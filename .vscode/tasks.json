@@ -1,0 +1,31 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "type": "shell",
+            "label": "CMake Full Build (Release)",
+            "command": "bash",
+            "args": [
+                "-c",
+                "mkdir -p build && cd build && cmake -DCMAKE_BUILD_TYPE=Release .. && cmake --build ."
+            ],
+            "options": {"cwd": "${workspaceFolder}"},
+            "group": {"kind": "build"},
+            "problemMatcher": "$gcc",
+            "detail": "Full CMake configuration and build (Release profile)"
+        },
+        {
+            "type": "shell",
+            "label": "CMake Full Build (Debug)",
+            "command": "bash",
+            "args": [
+                "-c",
+                "mkdir -p build && cd build && cmake -DCMAKE_BUILD_TYPE=Debug .. && cmake --build ."
+            ],
+            "options": {"cwd": "${workspaceFolder}"},
+            "group": {"kind": "build"},
+            "problemMatcher": "$gcc",
+            "detail": "Full CMake configuration and build (Debug profile)"
+        }
+    ]
+}

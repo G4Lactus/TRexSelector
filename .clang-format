@@ -1,0 +1,53 @@
+---
+Language:        Cpp
+# Maximum line length for code
+ColumnLimit:     120
+
+# Alignment settings
+AlignAfterOpenBracket: Align
+AlignOperands:   true
+AlignTrailingComments: true
+
+# Allow short constructs on a single line
+AllowShortFunctionsOnASingleLine: None
+AllowShortIfStatementsOnASingleLine: Never
+AllowShortLoopsOnASingleLine: false
+
+# Brace wrapping rules
+BraceWrapping:
+  AfterClass:      true
+  AfterControlStatement: true
+  AfterFunction:   true
+  BeforeElse:      true
+  IndentBraces:    false
+
+# Break settings
+BreakBeforeBraces: Custom
+BreakBeforeBinaryOperators: None
+BreakConstructorInitializers: BeforeColon
+BreakStringLiterals: true
+
+# Include sorting
+SortIncludes:    true
+IncludeBlocks:   Preserve
+
+# Indentation settings
+IndentWidth:     4
+TabWidth:        4
+UseTab:          Never
+
+# Pointer alignment
+PointerAlignment: Right
+
+# Namespace indentation
+NamespaceIndentation: None
+
+# Standard settings
+Standard:        Cpp20
+
+# Miscellaneous
+ReflowComments:  true
+SpacesInParentheses: false
+SpacesInSquareBrackets: false
+SpacesInContainerLiterals: true
+SpacesBeforeTrailingComments: 1
