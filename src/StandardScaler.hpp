@@ -9,9 +9,14 @@
  * @brief Standard scaling (z-score normalization): x' = (x - μ) / σ
  *
  * Centers data to column mean = 0 and scales columns to unit variance.
+ * Standard deviation uses Bessel correction (divides by n-1).
  */
 class StandardScaler : public DataTransformer {
 private:
+
+    // ========================================================================
+    // State Variables
+    // ========================================================================
 
     /** @brief Column means (zero if with_mean_ is false). */
     Eigen::VectorXd means_;
@@ -29,29 +34,32 @@ private:
 
 public:
 
+    // =========================================================================
+    // Constructor
+    // =========================================================================
+
     /**
-     * @brief Construct a new standard scaler object
+     * @brief Construct a new standard scaler object.
      *
      * @param with_mean If true, center data to column mean = 0.
-     * @param width_std If true, scale data to std = 1 (using Bessel correction).
+     * @param with_std If true, scale data to std = 1 (using Bessel correction).
      *
-     * @param center
      */
     explicit StandardScaler(bool with_mean = true, bool with_std = true)
         : with_mean_(with_mean), with_std_(with_std) {}
 
 
-    // ===== Core Interface =====
+    // ========================================================================
+    // Core Interface
+    // ========================================================================
 
     /**
-     * @brief Fit the scaler to the input data.
-     *
-     * Computes mean and standard deviation for each column.
+     * @brief Fit the scaler to the input data (read-only operation).
      *
      * @param X Input matrix (rows = samples, columns = features).
      * @param min_std_threshold Minimum std deviation for numerical stability.
      */
-    DataTransformer& fit(const Eigen::Map<const Eigen::MatrixXd>& X,
+    DataTransformer& fit(Eigen::Map<Eigen::MatrixXd>& X,
                          double min_std_threshold = 1e-12) override;
 
     /**
@@ -73,10 +81,12 @@ public:
     void inverse_transform_inplace(Eigen::Map<Eigen::MatrixXd>& X_scaled) const override;
 
 
-    // ===== Accessors =====
+    // ========================================================================
+    // Accessors
+    // ========================================================================
 
     /**
-     * @brief Get the column means.
+     * @brief Get column means (zeros if not centered).
      *
      * @return Vector of means for each column.
      */
@@ -90,7 +100,7 @@ public:
     inline const Eigen::VectorXd& get_scales() const noexcept override { return scales_; }
 
     /**
-     * @brief Get the transformer name.
+     * @brief Get the transformer name for serialization.
      *
      * @return "StandardScaler"
      */
@@ -110,38 +120,11 @@ public:
      */
     bool get_with_std() const noexcept { return with_std_; }
 
-    // ===== Utility =====
-
-    /**
-     * @brief Compute L2 conversion factors for coefficients.
-     *
-     * For algorithms assuming standardization, this recovers
-     * the L2 scale of regression coefficients.
-     *
-     * @param n_samples Number of training samples
-     * @return Per-feature conversion factors
-     */
-    Eigen::VectorXd get_l2_conversion_factor(std::size_t n_samples) const override;
-
-    /**
-     * @brief Create a deep copy of this scaler.
-     *
-     * @return Unique pointer to cloned scaler
-     */
-    std::unique_ptr<DataTransformer> clone() const override {
-        return std::make_unique<StandardScaler>(*this);
-    }
-
 protected:
 
-    /**
-     * @brief Get number of features.
-     *
-     * @return Number of features (columns)
-     */
-    std::size_t get_feature_dimension() const override {
-        return means_.size();
-    }
+    // ========================================================================
+    // De-/Serialization
+    // ========================================================================
 
     /**
      * @brief Serialize scaler state using Cereal NVPs.

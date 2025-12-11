@@ -1,8 +1,13 @@
-#include "StandardScaler.hpp"
+
 #include <algorithm>
 
+#include "utils_openmp.hpp"
 
-DataTransformer& StandardScaler::fit(const Eigen::Map<const Eigen::MatrixXd>& X,
+#include "StandardScaler.hpp"
+
+
+
+DataTransformer& StandardScaler::fit(Eigen::Map<Eigen::MatrixXd>& X,
                                      double min_std_threshold) {
 
     std::size_t ncols = X.cols();
@@ -51,16 +56,17 @@ DataTransformer& StandardScaler::fit(const Eigen::Map<const Eigen::MatrixXd>& X,
         }
 
         // Merge thread-local dropped indices
-        #pragma omp critical
-        {
-            local_dropped.insert(local_dropped.end(),
-                                thread_dropped.begin(),
-                                thread_dropped.end());
+        if (!thread_dropped.empty()) {
+            #pragma omp critical
+            {
+                dropped_indices_.insert(dropped_indices_.end(),
+                                    thread_dropped.begin(),
+                                    thread_dropped.end());
+            }
         }
     }
 
     // Sort dropped indices for consistent ordering
-    dropped_indices_ = std::move(local_dropped);
     std::sort(dropped_indices_.begin(), dropped_indices_.end());
 
     fitted_ = true;
@@ -69,11 +75,31 @@ DataTransformer& StandardScaler::fit(const Eigen::Map<const Eigen::MatrixXd>& X,
 
 
 void StandardScaler::transform_inplace(Eigen::Map<Eigen::MatrixXd>& X) const {
-    check_fitted("transform_inplace");
-    check_dimension(scales_.size(), X.cols(), "transform_inplace");
+
+    const std::string transformer_name = get_name();
+
+    if (!fitted_) {
+        throw std::logic_error(transformer_name + "::transform_inplace: Not fitted");
+    }
+    if (X.cols() != static_cast<Eigen::Index>(scales_.size())) {
+        throw std::invalid_argument(
+            transformer_name + "::transform_inplace: Expected " +
+            std::to_string(scales_.size()) + " features, got " +
+            std::to_string(X.cols()));
+    }
+
+    const bool has_dropped = !dropped_indices_.empty();
 
     #pragma omp parallel for schedule(static)
     for (std::size_t j = 0; j < static_cast<std::size_t>(X.cols()); ++j) {
+
+        // Skip dropped columns
+        if (has_dropped &&
+            std::binary_search(dropped_indices_.begin(),
+                               dropped_indices_.end(), j)) {
+            continue;
+        }
+
         // Center
         if (with_mean_) {
             X.col(j).array() -= means_[j];
@@ -87,10 +113,20 @@ void StandardScaler::transform_inplace(Eigen::Map<Eigen::MatrixXd>& X) const {
 }
 
 
-void StandardScaler::inverse_transform_inplace(
-    Eigen::Map<Eigen::MatrixXd>& X_scaled) const {
-    check_fitted("inverse_transform_inplace");
-    check_dimension(scales_.size(), X_scaled.cols(), "inverse_transform_inplace");
+void StandardScaler::inverse_transform_inplace(Eigen::Map<Eigen::MatrixXd>& X_scaled) const {
+
+    const std::string transformer_name = get_name();
+
+    if (!fitted_) {
+        throw std::logic_error(transformer_name + "::inverse_transform_inplace: Not fitted");
+    }
+
+    if (X_scaled.cols() != static_cast<Eigen::Index>(scales_.size())) {
+        throw std::invalid_argument(
+            transformer_name + "::inverse_transform_inplace: Expected " +
+            std::to_string(scales_.size()) + " features, got " +
+            std::to_string(X_scaled.cols()));
+    }
 
     #pragma omp parallel for schedule(static)
     for (std::size_t j = 0; j < static_cast<std::size_t>(X_scaled.cols()); ++j) {
@@ -104,30 +140,4 @@ void StandardScaler::inverse_transform_inplace(
             X_scaled.col(j).array() += means_[j];
         }
     }
-}
-
-
-Eigen::VectorXd StandardScaler::get_l2_conversion_factor(std::size_t n_samples) const {
-    check_fitted("get_l2_conversion_factor");
-
-    if (n_samples == 0) {
-        throw std::invalid_argument(
-            "get_l2_conversion_factor: n_samples must be > 0");
-    }
-
-    Eigen::VectorXd conversion(scales_.size());
-
-    #pragma omp parallel for schedule(static)
-    for (std::size_t j = 0; j < static_cast<std::size_t>(scales_.size()); ++j) {
-        // Convert from standardization to L2 scale
-        // Formula: β_L2 = β_scaled * scale_j / sqrt(n)
-        if (with_std_) {
-            conversion[j] = scales_[j] / std::sqrt(static_cast<double>(n_samples));
-        } else {
-            // No scaling applied
-            conversion[j] = 1.0 / std::sqrt(static_cast<double>(n_samples));
-        }
-    }
-
-    return conversion;
 }

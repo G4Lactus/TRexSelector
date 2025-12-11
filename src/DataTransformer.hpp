@@ -16,61 +16,147 @@
 
 #include "utils_cereal_eigen.hpp"
 
+
 /**
  * @brief Abstract base class for column-wise data transformations.
+ *
+ * Supports both in-memory and memory-mapped data via Eigen::Map.
+ * All transformations operate column-wise and support high-dimensional data (p>>n) with
+ * in-place operations.
+ *
+ *
+ * @example In-memory usage:
+ * @code
+ * double* data = new double[n * p];
+ * Eigen::Map<Eigen::MatrixXd> X(data, n, p);
+ *
+ * Normalizer normalizer;
+ * normalizer.fit(X);                        // learn statistics
+ * normalizer.transform_inplace(X);          // transform X in place
+ * normalizer.inverse_transform_inplace(X);  // revert transformation for X in place
+ * @endcode
+ *
+ * @example Memory-mapped usage:
+ * @code
+ * int fd = open("data.bin", O_RDWR);
+ * double* mmap_ptr = static_cast<double*>(
+ *     mmap(nullptr, n * p * sizeof(double), PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0));
+ *
+ * Eigen::Map<Eigen::MatrixXd> X(mmap_ptr, n, p);
+ *
+ * Normalizer normalizer;
+ * normalizer.fit(X);                        // learn statistics (read-only operation)
+ * normalizer.transform_inplace(X);          // transform X in place (modifies file)
+ * normalizer.inverse_transform_inplace(X);  // revert transformation for X in place
+ *
+ * munmap(mmap_ptr, n * p * sizeof(double));
+ * close(fd);
+ * @endcode
+ *
  */
 class DataTransformer {
+
 protected:
+
+    // ========================================================================
+    // State Variabeles
+    // ========================================================================
+
+    /** @brief Indices of dropped features due to zero variance/norm */
     std::vector<std::size_t> dropped_indices_;
+
+    /** @brief Whether the transformer has been fitted */
     bool fitted_{false};
 
-    // Protected constructors to prevent slicing
+    // ========================================================================
+    // Protected constructors to support inheritance and prevent slicing
+    // ========================================================================
+
+    /** @brief Default constructor */
     DataTransformer() = default;
+
+    /** @brief Default copy constructor */
     DataTransformer(const DataTransformer&) = default;
+
+    /** @brief Default copy assignment */
     DataTransformer& operator=(const DataTransformer&) = default;
+
+    /** @brief Default move constructor */
     DataTransformer(DataTransformer&&) noexcept = default;
+
+    /** @brief Default move assignment */
     DataTransformer& operator=(DataTransformer&&) noexcept = default;
 
 public:
-    /** @brief Public metadata (not polymorphic behavior) */
-    std::vector<std::string> feature_names;
 
+    /** @brief Virtual destructor */
     virtual ~DataTransformer() = default;
 
-    // ===== Core Interface =====
+    // ========================================================================
+    // Core Interface
+    // ========================================================================
 
-    virtual DataTransformer& fit(
-        const Eigen::Map<const Eigen::MatrixXd>& X,
-        double threshold = 1e-12) = 0;
+    /** @brief Fit the transformer to the input data (read-only)
+     *
+     * Computes statistics (means, scales, norms) without modifying X.
+     *
+     * @param X Input data matrix (n_samples x n_features)
+     * @param threshold Minimum threshold for numerical stability
+     *
+     * @return Reference to the method for chaining.
+     */
+    virtual DataTransformer& fit(Eigen::Map<Eigen::MatrixXd>& X,
+                                 double threshold = 1e-12) = 0;
 
-    virtual void transform_inplace(Eigen::Map<Eigen::MatrixXd>& X) const = 0;
+    /** @brief Applies the transformation in place (modifies X)
+     *
+     * @param X Input/output matrix to transform
+     */
+    virtual void transform_inplace(
+        Eigen::Map<Eigen::MatrixXd>& X) const = 0;
+
+    /**
+     * @brief Applies the inverse transformation in place (modifies X)
+     *
+     * @param X_transformed Input/output matrix to inverse transform
+     *
+     */
     virtual void inverse_transform_inplace(
         Eigen::Map<Eigen::MatrixXd>& X_transformed) const = 0;
 
-    // ===== Accessors =====
+    // ========================================================================
+    // Accessors
+    // ========================================================================
 
+    /** @brief Get column means or centers (zeros if not centered) */
     virtual const Eigen::VectorXd& get_means() const = 0;
+
+    /** @brief Get column scales or norms */
     virtual const Eigen::VectorXd& get_scales() const = 0;
+
+    /** @brief Get transformer name for serialization */
     virtual std::string get_name() const = 0;
 
+    /** @brief Get indices of dropped features (empty if none) */
     const std::vector<std::size_t>& get_dropped_indices() const noexcept {
         return dropped_indices_;
     }
 
-    bool is_fitted() const noexcept { return fitted_; }
-
-    std::size_t get_num_features() const noexcept {
-        return get_feature_dimension();
+    /** @brief Check if transformer has been fitted */
+    bool is_fitted() const noexcept {
+        return fitted_;
     }
 
-    // ===== Polymorphic Copying =====
 
-    virtual std::unique_ptr<DataTransformer> clone() const = 0;
-
-    // ===== Persistence =====
+    // ========================================================================
+    // De-/Serialization (Public Interface)
+    // ========================================================================
 
     /**
-     * @brief Save transformer to binary file.
+     * @brief Save transformer state to binary file.
+     *
+     * @param filename Path to output file
+     * @throws std::runtime_error if file cannot be opened
      */
     void save(const std::string& filename) const {
         std::ofstream ofs(filename, std::ios::binary);
@@ -85,18 +171,21 @@ public:
         std::string type_name = get_name();
         archive(CEREAL_NVP(type_name));
 
-        // Serialize the object (const_cast needed for archive)
+        // Serialize the object (const_cast needed for cereal)
         const_cast<DataTransformer*>(this)->serialize(archive);
     }
 
     /**
-     * @brief Load transformer from binary file.
+     * @brief Load transformer state from binary file.
+     *
+     * @param filename Path to input file
+     * @throws std::runtime_error if file cannot be opened or type mismatch
      */
     void load(const std::string& filename) {
         std::ifstream ifs(filename, std::ios::binary);
         if (!ifs.is_open()) {
             throw std::runtime_error(
-                "DataTransformer::load: Cannot open '" + filename + "'");
+                get_name() +  "::load: Cannot open '" + filename + "'");
         }
 
         cereal::PortableBinaryInputArchive archive(ifs);
@@ -119,13 +208,11 @@ public:
         }
     }
 
-    // ===== Utility =====
-
-    virtual Eigen::VectorXd get_l2_conversion_factor(
-        std::size_t n_samples) const = 0;
-
 protected:
-    virtual std::size_t get_feature_dimension() const = 0;
+
+    // ========================================================================
+    // De-/Serialization
+    // ========================================================================
 
     /**
      * @brief Serialize transformer state.
@@ -135,35 +222,12 @@ protected:
     template<class Archive>
     void serialize(Archive& archive) {
         archive(CEREAL_NVP(dropped_indices_),
-                CEREAL_NVP(fitted_),
-                CEREAL_NVP(feature_names)
+                CEREAL_NVP(fitted_)
             );
     }
 
     // Grant Cereal access
     friend class cereal::access;
-
-    /**
-     * @brief Check if fitted before operations.
-     */
-    void check_fitted(const std::string& method_name) const {
-        if (!fitted_) {
-            throw std::logic_error(method_name + ": Transformer not fitted");
-        }
-    }
-
-    /**
-     * @brief Validate dimension consistency.
-     */
-    void check_dimension(std::size_t expected,
-                         std::size_t actual,
-                         const std::string& method_name) const {
-        if (expected != actual) {
-            throw std::invalid_argument(
-                method_name + ": Expected " + std::to_string(expected) +
-                " features, got " + std::to_string(actual));
-        }
-    }
 };
 
 #endif
