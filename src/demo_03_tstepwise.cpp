@@ -40,9 +40,9 @@ void demo_TSTEPWISE_early_stopping(bool high_dim, std::size_t T_stop = 5) {
     const std::vector<double> true_coefs = {2.5, -1.8, 3.2};
     const double sigma{1};
 
-    print_tlars_config(n, p, num_dummies, T_stop, true_support, true_coefs, 1);
+    utils_talgos::print_tlars_config(n, p, num_dummies, T_stop, true_support, true_coefs, 1);
 
-    SyntheticData data(n, p, true_support, true_coefs, sigma);
+    utils_talgos::SyntheticData data(n, p, true_support, true_coefs, sigma);
 
     // Generate dummy variables
     Eigen::MatrixXd X_dummies(n, num_dummies);
@@ -63,8 +63,9 @@ void demo_TSTEPWISE_early_stopping(bool high_dim, std::size_t T_stop = 5) {
     auto t1 = utils_perf::profileit([&]() { tstepwise.executeStep(T_stop, /*early_stop=*/true); });
     std::cout << "T-STEPWISE early stopping at T=" << T_stop << " took " << t1.time_ms << " ms\n";
 
-    print_selection(tstepwise, true_support);
-    print_quality(tstepwise, true_support);
+    utils_talgos::print_selection(tstepwise, true_support);
+    utils_talgos::print_quality(tstepwise, true_support);
+
     std::cout << "\n\n";
 }
 
@@ -83,9 +84,9 @@ void demo_TSTEPWISE_serialization() {
     const std::vector<std::size_t> true_support = {10, 25, 40};
     const std::vector<double> true_coefs = {2.5, -1.8, 3.2};
 
-    print_tlars_config(n, p, num_dummies, T_stop, true_support, true_coefs);
+    utils_talgos::print_tlars_config(n, p, num_dummies, T_stop, true_support, true_coefs);
 
-    SyntheticData data(n, p, true_support, true_coefs);
+    utils_talgos::SyntheticData data(n, p, true_support, true_coefs);
 
     // Generate dummy variables
     Eigen::MatrixXd X_dummies(n, num_dummies);
@@ -139,8 +140,8 @@ void demo_TSTEPWISE_serialization() {
         auto& loaded_path = solver2.getActions();
         std::cout << (ref_path == loaded_path ? "✓ Paths match\n" : "✗ Paths differ!\n");
 
-        print_selection(solver2, true_support);
-        print_quality(solver2, true_support);
+        utils_talgos::print_selection(solver2, true_support);
+        utils_talgos::print_quality(solver2, true_support);
     }
 
     // Cleanup

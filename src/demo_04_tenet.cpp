@@ -41,9 +41,9 @@ void demo_TENET_early_stopping(bool high_dim, double lambda2, std::size_t T_stop
     const std::vector<double> true_coefs = {2.5, -1.8, 3.2};
     const double sigma{1};
 
-    print_tlars_config(n, p, num_dummies, T_stop, true_support, true_coefs, 1);
+    utils_talgos::print_tlars_config(n, p, num_dummies, T_stop, true_support, true_coefs, 1);
 
-    SyntheticData data(n, p, true_support, true_coefs, sigma);
+    utils_talgos::SyntheticData data(n, p, true_support, true_coefs, sigma);
 
     // Generate dummy variables
     Eigen::MatrixXd X_dummies(n, num_dummies);
@@ -65,8 +65,9 @@ void demo_TENET_early_stopping(bool high_dim, double lambda2, std::size_t T_stop
     std::cout << "T-Elastic Net early stopping at T=" << T_stop << " took "
               << t1.time_ms << " ms\n";
 
-    print_selection(tenet, true_support);
-    print_quality(tenet, true_support);
+    utils_talgos::print_selection(tenet, true_support);
+    utils_talgos::print_quality(tenet, true_support);
+
     std::cout << "Removals: " << tenet.getNumRemovals() << "\n";
     std::cout << "Cycling ratio: " << std::fixed << std::setprecision(4)
               << tenet.getCyclingRatio() << "\n";
@@ -91,9 +92,9 @@ void demo_TENET_serialization() {
     const std::vector<std::size_t> true_support = {10, 25, 40};
     const std::vector<double> true_coefs = {2.5, -1.8, 3.2};
 
-    print_tlars_config(n, p, num_dummies, T_stop, true_support, true_coefs);
+    utils_talgos::print_tlars_config(n, p, num_dummies, T_stop, true_support, true_coefs);
 
-    SyntheticData data(n, p, true_support, true_coefs);
+    utils_talgos::SyntheticData data(n, p, true_support, true_coefs);
 
     // Generate dummy variables
     Eigen::MatrixXd X_dummies(n, num_dummies);
@@ -147,8 +148,8 @@ void demo_TENET_serialization() {
         auto& loaded_path = solver2.getActions();
         std::cout << (ref_path == loaded_path ? "✓ Paths match\n" : "✗ Paths differ!\n");
 
-        print_selection(solver2, true_support);
-        print_quality(solver2, true_support);
+        utils_talgos::print_selection(solver2, true_support);
+        utils_talgos::print_quality(solver2, true_support);
         std::cout << "Removals: " << solver2.getNumRemovals() << "\n";
         std::cout << "Cycling ratio: " << std::fixed << std::setprecision(4)
                   << solver2.getCyclingRatio() << "\n";
@@ -177,9 +178,9 @@ void demo_TENET_lambda2_comparison() {
     const std::vector<std::size_t> true_support = {5, 20, 35};
     const std::vector<double> true_coefs = {3.0, -2.0, 2.5};
 
-    print_tlars_config(n, p, num_dummies, T_stop, true_support, true_coefs);
+    utils_talgos::print_tlars_config(n, p, num_dummies, T_stop, true_support, true_coefs);
 
-    SyntheticData data(n, p, true_support, true_coefs);
+    utils_talgos::SyntheticData data(n, p, true_support, true_coefs);
 
     // Generate dummy variables
     Eigen::MatrixXd X_dummies(n, num_dummies);
