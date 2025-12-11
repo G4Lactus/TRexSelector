@@ -20,6 +20,7 @@
  */
 namespace utils_eval {
 
+
 inline std::ostream*& get_default_stream_ptr() {
     static std::ostream *default_stream = &std::cout;
     return default_stream;
