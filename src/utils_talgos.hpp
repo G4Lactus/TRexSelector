@@ -75,8 +75,9 @@ inline void generate_dummies_inplace(
     std::size_t num_dummies,
     unsigned int seed = 42)
 {
+    #pragma omp parallel for schedule(static) if(num_dummies >= 1000)
     for (std::size_t j = 0; j < num_dummies; ++j) {
-        std::mt19937 rng(seed + 1000003UL + j);
+        std::mt19937 rng(seed + 1000003UL + p + j);
         std::normal_distribution<double> normal(0.0, 1.0);
 
         for (std::size_t i = 0; i < n; ++i) {
