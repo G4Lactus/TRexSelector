@@ -60,6 +60,33 @@ struct SyntheticData {
 
 
 /**
+ * @brief Generate dummy variables and append them to X_aug in-place
+ *
+ * @param X_aug Augmented data matrix [X | D] where D are the dummy variables
+ * @param n Number of rows
+ * @param p Number of original predictors (columns in X)
+ * @param num_dummies Number of dummy variables to generate
+ * @param seed Random seed for reproducibility
+ */
+inline void generate_dummies_inplace(
+    Eigen::MatrixXd& X_aug,
+    std::size_t n,
+    std::size_t p,
+    std::size_t num_dummies,
+    unsigned int seed = 42)
+{
+    for (std::size_t j = 0; j < num_dummies; ++j) {
+        std::mt19937 rng(seed + 1000003UL + j);
+        std::normal_distribution<double> normal(0.0, 1.0);
+
+        for (std::size_t i = 0; i < n; ++i) {
+            X_aug(i, p + j) = normal(rng);
+        }
+    }
+}
+
+
+/**
  * @brief Fill matrix with normal(mu = 0, sigma = 1) random values in column-major order
  *
  * @param X_data Pointer to column-major matrix data (Eigen::MatrixXd layout)
@@ -326,7 +353,7 @@ inline utils_memmap::MappedFile<double> augment_with_dummies(
 /**
  * @brief Print T-LARS configuration
  */
-inline void print_tlars_config(std::size_t n,
+inline void print_talgo_config(std::size_t n,
                                std::size_t p,
                                std::size_t num_dummies,
                                std::size_t T_stop,
