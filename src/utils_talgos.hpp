@@ -103,15 +103,6 @@ inline void fill_matrix_column_major_normal(
     std::size_t p,
     unsigned int base_seed = 42)
 {
-    std::cout << "  [DEBUG] fill_matrix_column_major_normal:\n";
-    std::cout << "    Using seeds " << base_seed << " to " << (base_seed + p - 1) << "\n";
-
-    // Check what seed is actually used for problematic columns
-    std::vector<std::size_t> check_cols = {4, 27, 149, 398, 420};
-    for (std::size_t col : check_cols) {
-        std::cout << "    X.col(" << col << ") uses seed: " << (base_seed + col) << "\n";
-    }
-
     std::atomic<std::size_t> completed_columns{0};
     std::size_t last_reported = 0;
 
@@ -120,7 +111,7 @@ inline void fill_matrix_column_major_normal(
 
         #pragma omp for schedule(static, 1000)
         for (std::size_t j = 0; j < p; ++j) {
-            std::mt19937 gen(base_seed + 100 * p + j);
+            std::mt19937 gen(base_seed + 1000003UL + j);
             std::normal_distribution<double> dist(0.0, 1.0);
 
             // Fill column j (Eigen column-major: elements are contiguous)
@@ -285,16 +276,6 @@ inline utils_memmap::MappedFile<double> augment_with_dummies(
 {
     std::cout << "=== Augmenting X with " << num_dummies << " dummies ===\n";
 
-    std::cout << "=== Augmenting X with " << num_dummies << " dummies ===\n";
-
-    // DIAGNOSTIC: Print seed ranges
-    std::cout << "  [SEED INFO]\n";
-    std::cout << "    X columns use seeds: " << seed << " to " << (seed + p - 1) << "\n";
-    std::cout << "    Dummy columns will use seeds: "
-              << (seed + 100*p + 1) << " to "
-              << (seed + 100*p + num_dummies) << "\n";
-    std::cout << "    Separation: " << (100*p + 1 - p) << " seeds\n";
-
     // Step 1: Load X
     auto X_map = utils_memmap::map_file_rw<double>(X_filename, n * p);
     const double* X_data = X_map.data;
@@ -319,7 +300,7 @@ inline utils_memmap::MappedFile<double> augment_with_dummies(
     std::cout << "  Generating " << num_dummies << " dummies..." << std::flush;
     #pragma omp parallel for schedule(static)
     for (std::size_t j = 0; j < num_dummies; ++j) {
-        std::mt19937 gen(seed + 1000003UL + j);  // 1000003 is prime
+        std::mt19937 gen(seed + 1000003UL + p + j);  // 1000003 is prime
         std::normal_distribution<double> dist(0.0, 1.0);
 
         double* col_start = X_aug_data + (p + j) * n;
@@ -328,19 +309,6 @@ inline utils_memmap::MappedFile<double> augment_with_dummies(
         }
     }
     std::cout << " done\n";
-
-    // DIAGNOSTIC: Check for collinearity
-    std::cout << "  [COLLINEARITY CHECK]\n";
-    Eigen::Map<Eigen::MatrixXd> X_aug_check(X_aug_data, n, p + num_dummies);
-
-    // Check suspicious dummies vs their corresponding X columns
-    std::vector<std::size_t> check_pairs = {3, 26, 148, 397, 419};
-    for (std::size_t idx : check_pairs) {
-        double corr = X_aug_check.col(idx + 1).dot(X_aug_check.col(p + idx)) /
-                      (X_aug_check.col(idx + 1).norm() * X_aug_check.col(p + idx).norm());
-        std::cout << "    Corr(X.col(" << (idx+1) << "), Dummy.col(" << idx
-                  << ")) = " << corr << "\n";
-    }
 
     // Step 5: Flush
     utils_memmap::flush_mapping(X_aug_map);
