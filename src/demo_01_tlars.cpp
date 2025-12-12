@@ -342,7 +342,7 @@ void demo_production_tlars_workflow() {
     utils_eval::print_section_header("=== Demo 5: Production T-LARS Workflow ===\n\n");
 
     // Configuration
-    const std::size_t n = 20'000, p = 1'000'000;
+    const std::size_t n = 20'000, p = 100'000;
     const std::size_t num_dummies = 10 * p;
     const std::size_t T_stop = 10;
     std::vector<std::size_t> true_support = {27, 149, 398, 420, 4};

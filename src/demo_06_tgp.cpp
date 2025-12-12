@@ -340,7 +340,7 @@ void demo_production_tgp_workflow() {
     utils_eval::print_section_header("=== Demo 5: Production T-GP Workflow ===\n\n");
 
     // Configuration
-    const std::size_t n = 20'000, p = 1'000'000;
+    const std::size_t n = 20'000, p = 100'000;
     const std::size_t num_dummies = 10 * p;
     const std::size_t T_stop = 10;
     std::vector<std::size_t> true_support = {27, 149, 398, 420, 4};
@@ -467,20 +467,12 @@ int main() {
 
     try {
 
-        // T-ACGP demos
-        const bool run_demo1 = true;
-        const bool run_demo2 = true;
-        const bool run_demo3 = true;
-        const bool run_demo4 = true;
-        const bool run_demo5 = true;
-
         // T-GP with early stopping - low and high dimensional
         const bool run_early_stopping_demo = false;
         if (run_early_stopping_demo) {
             demo_TGP_early_stopping(/*high_dim=*/false, /*T_stop=*/10);
             demo_TGP_early_stopping(/*high_dim=*/true, /*T_stop=*/10);
         }
-
 
         // T-GP with external normalization
         const bool run_external_normalizer_demo = false;
@@ -489,16 +481,13 @@ int main() {
             demo_TGP_with_external_normalizer(/*high_dim=*/true, /*T_stop=*/5);
         }
 
-
         // T-GP serialization and warm-start
         const bool run_serialization_demo = false;
         if (run_serialization_demo) demo_TGP_serialization();
 
-
         // T-GP controlled comparison
         const bool run_controlled_comparison = false;
         if (run_controlled_comparison) demo_TGP_controlled_comparison();
-
 
         // T-GP production workflow
         const bool run_production_tgp_with_mmap = true;

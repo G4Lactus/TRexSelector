@@ -347,7 +347,7 @@ void demo_production_tenet_workflow() {
     utils_eval::print_section_header("=== Demo 5: Production T-Elastic Net Workflow ===\n\n");
 
     // Configuration
-    const std::size_t n = 20'000, p = 1'000'000;
+    const std::size_t n = 20'000, p = 100'000;
     const std::size_t num_dummies = 10 * p;
     const std::size_t T_stop = 10;
     const double lambda2 = 0.5;
