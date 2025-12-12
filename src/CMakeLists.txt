@@ -72,19 +72,19 @@ add_demo_target(demo_00_scaler demo_00_scaler.cpp "")
 add_demo_target(demo_01_tlars demo_01_tlars.cpp "${TLARS_SOURCES}")
 
 ## --- demo_02_tlasso ---
-#add_demo_target(demo_02_tlasso demo_02_tlasso.cpp "${TLASSO_SOURCES}")
-#
+add_demo_target(demo_02_tlasso demo_02_tlasso.cpp "${TLASSO_SOURCES}")
+
 ## --- demo_03_tstepwise ---
-#add_demo_target(demo_03_tstepwise demo_03_tstepwise.cpp "${TSTEPWISE_SOURCES}")
-#
+add_demo_target(demo_03_tstepwise demo_03_tstepwise.cpp "${TSTEPWISE_SOURCES}")
+
 ## --- demo_04_tenet ---
-#add_demo_target(demo_04_tenet demo_04_tenet.cpp "${TENET_SOURCES}")
-#
+add_demo_target(demo_04_tenet demo_04_tenet.cpp "${TENET_SOURCES}")
+
 ## --- demo_05_tomp ---
-#add_demo_target(demo_05_tomp demo_05_tomp.cpp "${TOMP_SOURCES}")
-#
+add_demo_target(demo_05_tomp demo_05_tomp.cpp "${TOMP_SOURCES}")
+
 ## --- demo_06_tgp ---
-#add_demo_target(demo_06_tgp demo_06_tgp.cpp "${TGP_SOURCES}")
-#
+add_demo_target(demo_06_tgp demo_06_tgp.cpp "${TGP_SOURCES}")
+
 ## --- demo_07_tacgp ---
-#add_demo_target(demo_07_tacgp demo_07_tacgp.cpp "${TACGP_SOURCES}")
+add_demo_target(demo_07_tacgp demo_07_tacgp.cpp "${TACGP_SOURCES}")
