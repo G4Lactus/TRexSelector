@@ -15,24 +15,6 @@
 #include "utils_talgos.hpp"
 
 
-// Add to utils_talgos.hpp
-inline void generate_dummies_inplace(
-    Eigen::MatrixXd& X_aug,
-    std::size_t n,
-    std::size_t p,
-    std::size_t num_dummies,
-    unsigned int seed = 42)
-{
-    for (std::size_t j = 0; j < num_dummies; ++j) {
-        std::mt19937 rng(seed + 1000003UL + j);  // seed per column
-        std::normal_distribution<double> normal(0.0, 1.0);
-
-        for (std::size_t i = 0; i < n; ++i) {
-            X_aug(i, p + j) = normal(rng);
-        }
-    }
-}
-
 
 // ============================================================================
 // Demo 1: Basic T-LARS with Early Stopping
@@ -40,7 +22,7 @@ inline void generate_dummies_inplace(
 
 void demo_TLARS_early_stopping(bool high_dim, std::size_t T_stop = 5) {
 
-    std::cout << "Demo 1: Basic T-LARS with Early Stopping" << "\n";
+    std::cout << "=== Demo 1: Basic T-LARS with Early Stopping ===\n";
 
     std::mt19937 rng(42);
     std::normal_distribution<double> rnorm(0.0, 1.0);
@@ -60,21 +42,19 @@ void demo_TLARS_early_stopping(bool high_dim, std::size_t T_stop = 5) {
     const std::vector<double> true_coefs = {-0.4, -0.2, -0.8, 1.1, 2.5};
     const double snr = 1.0;
 
-    utils_talgos::print_tlars_config(n, p, num_dummies, T_stop, true_support, true_coefs, snr);
-
+    utils_talgos::print_talgo_config(n, p, num_dummies, T_stop, true_support, true_coefs, snr);
     utils_talgos::SyntheticData data(n, p, true_support, true_coefs, snr, /*seed=*/42);
+
 
     // Create augmented matrix X_aug = [X | D]
     Eigen::MatrixXd X_aug(n, p + num_dummies);
     X_aug.leftCols(p) = data.X;
-    generate_dummies_inplace(X_aug, n, p, num_dummies, 42);
+    utils_talgos::generate_dummies_inplace(X_aug, n, p, num_dummies, 42);
 
-    Eigen::Map<Eigen::MatrixXd> X_aug_map(X_aug.data(),
-                                          X_aug.rows(),
-                                          X_aug.cols());
-
+    Eigen::Map<Eigen::MatrixXd> X_aug_map(X_aug.data(), X_aug.rows(), X_aug.cols());
     Eigen::Map<Eigen::VectorXd> y_map(data.y.data(), data.y.size());
 
+    // Normalization is handled by the TLARS solver internally
     TLARS_Solver tlars(X_aug_map, y_map, num_dummies, true, true, true);
     auto t1 = utils_perf::profileit([&]() { tlars.executeStep(T_stop, /*early_stop=*/true); });
     std::cout << "T-LARS early stopping at T=" << T_stop << " took " << t1.time_ms << " ms\n";
@@ -91,11 +71,9 @@ void demo_TLARS_early_stopping(bool high_dim, std::size_t T_stop = 5) {
 // Demo 2: External Normalization with DataTransformer
 // ============================================================================
 
-void demo_TLARS_with_external_normalizer(bool high_dim,
-                                         bool normalize_internal,
-                                         std::size_t T_stop = 5) {
+void demo_TLARS_with_external_normalizer(bool high_dim, std::size_t T_stop = 5) {
 
-    std::cout << "Demo 2: T-LARS with External Normalization\n";
+    std::cout << "=== Demo 2: T-LARS with External Normalization ===\n";
 
     std::mt19937 rng(42);
     std::normal_distribution<double> normal(0.0, 1.0);
@@ -112,30 +90,29 @@ void demo_TLARS_with_external_normalizer(bool high_dim,
     }
 
     const std::size_t num_dummies = 10 * p;
-    const std::vector<std::size_t> true_support = {10, 25, 40};
-    const std::vector<double> true_coefs = {0.5, -0.8, 1.2};
+    const std::vector<std::size_t> true_support = {27, 149, 398, 420, 4};
+    const std::vector<double> true_coefs = {-0.4, -0.2, -0.8, 1.1, 2.5};
     const double snr = 1.0;
 
-    utils_talgos::print_tlars_config(n, p, num_dummies, T_stop, true_support, true_coefs, snr);
-
+    utils_talgos::print_talgo_config(n, p, num_dummies, T_stop, true_support, true_coefs, snr);
     utils_talgos::SyntheticData data(n, p, true_support, true_coefs, snr, /*seed=*/42);
 
-    // Create augmented matrix X_aug = [X | dummies]
+    // Create augmented matrix X_aug = [X | D]
     Eigen::MatrixXd X_aug(n, p + num_dummies);
     X_aug.leftCols(p) = data.X;
 
-    generate_dummies_inplace(X_aug, n, p, num_dummies, 42);
+    utils_talgos::generate_dummies_inplace(X_aug, n, p, num_dummies, 42);
 
-    Eigen::Map<Eigen::MatrixXd> X_aug_map(X_aug.data(),
-                                          X_aug.rows(),
-                                          X_aug.cols());
-
+    Eigen::Map<Eigen::MatrixXd> X_aug_map(X_aug.data(), X_aug.rows(), X_aug.cols());
     Eigen::Map<Eigen::VectorXd> y_map(data.y.data(), data.y.size());
 
+    // External normalization
     Normalizer normalizer(Normalizer::NormType::L2, true);
     normalizer.fit(X_aug_map);
     normalizer.transform_inplace(X_aug_map);
+    y_map.array() -= y_map.mean();
 
+    // Solver with external normalization
     TLARS_Solver tlars(X_aug_map, y_map, num_dummies, false, false, true);
     auto t1 = utils_perf::profileit([&]() { tlars.executeStep(T_stop, /*early_stop=*/true); });
     std::cout << "T-LARS early stopping at T=" << T_stop << " took " << t1.time_ms << " ms\n";
@@ -154,52 +131,50 @@ void demo_TLARS_with_external_normalizer(bool high_dim,
 
 void demo_TLARS_serialization() {
 
-    std::cout << "Demo 3: T-LARS Serialization & Path Consistency\n";
+    std::cout << "=== Demo 3: T-LARS Serialization & Path Consistency ===\n\n";
 
     const std::size_t n = 100, p = 50;
     const std::size_t num_dummies = p;
-    const std::size_t T_stop = 15;
+    const std::size_t T_stop_final = 15;
+    const std::size_t T_stop_partial = 7;
     const std::vector<std::size_t> true_support = {10, 25, 40};
     const std::vector<double> true_coefs = {2.5, -1.8, 3.2};
 
-    utils_talgos::print_tlars_config(n, p, num_dummies, T_stop, true_support, true_coefs);
+    utils_talgos::print_talgo_config(n, p, num_dummies, T_stop_final, true_support, true_coefs);
 
     utils_talgos::SyntheticData data(n, p, true_support, true_coefs);
 
     // Create augmented matrix X_aug = [X | D]
     Eigen::MatrixXd X_aug(n, p + num_dummies);
     X_aug.leftCols(p) = data.X;
-    generate_dummies_inplace(X_aug, n, p, num_dummies, 42);
+    utils_talgos::generate_dummies_inplace(X_aug, n, p, num_dummies, 42);
 
-    Eigen::Map<Eigen::MatrixXd> X_aug_map(X_aug.data(), X_aug.rows(),
-                                          X_aug.cols());
+    Eigen::Map<Eigen::MatrixXd> X_aug_map(X_aug.data(), X_aug.rows(), X_aug.cols());
     Eigen::Map<Eigen::VectorXd> y_map(data.y.data(), data.y.size());
 
     // First, create reference solver, run to full solution path
     TLARS_Solver solver_ref(X_aug_map, y_map, num_dummies, true, true, true);
-    solver_ref.executeStep(T_stop, /*early_stop=*/true);
+    solver_ref.executeStep(T_stop_final, /*early_stop=*/true);
 
     std::string filename = "tlars_checkpoint.bin";
 
-    // --------- PART 1: Run partial path and save checkpoint (scoped) ---------
+    // --------- STEP 1: Run partial path and save checkpoint (scoped) ---------
     {
         TLARS_Solver solver1(X_aug_map, y_map, num_dummies, true, true, true);
-        solver1.executeStep(/*T_stop=*/7, /*early_stop=*/true);
+        solver1.executeStep(/*T_stop=*/T_stop_partial, /*early_stop=*/true);
 
-        std::cout << "Checkpoint at partial stop: "
-                  << solver1.getNumSteps() << " steps\n";
+        std::cout << "Checkpoint at partial stop: " << solver1.getNumSteps() << " steps\n";
         const char* checkpoint = filename.c_str();
         solver1.save(checkpoint);
         std::cout << "✓ Checkpoint saved to '" << checkpoint << "'\n";
     }
 
-    // --------- PART 2: Load from checkpoint and continue (scoped) ---------
-    TLARS_Solver solver2(X_aug_map, y_map, num_dummies, true, true, true);
+    // --------- STEP 2: Load from checkpoint and continue (scoped) ---------
     {
         TLARS_Solver solver2 = TLARS_Solver::load(filename.c_str(), X_aug_map);
         std::cout << "Loaded from checkpoint: "
                   << solver2.getNumSteps() << " steps\n";
-        solver2.executeStep(T_stop, /*early_stop=*/true); // Continue to full path
+        solver2.executeStep(T_stop_final, /*early_stop=*/true); // Continue to full path
 
         // --------- Comparison to reference ---------
         std::cout << "\nCOMPARISON:\n";
@@ -234,7 +209,7 @@ void demo_TLARS_serialization() {
 // ============================================================================
 
 void demo_TLARS_controlled_comparison() {
-    std::cout << "CONTROLLED COMPARISON: In-Memory vs Memory-Mapped ===\n\n";
+    std::cout << "=== Demo 4: Controlled Comparison: In-Memory vs Memory-Mapped ===\n\n";
 
     // Configuration
     const std::size_t n = 1000, p = 5000;
@@ -245,15 +220,15 @@ void demo_TLARS_controlled_comparison() {
 
 
     // ============================================================
-    // STEP 1: Generate data in-memory (like working demos)
+    // Step 1: Generate data in-memory
     // ============================================================
-    std::cout << "Step 1: Generating data in-memory...\n";
+    std::cout << "\n=== Step 1: Generating data in-memory ===\n";
     utils_talgos::SyntheticData data(n, p, true_support, true_support_coefs, 1.0, 42);
 
     // Create X_aug in-memory
     Eigen::MatrixXd X_aug_inmem(n, p + num_dummies);
     X_aug_inmem.leftCols(p) = data.X;
-    generate_dummies_inplace(X_aug_inmem, n, p, num_dummies, 42);
+    utils_talgos::generate_dummies_inplace(X_aug_inmem, n, p, num_dummies, 42);
 
     Eigen::VectorXd y_inmem = data.y;
 
@@ -261,9 +236,9 @@ void demo_TLARS_controlled_comparison() {
 
 
     // ============================================================
-    // STEP 2: Write SAME data to memory-mapped files
+    // Step 2: Write SAME data to memory-mapped files
     // ============================================================
-    std::cout << "Step 2: Writing same data to memory-mapped files...\n";
+    std::cout << "\n=== Step 2: Writing same data to memory-mapped files ===\n";
 
     const std::string X_aug_file = "test_X_aug.bin";
     const std::string y_file = "test_y.bin";
@@ -283,8 +258,10 @@ void demo_TLARS_controlled_comparison() {
 
 
     // ============================================================
-    // STEP 3: Create Eigen::Maps
+    // Step 3: Create Eigen::Maps
     // ============================================================
+    std::cout << "\n=== Step 3: Creating Eigen::Map views ===\n";
+
     Eigen::Map<Eigen::MatrixXd> X_aug_inmem_map(X_aug_inmem.data(), n, p + num_dummies);
     Eigen::Map<Eigen::VectorXd> y_inmem_map(y_inmem.data(), n);
 
@@ -293,9 +270,9 @@ void demo_TLARS_controlled_comparison() {
 
 
     // ============================================================
-    // STEP 4: External normalization (both versions)
+    // Step 4: External normalization
     // ============================================================
-    std::cout << "Step 3: Applying external normalization...\n";
+    std::cout << "\n=== Step 4: Applying external normalization ===\n";
 
     // In-memory normalization
     Normalizer norm1(Normalizer::NormType::L2, false);
@@ -312,7 +289,7 @@ void demo_TLARS_controlled_comparison() {
     std::cout << "  ✓ Both normalized\n\n";
 
     // Verify data is still identical
-    std::cout << "Step 4: Verifying data identity...\n";
+    std::cout << "Verifying data identity...\n";
     double X_diff = (X_aug_inmem_map - X_aug_mmap_map).norm();
     double y_diff = (y_inmem_map - y_mmap_map).norm();
     std::cout << "  ||X_inmem - X_mmap|| = " << X_diff << "\n";
@@ -320,23 +297,23 @@ void demo_TLARS_controlled_comparison() {
 
 
     // ============================================================
-    // STEP 5: Run T-LARS on BOTH
+    // Step 5: Run T-LARS for both versions
     // ============================================================
-    std::cout << "Step 5: Running T-LARS on in-memory data...\n";
+    std::cout << "\n=== Step 5: Running T-LARS on in-memory data ===\n";
     TLARS_Solver tlars_inmem(X_aug_inmem_map, y_inmem_map, num_dummies, false, false, true);
     tlars_inmem.executeStep(T_stop, true);
     std::cout << "  ✓ In-memory T-LARS complete\n\n";
 
-    std::cout << "Step 6: Running T-LARS on memory-mapped data...\n";
+    std::cout << "Running T-LARS on memory-mapped data...\n";
     TLARS_Solver tlars_mmap(X_aug_mmap_map, y_mmap_map, num_dummies, false, false, true);
     tlars_mmap.executeStep(T_stop, true);
     std::cout << "  ✓ Memory-mapped T-LARS complete\n\n";
 
 
     // ============================================================
-    // STEP 6: Compare results
+    // Step 6: Compare results
     // ============================================================
-    std::cout << "=== COMPARISON ===\n";
+    std::cout << "\n=== Step 6: Comparing results ===\n";
 
     auto path_inmem = tlars_inmem.getActions();
     auto path_mmap = tlars_mmap.getActions();
@@ -362,17 +339,22 @@ void demo_TLARS_controlled_comparison() {
 
 void demo_production_tlars_workflow() {
 
-    utils_eval::print_section_header("Production T-LARS Workflow");
+    utils_eval::print_section_header("=== Demo 5: Production T-LARS Workflow ===\n\n");
 
     // Configuration
-    const std::size_t n = 1000, p = 5000;
-    const std::size_t num_dummies = 50 * p;
+    const std::size_t n = 20'000, p = 1'000'000;
+    const std::size_t num_dummies = 10 * p;
     const std::size_t T_stop = 10;
     std::vector<std::size_t> true_support = {27, 149, 398, 420, 4};
+    const bool strong_coefs = true;
+    std::vector<double> true_support_coefs;
+    if (strong_coefs) {
         // strong coefficients
-    std::vector<double> true_support_coefs = {1, 1, 1, 1, 1};
+        true_support_coefs = {1, 1, 1, 1, 1};
+    } else {
         // weak coefficients
-//    std::vector<double> true_support_coefs = {-0.4, -0.2, -0.8, 1.1, 2.5};
+        true_support_coefs = {-0.4, -0.2, -0.8, 1.1, 2.5};
+    }
 
     const std::string X_file = "production_X.bin";
     const std::string y_file = "production_y.bin";
@@ -380,10 +362,10 @@ void demo_production_tlars_workflow() {
 
 
     // ========================================================================
-    // PHASE 1: Create X and y on disk (simulating "already existing" data)
+    // Step 1: Create X and y on disk (simulating "already existing" data)
     // ========================================================================
 
-    std::cout << "\n=== PHASE 1: Creating X and y (simulating existing data) ===\n";
+    std::cout << "\n=== Step 1: Creating X and y (simulating existing data) ===\n";
 
     utils_talgos::create_mmapped_X_and_y(
         X_file.c_str(),
@@ -400,9 +382,9 @@ void demo_production_tlars_workflow() {
     std::cout << "  (In real use case, these would already exist)\n\n";
 
     // ========================================================================
-    // PHASE 2: Augment X with dummies: X_aug = [X | D]
+    // Step 2: Augment X with dummies: X_aug = [X | D]
     // ========================================================================
-    std::cout << "=== PHASE 2: Creating X_aug = [X | D] ===\n";
+    std::cout << "=== Step 2: Creating X_aug = [X | D] ===\n";
 
     auto X_aug_handle = utils_talgos::augment_with_dummies(
         X_file.c_str(),
@@ -413,9 +395,9 @@ void demo_production_tlars_workflow() {
     );
 
     // ========================================================================
-    // PHASE 3: Load y and create Eigen maps
+    // Step 3: Load y and create Eigen maps
     // ========================================================================
-    std::cout << "\n=== PHASE 3: Loading y and creating maps ===\n";
+    std::cout << "\n=== Step 3: Loading y and creating maps ===\n";
 
     auto y_handle = utils_memmap::map_file_rw<double>(y_file.c_str(), n);
 
@@ -426,9 +408,9 @@ void demo_production_tlars_workflow() {
     std::cout << "  y: " << y.size() << "\n";
 
     // ========================================================================
-    // PHASE 4: External normalization
+    // Step 4: External normalization
     // ========================================================================
-    std::cout << "\n=== PHASE 4: Normalizing data ===\n";
+    std::cout << "\n=== Step 4: Normalizing data ===\n";
 
     Normalizer normalizer(Normalizer::NormType::L2, false);
     normalizer.fit(X_aug);
@@ -446,9 +428,9 @@ void demo_production_tlars_workflow() {
     }
 
     // ========================================================================
-    // PHASE 5: Run T-LARS
+    // Step 5: Run T-LARS
     // ========================================================================
-    std::cout << "\n=== PHASE 5: Running T-LARS ===\n";
+    std::cout << "\n=== Step 5: Running T-LARS ===\n";
 
     TLARS_Solver tlars(X_aug, y, num_dummies, false, false, true);
 
@@ -463,14 +445,15 @@ void demo_production_tlars_workflow() {
     utils_talgos::print_quality(tlars, true_support);
 
     // ========================================================================
-    // PHASE 6: Cleanup
+    // Step 6: Cleanup
     // ========================================================================
-    std::cout << "\n=== PHASE 6: Cleanup ===\n";
+    std::cout << "\n=== Step 6: Cleanup ===\n";
     std::remove(X_file.c_str());
     std::remove(y_file.c_str());
     std::remove(X_aug_file.c_str());
     std::cout << "✓ All files removed\n";
 
+    std::cout << "\n\n";
 }
 
 
@@ -486,7 +469,7 @@ int main() {
     try {
 
         // T-LARS with early stopping - low and high dimensional
-        const bool run_early_stopping_demo = true;
+        const bool run_early_stopping_demo = false;
         if (run_early_stopping_demo) {
             demo_TLARS_early_stopping(/*high_dim=*/false, /*T_stop=*/10);
             demo_TLARS_early_stopping(/*high_dim=*/true, /*T_stop=*/10);
@@ -494,7 +477,7 @@ int main() {
 
 
         // T-LARS with external normalization
-        const bool run_external_normalizer_demo = true;
+        const bool run_external_normalizer_demo = false;
         if (run_external_normalizer_demo) {
             demo_TLARS_with_external_normalizer(/*high_dim=*/false, /*T_stop=*/5);
             demo_TLARS_with_external_normalizer(/*high_dim=*/true, /*T_stop=*/5);
@@ -502,12 +485,12 @@ int main() {
 
 
         // T-LARS serialization and warm-start
-        const bool run_serialization_demo = true;
+        const bool run_serialization_demo = false;
         if (run_serialization_demo) demo_TLARS_serialization();
 
 
         // T-LARS controlled comparison
-        const bool run_controlled_comparison = true;
+        const bool run_controlled_comparison = false;
         if (run_controlled_comparison) demo_TLARS_controlled_comparison();
 
 
