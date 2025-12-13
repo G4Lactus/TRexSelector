@@ -30,12 +30,12 @@ void demo_TLARS_early_stopping(bool high_dim, std::size_t T_stop = 5) {
     std::size_t n, p;
     if (high_dim) {
         std::cout << "High-dimensional setting (p > n)" << "\n";
-        n = 5000;
-        p = 1000;
-    } else {
-        std::cout << "Low-dimensional setting (n > p)" << "\n";
         n = 1000;
         p = 5000;
+    } else {
+        std::cout << "Low-dimensional setting (n > p)" << "\n";
+        n = 5000;
+        p = 1000;
     }
     const std::size_t num_dummies = 10 * p;
     const std::vector<std::size_t> true_support = {27, 149, 398, 420, 4};
@@ -81,12 +81,12 @@ void demo_TLARS_with_external_normalizer(bool high_dim, std::size_t T_stop = 5) 
     std::size_t n, p;
     if (high_dim) {
         std::cout << "High-dimensional setting (p > n)" << "\n";
-        n = 500;
-        p = 1000;
+        n = 1000;
+        p = 5000;
     } else {
         std::cout << "Low-dimensional setting (n > p)" << "\n";
-        n = 1000;
-        p = 500;
+        n = 5000;
+        p = 1000;
     }
 
     const std::size_t num_dummies = 10 * p;
@@ -356,13 +356,13 @@ void demo_production_tlars_workflow() {
         true_support_coefs = {-0.4, -0.2, -0.8, 1.1, 2.5};
     }
 
-    const std::string X_file = "production_X.bin";
-    const std::string y_file = "production_y.bin";
-    const std::string X_aug_file = "production_X_aug.bin";
+    const std::string X_file = "tlars_production_X.bin";
+    const std::string y_file = "tlars_production_y.bin";
+    const std::string X_aug_file = "tlars_production_X_aug.bin";
 
 
     // ========================================================================
-    // Step 1: Create X and y on disk (simulating "already existing" data)
+    // Step 1: Create X and y on disk
     // ========================================================================
 
     std::cout << "\n=== Step 1: Creating X and y (simulating existing data) ===\n";
@@ -469,7 +469,7 @@ int main() {
     try {
 
         // T-LARS with early stopping - low and high dimensional
-        const bool run_early_stopping_demo = false;
+        const bool run_early_stopping_demo = true;
         if (run_early_stopping_demo) {
             demo_TLARS_early_stopping(/*high_dim=*/false, /*T_stop=*/10);
             demo_TLARS_early_stopping(/*high_dim=*/true, /*T_stop=*/10);
@@ -477,25 +477,25 @@ int main() {
 
 
         // T-LARS with external normalization
-        const bool run_external_normalizer_demo = false;
+        const bool run_external_normalizer_demo = true;
         if (run_external_normalizer_demo) {
-            demo_TLARS_with_external_normalizer(/*high_dim=*/false, /*T_stop=*/5);
-            demo_TLARS_with_external_normalizer(/*high_dim=*/true, /*T_stop=*/5);
+            demo_TLARS_with_external_normalizer(/*high_dim=*/false, /*T_stop=*/10);
+            demo_TLARS_with_external_normalizer(/*high_dim=*/true, /*T_stop=*/10);
         }
 
 
         // T-LARS serialization and warm-start
-        const bool run_serialization_demo = false;
+        const bool run_serialization_demo = true;
         if (run_serialization_demo) demo_TLARS_serialization();
 
 
         // T-LARS controlled comparison
-        const bool run_controlled_comparison = false;
+        const bool run_controlled_comparison = true;
         if (run_controlled_comparison) demo_TLARS_controlled_comparison();
 
 
         // T-LARS production workflow
-        const bool run_production_tlars_with_mmap = true;
+        const bool run_production_tlars_with_mmap = false;
         if (run_production_tlars_with_mmap) demo_production_tlars_workflow();
 
 
