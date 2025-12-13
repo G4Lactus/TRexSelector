@@ -168,7 +168,7 @@ inline void create_mmapped_X_and_y(
     bool reproducible_noise = true
     )
 {
-    std::cout << "=== Step 1: Creating memory-mapped X and y ===\n";
+    std::cout << "===Creating memory-mapped X and y ===\n";
     std::cout << "  Dimensions: n=" << n << ", p=" << p << "\n";
     std::cout << "  True support size: " << true_support.size() << "\n";
     std::cout << "  SNR: " << snr << "\n\n";
