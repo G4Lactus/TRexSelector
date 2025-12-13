@@ -342,17 +342,35 @@ void TLARS_Solver::logInfo(const std::string& msg) const {
 void TLARS_Solver::executeStep(std::size_t T_stop, bool early_stop) {
     validateConnected();
 
+    // Add profiling structure
+    struct StepTimings {
+        double find_max_corr = 0.0;
+        double update_active = 0.0;
+        double cholesky = 0.0;
+        double equiangular = 0.0;
+        double step_size = 0.0;
+        double beta_update = 0.0;
+        double residual_update = 0.0;
+        double corr_update = 0.0;
+        double inactive_update = 0.0;
+        std::size_t num_steps = 0;
+    } timings;
+
     while (
         currentStep_ < maxSteps_ &&
         !inactives_.empty() &&
         actives_.size() < effective_n_ &&
         (count_active_dummies_ < T_stop || !early_stop)
     ) {
+        auto step_start = std::chrono::high_resolution_clock::now();
 
         // ========================================================
         // STEP 1: Max correlation among inactives
         // ========================================================
+        auto t1 = std::chrono::high_resolution_clock::now();
         auto [Cmax, new_vars] = findTiedMaxCorrelations();
+        auto t2 = std::chrono::high_resolution_clock::now();
+        timings.find_max_corr += std::chrono::duration<double, std::milli>(t2-t1).count();
         if (new_vars.empty()) {
             logInfo("No variables to add; exiting.");
             break;
@@ -372,7 +390,10 @@ void TLARS_Solver::executeStep(std::size_t T_stop, bool early_stop) {
         // ========================================================
         // STEP 3: Active set update
         // ========================================================
+        t1 = std::chrono::high_resolution_clock::now();
         actions_.emplace_back(updateActiveSet(new_vars));
+        t2 = std::chrono::high_resolution_clock::now();
+        timings.update_active += std::chrono::duration<double, std::milli>(t2-t1).count();
         if (actives_.empty() || R_.size() == 0) {
             logWarning("Active set or Cholesky is empty; aborting.");
             break;
@@ -381,20 +402,33 @@ void TLARS_Solver::executeStep(std::size_t T_stop, bool early_stop) {
         // ========================================================
         // STEP 4: Equi-angular computations
         // ========================================================
+        t1 = std::chrono::high_resolution_clock::now();
         Eigen::VectorXd sign_vec = signVector();
         Eigen::VectorXd w_A = equiangularDirection(sign_vec);
         Eigen::VectorXd u = equiangularVector(w_A);
+        t2 = std::chrono::high_resolution_clock::now();
+        timings.equiangular += std::chrono::duration<double, std::milli>(t2-t1).count();
+
+        t1 = std::chrono::high_resolution_clock::now();
         double gamma = computeStepSize(Cmax, u);
+        t2 = std::chrono::high_resolution_clock::now();
+        timings.step_size += std::chrono::duration<double, std::milli>(t2-t1).count();
 
         // ========================================================
         // STEP 5: Update beta coefficients
         // ========================================================
+        t1 = std::chrono::high_resolution_clock::now();
         updateBetaPath(w_A, gamma);
+        t2 = std::chrono::high_resolution_clock::now();
+        timings.beta_update += std::chrono::duration<double, std::milli>(t2-t1).count();
 
         // ========================================================
         // STEP 6: Update residuals
         // ========================================================
+        t1 = std::chrono::high_resolution_clock::now();
         r_ -= gamma * u;
+        t2 = std::chrono::high_resolution_clock::now();
+        timings.residual_update += std::chrono::duration<double, std::milli>(t2-t1).count();
 
         // ========================================================
         // STEP 7: Update diagnostics
@@ -409,12 +443,68 @@ void TLARS_Solver::executeStep(std::size_t T_stop, bool early_stop) {
         // ========================================================
         // STEP 8: Update inactive set
         // ========================================================
+        t1 = std::chrono::high_resolution_clock::now();
         updateInactiveSet();
+        t2 = std::chrono::high_resolution_clock::now();
+        timings.inactive_update += std::chrono::duration<double, std::milli>(t2-t1).count();
 
         // ========================================================
         // STEP 9: Recompute correlations for next iteration
         // ========================================================
+        t1 = std::chrono::high_resolution_clock::now();
         updateCorrelations();
+        t2 = std::chrono::high_resolution_clock::now();
+        timings.corr_update += std::chrono::duration<double, std::milli>(t2-t1).count();
+
+        timings.num_steps++;
+    }
+
+    // Print profiling summary
+    if (verbose_ && timings.num_steps > 0) {
+        std::cout << "\n=== TLARS Profiling Summary ===\n";
+        std::cout << "Total steps: " << timings.num_steps << "\n";
+        std::cout << "Time per step (avg):\n";
+        std::cout << "  Find max corr:    " << std::setw(8)
+                  << timings.find_max_corr / timings.num_steps << " ms\n";
+        std::cout << "  Update active:    " << std::setw(8)
+                  << timings.update_active / timings.num_steps << " ms\n";
+        std::cout << "  Equiangular dir:  " << std::setw(8)
+                  << timings.equiangular / timings.num_steps << " ms\n";
+        std::cout << "  Compute stepsize: " << std::setw(8)
+                  << timings.step_size / timings.num_steps << " ms\n";
+        std::cout << "  Update beta:      " << std::setw(8)
+                  << timings.beta_update / timings.num_steps << " ms\n";
+        std::cout << "  Update residual:  " << std::setw(8)
+                  << timings.residual_update / timings.num_steps << " ms\n";
+        std::cout << "  Update correlations: " << std::setw(8)
+                  << timings.corr_update / timings.num_steps << " ms\n";
+        std::cout << "  Update inactives: " << std::setw(8)
+                  << timings.inactive_update / timings.num_steps << " ms\n";
+
+        double total = timings.find_max_corr + timings.update_active +
+                       timings.equiangular + timings.step_size +
+                       timings.beta_update + timings.residual_update +
+                       timings.corr_update + timings.inactive_update;
+
+        std::cout << "\nPercentage breakdown:\n";
+        std::cout << "  Find max corr:    " << std::setw(6)
+                  << std::fixed << std::setprecision(1)
+                  << 100.0 * timings.find_max_corr / total << "%\n";
+        std::cout << "  Update active:    " << std::setw(6)
+                  << 100.0 * timings.update_active / total << "%\n";
+        std::cout << "  Equiangular dir:  " << std::setw(6)
+                  << 100.0 * timings.equiangular / total << "%\n";
+        std::cout << "  Compute stepsize: " << std::setw(6)
+                  << 100.0 * timings.step_size / total << "%\n";
+        std::cout << "  Update beta:      " << std::setw(6)
+                  << 100.0 * timings.beta_update / total << "%\n";
+        std::cout << "  Update residual:  " << std::setw(6)
+                  << 100.0 * timings.residual_update / total << "%\n";
+        std::cout << "  Update correlations: " << std::setw(6)
+                  << 100.0 * timings.corr_update / total << "%\n";
+        std::cout << "  Update inactives: " << std::setw(6)
+                  << 100.0 * timings.inactive_update / total << "%\n";
+        std::cout << "================================\n\n";
     }
 }
 
@@ -433,16 +523,15 @@ void TLARS_Solver::initializeCorrelations() {
 }
 
 void TLARS_Solver::updateCorrelations() {
-        #pragma omp parallel for schedule(static)
-        for (std::size_t i = 0; i < inactives_.size(); ++i) {
-            std::size_t j = inactives_[i];
-            correlations_(j) = X_->col(j).dot(r_);
+    #pragma omp parallel for schedule(static)
+    for (std::size_t i = 0; i < inactives_.size(); ++i) {
+        std::size_t j = inactives_[i];
+        correlations_(j) = X_->col(j).dot(r_);
     }
 }
 
 
-std::pair<double, std::vector<std::size_t>>
-    TLARS_Solver::findTiedMaxCorrelations() const {
+std::pair<double, std::vector<std::size_t>> TLARS_Solver::findTiedMaxCorrelations() const {
     double Cmax = 0.0;
     std::vector<std::size_t> tied;
     tied.reserve(10);
@@ -466,8 +555,7 @@ std::pair<double, std::vector<std::size_t>>
 }
 
 
-std::vector<int> TLARS_Solver::updateActiveSet (
-                                const std::vector<std::size_t>& new_vars) {
+std::vector<int> TLARS_Solver::updateActiveSet (const std::vector<std::size_t>& new_vars) {
 
         std::vector<int> actions_this_step;
         any_dropped_ = false;
@@ -485,11 +573,12 @@ std::vector<int> TLARS_Solver::updateActiveSet (
                 // Collinear: did NOT increase rank
                 R_ = R_backup;
                 last_updateR_rank_ = rankR_backup;
+
                 dropped_indices_.push_back(j_new);
                 actions_this_step.push_back(-static_cast<int>(j_new));
                 any_dropped_ = true;
-                logWarning(concatMsg("Variable ", j_new,
-                           " collinear; dropped."));
+                logWarning(concatMsg("Variable ", j_new, " collinear; dropped."));
+
             } else {
                 // Valid addition: rank increased
                 R_ = newR;
@@ -497,6 +586,13 @@ std::vector<int> TLARS_Solver::updateActiveSet (
                 actions_this_step.push_back(static_cast<int>(j_new));
                 Sign_.push_back((correlations_(j_new) >= 0) ? 1 : -1);
                 num_additions_++;
+
+                // Remove from inactives incrementally (O(p_inactive) worst case)
+                // faster than full rebuild when no drops
+                auto it = std::find(inactives_.begin(), inactives_.end(), j_new);
+                if (it != inactives_.end()) {
+                    inactives_.erase(it);  // Swap-and-pop would be O(1) but breaks ordering
+                }
 
                 // Track dummy variable entry for early stopping
                 if (j_new >= dummy_start_idx_) {
@@ -511,11 +607,13 @@ std::vector<int> TLARS_Solver::updateActiveSet (
 
 void TLARS_Solver::updateInactiveSet() {
 
+    if (!any_dropped_) return;
+
+    // Full rebuild only if collinear drops occured
     inactives_.clear();
 
     // Create hash sets for O(1) membership testing
-    std::unordered_set<std::size_t> active_set(actives_.begin(),
-                                               actives_.end());
+    std::unordered_set<std::size_t> active_set(actives_.begin(), actives_.end());
     std::unordered_set<std::size_t> dropped_set(dropped_indices_.begin(),
                                                 dropped_indices_.end());
 
@@ -541,6 +639,9 @@ void TLARS_Solver::updateInactiveSet() {
     for (const auto& buf : thread_buffers) {
         inactives_.insert(inactives_.end(), buf.begin(), buf.end());
     }
+
+    // Reset drop flag
+    any_dropped_ = false;
 }
 
 
@@ -600,8 +701,8 @@ double TLARS_Solver::computeStepSize(double Cmax, const Eigen::VectorXd& u) cons
     #pragma omp parallel
     {
         double local_gamma = std::numeric_limits<double>::max();
-
         std::size_t num_inactives = inactives_.size();
+
         #pragma omp for schedule(static) nowait
         for (std::size_t i = 0; i < num_inactives; ++i) {
             std::size_t j = inactives_[i];
@@ -611,8 +712,13 @@ double TLARS_Solver::computeStepSize(double Cmax, const Eigen::VectorXd& u) cons
             double g1 = (Cmax - c_j) / (A_A_ - a_j);
             double g2 = (Cmax + c_j) / (A_A_ + a_j);
 
-            if (g1 > eps_ && std::isfinite(g1) && g1 < gamma) { gamma = g1; }
-            if (g2 > eps_ && std::isfinite(g2) && g2 < gamma) { gamma = g2; }
+            // local gamma update
+            if (g1 > eps_ && std::isfinite(g1) && g1 < local_gamma) {
+                local_gamma = g1;
+            }
+            if (g2 > eps_ && std::isfinite(g2) && g2 < local_gamma) {
+                local_gamma = g2;
+            }
         }
 
         #pragma omp critical
