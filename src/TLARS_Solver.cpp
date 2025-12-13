@@ -352,7 +352,6 @@ void TLARS_Solver::executeStep(std::size_t T_stop, bool early_stop) {
         // ========================================================
         // STEP 1: Max correlation among inactives
         // ========================================================
-
         auto [Cmax, new_vars] = findTiedMaxCorrelations();
         if (new_vars.empty()) {
             logInfo("No variables to add; exiting.");
@@ -367,16 +366,13 @@ void TLARS_Solver::executeStep(std::size_t T_stop, bool early_stop) {
         // ========================================================
         // STEP 2: Increment step counter and record lambda
         // ========================================================
-
         currentStep_++;
         lambda_.push_back(Cmax);
 
         // ========================================================
         // STEP 3: Active set update
         // ========================================================
-
         actions_.emplace_back(updateActiveSet(new_vars));
-
         if (actives_.empty() || R_.size() == 0) {
             logWarning("Active set or Cholesky is empty; aborting.");
             break;
@@ -385,7 +381,6 @@ void TLARS_Solver::executeStep(std::size_t T_stop, bool early_stop) {
         // ========================================================
         // STEP 4: Equi-angular computations
         // ========================================================
-
         Eigen::VectorXd sign_vec = signVector();
         Eigen::VectorXd w_A = equiangularDirection(sign_vec);
         Eigen::VectorXd u = equiangularVector(w_A);
@@ -394,38 +389,32 @@ void TLARS_Solver::executeStep(std::size_t T_stop, bool early_stop) {
         // ========================================================
         // STEP 5: Update beta coefficients
         // ========================================================
-
         updateBetaPath(w_A, gamma);
 
         // ========================================================
         // STEP 6: Update residuals
         // ========================================================
-
         r_ -= gamma * u;
 
         // ========================================================
         // STEP 7: Update diagnostics
         // ========================================================
-
         double rss = r_.dot(r_);
         RSS_.push_back(rss);
         R2_.push_back(1.0 - rss / RSS_[0]);
 
-        // T-LARS: Track dummy count and compute DoF (includes dummies)
         updateDummyTracking();
         DoF_.push_back(actives_.size() + (intercept_ ? 1 : 0));
 
         // ========================================================
         // STEP 8: Update inactive set
         // ========================================================
-
         updateInactiveSet();
 
         // ========================================================
         // STEP 9: Recompute correlations for next iteration
         // ========================================================
-
-        computeCorrelations();
+        updateCorrelations();
     }
 }
 
@@ -443,11 +432,11 @@ void TLARS_Solver::initializeCorrelations() {
     }
 }
 
-void TLARS_Solver::computeCorrelations() {
-    #pragma omp parallel for schedule(static)
-    for (std::size_t i = 0; i < inactives_.size(); ++i) {
-        std::size_t j = inactives_[i];
-        correlations_(j) = X_->col(j).dot(r_);
+void TLARS_Solver::updateCorrelations() {
+        #pragma omp parallel for schedule(static)
+        for (std::size_t i = 0; i < inactives_.size(); ++i) {
+            std::size_t j = inactives_[i];
+            correlations_(j) = X_->col(j).dot(r_);
     }
 }
 
@@ -558,7 +547,6 @@ void TLARS_Solver::updateInactiveSet() {
 void TLARS_Solver::updateBetaPath(const Eigen::VectorXd& w_A, double gamma) {
 
     Eigen::VectorXd beta_new = betaPath_.col(betaPath_.cols() - 1);
-
     for (std::size_t k = 0; k < actives_.size(); ++k) {
         beta_new(actives_[k]) += gamma * w_A(k);
     }
@@ -578,6 +566,7 @@ Eigen::VectorXd TLARS_Solver::signVector() const {
 
 
 Eigen::VectorXd TLARS_Solver::equiangularDirection(const Eigen::VectorXd& sign) {
+
     std::size_t m = R_.rows();
     if (m == 1) {
         Eigen::VectorXd GAi_s(1);
@@ -594,8 +583,8 @@ Eigen::VectorXd TLARS_Solver::equiangularDirection(const Eigen::VectorXd& sign) 
 
 
 Eigen::VectorXd TLARS_Solver::equiangularVector(const Eigen::VectorXd& w_A) const {
-    Eigen::VectorXd u = Eigen::VectorXd::Zero(X_->rows());
 
+    Eigen::VectorXd u = Eigen::VectorXd::Zero(X_->rows());
     for (std::size_t k = 0; k < static_cast<std::size_t>(actives_.size()); ++k) {
         u += w_A(k) * X_->col(actives_[k]);
     }
@@ -604,18 +593,34 @@ Eigen::VectorXd TLARS_Solver::equiangularVector(const Eigen::VectorXd& w_A) cons
 }
 
 
-double TLARS_Solver::computeStepSize(double Cmax,
-                                     const Eigen::VectorXd& u) const {
+double TLARS_Solver::computeStepSize(double Cmax, const Eigen::VectorXd& u) const {
+
     double gamma = std::numeric_limits<double>::max();
 
-    for (std::size_t j : inactives_) {
-        double a_j = X_->col(j).dot(u);
+    #pragma omp parallel
+    {
+        double local_gamma = std::numeric_limits<double>::max();
 
-        double g1 = (Cmax - correlations_(j)) / (A_A_ - a_j);
-        double g2 = (Cmax + correlations_(j)) / (A_A_ + a_j);
+        std::size_t num_inactives = inactives_.size();
+        #pragma omp for schedule(static) nowait
+        for (std::size_t i = 0; i < num_inactives; ++i) {
+            std::size_t j = inactives_[i];
+            double a_j = X_->col(j).dot(u);
+            double c_j = correlations_(j);
 
-        if (g1 > eps_ && std::isfinite(g1) && g1 < gamma) { gamma = g1; }
-        if (g2 > eps_ && std::isfinite(g2) && g2 < gamma) { gamma = g2; }
+            double g1 = (Cmax - c_j) / (A_A_ - a_j);
+            double g2 = (Cmax + c_j) / (A_A_ + a_j);
+
+            if (g1 > eps_ && std::isfinite(g1) && g1 < gamma) { gamma = g1; }
+            if (g2 > eps_ && std::isfinite(g2) && g2 < gamma) { gamma = g2; }
+        }
+
+        #pragma omp critical
+        {
+            if (local_gamma < gamma) {
+                gamma = local_gamma;
+            }
+        }
     }
 
     if (gamma == std::numeric_limits<double>::max()) {

@@ -810,7 +810,7 @@ protected:
      *
      * @note Uses parallelized inner products for speed (OpenMP if available).
      */
-    virtual void computeCorrelations();
+    virtual void updateCorrelations();
 
     /**
      * @brief Identify all inactives tied at maximum absolute correlation.
