@@ -364,7 +364,6 @@ void demo_production_tlars_workflow() {
     // ========================================================================
     // Step 1: Create X and y on disk
     // ========================================================================
-
     std::cout << "\n=== Step 1: Creating X and y (simulating existing data) ===\n";
 
     utils_talgos::create_mmapped_X_and_y(
@@ -427,13 +426,28 @@ void demo_production_tlars_workflow() {
         std::cout << "  Corr(col " << idx << ", y) = " << corr << "\n";
     }
 
+    std::cout << "\nDiagnostic: Top 10 correlations:\n";
+    std::vector<std::pair<double, std::size_t>> corr_pairs;
+    for (std::size_t j = 0; j < static_cast<std::size_t>(X_aug.cols()); ++j) {
+        double c = X_aug.col(j).dot(y);
+        corr_pairs.push_back({std::abs(c), j});
+    }
+    std::sort(corr_pairs.rbegin(), corr_pairs.rend());
+    for (int i = 0; i < 10; ++i) {
+        std::size_t j = corr_pairs[i].second;
+        std::string type = (j < p) ? "Real" : "Dummy";
+        std::cout << "  " << type << " " << j << ": " << corr_pairs[i].first << "\n";
+    }
+
     // ========================================================================
     // Step 5: Run T-LARS
     // ========================================================================
     std::cout << "\n=== Step 5: Running T-LARS ===\n";
 
+    std::cout << "Creating T-LARS solver...\n";
     TLARS_Solver tlars(X_aug, y, num_dummies, false, false, true);
 
+    std::cout << "Executing T-LARS to T = " << T_stop << "...\n";
     auto t1 = utils_perf::profileit([&]() {
         tlars.executeStep(T_stop, true);
     });
@@ -497,7 +511,6 @@ int main() {
         // T-LARS production workflow
         const bool run_production_tlars_with_mmap = false;
         if (run_production_tlars_with_mmap) demo_production_tlars_workflow();
-
 
         std::cout << "\n✓ All T-LARS demos completed\n\n";
 
