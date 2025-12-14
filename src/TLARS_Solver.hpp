@@ -74,6 +74,11 @@ protected:
     /** @brief Residual vector. */
     Eigen::VectorXd r_{};
 
+    /** @brief Kahan summation compensation vector for incremental correlation updates.
+     *         Used to maintain numerical precision across multiple steps.
+     */
+    Eigen::VectorXd correlation_compensation_{};
+
     /** @brief Correlation between predictors and residual:
      *         vector X^T r (inactives only). */
     Eigen::VectorXd correlations_{};
@@ -197,6 +202,13 @@ protected:
      *        rejection, norm checks, etc.).
      */
     const double eps_ = std::numeric_limits<double>::epsilon();
+
+    /** @brief Kahan summation refresh interval (steps between full recomputations).
+     *         Chosen to provide a good balance between numerical stability and
+     *         performance. Classically, recommended to be 50, here set default
+     *         conservative 20 for higher stability in high-dimensional settings.
+     */
+    std::size_t kahan_refresh_interval_{20};
 
     /**
      * @brief True if X_ pointer is set and connected for computation.
@@ -512,6 +524,22 @@ public:
      */
     inline const Eigen::VectorXd& getNormsx() const noexcept { return normsx_; }
 
+    /**
+     * @brief Set Kahan summation refresh interval (steps between full recomputations).
+     *
+     * @param interval Number of steps between full refreshes computations.
+     *                 Smaller values (10-20) provide higher numerical stability.
+     *                 Larger values (50-100) reduce computational cost for stability.
+     *
+     * @note Must be called before executeStep(); Typical range: 10 - 50.
+     */
+    void setKahanRefreshInterval(std::size_t interval);
+
+    /**
+     * @brief Get current Kahan summation refresh interval.
+     */
+    std::size_t getKahanRefreshInterval() const noexcept { return kahan_refresh_interval_; }
+
 
     // ==== T-Algorithm Specific Getters ====
 
@@ -633,6 +661,8 @@ public:
             CEREAL_NVP(y_),
             CEREAL_NVP(r_),
             CEREAL_NVP(correlations_),
+            CEREAL_NVP(correlation_compensation_),
+            CEREAL_NVP(kahan_refresh_interval_),
 
             // Preprocessing
             CEREAL_NVP(normalize_),
@@ -806,11 +836,18 @@ protected:
     void initializeCorrelations();
 
     /**
-     * @brief Efficiently update correlation vector X^T r for all inactives.
+     * @brief Update correlations incrementally with periodic refresh.
+     *
+     * @details Uses Kahan's algorithm for incremental updates c_j = c_j - gamma * a_j,
+     *          maintaining numerical stability. Full recomputation from residuals every
+     *          20th step prevents long-term error drift accumulation.
+     *
+     * @param gamma Step size taken along equiangular direction.
+     * @param a Projection vector where a[i] = X^T_{inactives[i]} * u from computeStepSize().
      *
      * @note Uses parallelized inner products for speed (OpenMP if available).
      */
-    virtual void updateCorrelations();
+    virtual void updateCorrelations(double gamma, const Eigen::VectorXd& a);
 
     /**
      * @brief Identify all inactives tied at maximum absolute correlation.
@@ -892,11 +929,11 @@ protected:
      * @param Cmax Current maximal correlation (step size scaling).
      * @param u Equiangular predictor combination.
      *
-     * @return Maximum safe increment (gamma), constrained to no
-     *         over-shooting/ties.
+     * @return Pair of {gamma, projection_vector} where projection[i] = X^T_{inactives} u.
+     *         Maximum safe increment (gamma), constrained to no over-shooting/ties.
      */
-    virtual double computeStepSize(double Cmax,
-                                   const Eigen::VectorXd& u) const;
+    virtual std::pair<double, Eigen::VectorXd> computeStepSize(double Cmax,
+                                                               const Eigen::VectorXd& u) const;
 
     /**
      * @brief Update count of active dummies and dummies_at_step_ vector.
@@ -932,24 +969,32 @@ protected:
     // ============================================================================
 
     /**
-     * @brief Print information string if verbose or trace is enabled.
+     * @brief Print information string if verbose enabled.
      *
      * @param msg Log message.
+     *
+     * @note Thread-safe for stdout logging only. If adding file I/O, protect
+     *       with mutex.
      */
     void logMsg(const std::string& msg) const;
 
     /**
-     * @brief Print warning message (prefix [WARNING]) if verbose or trace is
-     *        enabled.
+     * @brief Print warning message (prefix [WARNING]) if verbose enabled.
      *
      * @param msg Warning detail.
+     *
+     * @note Thread-safe for stdout logging only. If adding file I/O, protect
+     *       with mutex.
      */
     void logWarning(const std::string& msg) const;
 
     /**
-     * @brief Print informational message (prefix [Info]) if verbose/trace.
+     * @brief Print informational message (prefix [Info]) if verbose enabled.
      *
      * @param msg Status detail.
+     *
+     * @note Thread-safe for stdout logging only. If adding file I/O, protect
+     *       with mutex.
      */
     void logInfo(const std::string& msg) const;
 
@@ -969,6 +1014,22 @@ protected:
         (oss << ... << args);
         return oss.str();
     }
+
+    // ==========================================================================
+    // Profiling
+    // ==========================================================================
+
+    /**
+     * @brief Utility timer for profiling code sections.
+     *
+     * @param label Label for the profiled section.
+     * @param time_value Time value in seconds.
+     * @param unit Time unit string (e.g., "s", "ms").
+     */
+    void printProfileLine(const std::string& label,
+                          double time_value,
+                          const std::string& unit) const;
+
 };
 
 #endif /* End of TLARS_SOLVER_HPP */
