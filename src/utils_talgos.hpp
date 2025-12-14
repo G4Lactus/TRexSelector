@@ -223,12 +223,13 @@ inline void create_mmapped_X_and_y(
         std::cout << "    beta[" << idx << "] = " << coef << "\n";
     }
 
-
-    // Add noise
     // Calculate noise level from SNR
-    double signal_power = y.squaredNorm() / n;
+    double y_mean = y.mean();
+    double signal_power = (y.array() - y_mean).square().sum() / n;
     double noise_std = std::sqrt(signal_power / snr);
-    std::cout << "  Signal power: " << signal_power << "\n";
+
+    std::cout << "  Signal mean: " << y_mean << " (should be ~0)\n";
+    std::cout << "  Signal variance: " << signal_power << "\n";
     std::cout << "  Noise std: " << noise_std << "\n";
 
     std::mt19937 gen;
@@ -241,6 +242,7 @@ inline void create_mmapped_X_and_y(
         std::cout << "  Using random noise (non-reproducible)\n";
     }
 
+    // Add noise
     std::normal_distribution<double> noise_dist(0.0, noise_std);
     for (std::size_t i = 0; i < n; ++i) {
         y(i) += noise_dist(gen);
