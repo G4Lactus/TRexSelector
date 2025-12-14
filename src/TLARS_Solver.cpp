@@ -109,8 +109,10 @@ TLARS_Solver::TLARS_Solver(
     dummies_at_step_.reserve(maxSteps_ + 1);
     dummies_at_step_.push_back(0);
 
-    // 10. Initialize correlations for all inactives
+    // 10. Initialize correlations and Kahan compensation for all inactives
+    correlation_compensation_ = Eigen::VectorXd::Zero(pcols);
     initializeCorrelations();
+
 }
 
 
@@ -187,6 +189,8 @@ void TLARS_Solver::preprocess() {
 
         #pragma omp parallel
         {
+            // Ensure Eigen does not spawn nested threads itself
+            Eigen::setNbThreads(1);
             int tid = omp_get_thread_num();
             int nthreads = omp_get_num_threads();
 
@@ -362,7 +366,6 @@ void TLARS_Solver::executeStep(std::size_t T_stop, bool early_stop) {
         actives_.size() < effective_n_ &&
         (count_active_dummies_ < T_stop || !early_stop)
     ) {
-        auto step_start = std::chrono::high_resolution_clock::now();
 
         // ========================================================
         // STEP 1: Max correlation among inactives
@@ -410,7 +413,7 @@ void TLARS_Solver::executeStep(std::size_t T_stop, bool early_stop) {
         timings.equiangular += std::chrono::duration<double, std::milli>(t2-t1).count();
 
         t1 = std::chrono::high_resolution_clock::now();
-        double gamma = computeStepSize(Cmax, u);
+        auto [gamma, a] = computeStepSize(Cmax, u);
         t2 = std::chrono::high_resolution_clock::now();
         timings.step_size += std::chrono::duration<double, std::milli>(t2-t1).count();
 
@@ -452,7 +455,7 @@ void TLARS_Solver::executeStep(std::size_t T_stop, bool early_stop) {
         // STEP 9: Recompute correlations for next iteration
         // ========================================================
         t1 = std::chrono::high_resolution_clock::now();
-        updateCorrelations();
+        updateCorrelations(gamma, a);
         t2 = std::chrono::high_resolution_clock::now();
         timings.corr_update += std::chrono::duration<double, std::milli>(t2-t1).count();
 
@@ -463,48 +466,42 @@ void TLARS_Solver::executeStep(std::size_t T_stop, bool early_stop) {
     if (verbose_ && timings.num_steps > 0) {
         std::cout << "\n=== TLARS Profiling Summary ===\n";
         std::cout << "Total steps: " << timings.num_steps << "\n";
-        std::cout << "Time per step (avg):\n";
-        std::cout << "  Find max corr:    " << std::setw(8)
-                  << timings.find_max_corr / timings.num_steps << " ms\n";
-        std::cout << "  Update active:    " << std::setw(8)
-                  << timings.update_active / timings.num_steps << " ms\n";
-        std::cout << "  Equiangular dir:  " << std::setw(8)
-                  << timings.equiangular / timings.num_steps << " ms\n";
-        std::cout << "  Compute stepsize: " << std::setw(8)
-                  << timings.step_size / timings.num_steps << " ms\n";
-        std::cout << "  Update beta:      " << std::setw(8)
-                  << timings.beta_update / timings.num_steps << " ms\n";
-        std::cout << "  Update residual:  " << std::setw(8)
-                  << timings.residual_update / timings.num_steps << " ms\n";
-        std::cout << "  Update correlations: " << std::setw(8)
-                  << timings.corr_update / timings.num_steps << " ms\n";
-        std::cout << "  Update inactives: " << std::setw(8)
-                  << timings.inactive_update / timings.num_steps << " ms\n";
 
+        // =========================================
+        // Time per step computations
+        // =========================================
+        std::cout << "Time per step (avg):\n" << std::fixed << std::setprecision(1);
+        printProfileLine("Find max corr:", timings.find_max_corr / timings.num_steps, " ms");
+        printProfileLine("Update active:", timings.update_active / timings.num_steps, " ms");
+        printProfileLine("Equiangular dir:", timings.equiangular / timings.num_steps, " ms");
+        printProfileLine("Compute stepsize:", timings.step_size / timings.num_steps, " ms");
+        printProfileLine("Update beta:", timings.beta_update / timings.num_steps, " ms");
+        printProfileLine("Update residual:", timings.residual_update / timings.num_steps, " ms");
+        printProfileLine("Update correlations:", timings.corr_update / timings.num_steps, " ms");
+        printProfileLine("Update inactives:", timings.inactive_update / timings.num_steps, " ms");
+
+        // =========================================
+        // Percentage breakdown section
+        // =========================================
         double total = timings.find_max_corr + timings.update_active +
                        timings.equiangular + timings.step_size +
                        timings.beta_update + timings.residual_update +
                        timings.corr_update + timings.inactive_update;
 
+        // =========================================
+        // Percentage breakdown section
+        // =========================================
         std::cout << "\nPercentage breakdown:\n";
-        std::cout << "  Find max corr:    " << std::setw(6)
-                  << std::fixed << std::setprecision(1)
-                  << 100.0 * timings.find_max_corr / total << "%\n";
-        std::cout << "  Update active:    " << std::setw(6)
-                  << 100.0 * timings.update_active / total << "%\n";
-        std::cout << "  Equiangular dir:  " << std::setw(6)
-                  << 100.0 * timings.equiangular / total << "%\n";
-        std::cout << "  Compute stepsize: " << std::setw(6)
-                  << 100.0 * timings.step_size / total << "%\n";
-        std::cout << "  Update beta:      " << std::setw(6)
-                  << 100.0 * timings.beta_update / total << "%\n";
-        std::cout << "  Update residual:  " << std::setw(6)
-                  << 100.0 * timings.residual_update / total << "%\n";
-        std::cout << "  Update correlations: " << std::setw(6)
-                  << 100.0 * timings.corr_update / total << "%\n";
-        std::cout << "  Update inactives: " << std::setw(6)
-                  << 100.0 * timings.inactive_update / total << "%\n";
-        std::cout << "================================\n\n";
+        printProfileLine("Find max corr:", 100.0 * timings.find_max_corr / total, "%");
+        printProfileLine("Update active:", 100.0 * timings.update_active / total, "%");
+        printProfileLine("Equiangular dir:", 100.0 * timings.equiangular / total, "%");
+        printProfileLine("Compute stepsize:", 100.0 * timings.step_size / total, "%");
+        printProfileLine("Update beta:", 100.0 * timings.beta_update / total, "%");
+        printProfileLine("Update residual:", 100.0 * timings.residual_update / total, "%");
+        printProfileLine("Update correlations:", 100.0 * timings.corr_update / total, "%");
+        printProfileLine("Update inactives:", 100.0 * timings.inactive_update / total, "%");
+
+        std::cout << "===================================\n\n";
     }
 }
 
@@ -522,11 +519,40 @@ void TLARS_Solver::initializeCorrelations() {
     }
 }
 
-void TLARS_Solver::updateCorrelations() {
-    #pragma omp parallel for schedule(static)
-    for (std::size_t i = 0; i < inactives_.size(); ++i) {
-        std::size_t j = inactives_[i];
-        correlations_(j) = X_->col(j).dot(r_);
+
+void TLARS_Solver::updateCorrelations(double gamma, const Eigen::VectorXd& a) {
+
+    std::size_t num_inactives = inactives_.size();
+
+    if ((currentStep_ % kahan_refresh_interval_) == 0) {
+        // Full recomputation from residuals (reset numerical errors - classical)
+        #pragma omp parallel for schedule(static)
+        for (std::size_t i = 0; i < num_inactives; ++i) {
+            std::size_t j = inactives_[i];
+            correlations_(j) = X_->col(j).dot(r_);
+            correlation_compensation_(j) = 0.0; // reset compensation
+        }
+    } else {
+        // Note: Old version
+        // Incremental update: c_j = c_j - gamma * a_j (recursive definition); O(n p_inactive)
+        // #pragma omp parallel for schedule(static)
+        // for (std::size_t i = 0; i < num_inactives; ++i) {
+        //     std::size_t j = inactives_[i];
+        //     correlations_(j) -= gamma * a(i);
+        // }
+
+        // better: Kahan Algorithm compensated incremental update; O(p_inactive)
+        // https://en.wikipedia.org/wiki/Kahan_summation_algorithm
+        #pragma omp parallel for schedule(static)
+        for (std::size_t i = 0; i < num_inactives; ++i) {
+            std::size_t j = inactives_[i];
+
+            // Kahan summation: compensate for accumulated error
+            double update = -gamma * a(i) - correlation_compensation_(j);
+            double temp = correlations_(j) + update;
+            correlation_compensation_(j) = (temp - correlations_(j)) - update;
+            correlations_(j) = temp;
+        }
     }
 }
 
@@ -577,6 +603,7 @@ std::vector<int> TLARS_Solver::updateActiveSet (const std::vector<std::size_t>& 
                 dropped_indices_.push_back(j_new);
                 actions_this_step.push_back(-static_cast<int>(j_new));
                 any_dropped_ = true;
+
                 logWarning(concatMsg("Variable ", j_new, " collinear; dropped."));
 
             } else {
@@ -587,11 +614,13 @@ std::vector<int> TLARS_Solver::updateActiveSet (const std::vector<std::size_t>& 
                 Sign_.push_back((correlations_(j_new) >= 0) ? 1 : -1);
                 num_additions_++;
 
-                // Remove from inactives incrementally (O(p_inactive) worst case)
-                // faster than full rebuild when no drops
+                // Remove from inactives incrementally
                 auto it = std::find(inactives_.begin(), inactives_.end(), j_new);
+
+                // O(p_inactive) worst case but preserve order
+                // Swap-and-pop would be O(1) but changes order and corrupted indices
                 if (it != inactives_.end()) {
-                    inactives_.erase(it);  // Swap-and-pop would be O(1) but breaks ordering
+                     inactives_.erase(it);
                 }
 
                 // Track dummy variable entry for early stopping
@@ -694,19 +723,22 @@ Eigen::VectorXd TLARS_Solver::equiangularVector(const Eigen::VectorXd& w_A) cons
 }
 
 
-double TLARS_Solver::computeStepSize(double Cmax, const Eigen::VectorXd& u) const {
+std::pair<double, Eigen::VectorXd> TLARS_Solver::computeStepSize(double Cmax,
+                                                                 const Eigen::VectorXd& u) const {
 
+    std::size_t num_inactives = inactives_.size();
+    Eigen::VectorXd a(num_inactives);
     double gamma = std::numeric_limits<double>::max();
 
     #pragma omp parallel
     {
         double local_gamma = std::numeric_limits<double>::max();
-        std::size_t num_inactives = inactives_.size();
 
         #pragma omp for schedule(static) nowait
         for (std::size_t i = 0; i < num_inactives; ++i) {
             std::size_t j = inactives_[i];
             double a_j = X_->col(j).dot(u);
+            a(i) = a_j;
             double c_j = correlations_(j);
 
             double g1 = (Cmax - c_j) / (A_A_ - a_j);
@@ -731,10 +763,10 @@ double TLARS_Solver::computeStepSize(double Cmax, const Eigen::VectorXd& u) cons
 
     if (gamma == std::numeric_limits<double>::max()) {
         logWarning("No valid gamma found, using fallback.");
-        return Cmax / A_A_;
+        return {Cmax / A_A_, a};
     }
 
-    return gamma;
+    return {gamma, a};
 }
 
 
@@ -994,6 +1026,30 @@ Eigen::MatrixXd TLARS_Solver::getBetaPath() const {
 
 
 // ============================================================================
+// Setter
+// ============================================================================
+
+void TLARS_Solver::setKahanRefreshInterval(std::size_t interval) {
+    if (interval < 1) {
+        logWarning(concatMsg(
+            "Kahan refresh interval must be at least 1; keeping current value (",
+            kahan_refresh_interval_, ")."
+        ));
+        return;
+    }
+
+    if (interval > 100) {
+        logWarning(concatMsg(
+            "Kahan refresh interval (", interval,
+            ") is large; numerical drift may accumulate. Recommended range: 10-50."
+        ));
+    }
+
+    kahan_refresh_interval_ = interval;
+}
+
+
+// ============================================================================
 // Cp statistics
 // ============================================================================
 
@@ -1210,4 +1266,18 @@ void TLARS_Solver::reconnect(Eigen::Map<Eigen::MatrixXd>& X) {
         "  - Current step: ", currentStep_, "\n",
         "  - Active variables: ", actives_.size()
     ));
+}
+
+
+// ==========================================================================
+// Profiling
+// ==========================================================================
+
+void TLARS_Solver::printProfileLine(const std::string& label,
+                                    double time_value,
+                                    const std::string& unit) const {
+
+    std::cout << "  " << std::left << std::setw(22) << label
+              << std::right << std::setw(8) << time_value
+              << " " << unit << "\n";
 }
