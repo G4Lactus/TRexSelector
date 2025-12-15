@@ -2,9 +2,14 @@
 #define TLASSO_SOLVER_HPP
 
 #include <cmath>
+#include <chrono>
 #include <fstream>
+#include <iostream>
+#include <iomanip>
 #include <limits>
 #include <sstream>
+#include <string>
+#include <vector>
 
 #include <cereal/archives/portable_binary.hpp>
 
@@ -211,12 +216,13 @@ public:
      *   - ratio < 0.3: Minimal cycling, stable path
      *   - ratio 0.3-0.5: Moderate cycling, typical for correlated predictors
      *   - ratio > 0.5: Heavy cycling, potential issues:
-     *     * Strong collinearity in design matrix
-     *     * Numerical instability in Cholesky updates/downdates
-     *     * Regularization parameter may need tuning
+     *                  * Strong collinearity in design matrix
+     *                  * Numerical instability in Cholesky updates/downdates
+     *                  * Regularization parameter may need tuning
      *
      * @note High cycling ratios (>0.5) may suggest numerical issues or
      *       ill-conditioning.
+     * @note Well-conditioned problems should have low cycling ratios (<0.2).
      */
     double getCyclingRatio() const;
 
@@ -228,14 +234,16 @@ public:
      * @brief Serialize all internal T-LASSO solver state except for X_.
      *
      * @tparam Archive Cereal archive type (e.g.,
-     *          cereal::PortableBinaryOutputArchive).
-     * @param archive Output/input archive object.
+     *                 cereal::PortableBinaryOutputArchive).
+     * @param archive  Output/input archive object.
      *
-     * @details Saves base T-LARS state plus T-LASSO-specific
-     *          num_removals_ counter. Call reconnect(X) after loading to
-     *          restore design matrix pointer.
+     * @details Saves:
+     * - All base T-LARS state (coefficients, correlations, Kahan compensation,
+     *   Cholesky factors, diagnostics, etc.)
+     * - T-LASSO-specific num_removals_ counter
      *
      * @note X_ must be reconnected after deserialization.
+     * @note All numerical quantities saved with full double precision.
      */
     template<class Archive>
     void serialize(Archive& archive) {
@@ -275,26 +283,31 @@ protected:
      * @brief Compute minimum positive step size (gamma) to coefficient
      *        zero-crossing.
      *
-     * @param gamhat Step size proposal from T-LARS logic (gamma to next
-     *               variable entry).
-     * @param drops Output boolean vector marking which actives cross zero
-     *              at gamma_sign.
-     * @param w_A Current equiangular direction weights for active set.
+     * @param gamhat Step size from T-LARS logic (first element of pair
+     *               returned by computeStepSize(), representing gamma to
+     *               next variable entry).
+     * @param drops  Output boolean vector marking which active variables
+     *               cross zero at gamma_sign (size = |actives_|).
+     * @param w_A    Current equiangular direction weights for active set.
      *
      * @return Smallest positive gamma where any coefficient crosses zero,
-     *         or gamhat if none.
+     *         or gamhat if no crossings occur before next variable entry.
      *
      * @details
-     *   For each active variable j:
-     *   - Current coefficient: beta_j
-     *   - Direction: d_j (from w_A)
-     *   - Zero-crossing when: beta_j + gamma * d_j = 0
-     *   - Solve: gamma = -beta_j / d_j (if positive and sign change occurs)
+     * For each active variable j with index i in active set:
+     * - Current coefficient: beta_j = betaPath_(actives_[i], currentStep_ - 1)
+     * - Direction: d_j = w_A(i)
+     * - Zero-crossing when: beta_j + gamma * d_j = 0
+     * - Solve: gamma = -beta_j / d_j (if positive and sign change occurs)
      *
-     *   Returns minimum over all positive gamma values, and marks corresponding
-     *   drops[j] = true for variables that cross zero at this gamma.
+     * Returns minimum over all positive gamma values, and marks corresponding
+     * drops[i] = true for variables that cross zero at this gamma.
      *
-     * @note Only considers positive step sizes; negative crossings are ignored.
+     * Multiple simultaneous crossings (within eps tolerance) are handled
+     * by marking all crossing variables in drops vector.
+     *
+     * @note Only considers positive step sizes; negative crossings ignored.
+     * @note Uses eps_ tolerance for detecting simultaneous crossings.
      */
     double computeGammaSignChange(double gamhat,
                                   std::vector<bool>& drops,
@@ -305,20 +318,24 @@ protected:
      *        Cholesky factor.
      *
      * @param drops Boolean vector marking which active variables to drop
-     *              (size = |actives_|).
+     *              (size = |actives_|, true = drop this variable).
      *
      * @details
-     *   For each marked variable:
-     *   1. Downdate Cholesky factor R using Givens rotations
-     *   2. Remove variable from actives_ vector
-     *   3. Add to inactives_ (allows re-entry in cycling)
-     *   4. Record negative action in actions_.back()
-     *   5. Increment num_removals_ counter
-     *   6. Track dummy removals if applicable
+     * For each marked variable (processed in reverse order for index stability):
+     * 1. Downdate Cholesky factor R using Givens rotations (downdateR())
+     * 2. Zero out coefficient in betaPath_ at current step
+     * 3. Record negative action in actions_.back() (removal indicator)
+     * 4. Re-add variable to inactives_ (enables cycling/re-entry)
+     * 5. Remove variable from actives_ vector (erase)
+     * 6. Remove sign from Sign_ vector (erase)
+     * 7. Decrement count_active_dummies_ if dropping a dummy
+     * 8. Increment num_removals_ counter
      *
-     * @note Processes drops in reverse order to maintain index stability
-     *       during removal.
+     * @note Processes drops in reverse order (high to low index) to maintain
+     *       index stability during vector erasure operations.
+     * @note Re-adding to inactives_ is CRITICAL for LASSO cycling behavior.
      * @note Updates Sign_ vector to match reduced active set.
+     * @note Thread-safe for single-threaded execution (modifies class state).
      */
     void processLassoDrops(std::vector<bool>& drops);
 
