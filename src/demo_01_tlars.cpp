@@ -422,7 +422,7 @@ void demo_production_tlars_workflow() {
     // Verification
     std::cout << "\nVerification:\n";
     for (std::size_t idx : true_support) {
-        double corr = X_aug.col(idx).dot(y) / (X_aug.col(idx).norm() * y.norm());
+        double corr = X_aug.col(idx).dot(y);
         std::cout << "  Corr(col " << idx << ", y) = " << corr << "\n";
     }
 
@@ -432,6 +432,7 @@ void demo_production_tlars_workflow() {
         double c = X_aug.col(j).dot(y);
         corr_pairs.push_back({std::abs(c), j});
     }
+
     std::sort(corr_pairs.rbegin(), corr_pairs.rend());
     for (int i = 0; i < 10; ++i) {
         std::size_t j = corr_pairs[i].second;
