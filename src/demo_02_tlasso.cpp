@@ -86,12 +86,12 @@ void demo_TLASSO_with_external_normalizer(bool high_dim, std::size_t T_stop = 5)
     std::size_t n, p;
     if (high_dim) {
         std::cout << "High-dimensional setting (p > n)" << "\n";
-        n = 500;
-        p = 1000;
+        n = 1000;
+        p = 5000;
     } else {
         std::cout << "Low-dimensional setting (n > p)" << "\n";
-        n = 1000;
-        p = 500;
+        n = 5000;
+        p = 1000;
     }
 
     const std::size_t num_dummies = 10 * p;
@@ -132,7 +132,6 @@ void demo_TLASSO_with_external_normalizer(bool high_dim, std::size_t T_stop = 5)
               << tlasso.getCyclingRatio() << "\n";
 
     std::cout << "\n\n";
-
 }
 
 
@@ -147,7 +146,7 @@ void demo_TLASSO_serialization() {
 
     const std::size_t n = 100, p = 50;
     const std::size_t num_dummies = p;
-    const std::size_t T_stop_final = 15;
+    const std::size_t T_stop_final = 55;
     const std::size_t T_stop_partial = 7;
     const std::vector<std::size_t> true_support = {10, 25, 40};
     const std::vector<double> true_coefs = {2.5, -1.8, 3.2};
@@ -285,7 +284,7 @@ void demo_TLASSO_controlled_comparison() {
 
 
     // ============================================================
-    // Step 4: Applying external normalization
+    // Step 4: External normalization
     // ============================================================
     std::cout << "\n=== Step 4: Applying external normalization ===\n";
 
@@ -312,7 +311,7 @@ void demo_TLASSO_controlled_comparison() {
 
 
     // ============================================================
-    // Step 5: Running T-LASSO for both versions
+    // Step 5: Run T-LASSO for both versions
     // ============================================================
     std::cout << "\n=== Step 5: Running T-LASSO on in-memory data ===\n";
     TLASSO_Solver tlasso_inmem(X_aug_inmem_map, y_inmem_map, num_dummies, false, false, true);
@@ -344,7 +343,6 @@ void demo_TLASSO_controlled_comparison() {
     // Cleanup
     std::remove(X_aug_file.c_str());
     std::remove(y_file.c_str());
-
 }
 
 
@@ -377,7 +375,7 @@ void demo_production_TLASSO_workflow() {
 
 
     // ========================================================================
-    // Step 1: Create X and y on disk (simulating "already existing" data)
+    // Step 1: Create X and y on disk
     // ========================================================================
 
     std::cout << "\n=== Step 1: Creating X and y (simulating existing data) ===\n";
@@ -442,13 +440,28 @@ void demo_production_TLASSO_workflow() {
         std::cout << "  Corr(col " << idx << ", y) = " << corr << "\n";
     }
 
+    std::cout << "\nDiagnostic: Top 10 correlations:\n";
+    std::vector<std::pair<double, std::size_t>> corr_pairs;
+    for (std::size_t j = 0; j < static_cast<std::size_t>(X_aug.cols()); ++j) {
+        double c = X_aug.col(j).dot(y);
+        corr_pairs.push_back({std::abs(c), j});
+    }
+    std::sort(corr_pairs.rbegin(), corr_pairs.rend());
+    for (int i = 0; i < 10; ++i) {
+        std::size_t j = corr_pairs[i].second;
+        std::string type = (j < p) ? "Real" : "Dummy";
+        std::cout << "  " << type << " " << j << ": " << corr_pairs[i].first << "\n";
+    }
+
     // ========================================================================
     // Step 5: Run T-LASSO
     // ========================================================================
     std::cout << "\n=== Step 5: Running T-LASSO ===\n";
 
+    std::cout << "Creating T-LARS solver...\n";
     TLASSO_Solver tlasso(X_aug, y, num_dummies, false, false, true);
 
+    std::cout << "Executing T-LARS to T = " << T_stop << "...\n";
     auto t1 = utils_perf::profileit([&]() {
         tlasso.executeStep(T_stop, true);
     });
@@ -485,7 +498,7 @@ int main() {
     try {
 
         // T-LASSO with early stopping - low and high dimensional
-        const bool run_early_stopping_demo = false;
+        const bool run_early_stopping_demo = true;
         if (run_early_stopping_demo) {
             demo_TLASSO_early_stopping(/*high_dim=*/false, /*T_stop=*/10);
             demo_TLASSO_early_stopping(/*high_dim=*/true, /*T_stop=*/10);
@@ -493,7 +506,7 @@ int main() {
 
 
         // T-LASSO with external normalization
-        const bool run_external_normalizer_demo = false;
+        const bool run_external_normalizer_demo = true;
         if (run_external_normalizer_demo) {
             demo_TLASSO_with_external_normalizer(/*high_dim=*/false, /*T_stop=*/5);
             demo_TLASSO_with_external_normalizer(/*high_dim=*/true, /*T_stop=*/5);
@@ -501,17 +514,17 @@ int main() {
 
 
         // T-LASSO serialization and warm-start
-        const bool run_serialization_demo = false;
+        const bool run_serialization_demo = true;
         if (run_serialization_demo) demo_TLASSO_serialization();
 
 
         // T-LASSO controlled comparison
-        const bool run_controlled_comparison = false;
+        const bool run_controlled_comparison = true;
         if (run_controlled_comparison) demo_TLASSO_controlled_comparison();
 
 
         // T-LASSO production workflow
-        const bool run_production_tlasso_with_mmap = true;
+        const bool run_production_tlasso_with_mmap = false;
         if (run_production_tlasso_with_mmap) demo_production_TLASSO_workflow();
 
 
