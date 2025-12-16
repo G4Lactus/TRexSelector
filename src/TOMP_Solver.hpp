@@ -2,6 +2,7 @@
 #define TOMP_SOLVER_HPP
 
 #include <algorithm>
+#include <chrono>
 #include <fstream>
 #include <iostream>
 #include <iomanip>
@@ -697,7 +698,8 @@ protected:
      *
      * @note Uses Eigen triangular view; throws if singular/ill-conditioned.
      */
-    Eigen::VectorXd backsolve(const Eigen::Ref<const Eigen::MatrixXd>& R, const Eigen::Ref<const Eigen::VectorXd>& b) const;
+    Eigen::VectorXd backsolve(const Eigen::Ref<const Eigen::MatrixXd>& R,
+                              const Eigen::Ref<const Eigen::VectorXd>& b) const;
 
     /**
      * @brief Solve R^T x = b for x (lower-triangular, R n x n).
@@ -709,10 +711,12 @@ protected:
      *
      * @note Uses Eigen triangular view; throws if singular/ill-conditioned.
      */
-    Eigen::VectorXd backsolveT(const Eigen::Ref<const Eigen::MatrixXd>& R, const Eigen::Ref<const Eigen::VectorXd>& b) const;
+    Eigen::VectorXd backsolveT(const Eigen::Ref<const Eigen::MatrixXd>& R,
+                               const Eigen::Ref<const Eigen::VectorXd>& b) const;
 
-
-    // ===== Internal OMP helper =====
+    // ============================================================================
+    // Internal OMP helper
+    // ============================================================================
 
     /**
      * @brief Efficiently setup correlation vector X^T y for all inactives.
@@ -726,7 +730,7 @@ protected:
      *
      * @note Uses parallelized inner products for speed (OpenMP if available).
      */
-    virtual void computeCorrelations();
+    virtual void updateCorrelations();
 
     /**
      * @brief Identify all inactives tied at maximum absolute correlation.
@@ -756,17 +760,17 @@ protected:
      */
     virtual std::vector<int> updateActiveSet(const std::vector<std::size_t>& new_vars);
 
-
     /**
-     * @brief Initialize the inactive set with all predictors not yet active or dropped.
+     * @brief Initialize and/or update list of inactives, skipping dropped
+     *        indices.
      *
-     * @note Parallel support with OpenMP is available.
+     * @note Efficient for large p with hash/linear branching.
      */
     void initializeInactives();
 
-
     /**
-     * @brief Updates inactives_ to all predictors not in actives_ or dropped_indices_.
+     * @brief Updates inactives_ to all predictors not in actives_ or
+     *        dropped_indices_.
      *
      * @details Rebuilds inactives_ as all predictors not currently in actives_ or dropped_indices_.
      *          Should be called by any descendant of OMP_Solver that supports active cycling
@@ -782,33 +786,43 @@ protected:
     virtual void updateResiduals();
 
     /**
-     * @brief Update and record the solution path coefficients after each algorithmic step.
+     * @brief Update and record the solution path coefficients after each
+     *        algorithmic step.
      */
     virtual void updateBetaPath();
 
     /**
      * @brief Update count of active dummies and dummies_at_step_ vector.
      *
-     * @note Called after each step to track dummy variable selection for FDR control.
+     * @note Called after each step to track dummy variable selection for
+     *       FDR control.
      */
     void updateDummyTracking();
 
-
-    // ===== Validation =====
+    // ============================================================================
+    // Validation
+    // ============================================================================
 
     /**
-     * @brief Ensure design matrix is connected and state is internally coherent.
+     * @brief Ensure design matrix is connected and state is internally
+     *        coherent.
      *
-     * @throws std::runtime_error if not connected or if serious shape mismatch detected.
+     * @throws std::runtime_error if not connected or if serious shape mismatch
+     *         detected.
      */
     void validateConnected() const;
 
-    // ===== Logging =====
+    // ============================================================================
+    // Logging
+    // ============================================================================
 
     /**
-     * @brief Print information string if verbose or trace is enabled.
+     * @brief Print information string if verboseis enabled.
      *
      * @param msg Log message
+     *
+     * @note Thread-safe for stdout logging only. If adding file I/O, protect with
+     *       mutex.
      */
     void logMsg(const std::string& msg) const;
 
@@ -816,13 +830,19 @@ protected:
      * @brief Print warning message (prefix [WARNING]) if verbose or trace is enabled.
      *
      * @param msg Warning detail
+     *
+     * @note Thread-safe for stdout logging only. If adding file I/O, protect with
+     *       mutex.
      */
     void logWarning(const std::string& msg) const;
 
     /**
-     * @brief Print informational message (prefix [Info]) if verbose/trace.
+     * @brief Print informational message (prefix [Info]) if verbose/trace is enabled.
      *
-     * @param msg Status detail
+     * @param msg Status detail.
+     *
+     * @note Thread-safe for stdout logging only. If adding file I/O, protect
+     *       with mutex.
      */
     void logInfo(const std::string& msg) const;
 
@@ -841,6 +861,22 @@ protected:
         (oss << ... << args);
         return oss.str();
     }
+
+    // ==========================================================================
+    // Profiling
+    // ==========================================================================
+
+    /**
+     * @brief Utility timer for profiling code sections.
+     *
+     * @param label Label for the profiled section.
+     * @param time_value Time value in seconds.
+     * @param unit Time unit string (e.g., "s", "ms").
+     */
+    void printProfileLine(const std::string& label,
+                          double time_value,
+                          const std::string& unit) const;
+
 };
 
 #endif /* End of TOMP_SOLVER_HPP */

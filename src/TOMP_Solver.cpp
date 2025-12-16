@@ -98,7 +98,7 @@ TOMP_Solver::TOMP_Solver(
     double rss = y_.dot(y_);
     RSS_.emplace_back(rss);
     R2_.emplace_back(0.0);
-    DoF_.emplace_back(intercept ? 1 : 0);
+    DoF_.emplace_back(intercept_ ? 1 : 0);
     R_.resize(0, 0);
 
     // 9. Initialize dummy tracking
@@ -334,6 +334,17 @@ void TOMP_Solver::logInfo(const std::string& msg) const {
 void TOMP_Solver::executeStep(std::size_t T_stop, bool early_stop) {
     validateConnected();
 
+    // Add profiling structure
+    struct StepTimings {
+        double find_max_corr = 0.0;
+        double update_active_set = 0.0;
+        double beta_update = 0.0;
+        double residual_update = 0.0;
+        double corr_update = 0.0;
+        double inactive_update = 0.0;
+        std::size_t num_steps = 0;
+    } timings;
+
     while (
         currentStep_ < maxSteps_ &&
         !inactives_.empty() &&
@@ -344,13 +355,14 @@ void TOMP_Solver::executeStep(std::size_t T_stop, bool early_stop) {
         // ========================================================
         // STEP 1: Max correlation among inactives
         // ========================================================
-
+        auto t1 = std::chrono::high_resolution_clock::now();
         auto [Cmax, new_vars] = findTiedMaxCorrelations();
+        auto t2 = std::chrono::high_resolution_clock::now();
+        timings.find_max_corr += std::chrono::duration<double, std::milli>(t2 - t1).count();
         if (new_vars.empty()) {
             logInfo("T-OMP: No variables to add; exiting.");
             break;
         }
-
         if (Cmax < 100 * eps_) {
             logInfo("Max |corr| approx 0; exiting.");
             break;
@@ -359,10 +371,11 @@ void TOMP_Solver::executeStep(std::size_t T_stop, bool early_stop) {
         // ========================================================
         // STEP 2: Add variable to support and update active set
         // ========================================================
-
         currentStep_++;
+        t1 = std::chrono::high_resolution_clock::now();
         actions_.emplace_back(updateActiveSet(new_vars));
-
+        t2 = std::chrono::high_resolution_clock::now();
+        timings.update_active_set += std::chrono::duration<double, std::milli>(t2 - t1).count();
         if (actives_.empty() || R_.size() == 0) {
             logWarning("Active set or Cholesky is empty; exiting.");
             break;
@@ -371,24 +384,72 @@ void TOMP_Solver::executeStep(std::size_t T_stop, bool early_stop) {
         // ========================================================
         // STEP 3: Solution, residual, path, diagnostics updates
         // ========================================================
-
+        t1 = std::chrono::high_resolution_clock::now();
         updateBetaPath();
+        t2 = std::chrono::high_resolution_clock::now();
+        timings.beta_update += std::chrono::duration<double, std::milli>(t2 - t1).count();
+        t1 = std::chrono::high_resolution_clock::now();
         updateResiduals();
+        t2 = std::chrono::high_resolution_clock::now();
+        timings.residual_update += std::chrono::duration<double, std::milli>(t2 - t1).count();
 
         double rss = r_.dot(r_);
         RSS_.emplace_back(rss);
         R2_.emplace_back(1.0 - rss / RSS_[0]);
 
-        // T-OMP: Track dummy count and compute DoF (includes dummies)
         updateDummyTracking();
         DoF_.emplace_back(actives_.size() + (intercept_ ? 1 : 0));
 
         // ========================================================
         // STEP 4: Update inactive set and compute new correlations
         // ========================================================
-
+        t1 = std::chrono::high_resolution_clock::now();
         updateInactiveSet();
-        computeCorrelations();
+        t2 = std::chrono::high_resolution_clock::now();
+        timings.inactive_update += std::chrono::duration<double, std::milli>(t2 - t1).count();
+
+        t1 = std::chrono::high_resolution_clock::now();
+        updateCorrelations();
+        t2 = std::chrono::high_resolution_clock::now();
+        timings.corr_update += std::chrono::duration<double, std::milli>(t2 - t1).count();
+
+        timings.num_steps++;
+    }
+
+        // Print profiling summary
+        if (verbose_ && timings.num_steps > 0) {
+        std::cout << "\n=== T-OMP Profiling Summary ===\n";
+        std::cout << "Total steps: " << timings.num_steps << "\n";
+
+        // =========================================
+        // Time per step computations
+        // =========================================
+        std::cout << "Time per step (avg):\n" << std::fixed << std::setprecision(1);
+        printProfileLine("Find max corr:", timings.find_max_corr / timings.num_steps, " ms");
+        printProfileLine("Update active:", timings.update_active_set / timings.num_steps, " ms");
+        printProfileLine("Update beta:", timings.beta_update / timings.num_steps, " ms");
+        printProfileLine("Update residual:", timings.residual_update / timings.num_steps, " ms");
+        printProfileLine("Update correlations:", timings.corr_update / timings.num_steps, " ms");
+        printProfileLine("Update inactives:", timings.inactive_update / timings.num_steps, " ms");
+
+        // =========================================
+        // Total time breakdown section
+        // =========================================
+        double total = timings.find_max_corr + timings.update_active_set +
+                       timings.beta_update + timings.residual_update +
+                       timings.corr_update + timings.inactive_update;
+
+        // =========================================
+        // Percentage breakdown
+        // =========================================
+        std::cout << "\nPercentage breakdown:\n";
+        printProfileLine("Find max corr:", 100.0 * timings.find_max_corr / total, "%");
+        printProfileLine("Update active:", 100.0 * timings.update_active_set / total, "%");
+        printProfileLine("Update beta:", 100.0 * timings.beta_update / total, "%");
+        printProfileLine("Update residual:", 100.0 * timings.residual_update / total, "%");
+        printProfileLine("Update correlations:", 100.0 * timings.corr_update / total, "%");
+        printProfileLine("Update inactives:", 100.0 * timings.inactive_update / total, "%");
+        std::cout << "===================================\n\n";
     }
 }
 
@@ -407,7 +468,7 @@ void TOMP_Solver::initializeCorrelations() {
 }
 
 
-void TOMP_Solver::computeCorrelations() {
+void TOMP_Solver::updateCorrelations() {
     #pragma omp parallel for schedule(static)
     for (std::size_t i = 0; i < inactives_.size(); ++i) {
         std::size_t j = inactives_[i];
@@ -487,6 +548,10 @@ void TOMP_Solver::updateDummyTracking() {
 
 void TOMP_Solver::updateInactiveSet() {
 
+    // Skip rebuild if no collinearities were detected
+    if (!any_dropped_) return;
+
+    // Full rebuild only when necessary
     inactives_.clear();
 
     // Create hash sets for O(1) lookup instead of O(k) linear search
@@ -515,6 +580,9 @@ void TOMP_Solver::updateInactiveSet() {
     for (const auto& buf : thread_buffers) {
         inactives_.insert(inactives_.end(), buf.begin(), buf.end());
     }
+
+    // Reset flag after rebuild
+    any_dropped_ = false;
 }
 
 
@@ -928,4 +996,17 @@ void TOMP_Solver::reconnect(Eigen::Map<Eigen::MatrixXd>& X) {
     logInfo(concatMsg("Design matrix reconnected successfully\n",
                   "  - Dimensions: ", X.rows(), " x ", X.cols(), "\n",
                   "  - Solver is now ready for executeStep()"));
+}
+
+
+// ============================================================================
+// Profiling
+// ============================================================================
+
+void TOMP_Solver::printProfileLine(const std::string& label,
+                                    double time_value,
+                                    const std::string& unit) const {
+    std::cout << std::left << std::setw(22) << label
+              << std::right << std::setw(8) << time_value
+              << " " << unit << "\n";
 }
