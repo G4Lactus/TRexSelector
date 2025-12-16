@@ -30,12 +30,12 @@ void demo_TSTEPWISE_early_stopping(bool high_dim, std::size_t T_stop = 5) {
     std::size_t n, p;
     if (high_dim) {
         std::cout << "High-dimensional setting (p > n)" << "\n";
-        n = 5000;
-        p = 1000;
-    } else {
-        std::cout << "Low-dimensional setting (n > p)" << "\n";
         n = 1000;
         p = 5000;
+    } else {
+        std::cout << "Low-dimensional setting (n > p)" << "\n";
+        n = 5000;
+        p = 1000;
     }
     const std::size_t num_dummies = 10 * p;
     const std::vector<std::size_t> true_support = {27, 149, 398, 420, 4};
@@ -80,12 +80,12 @@ void demo_TSTEPWISE_with_external_normalizer(bool high_dim, std::size_t T_stop =
     std::size_t n, p;
     if (high_dim) {
         std::cout << "High-dimensional setting (p > n)" << "\n";
-        n = 500;
-        p = 1000;
+        n = 1000;
+        p = 5000;
     } else {
         std::cout << "Low-dimensional setting (n > p)" << "\n";
-        n = 1000;
-        p = 500;
+        n = 5000;
+        p = 1000;
     }
 
     const std::size_t num_dummies = 10 * p;
@@ -354,16 +354,14 @@ void demo_production_tstepwise_workflow() {
         true_support_coefs = {-0.4, -0.2, -0.8, 1.1, 2.5};
     }
 
-    const std::string X_file = "production_X.bin";
-    const std::string y_file = "production_y.bin";
-    const std::string X_aug_file = "production_X_aug.bin";
+    const std::string X_file = "tstepwise_production_X.bin";
+    const std::string y_file = "tstepwise_production_y.bin";
+    const std::string X_aug_file = "tstepwise_production_X_aug.bin";
 
 
     // ========================================================================
-    // Step 1: Create X and y on disk (simulating "already existing" data)
+    // Step 1: Create X and y on disk
     // ========================================================================
-
-
     std::cout << "\n=== Step 1: Creating X and y (simulating existing data) ===\n";
 
     utils_talgos::create_mmapped_X_and_y(
@@ -422,8 +420,22 @@ void demo_production_tstepwise_workflow() {
     // Verification
     std::cout << "\nVerification:\n";
     for (std::size_t idx : true_support) {
-        double corr = X_aug.col(idx).dot(y) / (X_aug.col(idx).norm() * y.norm());
+        double corr = X_aug.col(idx).dot(y);
         std::cout << "  Corr(col " << idx << ", y) = " << corr << "\n";
+    }
+
+    std::cout << "\nDiagnostic: Top 10 correlations:\n";
+    std::vector<std::pair<double, std::size_t>> corr_pairs;
+    for (std::size_t j = 0; j < static_cast<std::size_t>(X_aug.cols()); ++j) {
+        double c = X_aug.col(j).dot(y);
+        corr_pairs.push_back({std::abs(c), j});
+    }
+
+    std::sort(corr_pairs.rbegin(), corr_pairs.rend());
+    for (int i = 0; i < 10; ++i) {
+        std::size_t j = corr_pairs[i].second;
+        std::string type = (j < p) ? "Real" : "Dummy";
+        std::cout << "  " << type << " " << j << ": " << corr_pairs[i].first << "\n";
     }
 
     // ========================================================================
@@ -431,8 +443,10 @@ void demo_production_tstepwise_workflow() {
     // ========================================================================
     std::cout << "\n=== Step 5: Running T-Stepwise ===\n";
 
+    std::cout << "Creating T-STEPWISE solver...\n";
     TSTEPWISE_Solver tstepwise(X_aug, y, num_dummies, false, false, true);
 
+    std::cout << "Executing T-STEPWISE to T_stop = " << T_stop << "...\n";
     auto t1 = utils_perf::profileit([&]() {
         tstepwise.executeStep(T_stop, true);
     });
@@ -446,7 +460,6 @@ void demo_production_tstepwise_workflow() {
     // ========================================================================
     // Step 6: Cleanup
     // ========================================================================
-    std::cout << "\n=== Step 6: Cleanup ===\n";
     std::cout << "\n=== Step 6: Cleanup ===\n";
     std::remove(X_file.c_str());
     std::remove(y_file.c_str());
@@ -463,7 +476,7 @@ void demo_production_tstepwise_workflow() {
 
 int main() {
     openmp::print_info();
-    omp_set_num_threads(6);
+    omp_set_num_threads(8);
     std::cout << "Running with " << omp_get_max_threads() << " threads\n\n";
 
     try {
@@ -479,8 +492,8 @@ int main() {
         // T-Stepwise with external normalization
         const bool run_external_normalizer_demo = false;
         if (run_external_normalizer_demo) {
-            demo_TSTEPWISE_with_external_normalizer(/*high_dim=*/false, /*T_stop=*/5);
-            demo_TSTEPWISE_with_external_normalizer(/*high_dim=*/true, /*T_stop=*/5);
+            demo_TSTEPWISE_with_external_normalizer(/*high_dim=*/false, /*T_stop=*/10);
+            demo_TSTEPWISE_with_external_normalizer(/*high_dim=*/true, /*T_stop=*/10);
         }
 
 
