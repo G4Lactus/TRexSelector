@@ -448,7 +448,7 @@ void demo_production_tlars_workflow() {
     std::cout << "Creating T-LARS solver...\n";
     TLARS_Solver tlars(X_aug, y, num_dummies, false, false, true);
 
-    std::cout << "Executing T-LARS to T = " << T_stop << "...\n";
+    std::cout << "Executing T-LARS to T_stop = " << T_stop << "...\n";
     auto t1 = utils_perf::profileit([&]() {
         tlars.executeStep(T_stop, true);
     });
