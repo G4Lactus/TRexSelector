@@ -11,10 +11,9 @@
 
 #include "utils_openmp.hpp"
 #include "utils_eval.hpp"
+#include "utils_memmap.hpp"
 #include "utils_perf.hpp"
 #include "utils_talgos.hpp"
-#include "utils_memmap.hpp"
-
 
 
 // ============================================================================
@@ -26,17 +25,17 @@ void demo_TACGP_early_stopping(bool high_dim, std::size_t T_stop = 5) {
     std::cout << "=== Demo 1: Basic T-ACGP with Early Stopping ===\n";
 
     std::mt19937 rng(42);
-    std::normal_distribution<double> rnorm(0.0, 1.0);
+    std::normal_distribution<double> norm_dist(0.0, 1.0);
 
     std::size_t n, p;
     if (high_dim) {
         std::cout << "High-dimensional setting (p > n)" << "\n";
-        n = 5000;
-        p = 1000;
-    } else {
-        std::cout << "Low-dimensional setting (n > p)" << "\n";
         n = 1000;
         p = 5000;
+    } else {
+        std::cout << "Low-dimensional setting (n > p)" << "\n";
+        n = 5000;
+        p = 1000;
     }
     const std::size_t num_dummies = 10 * p;
     const std::vector<std::size_t> true_support = {27, 149, 398, 420, 4};
@@ -58,14 +57,13 @@ void demo_TACGP_early_stopping(bool high_dim, std::size_t T_stop = 5) {
     // Normalization is handled by the TACGP solver internally
     TACGP_Solver tacgp(X_aug_map, y_map, num_dummies, true, true, true);
     auto t1 = utils_perf::profileit([&]() { tacgp.executeStep(T_stop, /*early_stop=*/true); });
-    std::cout << "T-ACGP early stopping at T=" << T_stop << " took " << t1.time_ms << " ms\n";
+    std::cout << "T-ACGP early stopping at T_stop=" << T_stop << " took " << t1.time_ms << " ms\n";
 
     utils_talgos::print_selection(tacgp, true_support);
     utils_talgos::print_quality(tacgp, true_support);
 
     std::cout << "\n\n";
 }
-
 
 
 // ============================================================================
@@ -82,12 +80,12 @@ void demo_TACGP_with_external_normalizer(bool high_dim, std::size_t T_stop = 5) 
     std::size_t n, p;
     if (high_dim) {
         std::cout << "High-dimensional setting (p > n)" << "\n";
-        n = 500;
-        p = 1000;
+        n = 1000;
+        p = 5000;
     } else {
         std::cout << "Low-dimensional setting (n > p)" << "\n";
-        n = 1000;
-        p = 500;
+        n = 5000;
+        p = 1000;
     }
 
     const std::size_t num_dummies = 10 * p;
@@ -116,7 +114,7 @@ void demo_TACGP_with_external_normalizer(bool high_dim, std::size_t T_stop = 5) 
     // Solver with external normalization
     TACGP_Solver tacgp(X_aug_map, y_map, num_dummies, false, false, true);
     auto t1 = utils_perf::profileit([&]() { tacgp.executeStep(T_stop, /*early_stop=*/true); });
-    std::cout << "T-ACGP early stopping at T=" << T_stop << " took " << t1.time_ms << " ms\n";
+    std::cout << "T-ACGP early stopping at T_stop=" << T_stop << " took " << t1.time_ms << " ms\n";
 
     utils_talgos::print_selection(tacgp, true_support);
     utils_talgos::print_quality(tacgp, true_support);
@@ -142,7 +140,6 @@ void demo_TACGP_serialization() {
     const std::vector<double> true_coefs = {2.5, -1.8, 3.2};
 
     utils_talgos::print_talgo_config(n, p, num_dummies, T_stop_final, true_support, true_coefs);
-
     utils_talgos::SyntheticData data(n, p, true_support, true_coefs);
 
     // Create augmented matrix X_aug = [X | D]
@@ -204,6 +201,7 @@ void demo_TACGP_serialization() {
 }
 
 
+
 // ============================================================================
 // Demo 4: Controlled Comparison In-Memory vs Memory-Mapped
 // ============================================================================
@@ -240,8 +238,8 @@ void demo_TACGP_controlled_comparison() {
     // ============================================================
     std::cout << "\n=== Step 2: Writing same data to memory-mapped files ===\n";
 
-    const std::string X_aug_file = "test_X_aug.bin";
-    const std::string y_file = "test_y.bin";
+    const std::string X_aug_file = "tacgp_test_X_aug.bin";
+    const std::string y_file = "tacgp_test_y.bin";
 
     auto X_aug_mmap = utils_memmap::create_empty_map<double>(X_aug_file.c_str(),
                                                              n * (p + num_dummies));
@@ -356,13 +354,13 @@ void demo_production_tacgp_workflow() {
         true_support_coefs = {-0.4, -0.2, -0.8, 1.1, 2.5};
     }
 
-    const std::string X_file = "production_X.bin";
-    const std::string y_file = "production_y.bin";
-    const std::string X_aug_file = "production_X_aug.bin";
+    const std::string X_file = "tacgp_production_X.bin";
+    const std::string y_file = "tacgp_production_y.bin";
+    const std::string X_aug_file = "tacgp_production_X_aug.bin";
 
 
     // ========================================================================
-    // Step 1: Create X and y on disk (simulating "already existing" data)
+    // Step 1: Create X and y on disk
     // ========================================================================
 
     std::cout << "\n=== Step 1: Creating X and y (simulating existing data) ===\n";
@@ -432,8 +430,10 @@ void demo_production_tacgp_workflow() {
     // ========================================================================
     std::cout << "\n=== Step 5: Running T-ACGP ===\n";
 
+    std::cout << "Creating T-ACGP solver...\n";
     TACGP_Solver tacgp(X_aug, y, num_dummies, false, false, true);
 
+    std::cout << "Executing T-ACGP to T_stop=" << T_stop << "...\n";
     auto t1 = utils_perf::profileit([&]() {
         tacgp.executeStep(T_stop, true);
     });
@@ -480,8 +480,8 @@ int main() {
         // T-ACGP with external normalization
         const bool run_external_normalizer_demo = false;
         if (run_external_normalizer_demo) {
-            demo_TACGP_with_external_normalizer(/*high_dim=*/false, /*T_stop=*/5);
-            demo_TACGP_with_external_normalizer(/*high_dim=*/true, /*T_stop=*/5);
+            demo_TACGP_with_external_normalizer(/*high_dim=*/false, /*T_stop=*/10);
+            demo_TACGP_with_external_normalizer(/*high_dim=*/true, /*T_stop=*/10);
         }
 
 

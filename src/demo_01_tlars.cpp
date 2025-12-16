@@ -11,6 +11,7 @@
 
 #include "utils_openmp.hpp"
 #include "utils_eval.hpp"
+#include "utils_memmap.hpp"
 #include "utils_perf.hpp"
 #include "utils_talgos.hpp"
 
@@ -57,7 +58,7 @@ void demo_TLARS_early_stopping(bool high_dim, std::size_t T_stop = 5) {
     // Normalization is handled by the TLARS solver internally
     TLARS_Solver tlars(X_aug_map, y_map, num_dummies, true, true, true);
     auto t1 = utils_perf::profileit([&]() { tlars.executeStep(T_stop, /*early_stop=*/true); });
-    std::cout << "T-LARS early stopping at T=" << T_stop << " took " << t1.time_ms << " ms\n";
+    std::cout << "T-LARS early stopping at T_stop=" << T_stop << " took " << t1.time_ms << " ms\n";
 
     utils_talgos::print_selection(tlars, true_support);
     utils_talgos::print_quality(tlars, true_support);
@@ -240,8 +241,8 @@ void demo_TLARS_controlled_comparison() {
     // ============================================================
     std::cout << "\n=== Step 2: Writing same data to memory-mapped files ===\n";
 
-    const std::string X_aug_file = "test_X_aug.bin";
-    const std::string y_file = "test_y.bin";
+    const std::string X_aug_file = "tlars_test_X_aug.bin";
+    const std::string y_file = "tlars_test_y.bin";
 
     auto X_aug_mmap = utils_memmap::create_empty_map<double>(X_aug_file.c_str(),
                                                              n * (p + num_dummies));

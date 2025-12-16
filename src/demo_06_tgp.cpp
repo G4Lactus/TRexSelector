@@ -11,6 +11,7 @@
 
 #include "utils_openmp.hpp"
 #include "utils_eval.hpp"
+#include "utils_memmap.hpp"
 #include "utils_perf.hpp"
 #include "utils_talgos.hpp"
 
@@ -29,12 +30,12 @@ void demo_TGP_early_stopping(bool high_dim, std::size_t T_stop = 5) {
     std::size_t n, p;
     if (high_dim) {
         std::cout << "High-dimensional setting (p > n)" << "\n";
-        n = 5000;
-        p = 1000;
-    } else {
-        std::cout << "Low-dimensional setting (n > p)" << "\n";
         n = 1000;
         p = 5000;
+    } else {
+        std::cout << "Low-dimensional setting (n > p)" << "\n";
+        n = 5000;
+        p = 1000;
     }
     const std::size_t num_dummies = 10 * p;
     const std::vector<std::size_t> true_support = {27, 149, 398, 420, 4};
@@ -50,13 +51,13 @@ void demo_TGP_early_stopping(bool high_dim, std::size_t T_stop = 5) {
     X_aug.leftCols(p) = data.X;
     utils_talgos::generate_dummies_inplace(X_aug, n, p, num_dummies, 42);
 
-    Eigen::Map<Eigen::MatrixXd> X_aug_map(X_aug.data(), n, p + num_dummies);
-    Eigen::Map<Eigen::VectorXd> y_map(data.y.data(), n);
+    Eigen::Map<Eigen::MatrixXd> X_aug_map(X_aug.data(), X_aug.rows(), X_aug.cols());
+    Eigen::Map<Eigen::VectorXd> y_map(data.y.data(), data.y.size());
 
     // Normalization is handled by the TGP solver internally
     TGP_Solver tgp(X_aug_map, y_map, num_dummies, true, true, true);
     auto t1 = utils_perf::profileit([&]() { tgp.executeStep(T_stop, /*early_stop=*/true); });
-    std::cout << "T-GP early stopping at T=" << T_stop << " took " << t1.time_ms << " ms\n";
+    std::cout << "T-GP early stopping at T_stop=" << T_stop << " took " << t1.time_ms << " ms\n";
 
     utils_talgos::print_selection(tgp, true_support);
     utils_talgos::print_quality(tgp, true_support);
@@ -79,12 +80,12 @@ void demo_TGP_with_external_normalizer(bool high_dim, std::size_t T_stop = 5) {
     std::size_t n, p;
     if (high_dim) {
         std::cout << "High-dimensional setting (p > n)" << "\n";
-        n = 500;
-        p = 1000;
+        n = 1000;
+        p = 5000;
     } else {
         std::cout << "Low-dimensional setting (n > p)" << "\n";
-        n = 1000;
-        p = 500;
+        n = 5000;
+        p = 1000;
     }
 
     const std::size_t num_dummies = 10 * p;
@@ -113,7 +114,7 @@ void demo_TGP_with_external_normalizer(bool high_dim, std::size_t T_stop = 5) {
     // Solver with external normalization
     TGP_Solver tgp(X_aug_map, y_map, num_dummies, false, false, true);
     auto t1 = utils_perf::profileit([&]() { tgp.executeStep(T_stop, /*early_stop=*/true); });
-    std::cout << "T-GP early stopping at T=" << T_stop << " took " << t1.time_ms << " ms\n";
+    std::cout << "T-GP early stopping at T_stop=" << T_stop << " took " << t1.time_ms << " ms\n";
 
     utils_talgos::print_selection(tgp, true_support);
     utils_talgos::print_quality(tgp, true_support);
@@ -139,7 +140,6 @@ void demo_TGP_serialization() {
     const std::vector<double> true_coefs = {2.5, -1.8, 3.2};
 
     utils_talgos::print_talgo_config(n, p, num_dummies, T_stop_final, true_support, true_coefs);
-
     utils_talgos::SyntheticData data(n, p, true_support, true_coefs);
 
     // Create augmented matrix X_aug = [X | D]
@@ -238,8 +238,8 @@ void demo_TGP_controlled_comparison() {
     // ============================================================
     std::cout << "\n=== Step 2: Writing same data to memory-mapped files ===\n";
 
-    const std::string X_aug_file = "test_X_aug.bin";
-    const std::string y_file = "test_y.bin";
+    const std::string X_aug_file = "tgp_test_X_aug.bin";
+    const std::string y_file = "tgp_test_y.bin";
 
     auto X_aug_mmap = utils_memmap::create_empty_map<double>(X_aug_file.c_str(),
                                                              n * (p + num_dummies));
@@ -354,15 +354,14 @@ void demo_production_tgp_workflow() {
         true_support_coefs = {-0.4, -0.2, -0.8, 1.1, 2.5};
     }
 
-    const std::string X_file = "production_X.bin";
-    const std::string y_file = "production_y.bin";
-    const std::string X_aug_file = "production_X_aug.bin";
+    const std::string X_file = "tgp_production_X.bin";
+    const std::string y_file = "tgp_production_y.bin";
+    const std::string X_aug_file = "tgp_production_X_aug.bin";
 
 
     // ========================================================================
-    // Step 1: Create X and y on disk (simulating "already existing" data)
+    // Step 1: Create X and y on disk
     // ========================================================================
-
     std::cout << "\n=== Step 1: Creating X and y (simulating existing data) ===\n";
 
     utils_talgos::create_mmapped_X_and_y(
@@ -430,8 +429,10 @@ void demo_production_tgp_workflow() {
     // ========================================================================
     std::cout << "\n=== Step 5: Running T-GP ===\n";
 
+    std::cout << "Creating T-GP solver...\n";
     TGP_Solver tgp(X_aug, y, num_dummies, false, false, true);
 
+    std::cout << "Executing T-GP to T_stop=" << T_stop << "...\n";
     auto t1 = utils_perf::profileit([&]() {
         tgp.executeStep(T_stop, true);
     });
@@ -474,16 +475,18 @@ int main() {
             demo_TGP_early_stopping(/*high_dim=*/true, /*T_stop=*/10);
         }
 
+
         // T-GP with external normalization
         const bool run_external_normalizer_demo = false;
         if (run_external_normalizer_demo) {
-            demo_TGP_with_external_normalizer(/*high_dim=*/false, /*T_stop=*/5);
-            demo_TGP_with_external_normalizer(/*high_dim=*/true, /*T_stop=*/5);
+            demo_TGP_with_external_normalizer(/*high_dim=*/false, /*T_stop=*/10);
+            demo_TGP_with_external_normalizer(/*high_dim=*/true, /*T_stop=*/10);
         }
 
         // T-GP serialization and warm-start
         const bool run_serialization_demo = false;
         if (run_serialization_demo) demo_TGP_serialization();
+
 
         // T-GP controlled comparison
         const bool run_controlled_comparison = false;
