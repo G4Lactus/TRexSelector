@@ -1,6 +1,9 @@
 #ifndef TSTEPWISE_SOLVER
 #define TSTEPWISE_SOLVER
 
+#include <chrono>
+#include <iomanip>
+#include <iostream>
 #include <algorithm>
 #include <fstream>
 #include <sstream>
@@ -11,12 +14,34 @@
  * @brief T-Stepwise Regression Solver (Forward Selection with Dummy Variables)
  *
  * @details Specializes the TLARS_Solver for classical stepwise (greedy)
- * regression with dummy variable augmentation for FDR-controlled variable
- * selection.
- * The algorithm takes a full step to the axis-aligned (zero-correlation)
- * solution, without coefficient drops or LASSO L1 path tracking.
+ *          regression with dummy variable augmentation to support FDR-controlled
+ *          variable selection.
  *
- * Early stopping occurs when T_stop dummy variables enter the active set.
+ * Algorithm:
+ * Given current residual r and active set A, at step k:
+ * 1. Find j* = argmax_j |X_j^T r| (over inactive predictors)
+ * 2. Add j* to active set: A ← A ∪ {j*}
+ * 3. Compute equiangular direction w_A
+ * 4. Compute equiangular vector u = X_A w_A
+ * 5. Take full orthogonal step: γ = C_max / A_A
+ *    where C_max = max|X_j^T r| and A_A = 1/√(s^T G_A^{-1} s)
+ * 6. Update: β ← β + γ w_A, r ← r - γ u
+ * 7. Result: All active variables have zero correlation with new residual
+ *
+ * Key Difference from T-LARS:
+ *  - Step size: Full orthogonal step (γ = C_max / A_A) vs minimum step
+ *  - Correlation: Exactly zero after each step vs small positive
+ *  - Complexity: Simple (no step size search, no cycling, no drops)
+ *  - Optimality: Greedy selection not LARS path
+ *
+ * Numerical Stability:
+ * - Inherits Cholesky updates from TLARS_Solver (collinearity detection)
+ * - Full correlation recomputation each step (no incremental drift)
+ * - Orthogonal steps prevent accumulaiton of numerical errors
+ *
+ * @note Inherits all T-LARS capabilities: MMAP support, serialization,
+ *       warm-starts, openMP support.
+ * @note Designed for use with augmented design matrix X = [X_original | X_dummies]
  */
 class TSTEPWISE_Solver: public TLARS_Solver {
 
@@ -73,16 +98,29 @@ public:
     // ==========================================================================
 
     /**
-     * @brief Overrides main T-LARS path algorithm for stepwise forward
-     *        selection with FDR control.
-     *
-     * @details On each iteration, takes the maximum orthogonal step.
-     * Stops early when T_stop dummies enter the active set
-     * (if early_stop=true).
+     * @brief Execute T-STEPWISE solution path (greedy forward selection).
      *
      * @param T_stop Number of dummies to trigger early stopping
      *               (0: full solution path, default).
      * @param early_stop If true, stop when count_active_dummies_ >= T_stop.
+     *
+     * @details
+     * Overrides T-LARS path algorithm with full orthogonal steps:
+     * - Selects variable with maximum absolute correlation
+     * - Computes equiangular direction (same as T-LARS)
+     * - Takes full step: γ = C_max / A_A (reduces correlation to zero)
+     * - Fully recomputes all correlations from residual (no incremental updates)
+     * - Resets sign vector for next iteration
+     * - No drops, no cycling, pure forward selection
+     *
+     * Stopping Conditions:
+     * - Active set becomes empty (shouldn't happen in forward selection)
+     * - Maximum correlation < 100·eps (numerical convergence)
+     * - Early stopping: count_active_dummies_ >= T_stop (after step completes)
+     * - Maximum steps reached (maxSteps_)
+     *
+     * @note Internal state is updated in-place; supports warm-starts and
+     *       serialization.
      */
     void executeStep(std::size_t T_stop = 0, bool early_stop = true) override;
 
@@ -99,6 +137,7 @@ public:
      * @param archive Output/input archive object.
      *
      * @note X_ must be reconnected after deserialization.
+     * @note Inherits TLARS_Solver serialization.
      */
     template<class Archive>
     void serialize(Archive& archive) {
@@ -129,9 +168,24 @@ protected:
     /**
      * @brief Reset sign vector to enable orthogonal (axis-aligned) steps.
      *
-     * @details Internal helper to zero all signs for stepwise regression.
+     * @details Sets all elements of Sign_ to zero, to ensure that each newly
+     *          entering variable starts with a fresh correlation sign, based on
+     *          its current correlation with the residual.
+     *
+     * Necessary for stepwise regression because:
+     * - We take full orthogonal steps (correlation -> 0)
+     * - Signs from previous iterations are no longer valid
+     * - Next iteration needs fresh sign determination
+     *
+     * @note Called after each step, before correlation recomputation.
      */
     void zeroAllSigns();
+
+
+    /**
+     * @brief Fully recompute correlations for all inactive variables.
+     */
+    void recomputeCorrelations();
 
 };
 
