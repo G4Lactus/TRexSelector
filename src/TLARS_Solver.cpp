@@ -481,7 +481,7 @@ void TLARS_Solver::executeStep(std::size_t T_stop, bool early_stop) {
         printProfileLine("Update inactives:", timings.inactive_update / timings.num_steps, " ms");
 
         // =========================================
-        // Percentage breakdown section
+        // Total time breakdown section
         // =========================================
         double total = timings.find_max_corr + timings.update_active +
                        timings.equiangular + timings.step_size +

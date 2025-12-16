@@ -541,7 +541,9 @@ public:
     std::size_t getKahanRefreshInterval() const noexcept { return kahan_refresh_interval_; }
 
 
-    // ==== T-Algorithm Specific Getters ====
+    // ============================================================================
+    // T-Algorithm Specific Getters
+    // ============================================================================
 
     /**
      * @brief Get original predictor count (before dummy augmentation).
@@ -596,8 +598,9 @@ public:
      */
     std::vector<std::size_t> getActiveDummyIndices() const;
 
-
-    // ==== Restoration ====
+    // ============================================================================
+    // Restoration
+    // ============================================================================
 
     /**
      * @brief Restore original X, y for a given fitted path by applying
@@ -877,6 +880,14 @@ protected:
     std::vector<int> updateActiveSet(const std::vector<std::size_t>& new_vars);
 
     /**
+     * @brief Initialize and/or update list of inactives, skipping dropped
+     *        indices.
+     *
+     * @note Efficient for large p with hash/linear branching.
+     */
+    void initializeInactives();
+
+    /**
      * @brief Updates inactives_ to all predictors not in actives_ or
      *        dropped_indices_.
      *
@@ -943,6 +954,7 @@ protected:
      */
     void updateDummyTracking();
 
+
     // ============================================================================
     // Validation
     // ============================================================================
@@ -955,14 +967,6 @@ protected:
      *         detected.
      */
     void validateConnected() const;
-
-    /**
-     * @brief Initialize and/or update list of inactives, skipping dropped
-     *        indices.
-     *
-     * @note Efficient for large p with hash/linear branching.
-     */
-    void initializeInactives();
 
     // ============================================================================
     // Logging
