@@ -188,7 +188,7 @@ TSTEPWISE_Solver TSTEPWISE_Solver::load(const std::string& filename,
                                         Eigen::Map<Eigen::MatrixXd>& X) {
 
     TSTEPWISE_Solver tstepwise;  // Uses no-args constructor
-    const std::string solver{TSTEPWISE_Solver::solverTypeToString(SolverType::TStepwise)};
+    const std::string solver{TSTEPWISE_Solver::solverTypeToString(SolverTypeLarsBased::TStepwise)};
 
     // 1. Deserialize from file with error handling
     {

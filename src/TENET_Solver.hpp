@@ -86,7 +86,7 @@ public:
      *
      * @note X_ must be set via reconnect() before running any algorithm.
      */
-    TENET_Solver() : TLARS_Solver(SolverType::TENET) {}
+    TENET_Solver() : TLARS_Solver(SolverTypeLarsBased::TENET) {}
 
     /**
      * @brief Deleted copy constructor to avoid raw pointer ownership problems.
@@ -347,9 +347,9 @@ protected:
     /**
      * @brief Compute correlations X^T r for inactives with EN adjustments.
      *
-     * @details Overrides base LARS to account for L2 penalty effects on correlations.
+     * @details EN-specific correlation computation accounting for L2 penalty effects.
      */
-    void computeCorrelations() override;
+    void updateCorrelationsENET();
 
 
     /**

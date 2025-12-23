@@ -69,12 +69,12 @@ public:
                      bool intercept = true,
                      bool verbose = false)
                 : TLARS_Solver(X, y, num_dummies, normalize, intercept, verbose,
-                    SolverType::TStepwise) {}
+                    SolverTypeLarsBased::TStepwise) {}
 
     /** @brief Default constructor for serialization or deferred initialization.
      */
     TSTEPWISE_Solver()
-        : TLARS_Solver(SolverType::TStepwise) {}
+        : TLARS_Solver(SolverTypeLarsBased::TStepwise) {}
 
     /**
      * @brief Delete copy constructor to prevent raw pointer ownership problems.

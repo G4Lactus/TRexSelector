@@ -19,7 +19,7 @@ TENET_Solver::TENET_Solver(
       num_removals_(0) {
 
     // Assign base class members directly in body
-    algo_type_ = SolverType::TENET;
+    algo_type_ = SolverTypeLarsBased::TENET;
     X_ = &X;
     y_ = y;
     normalize_ = normalize;
@@ -268,7 +268,7 @@ void TENET_Solver::executeStep(std::size_t T_stop, bool early_stop) {
         // STEP 10: Recompute correlations for next iteration
         // ========================================================
 
-        computeCorrelations();
+        updateCorrelationsENET();
     }
 }
 
@@ -287,7 +287,7 @@ void TENET_Solver::initializeCorrelations() {
 }
 
 
-void TENET_Solver::computeCorrelations() {
+void TENET_Solver::updateCorrelationsENET() {
     // EN-specific correlation formula (Zou & Hastie 2005)
     // Cvec <- (drop(t(residuals[1:n]) %*% x) + d1 * residuals[-(1:n)]) * d2
     // where residuals is augmented (n + m) vector: [y_residuals; coefficient_penalties]
@@ -651,7 +651,7 @@ TENET_Solver TENET_Solver::load(const std::string& filename, Eigen::Map<Eigen::M
 
     TENET_Solver tenet;  // No-args constructor
 
-    const std::string solver{TENET_Solver::solverTypeToString(SolverType::TENET)};
+    const std::string solver{TENET_Solver::solverTypeToString(SolverTypeLarsBased::TENET)};
 
     // 1. Deserialize from file with error handling
     {
