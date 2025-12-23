@@ -80,12 +80,12 @@ protected:
     /**
      * @brief Protected constructor for inheritance by derived classes.
      *
-     * @param solver_type Algorithm variant as SolverType enum
-     *                   (e.g., SolverType::TLASSO).
+     * @param solver_type Algorithm variant as SolverTypeLarsBased enum
+     *                   (e.g., SolverTypeLarsBased::TLASSO).
      *
      * @note Used by further derived classes that extend T-LASSO behavior.
      */
-    explicit TLASSO_Solver(SolverType solver_type) :
+    explicit TLASSO_Solver(SolverTypeLarsBased solver_type) :
                             TLARS_Solver(solver_type) {}
 
 
@@ -114,7 +114,7 @@ public:
      * @note Has internal column-dropping logic for low-variance columns
      *       when normalize=true.
      *       Otherwise ensure collinear columns are excluded a priori.
-     * @note Initializes base T-LARS state with SolverType::TLASSO.
+     * @note Initializes base T-LARS state with SolverTypeLarsBased::TLASSO.
      */
     TLASSO_Solver(Eigen::Map<Eigen::MatrixXd>& X,
                   Eigen::Map<Eigen::VectorXd>& y,
@@ -123,14 +123,14 @@ public:
                   bool intercept = true,
                   bool verbose = false)
         : TLARS_Solver(X, y, num_dummies, normalize, intercept, verbose,
-                       SolverType::TLASSO) {}
+                       SolverTypeLarsBased::TLASSO) {}
 
     /**
      * @brief Default constructor for serialization or deferred initialization.
      *
      * @note X_ must be set via reconnect() before running any algorithm.
      */
-    TLASSO_Solver() : TLARS_Solver(SolverType::TLASSO) {}
+    TLASSO_Solver() : TLARS_Solver(SolverTypeLarsBased::TLASSO) {}
 
     /**
      * @brief Deleted copy constructor to avoid raw pointer ownership problems.

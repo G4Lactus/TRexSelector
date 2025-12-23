@@ -291,7 +291,7 @@ TLASSO_Solver TLASSO_Solver::load(const std::string& filename,
 
     TLASSO_Solver tlasso;  // No-args constructor
     const std::string solver{
-        TLASSO_Solver::solverTypeToString(SolverType::TLASSO)};
+        TLASSO_Solver::solverTypeToString(SolverTypeLarsBased::TLASSO)};
 
     // 1. Deserialize from file with error handling
     {
