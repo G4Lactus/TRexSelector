@@ -12,7 +12,7 @@ TLARS_Solver::TLARS_Solver(
     bool normalize,
     bool intercept,
     bool verbose,
-    SolverType algorithm_type)
+    SolverTypeLarsBased algorithm_type)
     : X_(&X),
       y_(y),
       normalize_(normalize),
@@ -116,12 +116,12 @@ TLARS_Solver::TLARS_Solver(
 }
 
 
-TLARS_Solver::TLARS_Solver(SolverType type)
+TLARS_Solver::TLARS_Solver(SolverTypeLarsBased type)
     : X_(nullptr), is_connected_(false), algo_type_(type) {};
 
 
 TLARS_Solver::TLARS_Solver()
-    : X_(nullptr), is_connected_(false), algo_type_(SolverType::TLARS) {};
+    : X_(nullptr), is_connected_(false), algo_type_(SolverTypeLarsBased::TLARS) {};
 
 
 void TLARS_Solver::initializeInactives() {
@@ -1146,7 +1146,7 @@ TLARS_Solver TLARS_Solver::load(const std::string& filename,
                                 Eigen::Map<Eigen::MatrixXd>& X) {
     TLARS_Solver tlars;
     const std::string solver{TLARS_Solver::solverTypeToString(
-        SolverType::TLARS)};
+        SolverTypeLarsBased::TLARS)};
 
     // 1. Deserialize from file
     {

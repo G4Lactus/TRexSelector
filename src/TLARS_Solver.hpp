@@ -24,7 +24,7 @@
  *
  * Used for algorithm selection, configuration, and logging/reporting.
  */
-enum class SolverType: int {
+enum class SolverTypeLarsBased: int {
     TLARS = 0,      // Terminating Least Angle Regression (T-LARS)
     TLASSO = 1,     // T-LARS/LASSO with variable removal
     TStepwise = 2,  // T-Stepwise selection
@@ -238,14 +238,14 @@ protected:
     /**
      * @brief Algorithm variant type.
      */
-    SolverType algo_type_{SolverType::TLARS};
+    SolverTypeLarsBased algo_type_{SolverTypeLarsBased::TLARS};
 
     /**
      * @brief Protected constructor for inheritance.
      *
-     * @param type Algorithm variant as SolverType enum.
+     * @param type Algorithm variant as SolverTypeLarsBased enum.
      */
-    explicit TLARS_Solver(SolverType type);
+    explicit TLARS_Solver(SolverTypeLarsBased type);
 
 
 public:
@@ -264,7 +264,7 @@ public:
      * @param normalize If true, each column of X is scaled to unit L2-norm.
      * @param intercept If true, X and y are centered (intercept fitted).
      * @param verbose If true, print status and diagnostics during execution.
-     * @param algorithm_type SolverType variant (TLARS, TLASSO, TStepwise,
+     * @param algorithm_type SolverTypeLarsBased variant (TLARS, TLASSO, TStepwise,
      *                       TENET).
      *
      * @note X is not copied nor owned, so changes to X alter the underlying
@@ -280,7 +280,7 @@ public:
                  bool normalize = true,
                  bool intercept = true,
                  bool verbose = false,
-                 SolverType algorithm_type = SolverType::TLARS
+                 SolverTypeLarsBased algorithm_type = SolverTypeLarsBased::TLARS
                 );
 
     /**
@@ -728,16 +728,16 @@ public:
     /**
      * @brief Convert enum to human-readable string for reporting/logging.
      *
-     * @param type The SolverType enum value.
+     * @param type The SolverTypeLarsBased enum value.
      *
      * @return Static string name.
      */
-    static const char* solverTypeToString(SolverType type) {
+    static const char* solverTypeToString(SolverTypeLarsBased type) {
         switch(type) {
-            case SolverType::TLARS:       return "TLARS";
-            case SolverType::TLASSO:      return "TLASSO";
-            case SolverType::TStepwise:   return "TStepwise";
-            case SolverType::TENET:       return "TENET";
+            case SolverTypeLarsBased::TLARS:       return "TLARS";
+            case SolverTypeLarsBased::TLASSO:      return "TLASSO";
+            case SolverTypeLarsBased::TStepwise:   return "TStepwise";
+            case SolverTypeLarsBased::TENET:       return "TENET";
             default:                      return "UnknownSolver";
         }
     }
