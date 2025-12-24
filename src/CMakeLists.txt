@@ -16,6 +16,16 @@ set(TENET_SOURCES ${DIRSRC}/TENET_Solver.cpp ${TLARS_SOURCES})
 set(TOMP_SOURCES ${DIRSRC}/TOMP_Solver.cpp)
 set(TGP_SOURCES ${DIRSRC}/TGP_Solver.cpp ${TOMP_SOURCES})
 set(TACGP_SOURCES ${DIRSRC}/TACGP_Solver.cpp ${TGP_SOURCES} ${TOMP_SOURCES})
+set(TREX_SOURCES
+    ${DIRSRC}/TRex_Selector.cpp
+    ${TLARS_SOURCES}
+    ${TLASSO_SOURCES}
+    ${TSTEPWISE_SOURCES}
+    ${TENET_SOURCES}
+    ${TOMP_SOURCES}
+    ${TGP_SOURCES}
+    ${TACGP_SOURCES}
+)
 
 
 # ----- Common libraries -----
@@ -64,10 +74,13 @@ endmacro()
 # ----- Demo targets -----
 add_demo_target(demo_00_scaler demo_00_scaler.cpp "")
 add_demo_target(demo_01_tlars demo_01_tlars.cpp "${TLARS_SOURCES}")
-# add_demo_target(demo_02_tlasso demo_02_tlasso.cpp "${TLASSO_SOURCES}")
-# add_demo_target(demo_03_tstepwise demo_03_tstepwise.cpp "${TSTEPWISE_SOURCES}")
-# add_demo_target(demo_04_tenet demo_04_tenet.cpp "${TENET_SOURCES}")
-# add_demo_target(demo_05_tomp demo_05_tomp.cpp "${TOMP_SOURCES}")
-# add_demo_target(demo_06_tgp demo_06_tgp.cpp "${TGP_SOURCES}")
-# add_demo_target(demo_07_tacgp demo_07_tacgp.cpp "${TACGP_SOURCES}")
+add_demo_target(demo_02_tlasso demo_02_tlasso.cpp "${TLASSO_SOURCES}")
+add_demo_target(demo_03_tstepwise demo_03_tstepwise.cpp "${TSTEPWISE_SOURCES}")
+add_demo_target(demo_04_tenet demo_04_tenet.cpp "${TENET_SOURCES}")
+add_demo_target(demo_05_tomp demo_05_tomp.cpp "${TOMP_SOURCES}")
+add_demo_target(demo_06_tgp demo_06_tgp.cpp "${TGP_SOURCES}")
+add_demo_target(demo_07_tacgp demo_07_tacgp.cpp "${TACGP_SOURCES}")
+add_demo_target(demo_08_trex demo_08_trex.cpp "${TREX_SOURCES}")
+
+
 # add_demo_target(demo_XX_backend demo_XX_backend.cpp "")
