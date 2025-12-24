@@ -12,7 +12,7 @@ TACGP_Solver::TACGP_Solver(
     bool normalize,
     bool intercept,
     bool verbose)
-    : TGP_Solver(X, y, num_dummies, normalize, intercept, verbose, SolverType::TACGP),
+    : TGP_Solver(X, y, num_dummies, normalize, intercept, verbose, SolverTypeOMPBased::TACGP),
       beta1_(0.0)
 {
     // Initialize TACGP-specific state
@@ -24,7 +24,7 @@ TACGP_Solver::TACGP_Solver(
 
 // Default constructor
 TACGP_Solver::TACGP_Solver()
-    : TGP_Solver(SolverType::TACGP),
+    : TGP_Solver(SolverTypeOMPBased::TACGP),
       beta1_(0.0)
 {
     direction_prev_.resize(0);
@@ -34,7 +34,7 @@ TACGP_Solver::TACGP_Solver()
 
 
 // Protected constructor
-TACGP_Solver::TACGP_Solver(SolverType type)
+TACGP_Solver::TACGP_Solver(SolverTypeOMPBased type)
     : TGP_Solver(type),
       beta1_(0.0)
 {
@@ -124,7 +124,7 @@ void TACGP_Solver::executeStep(std::size_t T_stop, bool early_stop) {
         // STEP 6: Update correlations for next iteration
         // ==========================================================
 
-        computeCorrelations();        // correlations_ = X^T r
+        updateCorrelations();        // correlations_ = X^T r
 
     }
 }
@@ -254,7 +254,7 @@ void TACGP_Solver::save(const std::string& filename) const {
 TACGP_Solver TACGP_Solver::load(const std::string& filename, Eigen::Map<Eigen::MatrixXd>& X) {
 
     TACGP_Solver tacgp; // Uses no-arg constructor
-    const std::string solver{TACGP_Solver::solverTypeToString(SolverType::TACGP)};
+    const std::string solver{TACGP_Solver::solverTypeToString(SolverTypeOMPBased::TACGP)};
 
     // 1. Deserialize from file with error handling
     {

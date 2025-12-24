@@ -56,7 +56,7 @@ protected:
      *
      * @param type Solver type enum (to be set by derived class).
      */
-    explicit TACGP_Solver(SolverType type);
+    explicit TACGP_Solver(SolverTypeOMPBased type);
 
 public:
     // ==================================================================================

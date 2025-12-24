@@ -1,6 +1,7 @@
 #ifndef TGP_SOLVER_HPP
 #define TGP_SOLVER_HPP
 
+#include <iomanip>
 #include "TOMP_Solver.hpp"
 
 
@@ -39,7 +40,6 @@ protected:
      */
     Eigen::VectorXd direction_{};
 
-
     /**
      * @brief Direction projected into data space: c_n = X_active * d_n.
      *        Used for step size computation and residual updates.
@@ -60,7 +60,7 @@ protected:
     /**
      * @brief Protected default constructor for derived classes.
      */
-    explicit TGP_Solver(SolverType type);
+    explicit TGP_Solver(SolverTypeOMPBased type);
 
     /**
      * @brief Protected constructor with full parameter for derived classes.
@@ -79,7 +79,7 @@ protected:
                bool normalize,
                bool intercept,
                bool verbose,
-               SolverType type);
+               SolverTypeOMPBased type);
 
 public:
 
@@ -279,7 +279,7 @@ protected:
      * @note GP override: computes for all variables (not just inactives) to allow re-selection.
      *       Base class only updates inactives.
      */
-    void computeCorrelations() override;
+    void updateCorrelations() override;
 
 };
 
