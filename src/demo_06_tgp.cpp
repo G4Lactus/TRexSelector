@@ -30,8 +30,8 @@ void demo_TGP_early_stopping(bool high_dim, std::size_t T_stop = 5) {
     std::size_t n, p;
     if (high_dim) {
         std::cout << "High-dimensional setting (p > n)" << "\n";
-        n = 1000;
-        p = 5000;
+        n = 10000;
+        p = 60000;
     } else {
         std::cout << "Low-dimensional setting (n > p)" << "\n";
         n = 5000;
@@ -55,7 +55,9 @@ void demo_TGP_early_stopping(bool high_dim, std::size_t T_stop = 5) {
     Eigen::Map<Eigen::VectorXd> y_map(data.y.data(), data.y.size());
 
     // Normalization is handled by the TGP solver internally
+    std::cout << "Running T-GP solver...\n";
     TGP_Solver tgp(X_aug_map, y_map, num_dummies, true, true, true);
+    std::cout << "Executing T-GP with early stopping at T_stop=" << T_stop << "...\n";
     auto t1 = utils_perf::profileit([&]() { tgp.executeStep(T_stop, /*early_stop=*/true); });
     std::cout << "T-GP early stopping at T_stop=" << T_stop << " took " << t1.time_ms << " ms\n";
 
@@ -210,8 +212,8 @@ void demo_TGP_controlled_comparison() {
     std::cout << "=== Demo 4: Controlled Comparison: In-Memory vs Memory-Mapped ===\n\n";
 
     // Configuration
-    const std::size_t n = 1000, p = 5000;
-    const std::size_t num_dummies = 50 * p;
+    const std::size_t n = 10000, p = 50000;
+    const std::size_t num_dummies = 10 * p;
     const std::size_t T_stop = 10;
     std::vector<std::size_t> true_support = {27, 149, 398, 420, 4};
     std::vector<double> true_support_coefs = {-0.4, -0.2, -0.8, 1.1, 2.5};
@@ -469,7 +471,7 @@ int main() {
     try {
 
         // T-GP with early stopping - low and high dimensional
-        const bool run_early_stopping_demo = false;
+        const bool run_early_stopping_demo = true;
         if (run_early_stopping_demo) {
             demo_TGP_early_stopping(/*high_dim=*/false, /*T_stop=*/10);
             demo_TGP_early_stopping(/*high_dim=*/true, /*T_stop=*/10);
@@ -493,7 +495,7 @@ int main() {
         if (run_controlled_comparison) demo_TGP_controlled_comparison();
 
         // T-GP production workflow
-        const bool run_production_tgp_with_mmap = true;
+        const bool run_production_tgp_with_mmap = false;
         if (run_production_tgp_with_mmap) demo_production_tgp_workflow();
 
 
