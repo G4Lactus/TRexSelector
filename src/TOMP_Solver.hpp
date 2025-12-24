@@ -25,7 +25,7 @@
  * Used for algorithm selection, configuration, and logging/reporting
  *
  */
-enum class SolverType: int {
+enum class SolverTypeOMPBased: int {
     TOMP = 0,        // Terminating Orthogonal Matching Pursuit
     TGP = 1,         // Terminating Gradient Pursuit
     TACGP = 2        // Terminating Approximate Conjugate Gradient Pursuit
@@ -211,14 +211,14 @@ protected:
     /**
      * @brief Algorithm variant type.
      */
-    SolverType algo_type_{SolverType::TOMP};
+    SolverTypeOMPBased algo_type_{SolverTypeOMPBased::TOMP};
 
     /**
      * @brief Protected constructor for inheritance.
      *
-     * @param type Algorithm variant as SolverType enum.
+     * @param type Algorithm variant as SolverTypeOMPBased enum.
      */
-    explicit TOMP_Solver(SolverType type);
+    explicit TOMP_Solver(SolverTypeOMPBased type);
 
 public:
 
@@ -236,7 +236,7 @@ public:
      * @param normalize If true, each column of X is scaled to unit L2-norm.
      * @param intercept If true, X and y are centered (intercept fitted).
      * @param verbose If true, print status and diagnostics during execution.
-     * @param algorithm_type SolverType variant (default: TOMP).
+     * @param algorithm_type SolverTypeOMPBased variant (default: TOMP).
      *
      * @note X is not copied nor owned, so changes to X alter the underlying data.
      */
@@ -246,7 +246,7 @@ public:
                 bool normalize = true,
                 bool intercept = true,
                 bool verbose = false,
-                SolverType algorithm_type = SolverType::TOMP
+                SolverTypeOMPBased algorithm_type = SolverTypeOMPBased::TOMP
                );
 
     /**
@@ -632,16 +632,16 @@ public:
     /**
      * @brief Convert enum to human-readable string for reporting/logging.
      *
-     * @param type The SolverType enum value.
+     * @param type The SolverTypeOMPBased enum value.
      *
      * @return Static string name.
      */
-    static const char* solverTypeToString(SolverType type) {
+    static const char* solverTypeToString(SolverTypeOMPBased type) {
         switch (type) {
-            case SolverType::TOMP:      return "TOMP";
-            case SolverType::TGP:       return "TGP";
-            case SolverType::TACGP:     return "TACGP";
-            default:                    return "Unknown SolverType";
+            case SolverTypeOMPBased::TOMP:      return "TOMP";
+            case SolverTypeOMPBased::TGP:       return "TGP";
+            case SolverTypeOMPBased::TACGP:     return "TACGP";
+            default:                    return "Unknown SolverTypeOMPBased";
         }
     }
 

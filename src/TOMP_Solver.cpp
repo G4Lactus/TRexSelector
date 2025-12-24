@@ -12,7 +12,7 @@ TOMP_Solver::TOMP_Solver(
     bool normalize,
     bool intercept,
     bool verbose,
-    SolverType algorithm_type)
+    SolverTypeOMPBased algorithm_type)
     : X_(&X),
       y_(y),
       normalize_(normalize),
@@ -110,12 +110,12 @@ TOMP_Solver::TOMP_Solver(
 }
 
 
-TOMP_Solver::TOMP_Solver(SolverType type)
+TOMP_Solver::TOMP_Solver(SolverTypeOMPBased type)
     : X_(nullptr), is_connected_(false), algo_type_(type) {};
 
 
 TOMP_Solver::TOMP_Solver()
-    : X_(nullptr), is_connected_(false), algo_type_(SolverType::TOMP) {};
+    : X_(nullptr), is_connected_(false), algo_type_(SolverTypeOMPBased::TOMP) {};
 
 
 void TOMP_Solver::initializeInactives() {
@@ -879,7 +879,7 @@ void TOMP_Solver::save(const std::string& filename) const {
 TOMP_Solver TOMP_Solver::load(const std::string& filename, Eigen::Map<Eigen::MatrixXd>& X) {
 
     TOMP_Solver tomp; // Uses no-arg constructor
-    const std::string solver{TOMP_Solver::solverTypeToString(SolverType::TOMP)}; // static
+    const std::string solver{TOMP_Solver::solverTypeToString(SolverTypeOMPBased::TOMP)}; // static
 
     // 1. Deserialize from file with error handling
     {
