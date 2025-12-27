@@ -141,9 +141,10 @@ void demo_TLARS_serialization() {
     const std::vector<std::size_t> true_support = {10, 25, 40};
     const std::vector<double> true_coefs = {2.5, -1.8, 3.2};
 
-    utils_talgos::print_talgo_config(n, p, num_dummies, T_stop_final, true_support, true_coefs);
+    utils_talgos::print_talgo_config(n, p, num_dummies, T_stop_final, true_support, true_coefs,
+                                     /*snr=*/1.0);
 
-    utils_talgos::SyntheticData data(n, p, true_support, true_coefs);
+    utils_talgos::SyntheticData data(n, p, true_support, true_coefs, /*snr=*/1.0, /*seed=*/42);
 
     // Create augmented matrix X_aug = [X | D]
     Eigen::MatrixXd X_aug(n, p + num_dummies);
