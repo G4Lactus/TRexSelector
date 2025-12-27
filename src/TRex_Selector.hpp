@@ -36,6 +36,15 @@ enum class SolverTypeForTRex {
 
 
 /**
+ * @brief L-loop calibration strategies
+ */
+enum class LLoopStrategy {
+    STANDARD,       // Generate fresh dummies each iteration (conservative)
+    ADAPTIVE        // Horizontally expand dummy matrices (faster)
+};
+
+
+/**
  * @brief T-Rex Selector for FDR-controlled variable selection.
  *
  * @details
@@ -102,11 +111,24 @@ protected:
     /** @brief Number of random experiments. */
     const std::size_t K_;
 
-    /** @brief Maximum number of dummy variables (a multiple of p). */
+    /** @brief Maximum number of dummy variables (a multiple of p;
+     *          L = p, 2p, 3p .. 10p usually). */
     const std::size_t max_num_dummies_;
 
     /** @brief Use ceiling(n/2) as max T_stop. */
     const bool max_T_stop_;
+
+    // ============================================================
+    // Member Methods - Normalization
+    // ============================================================
+
+    /** @brief L-loop calibration strategy */
+    const LLoopStrategy lloop_strategy_;
+
+
+    // ============================================================
+    // Data Members - Configuration
+    // ============================================================
 
     /** @brief Random seed. */
     const int seed_;
@@ -122,13 +144,15 @@ protected:
     // Data Members - Normalization parameters
     // ============================================================
 
-    /** @brief Feature column means (size p). */
+    /** @brief Feature column means of original X (size p). */
     Eigen::VectorXd X_means_;
 
-    /** @brief Feature column standard deviations (size p). */
+    /** @brief Feature column standard deviations of original X (size p).
+     *         Normalization with Bessel factor (n-1).
+     */
     Eigen::VectorXd X_stds_;
 
-    /** @brief Feature column L2 norms (size p). */
+    /** @brief Feature column L2 norms of original X (size p). */
     Eigen::VectorXd X_l2norms_;
 
     /** @brief Response mean. */
@@ -183,6 +207,42 @@ protected:
     /** @brief Storage for dummy matrices (for T-loop reuse) */
     std::vector<Eigen::MatrixXd> stored_dummies_;
 
+    // ============================================================
+    // Member Methods for Solver Serialization (T-loop warm start)
+    // ============================================================
+
+    /**
+     * @brief Directory for temporary solver state files.
+     *
+     * @details Created during T-Loop, deleted after selection.
+     */
+    std::string temp_dir_;
+
+    /**
+     * @brief Paths to serialized solver files (K files).
+     *
+     * @details Only populated during T-Loop for warm starts.
+     */
+    std::vector<std::string> solver_files_;
+
+    /**
+     * @brief Flag indicating if serialized solvers are available.
+     */
+    bool has_serialized_solvers_;
+
+    /**
+     * @brief Create temporary directory for solver state files.
+     *
+     * @return Path to temporary directory.
+     */
+    std::string createTempDirectory();
+
+    /**
+     * @brief Clean up temporary directory and all solver files.
+     */
+    void cleanupTempDirectory();
+
+
 
 public:
     // ===========================================================
@@ -202,23 +262,7 @@ public:
         Eigen::VectorXd voting_grid;    /** Voting grid used */
     };
 
-    /** @brief State during calibration loop. */
-    struct CalibrationState {
-        std::size_t LL;                     /** Current dummy multiplier in L-loop */
-        std::size_t num_dummies;            /** Current number of dummies used */
-        std::size_t T_stop;                 /** Current stopping threshold */
-        Eigen::VectorXd FDP_hat;            /** Current FDP estimates */
-        Eigen::MatrixXd Phi;                /** Current relative occurrence matrix */
-        Eigen::VectorXd Phi_prime;          /** Current adjusted relative occurrences */
-        Eigen::MatrixXd phit_T_mat;         /** Dummy inclusion tracking */
 
-        // Constructor
-        CalibrationState(std::size_t p, std::size_t K, std::size_t V_len);
-    };
-
-
-
-public:
     // ============================================================
     // Constructor
     // ============================================================
@@ -233,6 +277,7 @@ public:
      * @param solver Solver type (default: TLARS).
      * @param max_num_dummies Maximum Dummy multiplier (default: 10).
      * @param max_T_stop Use ceiling(n/2) as max T_stop (default: true).
+     * @param lloop_strategy L-loop calibration strategy (default: STANDARD).
      * @param seed Random seed (< 0 for random seed).
      * @param verbose Enable verbose output (default: true).
      *
@@ -245,6 +290,7 @@ public:
                  SolverTypeForTRex solver = SolverTypeForTRex::TLARS,
                  std::size_t max_num_dummies = 10,
                  bool max_T_stop = true,
+                 LLoopStrategy lloop_strategy = LLoopStrategy::STANDARD,
                  int seed = -1,
                  bool verbose = true
     );
@@ -365,56 +411,67 @@ protected:
     // Protected Methods
     // ============================================================
 
-    /** @brief Normalize X to have z-score zero mean and unit standard deviation. */
-    void normalizeZscore(
-        Eigen::Map<Eigen::MatrixXd>& X,
-        Eigen::VectorXd& means,
-        Eigen::VectorXd& stds
-    ) const;
+    /** @brief Center y in-place. Stores y_mean internally. */
+    void centerY();
 
-    /** @brief Normalize X to have unit L2 column norms in place. */
-    void normalizeL2Norm(
-        Eigen::Map<Eigen::MatrixXd>& X,
-        Eigen::VectorXd& means,
-        Eigen::VectorXd& l2norms
-    ) const;
-
-    /**
-     * @brief Center y in-place.
-     *
-     * @return Mean of y before centering.
-     */
-    double centerY();
-
-    /**
-     * @brief Convert from L2 to z-score normalization.
-     *
-     * @param X_L2 Matrix in L2 normalization.
-     * @param l2norms L2 norms from normalization.
-     * @return Matrix in z-score normalization.
-     */
-    void convertL2ToZscore(
-        Eigen::Map<Eigen::MatrixXd>& X
-    ) const;
-
-    /**
-     * @brief Convert from z-score to L2 normalization.
-     *
-     * @param X_zscore Matrix in z-score normalization.
-     * @param means Means from z-score.
-     * @param stds Standard deviations from z-score.
-     * @return Matrix in L2 normalization.
-     */
-    void convertZscoreToL2(
-        Eigen::Map<Eigen::MatrixXd>& X
-    ) const;
-
-    /** @brief Denormalize X to original scale. */
-    void denormalizeX();
 
     /** @brief Denormalize y to original scale. */
     void decenterY();
 
+
+    // Legacy - kept for potential future use ----------------------------------------------
+    /**
+     * @brief Center and z-score normalize X in-place.
+     * @details Centers each column (mean = 0) and scales to unit variance (std = 1)
+     *          using Bessel correction (n-1). Stores X_means_ and X_stds_.
+     *          Result: Each column has mean=0, std=1, L2 norm=sqrt(n-1).
+     */
+    void centerAndZscoreNormalizeX();
+
+
+    /**
+     * @brief Center and L2 normalize X in-place.
+     * @details Centers each column, then scales to unit L2 norm.
+     *          Stores X_means_ and X_l2norms_.
+     *          Result: Each column has mean = 0, L2 norm = 1.
+     */
+    void centerAndL2NormalizeX();
+
+
+    /**
+     * @brief Center and L2 normalize matrix in-place.
+     * @details Centers each column, then scales to unit L2 norm.
+     *          Does NOT store normalization parameters.
+     * @param X Mapped matrix to normalize (modified in-place).
+     */
+    void centerAndL2NormalizeMatrix(Eigen::Map<Eigen::MatrixXd>& X) const;
+
+    // -------------------------------------------------------------------------------------
+
+
+    /**
+     * @brief Convert z-score normalized matrix to L2 normalized.
+     * @details Divides each column by sqrt(n-1) to convert from z-score
+     *          (L2 norm = sqrt(n-1)) to unit L2 norm (L2 norm = 1).
+     * @param Z Matrix in z-score normalization (modified in-place).
+     */
+    void convertZscoreToL2(Eigen::Map<Eigen::MatrixXd>& Z) const;
+
+
+    /**
+     * @brief Convert L2 normalized matrix to z-score normalized.
+     * @details Multiplies each column by sqrt(n-1) to convert from unit L2 norm
+     *          (L2 norm = 1) to z-score (L2 norm = sqrt(n-1)).
+     * @param Z Matrix in L2 normalization (modified in-place).
+     */
+    void convertL2ToZscore(Eigen::Map<Eigen::MatrixXd>& Z) const;
+
+
+    /**
+     * @brief Restore X to original scale.
+     * @details Reverses z-score normalization: X = X_zscore * X_stds + X_means.
+     */
+    void denormalizeX();
 
 
     // ===========================================================
@@ -451,15 +508,18 @@ protected:
     /**
      * @brief Run K random experiments.
      *
-     * @param num_dummies
-     * @param T_stop
-     * @param generate_new_dummies
-     * @return
+     * @param num_dummies Number of dummies to append.
+     * @param T_stop Early stopping threshold.
+     * @param generate_new_dummies If true, generate new dummies;
+     * @param use_warm_start If true, load and continue from saved state.
+     *
+     * @return Experiment results (phi_T_mat and Phi).
      */
     ExperimentResults runRandomExperiments(
         std::size_t num_dummies,
         std::size_t T_stop,
-        bool generate_new_dummies
+        bool generate_new_dummies,
+        bool use_warm_start
     );
 
 
@@ -470,6 +530,17 @@ protected:
      * @param exp_results Experiment results structure to fill.
      */
     void runLLoopCalibration(Eigen::VectorXd& FDP_hat, ExperimentResults& exp_results);
+
+
+    /**
+     * @brief Run L-loop calibration (ADAPTIVE strategy).
+     *
+     * @details Horizontally expands dummy matrices across iterations.
+     *
+     * @param FDP_hat FDP estimates.
+     * @param exp_results Experiment results structure to fill.
+     */
+    void runLLoopCalibration_Adaptive(Eigen::VectorXd& FDP_hat, ExperimentResults& exp_results);
 
 
     /**
@@ -575,18 +646,24 @@ protected:
 
 
     /**
-     * @brief Run a single T-selector experiment on augmented data.
+     * @brief Run a single experiment with a specific solver type.
      *
-     * @param XD_map Augmented data matrix [X | D] of dim = (n x (p + num_dummies)).
+     * @details Handles solver creation, warm start loading, execution, and saving.
+     *
+     * @param XD_map Augmented design matrix.
      * @param y_map Response vector.
      * @param T_stop Early stopping threshold.
+     * @param use_warm_start If true, load from file; else create fresh.
+     * @param solver_file Path to solver file for load/save.
      *
-     * @return Beta path from T-selector.
+     * @return Beta path matrix.
      */
-    Eigen::MatrixXd runSingleExperiment(
+    Eigen::MatrixXd runSingleExperimentWithSolver(
         Eigen::Map<Eigen::MatrixXd>& XD_map,
         Eigen::Map<Eigen::VectorXd>& y_map,
-        std::size_t T_stop
+        std::size_t T_stop,
+        bool use_warm_start,
+        const std::string& solver_file
     );
 
 
