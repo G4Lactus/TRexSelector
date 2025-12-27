@@ -37,9 +37,17 @@ struct SyntheticData {
         : true_support(support) {
 
         // Set random seed for reproducibility
-        std::srand(seed);
+        std::mt19937 gen(seed);
+        std::normal_distribution<double> dist(0.0, 1.0);
 
-        X = Eigen::MatrixXd::Random(n, p);
+        // Generate X ~ N(0,1)
+        X = Eigen::MatrixXd(n, p);
+        for (std::size_t j = 0; j < p; ++j) {
+            for (std::size_t i = 0; i < n; ++i) {
+                X(i, j) = dist(gen);
+            }
+        }
+
         y = Eigen::VectorXd::Zero(n);
         beta_true = Eigen::VectorXd::Zero(p);
 
@@ -53,8 +61,11 @@ struct SyntheticData {
         double signal_power = y.squaredNorm() / n;
         double noise_std = std::sqrt(signal_power / snr);
 
-        // Add noise
-        y += noise_std * Eigen::VectorXd::Random(n);
+        // Add Gaussian noise
+        std::normal_distribution<double> noise_dist(0.0, noise_std);
+        for (std::size_t i = 0; i < n; ++i) {
+            y(i) += noise_dist(gen);
+        }
     }
 };
 
