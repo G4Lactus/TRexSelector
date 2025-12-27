@@ -117,6 +117,7 @@ void demo_TRexSelector_MonteCarlo(std::size_t num_MC, bool high_dim, bool rnd_co
     const std::vector<SolverConfig> solvers_to_test = {
        {SolverTypeForTRex::TLARS,      "TLARS"},
        {SolverTypeForTRex::TLASSO,     "TLASSO"},
+       {SolverTypeForTRex::TENET,      "TENET"},
        {SolverTypeForTRex::TSTEPWISE,  "TSTEPWISE"},
        {SolverTypeForTRex::TOMP,       "TOMP"},
        {SolverTypeForTRex::TGP,        "TGP"},
@@ -330,6 +331,7 @@ void demo_TRexSelector_varMonteCarlo(std::size_t num_MC, bool high_dim, bool rnd
     const std::vector<SolverConfig> solvers_to_test = {
        {SolverTypeForTRex::TLARS,      "TLARS"},
        {SolverTypeForTRex::TLASSO,     "TLASSO"},
+       {SolverTypeForTRex::TENET,      "TENET"},
        {SolverTypeForTRex::TSTEPWISE,  "TSTEPWISE"},
        {SolverTypeForTRex::TOMP,       "TOMP"},
        {SolverTypeForTRex::TGP,        "TGP"},
@@ -535,7 +537,7 @@ int main() {
 
     // Run T-Rex Selector variable data Monte Carlo simulation
     // high-dimensional setting
-    demo_TRexSelector_varMonteCarlo(/*num_MC=*/100, /*high_dim=*/true, /*rnd_coef=*/true);
+    demo_TRexSelector_varMonteCarlo(/*num_MC=*/100, /*high_dim=*/true, /*rnd_coef=*/false);
 
 
     return 0;
