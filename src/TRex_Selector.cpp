@@ -17,7 +17,8 @@ TRexSelector::TRexSelector(
     bool max_T_stop,
     LLoopStrategy lloop_strategy,
     int seed,
-    bool verbose
+    bool verbose,
+    std::unique_ptr<SolverConfig> solver_config
     ) :
     X_(&X),
     y_(y),
@@ -29,6 +30,7 @@ TRexSelector::TRexSelector(
     lloop_strategy_(lloop_strategy),
     seed_(seed),
     verbose_(verbose),
+    solver_config_(std::move(solver_config)),
     T_stop_(0),
     num_dummies_(0),
     voting_threshold_(0.0),
@@ -484,7 +486,7 @@ Eigen::VectorXd TRexSelector::computePhiPrime(
 
     for (const auto idx : phi_geg_fifty_indices) {
         // Verify dimension match (debug only)
-        assert(phi_T_mat.row(idx).size() == current_T);
+        assert(static_cast<std::size_t>(phi_T_mat.row(idx).size()) == current_T);
 
         delta_av_num_var_sel += phi_T_mat.row(idx).transpose();
     }
@@ -1242,13 +1244,22 @@ Eigen::MatrixXd TRexSelector::runSingleExperimentWithSolver(
         }
 
         case SolverTypeForTRex::TENET: {
+            // Extract lambda2 from config or use default
+            double lambda2 = 1.0;  // default
+            if (solver_config_) {
+                if (auto* tenet_cfg = dynamic_cast<TENETConfig*>(solver_config_.get())) {
+                    lambda2 = tenet_cfg->lambda2;
+                }
+            }
+
             if (use_warm_start && has_serialized_solvers_) {
                 TENET_Solver solver = TENET_Solver::load(solver_file, XD_map);
                 solver.executeStep(T_stop, /*early_stop=*/true);
                 pathMatrix = solver.getBetaPath();
                 solver.save(solver_file);
             } else {
-                TENET_Solver solver(XD_map, y_map, num_dummies_, false, false, false);
+                TENET_Solver solver(XD_map, y_map, num_dummies_, lambda2,
+                                    false, false, false);
                 solver.executeStep(T_stop, /*early_stop=*/true);
                 pathMatrix = solver.getBetaPath();
                 if (!solver_file.empty()) {

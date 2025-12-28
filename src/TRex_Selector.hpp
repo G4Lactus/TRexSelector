@@ -45,6 +45,42 @@ enum class LLoopStrategy {
 
 
 /**
+ * @brief Base class for solver-specific configuration
+ */
+struct SolverConfig {
+    virtual ~SolverConfig() = default;
+};
+
+/**
+ * @brief TENET solver configuration
+ */
+struct TENETConfig : public SolverConfig {
+    double lambda2;
+
+    explicit TENETConfig(double lambda2_val = 1.0)
+        : lambda2(lambda2_val) {}
+};
+
+/**
+ * @brief Configuration for solvers without extra parameters
+ * (TLARS, TLASSO, TSTEPWISE, TOMP, TGP, TACGP)
+ */
+struct DefaultConfig : public SolverConfig {
+    DefaultConfig() = default;
+};
+
+// Future solver configs can be added here as needed
+// Example:
+// struct TGPConfig : public SolverConfig {
+//     double step_size;
+//     int max_iterations;
+//
+//     TGPConfig(double mu = 0.1, int mi = 1000)
+//         : step_size(mu), max_iterations(mi) {}
+// };
+
+
+/**
  * @brief T-Rex Selector for FDR-controlled variable selection.
  *
  * @details
@@ -139,6 +175,13 @@ protected:
     /** @brief Verbose output flag. */
     const bool verbose_;
 
+    // ============================================================
+    // Solver specific configuration
+    // ============================================================
+
+    /** @brief Solver-specific configuration (e.g., TENET lambda2). */
+    std::unique_ptr<SolverConfig> solver_config_;
+
 
     // ============================================================
     // Data Members - Normalization parameters
@@ -208,7 +251,7 @@ protected:
     std::vector<Eigen::MatrixXd> stored_dummies_;
 
     // ============================================================
-    // Member Methods for Solver Serialization (T-loop warm start)
+    // Members for Solver Serialization (T-loop warm start)
     // ============================================================
 
     /**
@@ -229,18 +272,6 @@ protected:
      * @brief Flag indicating if serialized solvers are available.
      */
     bool has_serialized_solvers_;
-
-    /**
-     * @brief Create temporary directory for solver state files.
-     *
-     * @return Path to temporary directory.
-     */
-    std::string createTempDirectory();
-
-    /**
-     * @brief Clean up temporary directory and all solver files.
-     */
-    void cleanupTempDirectory();
 
 
 
@@ -280,6 +311,7 @@ public:
      * @param lloop_strategy L-loop calibration strategy (default: STANDARD).
      * @param seed Random seed (< 0 for random seed).
      * @param verbose Enable verbose output (default: true).
+     * @param solver_config Solver-specific configuration (e.g., TENETConfig for TENET).
      *
      * @return TRexSelector instance.
      */
@@ -292,7 +324,8 @@ public:
                  bool max_T_stop = true,
                  LLoopStrategy lloop_strategy = LLoopStrategy::STANDARD,
                  int seed = -1,
-                 bool verbose = true
+                 bool verbose = true,
+                 std::unique_ptr<SolverConfig> solver_config = nullptr
     );
 
     /** @brief Virtual destructor for proper polymorphic behavior. */
@@ -691,6 +724,22 @@ protected:
 
     /** @brief Print diagnostics of current TRexSelector state */
     void printDiagnostics() const;
+
+    // ============================================================
+    // Methods for Solver State Serialization (T-loop warm start)
+    // ============================================================
+
+    /**
+     * @brief Create temporary directory for solver state files.
+     *
+     * @return Path to temporary directory.
+     */
+    std::string createTempDirectory();
+
+    /**
+     * @brief Clean up temporary directory and all solver files.
+     */
+    void cleanupTempDirectory();
 
 }; /* End of TRexSelector class */
 
