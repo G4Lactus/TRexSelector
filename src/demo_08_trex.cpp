@@ -52,7 +52,8 @@ void demo_TRexSelector(bool high_dim) {
         /*max_T_stop=*/true,
         /*lloop_strategy=*/LLoopStrategy::ADAPTIVE,
         /*seed=*/-1,
-        /*verbose=*/true
+        /*verbose=*/true,
+        /*solver_config=*/nullptr
     );
 
     // Execute T-Rex Selector
@@ -117,8 +118,8 @@ void demo_TRexSelector_MonteCarlo(std::size_t num_MC, bool high_dim, bool rnd_co
 
     const std::vector<SolverConfig> solvers_to_test = {
        {SolverTypeForTRex::TLARS,      "TLARS", /*lambda2=*/{}},
-       {SolverTypeForTRex::TLASSO,     "TLASSO", /*lambda2=*/0.0},
-       {SolverTypeForTRex::TENET,      "TENET",      /*lambda2=*/{}},
+       {SolverTypeForTRex::TLASSO,     "TLASSO", /*lambda2=*/{}},
+       {SolverTypeForTRex::TENET,      "TENET",      /*lambda2=*/0.1},
        {SolverTypeForTRex::TSTEPWISE,  "TSTEPWISE", /*lambda2=*/{}},
        {SolverTypeForTRex::TOMP,       "TOMP", /*lambda2=*/{}},
        {SolverTypeForTRex::TGP,        "TGP", /*lambda2=*/{}},
@@ -364,7 +365,6 @@ void demo_TRexSelector_varMonteCarlo(std::size_t num_MC, bool high_dim, bool rnd
     std::normal_distribution<double> normal(0.0, 1.0);
 
 
-
     // ===================================================================
     // Solver loop
     // ===================================================================
@@ -450,7 +450,7 @@ void demo_TRexSelector_varMonteCarlo(std::size_t num_MC, bool high_dim, bool rnd
                     /*max_T_stop=*/true,
                     /*lloop_strategy=*/LLoopStrategy::ADAPTIVE,
                     /*seed=*/-1,
-                    /*verbose=*/false,
+                    /*verbose=*/true,
                     /*solver_config=*/std::move(solver_cfg)
                 );
 
@@ -556,7 +556,7 @@ int main() {
     // Run T-Rex Selector with variable data Monte Carlo simulation
     // --------------------------------------------------------------
     // high-dimensional setting
-    demo_TRexSelector_varMonteCarlo(/*num_MC=*/100, /*high_dim=*/true, /*rnd_coef=*/false);
+    demo_TRexSelector_varMonteCarlo(/*num_MC=*/100, /*high_dim=*/true, /*rnd_coef=*/true);
 
 
     return 0;
