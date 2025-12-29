@@ -564,7 +564,7 @@ TRexSelector::SelectionResult TRexSelector::selectedVariables(
     for (std::size_t j = 0; j < n_cols; ++j) {      // Columns
         for (std::size_t i = 0; i < n_rows; ++i) {  // Rows
             // Check FDP constraint directly (no infinity needed)
-            if (FDP_use(i, j) <= tFDR_ && R_mat(i, j) >= val_max) { // NOTE: changed to >=
+            if (FDP_use(i, j) <= tFDR_ && R_mat(i, j) >= val_max) { // NOTE: changed == to >=
                 val_max = R_mat(i, j);
                 ind_max_row = i;
                 ind_max_col = j;
@@ -624,7 +624,6 @@ Eigen::VectorXd TRexSelector::createVotingGrid() const {
 
 
 void TRexSelector::set75PercentOptPoint(const std::size_t v_len) {
-
     opt_point_ = 0;
     double target_v = 0.75;
 
@@ -636,6 +635,11 @@ void TRexSelector::set75PercentOptPoint(const std::size_t v_len) {
 
 }
 
+// ===========================================================
+// Loop Calibration Methods
+// ===========================================================
+
+// Variant with new dummies each iteration
 
 void TRexSelector::runLLoopCalibration(Eigen::VectorXd& FDP_hat, ExperimentResults& exp_results) {
 
@@ -678,6 +682,7 @@ void TRexSelector::runLLoopCalibration(Eigen::VectorXd& FDP_hat, ExperimentResul
     dummy_multiplier_LL_ = (dummy_multiplier_LL > 1) ? (dummy_multiplier_LL - 1) : 1;
 }
 
+// Variant with dummy matrix augmentation
 
 void TRexSelector::runLLoopCalibration_Adaptive(
     Eigen::VectorXd& FDP_hat,
@@ -750,9 +755,14 @@ void TRexSelector::runLLoopCalibration_Adaptive(
 
         ++dummy_multiplier_LL_;
     }
+
     dummy_multiplier_LL_ = (dummy_multiplier_LL_ > 1) ? (dummy_multiplier_LL_ - 1) : 1;
 }
 
+
+// ===========================================================
+// T-Loop Calibration
+// ===========================================================
 
 void TRexSelector::runTLoopCalibration(
     Eigen::VectorXd& FDP_hat,
@@ -775,7 +785,7 @@ void TRexSelector::runTLoopCalibration(
     // Track selection size for stagnation detection
     std::size_t prev_num_selected = 0;
     std::size_t stagnant_iterations = 0;
-    const std::size_t MAX_STAGNANT = 3;
+    const std::size_t MAX_STAGNANT = 7;
 
     std::size_t row_idx = 0;
 
@@ -807,12 +817,7 @@ void TRexSelector::runTLoopCalibration(
                 v_star_idx = i;
             }
         }
-
         double v_star = (v_star_idx < v_len) ? voting_grid_(v_star_idx) : 0.0;
-
-        // TODO: consider shifting to verbose_ part
-        double min_FDP = FDP_hat.minCoeff();
-        double max_FDP = FDP_hat.maxCoeff();
 
         // Count variables selected at v*
         std::size_t num_selected = 0;
@@ -837,11 +842,14 @@ void TRexSelector::runTLoopCalibration(
                 stagnant_iterations = 0;
             }
         }
-
         prev_num_selected = num_selected;
+
 
         // Enhanced diagnostic output
         if (verbose_) {
+            const double min_FDP = FDP_hat.minCoeff();
+            const double max_FDP = FDP_hat.maxCoeff();
+
             std::cout << "[T =" << std::setw(3) << T_stop_
                       << "] v* =" << v_star
                       << ", |S| =" << num_selected
@@ -891,9 +899,6 @@ void TRexSelector::runTLoopCalibration(
                       std::to_string(T_stop_) + stop_reason);
     }
 }
-
-
-
 
 
 void TRexSelector::storeResults(const SelectionResult& result) {
@@ -1091,7 +1096,6 @@ Eigen::MatrixXd TRexSelector::generateDummies(
 
 
 // Augmented Matrix Creation
-// ===========================================================
 
 Eigen::MatrixXd TRexSelector::createAugmentedMatrix(
     const Eigen::MatrixXd& D
