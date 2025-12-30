@@ -5,6 +5,7 @@
 #include <limits>
 #include <iostream>
 #include <iomanip>
+#include <memory>
 #include <stdexcept>
 #include <string>
 #include <vector>
@@ -20,6 +21,10 @@
 #include "TGP_Solver.hpp"
 #include "TACGP_Solver.hpp"
 
+
+// ============================================================
+// Enums & Control Structures
+// ============================================================
 
 /**
  * @brief Solver types for T-Rex Selector
@@ -45,14 +50,50 @@ enum class LLoopStrategy {
 
 
 /**
- * @brief Base class for solver-specific configuration
+ * @brief Algorithmic control parameters for T-Rex Selector.
+ *
+ * @details Groups all T-Rex algorithm control parameters:
+ *          - Loop Strategies
+ *          - Early stopping Strategies
+ *          - Calibration
+ */
+struct TRexControlParameter {
+    /** @brief Number of random experiments (deault: 20) */
+    std::size_t K = 20;
+
+    /** @brief Maximum number of dummy variables as a multiple of p (L = p, 2p, .., 10p)
+     *         (default: 10)
+     */
+    std::size_t max_num_dummies = 10;
+
+    /** @brief If true, limit T_stop to ceiling(n/2) (default: true) */
+    bool max_T_stop = true;
+
+    /** @brief Strategy for L-loop calibration. STANDARD or ADAPTIVE (default: ADAPTIVE) */
+    LLoopStrategy lloop_strategy = LLoopStrategy::ADAPTIVE;
+
+    /** @brief If true, perform early stopping if support set stagnates (default: true) */
+    bool tloop_stagnation_stop = true;
+
+    /** @brief Number of stagnant steps required to trigger early T-loop stopping (default: 3) */
+    std::size_t max_stagnant_steps = 3;
+};
+
+
+// --- Solver Configuration ---
+
+/**
+ * @brief Base class for solver-specific configuration.
+ *
+ * @details Wrapper for solver details to be specified for each solver,
+ *          like lambda parameter, step size, tolerances etc.
  */
 struct SolverConfig {
     virtual ~SolverConfig() = default;
 };
 
 /**
- * @brief TENET solver configuration
+ * @brief TENET solver configuration.
  */
 struct TENETConfig : public SolverConfig {
     double lambda2;
@@ -62,23 +103,22 @@ struct TENETConfig : public SolverConfig {
 };
 
 /**
- * @brief Configuration for solvers without extra parameters
+ * @brief
+ *
+ * Configuration for solvers without extra parameters
  * (TLARS, TLASSO, TSTEPWISE, TOMP, TGP, TACGP)
  */
-struct DefaultConfig : public SolverConfig {
-    DefaultConfig() = default;
+struct SolverControl {
+    /** @brief Solver type. */
+    SolverTypeForTRex solver_type = SolverTypeForTRex::TLARS;
+
+    /** @brief Solver-specific configuration (e.g., TENET lambda2). */
+    std::unique_ptr<SolverConfig> config = nullptr;
 };
 
-// Future solver configs can be added here as needed
-// Example:
-// struct TGPConfig : public SolverConfig {
-//     double step_size;
-//     int max_iterations;
-//
-//     TGPConfig(double mu = 0.1, int mi = 1000)
-//         : step_size(mu), max_iterations(mi) {}
-// };
-
+// ============================================================
+// T-Rex Selector Class
+// ============================================================
 
 /**
  * @brief T-Rex Selector for FDR-controlled variable selection.
@@ -103,6 +143,9 @@ struct DefaultConfig : public SolverConfig {
  *  - Dependendy Aware (DA) T-Rex
  *  - Screen-TRex
  *  - Dummy Permutation (DP) T-Rex
+ *  - GVS TRex
+ *  - Sparse PCA TRex
+ *  - etc.
  */
 class TRexSelector {
 protected:
@@ -118,19 +161,13 @@ protected:
      */
     Eigen::Map<Eigen::MatrixXd>* X_;
 
-    /**
-     * @brief Response vector (owned) (n x 1).
-     */
+    /** @brief Response vector (owned) (n x 1). */
     Eigen::VectorXd y_{};
 
-    /**
-     * @brief Number of observations.
-     */
+    /** @brief Number of observations. */
     std::size_t n_;
 
-    /**
-     * @brief Number of features.
-     */
+    /** @brief Number of features. */
     std::size_t p_;
 
 
@@ -138,49 +175,23 @@ protected:
     // Data Members - Configuration
     // ============================================================
 
-    /** @brief Solver type. */
-    const SolverTypeForTRex solver_;
-
     /** @brief Target False Discovery Rate. */
     const double tFDR_;
 
-    /** @brief Number of random experiments. */
-    const std::size_t K_;
+    /** @brief Algorithmic control parameters. */
+    const TRexControlParameter trex_ctrl_;
 
-    /** @brief Maximum number of dummy variables (a multiple of p;
-     *          L = p, 2p, 3p .. 10p usually). */
-    const std::size_t max_num_dummies_;
-
-    /** @brief Use ceiling(n/2) as max T_stop. */
-    const bool max_T_stop_;
-
-    // ============================================================
-    // Member Methods - Normalization
-    // ============================================================
-
-    /** @brief L-loop calibration strategy */
-    const LLoopStrategy lloop_strategy_;
-
-
-    // ============================================================
-    // Data Members - Configuration
-    // ============================================================
+    /** @brief Solver control parameters (type and math config) */
+    const SolverControl solver_ctrl_;
 
     /** @brief Random seed. */
     const int seed_;
 
-    /** @brief Numerical tolerance. */
-    const double eps_{std::numeric_limits<double>::epsilon()};
-
     /** @brief Verbose output flag. */
     const bool verbose_;
 
-    // ============================================================
-    // Solver specific configuration
-    // ============================================================
-
-    /** @brief Solver-specific configuration (e.g., TENET lambda2). */
-    std::unique_ptr<SolverConfig> solver_config_;
+    /** @brief Numerical tolerance. */
+    const double eps_{std::numeric_limits<double>::epsilon()};
 
 
     // ============================================================
@@ -189,11 +200,6 @@ protected:
 
     /** @brief Feature column means of original X (size p). */
     Eigen::VectorXd X_means_;
-
-    /** @brief Feature column standard deviations of original X (size p).
-     *         Normalization with Bessel factor (n-1).
-     */
-    Eigen::VectorXd X_stds_;
 
     /** @brief Feature column L2 norms of original X (size p). */
     Eigen::VectorXd X_l2norms_;
@@ -247,12 +253,12 @@ protected:
     /** @brief Current dummy multiplier in L-loop. */
     std::size_t dummy_multiplier_LL_;
 
-    /** @brief Storage for dummy matrices (for T-loop reuse) */
-    std::vector<Eigen::MatrixXd> stored_dummies_;
-
     // ============================================================
     // Members for Solver Serialization (T-loop warm start)
     // ============================================================
+
+    /** @brief Storage for dummy matrices (for T-loop reuse) */
+    std::vector<Eigen::MatrixXd> stored_dummies_;
 
     /**
      * @brief Directory for temporary solver state files.
@@ -272,7 +278,6 @@ protected:
      * @brief Flag indicating if serialized solvers are available.
      */
     bool has_serialized_solvers_;
-
 
 
 public:
@@ -304,28 +309,18 @@ public:
      * @param X Feature matrix (n x p) - accepts Eigen::Map.
      * @param y Response vector (n x 1) - accepts Eigen::Map.
      * @param tFDR Target False Discovery Rate (default: 0.1).
-     * @param K Number of random experiments (default: 20).
-     * @param solver Solver type (default: TLARS).
-     * @param max_num_dummies Maximum Dummy multiplier (default: 10).
-     * @param max_T_stop Use ceiling(n/2) as max T_stop (default: true).
-     * @param lloop_strategy L-loop calibration strategy (default: STANDARD).
+     * @param trex_control Algorithmic control parameters.
+     * @param solver_control Solver type and specific math config.
      * @param seed Random seed (< 0 for random seed).
      * @param verbose Enable verbose output (default: true).
-     * @param solver_config Solver-specific configuration (e.g., TENETConfig for TENET).
-     *
-     * @return TRexSelector instance.
      */
     TRexSelector(Eigen::Map<Eigen::MatrixXd>& X,
                  Eigen::Map<Eigen::VectorXd>& y,
                  double tFDR = 0.1,
-                 std::size_t K = 20,
-                 SolverTypeForTRex solver = SolverTypeForTRex::TLARS,
-                 std::size_t max_num_dummies = 10,
-                 bool max_T_stop = true,
-                 LLoopStrategy lloop_strategy = LLoopStrategy::STANDARD,
+                 TRexControlParameter trex_control = TRexControlParameter(),
+                 SolverControl solver_control = SolverControl(),
                  int seed = -1,
-                 bool verbose = true,
-                 std::unique_ptr<SolverConfig> solver_config = nullptr
+                 bool verbose = true
     );
 
     /** @brief Virtual destructor for proper polymorphic behavior. */
@@ -375,14 +370,20 @@ public:
     inline double getTFDR() const noexcept { return tFDR_; }
 
     /** @brief Get number of random experiments. */
-    inline std::size_t getK() const noexcept { return K_; }
+    inline std::size_t getK() const noexcept { return trex_ctrl_.K; }
 
     /** @brief Get dummy multiplier. */
-    inline std::size_t getMaxNumDummies() const noexcept { return max_num_dummies_; }
+    inline std::size_t getMaxNumDummies() const noexcept {
+        return trex_ctrl_.max_num_dummies;
+    }
 
     /** @brief Get maximum T_stop flag. */
-    inline bool getMaxTStop() const noexcept { return max_T_stop_; }
+    inline bool getMaxTStop() const noexcept { return trex_ctrl_.max_T_stop; }
 
+    /** @brief Get stagnation check flag. */
+    inline bool getStagnationCheck() const noexcept {
+        return trex_ctrl_.tloop_stagnation_stop;
+    }
 
     // ============================================================
     // Public Getters - Normalization Parameters
@@ -390,9 +391,6 @@ public:
 
     /** @brief Get means of features. */
     inline const Eigen::VectorXd& getXMeans() const noexcept { return X_means_; }
-
-    /** @brief Get standard deviations of features. */
-    inline const Eigen::VectorXd& getXStds() const noexcept { return X_stds_; }
 
     /** @brief Get L2 norms of features. */
     inline const Eigen::VectorXd& getXL2Norms() const noexcept { return X_l2norms_; }
@@ -452,16 +450,6 @@ protected:
     void decenterY();
 
 
-    // Legacy - kept for potential future use ----------------------------------------------
-    /**
-     * @brief Center and z-score normalize X in-place.
-     * @details Centers each column (mean = 0) and scales to unit variance (std = 1)
-     *          using Bessel correction (n-1). Stores X_means_ and X_stds_.
-     *          Result: Each column has mean=0, std=1, L2 norm=sqrt(n-1).
-     */
-    void centerAndZscoreNormalizeX();
-
-
     /**
      * @brief Center and L2 normalize X in-place.
      * @details Centers each column, then scales to unit L2 norm.
@@ -477,27 +465,7 @@ protected:
      *          Does NOT store normalization parameters.
      * @param X Mapped matrix to normalize (modified in-place).
      */
-    void centerAndL2NormalizeMatrix(Eigen::Map<Eigen::MatrixXd>& X) const;
-
-    // -------------------------------------------------------------------------------------
-
-
-    /**
-     * @brief Convert z-score normalized matrix to L2 normalized.
-     * @details Divides each column by sqrt(n-1) to convert from z-score
-     *          (L2 norm = sqrt(n-1)) to unit L2 norm (L2 norm = 1).
-     * @param Z Matrix in z-score normalization (modified in-place).
-     */
-    void convertZscoreToL2(Eigen::Map<Eigen::MatrixXd>& Z) const;
-
-
-    /**
-     * @brief Convert L2 normalized matrix to z-score normalized.
-     * @details Multiplies each column by sqrt(n-1) to convert from unit L2 norm
-     *          (L2 norm = 1) to z-score (L2 norm = sqrt(n-1)).
-     * @param Z Matrix in L2 normalization (modified in-place).
-     */
-    void convertL2ToZscore(Eigen::Map<Eigen::MatrixXd>& Z) const;
+    void centerAndL2NormalizeMatrix(Eigen::Map<Eigen::MatrixXd>& M) const;
 
 
     /**
