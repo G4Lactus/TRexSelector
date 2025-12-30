@@ -1,6 +1,8 @@
 #include <iostream>
 #include <iomanip>
 #include <vector>
+#include <map>
+#include <unordered_set>
 
 #include <Eigen/Dense>
 
@@ -40,20 +42,28 @@ void demo_TRexSelector(bool high_dim) {
     Eigen::Map<Eigen::MatrixXd> X_map(data.X.data(), data.X.rows(), data.X.cols());
     Eigen::Map<Eigen::VectorXd> y_map(data.y.data(), data.y.size());
 
+    // Setup Control Structures
+    TRexControlParameter trex_ctrl;
+    trex_ctrl.K = 20;
+    trex_ctrl.max_num_dummies = 10;
+    trex_ctrl.max_T_stop = true;
+    trex_ctrl.lloop_strategy = LLoopStrategy::ADAPTIVE;
+    trex_ctrl.tloop_stagnation_stop = true;
+
+    SolverControl solver_ctrl;
+    solver_ctrl.solver_type = SolverTypeForTRex::TLARS;
+    solver_ctrl.config = nullptr;  // Default config
+
     // Create T-Rex Selector instance
     std::cout << "Creating T-Rex Selector instance...\n";
     TRexSelector trex(
         /*X=*/X_map,
         /*y=*/y_map,
         /*tFDR=*/0.1,
-        /*K=*/20,
-        /*solver=*/SolverTypeForTRex::TLARS,
-        /*max_num_dummies=*/10,
-        /*max_T_stop=*/true,
-        /*lloop_strategy=*/LLoopStrategy::ADAPTIVE,
+        /*trex_control=*/trex_ctrl,
+        /*solver_control=*/std::move(solver_ctrl),
         /*seed=*/-1,
-        /*verbose=*/true,
-        /*solver_config=*/nullptr
+        /*verbose=*/true
     );
 
     // Execute T-Rex Selector
@@ -87,6 +97,11 @@ void demo_TRexSelector(bool high_dim) {
 
 // ----------------------------------------------------------------------
 
+struct DemoSolverInfo {
+    SolverTypeForTRex solver_type;
+    std::string solver_name;
+    double lambda2;  // For TENET solver
+};
 
 void demo_TRexSelector_MonteCarlo(std::size_t num_MC, bool high_dim, bool rnd_coef) {
 
@@ -107,23 +122,17 @@ void demo_TRexSelector_MonteCarlo(std::size_t num_MC, bool high_dim, bool rnd_co
     const std::vector<double> snr_values = {0.1, 0.5, 1.0, 2.0, 5.0};
 
     // ===================================================================
-    // Define solvers to test
+    // Define solvers to test & T-Rex control parameters
     // ===================================================================
 
-    struct SolverConfig {
-        SolverTypeForTRex solver_type;
-        std::string solver_name;
-        double lambda2;  // For TENET solver
-    };
-
-    const std::vector<SolverConfig> solvers_to_test = {
-       {SolverTypeForTRex::TLARS,      "TLARS", /*lambda2=*/{}},
-       {SolverTypeForTRex::TLASSO,     "TLASSO", /*lambda2=*/{}},
-       {SolverTypeForTRex::TENET,      "TENET",      /*lambda2=*/0.1},
-       {SolverTypeForTRex::TSTEPWISE,  "TSTEPWISE", /*lambda2=*/{}},
-       {SolverTypeForTRex::TOMP,       "TOMP", /*lambda2=*/{}},
-       {SolverTypeForTRex::TGP,        "TGP", /*lambda2=*/{}},
-       {SolverTypeForTRex::TACGP,      "TACGP", /*lambda2=*/{}}
+    const std::vector<DemoSolverInfo> solvers_to_test = {
+       {SolverTypeForTRex::TLARS,      "TLARS",     /*lambda2=*/{}  },
+       {SolverTypeForTRex::TLASSO,     "TLASSO",    /*lambda2=*/{}  },
+       {SolverTypeForTRex::TENET,      "TENET",     /*lambda2=*/0.1 },
+       {SolverTypeForTRex::TSTEPWISE,  "TSTEPWISE", /*lambda2=*/{}  },
+       {SolverTypeForTRex::TOMP,       "TOMP",      /*lambda2=*/{}  },
+       {SolverTypeForTRex::TGP,        "TGP",       /*lambda2=*/{}  },
+       {SolverTypeForTRex::TACGP,      "TACGP",     /*lambda2=*/{}  }
     };
 
     // Results: solver x SNR
@@ -135,8 +144,17 @@ void demo_TRexSelector_MonteCarlo(std::size_t num_MC, bool high_dim, bool rnd_co
         tpr_results_map[solver_config.solver_name] = Eigen::VectorXd(snr_values.size());
     }
 
+    // Setup TRex Parameters
+    TRexControlParameter trex_control;
+    trex_control.K = 20;
+    trex_control.max_num_dummies = 10;
+    trex_control.max_T_stop = true;
+    trex_control.lloop_strategy = LLoopStrategy::ADAPTIVE;
+    trex_control.tloop_stagnation_stop = true;
+    trex_control.max_stagnant_steps = 3;
+
     // ===================================================================
-    // Generate true support once and shared across all tests
+    // Generate true support once and shared across all Monte Carlo runs
     // ===================================================================
     std::mt19937 rng(24);
     std::uniform_int_distribution<std::size_t> uniform_dist(0, p - 1);
@@ -153,12 +171,12 @@ void demo_TRexSelector_MonteCarlo(std::size_t num_MC, bool high_dim, bool rnd_co
     std::vector<double> true_coefs;
     true_coefs.reserve(cardinality_true_support);
     if (rnd_coef) {
-        // Random coefficients
+        // Random (heterogeneous) coefficients
         for (std::size_t i = 0; i < cardinality_true_support; ++i) {
             true_coefs.push_back(normal(rng));
         }
     } else {
-        // Fixed coefficients
+        // Fixed (deterministic/homogeneous) coefficients
         for (std::size_t i = 0; i < cardinality_true_support; ++i) {
             true_coefs.push_back(1);
         }
@@ -174,32 +192,35 @@ void demo_TRexSelector_MonteCarlo(std::size_t num_MC, bool high_dim, bool rnd_co
     // ===================================================================
     // Solver loop
     // ===================================================================
-    for (const auto& solver_config : solvers_to_test) {
+    for (const auto& current_solver : solvers_to_test) {
 
         std::cout << "===================================================\n";
-        std::cout << "Solver: " << solver_config.solver_name << "\n";
+        std::cout << "Solver: " << current_solver.solver_name << "\n";
         std::cout << "===================================================\n\n";
 
         // ===================================================================
         // Loop over SNR values
         // ===================================================================
         for (std::size_t snr_idx = 0; snr_idx < snr_values.size(); ++snr_idx) {
-            const double snr = snr_values[snr_idx];
-            std::cout << "SNR = " << std::fixed << std::setprecision(1) << snr << "\n";
 
             double total_fdp = 0.0;
             double total_tpp = 0.0;
+            const double snr = snr_values[snr_idx];
+
+            std::cout << "SNR = " << std::fixed << std::setprecision(1) << snr << "\n";
 
             // ===================================================================
             // Monte Carlo loop
             // ===================================================================
             for (std::size_t mc = 0; mc < num_MC; ++mc) {
+
                 // Progress
                 std::cout << "  Progress: [" << std::setw(3) << (mc + 1)
                           << "/" << num_MC << "] "
                           << std::fixed << std::setprecision(1)
                           << (100.0 * (mc + 1) / num_MC) << "%\r";
 
+                // Generate data
                 utils_talgos::SyntheticData data(
                     n, p, true_support, true_coefs, snr,
                     /*seed=*/24 + snr_idx * 1000 + mc
@@ -208,28 +229,29 @@ void demo_TRexSelector_MonteCarlo(std::size_t num_MC, bool high_dim, bool rnd_co
                 Eigen::Map<Eigen::MatrixXd> X_map(data.X.data(), data.X.rows(), data.X.cols());
                 Eigen::Map<Eigen::VectorXd> y_map(data.y.data(), data.y.size());
 
-                // Create solver-specific config if needed
-                std::unique_ptr<::SolverConfig> solver_cfg = nullptr;
-                if (solver_config.solver_type == SolverTypeForTRex::TENET) {
-                    solver_cfg = std::make_unique<TENETConfig>(solver_config.lambda2);
+                // Setup Solver Control Parameters
+                SolverControl solver_control;
+                solver_control.solver_type = current_solver.solver_type;
+
+                if (current_solver.solver_type == SolverTypeForTRex::TENET) {
+                    solver_control.config = std::make_unique<TENETConfig>(current_solver.lambda2);
                 }
 
+                // Create T-Rex Selector instance
                 TRexSelector trex(
                     /*X=*/X_map,
                     /*y=*/y_map,
                     /*tFDR=*/0.1,
-                    /*K=*/20,
-                    /*solver=*/solver_config.solver_type,
-                    /*max_num_dummies=*/10,
-                    /*max_T_stop=*/true,
-                    /*lloop_strategy=*/LLoopStrategy::ADAPTIVE,
+                    /*trex_control=*/trex_control,
+                    /*solver_control=*/std::move(solver_control),
                     /*seed=*/-1,
-                    /*verbose=*/false,
-                    /*solver_config=*/std::move(solver_cfg)
+                    /*verbose=*/false
                 );
 
+                // Execute T-Rex Selector
                 trex.select();
 
+                // Evaluate performance
                 auto selected_indices = trex.getSelectedIndices();
 
                 const double fdp = utils_fdr_control::compute_fdp(
@@ -247,9 +269,9 @@ void demo_TRexSelector_MonteCarlo(std::size_t num_MC, bool high_dim, bool rnd_co
             }
 
             // Store in map
-            fdr_results_map[solver_config.solver_name](snr_idx) =
+            fdr_results_map[current_solver.solver_name](snr_idx) =
                 total_fdp / static_cast<double>(num_MC);
-            tpr_results_map[solver_config.solver_name](snr_idx) =
+            tpr_results_map[current_solver.solver_name](snr_idx) =
                 total_tpp / static_cast<double>(num_MC);
 
             // Clear progress line
@@ -329,23 +351,17 @@ void demo_TRexSelector_varMonteCarlo(std::size_t num_MC, bool high_dim, bool rnd
     const std::vector<double> snr_values = {0.1, 0.5, 1.0, 2.0, 5.0};
 
     // ===================================================================
-    // Define solvers to test
+    // Define solvers to test & T-Rex control parameters
     // ===================================================================
 
-    struct SolverConfig {
-        SolverTypeForTRex solver_type;
-        std::string solver_name;
-        double lambda2;  // For TENET solver
-    };
-
-    const std::vector<SolverConfig> solvers_to_test = {
-       {SolverTypeForTRex::TLARS,      "TLARS", {}},
-       {SolverTypeForTRex::TLASSO,     "TLASSO", {}},
-       {SolverTypeForTRex::TENET,      "TENET",      /*lambda2=*/0.1},
-       {SolverTypeForTRex::TSTEPWISE,  "TSTEPWISE", {}},
-       {SolverTypeForTRex::TOMP,       "TOMP", {}},
-       {SolverTypeForTRex::TGP,        "TGP", {}},
-       {SolverTypeForTRex::TACGP,      "TACGP", {}}
+    const std::vector<DemoSolverInfo> solvers_to_test = {
+       {SolverTypeForTRex::TLARS,      "TLARS",     /*lambda2=*/{}  },
+       {SolverTypeForTRex::TLASSO,     "TLASSO",    /*lambda2=*/{}  },
+       {SolverTypeForTRex::TENET,      "TENET",     /*lambda2=*/0.1 },
+       {SolverTypeForTRex::TSTEPWISE,  "TSTEPWISE", /*lambda2=*/{}  },
+       {SolverTypeForTRex::TOMP,       "TOMP",      /*lambda2=*/{}  },
+       {SolverTypeForTRex::TGP,        "TGP",       /*lambda2=*/{}  },
+       {SolverTypeForTRex::TACGP,      "TACGP",     /*lambda2=*/{}  }
     };
 
     // Results: solver x SNR
@@ -356,6 +372,15 @@ void demo_TRexSelector_varMonteCarlo(std::size_t num_MC, bool high_dim, bool rnd
         fdr_results_map[solver_config.solver_name] = Eigen::VectorXd(snr_values.size());
         tpr_results_map[solver_config.solver_name] = Eigen::VectorXd(snr_values.size());
     }
+
+    // Setup TRex Parameters
+    TRexControlParameter trex_control;
+    trex_control.K = 20;
+    trex_control.max_num_dummies = 10;
+    trex_control.max_T_stop = true;
+    trex_control.lloop_strategy = LLoopStrategy::ADAPTIVE;
+    trex_control.tloop_stagnation_stop = true;
+    trex_control.max_stagnant_steps = 3;
 
     // ===================================================================
     // Generate true support once and shared across all tests
@@ -368,10 +393,10 @@ void demo_TRexSelector_varMonteCarlo(std::size_t num_MC, bool high_dim, bool rnd
     // ===================================================================
     // Solver loop
     // ===================================================================
-    for (const auto& solver_config : solvers_to_test) {
+    for (const auto& current_solver : solvers_to_test) {
 
         std::cout << "===================================================\n";
-        std::cout << "Solver: " << solver_config.solver_name << "\n";
+        std::cout << "Solver: " << current_solver.solver_name << "\n";
         std::cout << "===================================================\n\n";
 
         // ===================================================================
@@ -399,12 +424,12 @@ void demo_TRexSelector_varMonteCarlo(std::size_t num_MC, bool high_dim, bool rnd
                 std::vector<double> true_coefs;
                 true_coefs.reserve(cardinality_true_support);
                 if (rnd_coef) {
-                    // Random coefficients
+                    // Random (heterogeneous) coefficients
                     for (std::size_t i = 0; i < cardinality_true_support; ++i) {
                         true_coefs.push_back(normal(rng));
                     }
                 } else {
-                    // Fixed coefficients
+                    // Fixed (deterministic/homogeneous) coefficients
                     for (std::size_t i = 0; i < cardinality_true_support; ++i) {
                         true_coefs.push_back(1);
                     }
@@ -434,28 +459,28 @@ void demo_TRexSelector_varMonteCarlo(std::size_t num_MC, bool high_dim, bool rnd
                 Eigen::Map<Eigen::MatrixXd> X_map(data.X.data(), data.X.rows(), data.X.cols());
                 Eigen::Map<Eigen::VectorXd> y_map(data.y.data(), data.y.size());
 
-                // Create solver-specific config if needed
-                std::unique_ptr<::SolverConfig> solver_cfg = nullptr;
-                if (solver_config.solver_type == SolverTypeForTRex::TENET) {
-                    solver_cfg = std::make_unique<TENETConfig>(solver_config.lambda2);
+                // Setup Solver Control Parameters
+                SolverControl solver_control;
+                solver_control.solver_type = current_solver.solver_type;
+                if (current_solver.solver_type == SolverTypeForTRex::TENET) {
+                    solver_control.config = std::make_unique<TENETConfig>(current_solver.lambda2);
                 }
 
+                // Create T-Rex Selector instance
                 TRexSelector trex(
                     /*X=*/X_map,
                     /*y=*/y_map,
                     /*tFDR=*/0.1,
-                    /*K=*/20,
-                    /*solver=*/solver_config.solver_type,
-                    /*max_num_dummies=*/10,
-                    /*max_T_stop=*/true,
-                    /*lloop_strategy=*/LLoopStrategy::ADAPTIVE,
+                    /*trex_control=*/trex_control,
+                    /*solver_control=*/std::move(solver_control),
                     /*seed=*/-1,
-                    /*verbose=*/true,
-                    /*solver_config=*/std::move(solver_cfg)
+                    /*verbose=*/false
                 );
 
+                // Execute T-Rex Selector
                 trex.select();
 
+                // Evaluate performance
                 auto selected_indices = trex.getSelectedIndices();
 
                 const double fdp = utils_fdr_control::compute_fdp(
@@ -473,9 +498,9 @@ void demo_TRexSelector_varMonteCarlo(std::size_t num_MC, bool high_dim, bool rnd
             }
 
             // Store in map
-            fdr_results_map[solver_config.solver_name](snr_idx) =
+            fdr_results_map[current_solver.solver_name](snr_idx) =
                 total_fdp / static_cast<double>(num_MC);
-            tpr_results_map[solver_config.solver_name](snr_idx) =
+            tpr_results_map[current_solver.solver_name](snr_idx) =
                 total_tpp / static_cast<double>(num_MC);
 
             // Clear progress line
@@ -544,8 +569,8 @@ int main() {
     // demo_TRexSelector(/*high_dim=*/true);
 
 
-    // Run T-Rex Selector Monte Carlo simulation
-    // --------------------------------------------------------------
+    // Monte Carlo simulation: Run T-Rex Selector with fixed support & coefficients
+    // --------------------------------------------------------------------------------------
     // high-dimensional setting
     // demo_TRexSelector_MonteCarlo(/*num_MC=*/100, /*high_dim=*/true, /*rnd_coef=*/false);
 
@@ -553,10 +578,10 @@ int main() {
     // demo_TRexSelector_MonteCarlo(/*num_MC=*/100, /*high_dim=*/false);
 
 
-    // Run T-Rex Selector with variable data Monte Carlo simulation
-    // --------------------------------------------------------------
+    // Monte Carlo simulation: Run T-Rex Selector with variable data, support & coefficients
+    // --------------------------------------------------------------------------------------
     // high-dimensional setting
-    demo_TRexSelector_varMonteCarlo(/*num_MC=*/100, /*high_dim=*/true, /*rnd_coef=*/true);
+    demo_TRexSelector_varMonteCarlo(/*num_MC=*/100, /*high_dim=*/true, /*rnd_coef=*/false);
 
 
     return 0;
