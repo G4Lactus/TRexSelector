@@ -75,7 +75,7 @@ void demo_TLARS_early_stopping(bool high_dim, bool rnd_coef, std::size_t T_stop)
 
     // Augment with dummies
     Eigen::MatrixXd X_aug = datagen::append_dummies_to_matrix(data.getX(), num_dummies,
-                                                             /*seed=*/1234);
+                /*seed=*/1234, /*dummy_dist=*/ datagen::dummygen::Distribution::Normal() );
     Eigen::VectorXd y = data.getY();
 
     // Create Maps
