@@ -19,6 +19,7 @@
 
 #include <algorithm>
 #include <atomic>
+#include <filesystem>
 #include <iostream>
 #include <iomanip>
 #include <memory>
@@ -32,6 +33,7 @@
 
 #include "utils/openMP/utils_openmp.hpp"
 #include "utils/memmap/MemoryMappedMatrix.hpp"
+#include "utils/datagen/utils_dummygen.hpp"
 
 // ===================================================================================
 
@@ -42,6 +44,7 @@ namespace datagen {
 // ==============================================================================
 // Set aliases for namespaces
 namespace memmap = trex::utils::memmap;
+namespace dummygen = trex::utils::dummygen;
 
 // =============================================================================
 // Helper Functions (private)
@@ -90,7 +93,7 @@ inline unsigned int get_base_seed(int seed) {
 
 
 /**
- * @brief Generate standard normal matrix using OpenMP for parallelism.
+ * @brief Generate standard normal matrix.
  *
  * @tparam MatrixType Type of the matrix (e.g., Eigen::MatrixXd).
  *
@@ -100,22 +103,14 @@ inline unsigned int get_base_seed(int seed) {
  * @param base_seed Base seed for random number generation.
  */
 template<typename MatrixType>
-void generate_standard_normal_matrix(
+inline void generate_standard_normal_matrix(
     MatrixType& X,
     std::size_t n,
     std::size_t p,
     unsigned int base_seed
 ) {
-    #pragma omp parallel for schedule(static)
-    for (std::size_t j = 0; j < p; ++j) {
-        // Seed column specific
-        std::mt19937 col_gen(base_seed + static_cast<unsigned int>(j) + 1000);
-        std::normal_distribution<double> dist(0.0, 1.0);
-
-        for (std::size_t i = 0; i < n; ++i) {
-            X(i, j) = dist(col_gen);
-        }
-    }
+    // Use dummygen to generate standard normal dummies
+    dummygen::generate_dummies(X, n, p, base_seed, dummygen::Distribution::Normal());
 }
 
 
@@ -131,7 +126,7 @@ void generate_standard_normal_matrix(
  * @param coefs Coefficient values corresponding to the support.
  */
 template<typename MatrixType, typename VectorType>
-void generate_signal(
+inline void generate_signal(
     VectorType& y,
     const MatrixType& X,
     const std::vector<std::size_t>& support,
@@ -156,7 +151,7 @@ void generate_signal(
  * @return Pair of signal power and noise standard deviation.
  */
 template<typename VectorType>
-std::pair<double, double> calculate_noise_params(
+inline std::pair<double, double> calculate_noise_params(
     const VectorType& y,
     std::size_t n,
     double snr
@@ -187,7 +182,7 @@ std::pair<double, double> calculate_noise_params(
  * @param noise_seed Seed for random number generation.
  */
 template<typename VectorType>
-void add_gaussian_noise(
+inline void add_gaussian_noise(
     VectorType& y,
     std::size_t n,
     double noise_std,
@@ -522,6 +517,7 @@ public:
      *               >= 0 for reproducible).
      * @param dummy_seed Seed for generating dummy variables (Default: -1 for random seed,
      *                   >= 0 for reproducible).
+     * @param dummy_dist Distribution for dummy variable generation (Default: Normal).
      */
     SyntheticDataMappedWithDummies(
         const std::string& X_aug_filepath,
@@ -534,7 +530,8 @@ public:
         double snr = 1.0,
         int seed = -1,
         int X_seed = -1,
-        int dummy_seed = -1
+        int dummy_seed = -1,
+        const dummygen::Distribution& dummy_dist = dummygen::Distribution::Normal()
     ) : X_aug_filepath_(X_aug_filepath),
         y_filepath_(y_filepath),
         n_(n),
@@ -570,7 +567,7 @@ public:
 
         // Generate dummies in last num_dummies columns
         auto dummies_view = X_aug_map.rightCols(num_dummies);
-        detail::generate_standard_normal_matrix(dummies_view, n, num_dummies, dummy_gen_seed);
+        dummygen::generate_dummies(dummies_view, n, num_dummies, dummy_gen_seed, dummy_dist);
 
         // Generate signal y
         Eigen::VectorXd y_vec = y_map.col(0);
@@ -649,11 +646,17 @@ public:
 /**
  * @brief Appends dummy variables to the augmented feature matrix.
  *
+ * @param X Original feature matrix.
+ * @param num_dummies Number of dummy variables to append.
+ * @param seed Random seed for dummy generation (Default: -1 for random seed, >= 0 for
+ *             reproducible).
+ * @param dummy_dist Distribution for dummy variable generation (Default: Normal).
  */
-Eigen::MatrixXd append_dummies_to_matrix(
+inline Eigen::MatrixXd append_dummies_to_matrix(
     const Eigen::MatrixXd& X,
     std::size_t num_dummies,
-    int seed = -1
+    int seed = -1,
+    const dummygen::Distribution& dummy_dist = dummygen::Distribution::Normal()
 ) {
     // Get dimensions
     const std::size_t n = X.rows();
@@ -666,9 +669,77 @@ Eigen::MatrixXd append_dummies_to_matrix(
     // Generate dummies using existing detail helper
     auto dummies_view = X_aug.rightCols(num_dummies);
     unsigned int base_seed = detail::get_base_seed(seed);
-    detail::generate_standard_normal_matrix(dummies_view, n, num_dummies, base_seed);
+    dummygen::generate_dummies(dummies_view, n, num_dummies, base_seed, dummy_dist);
 
     return X_aug;
+}
+
+
+/**
+ * @brief Create augmented memory-mapped matrix from existing data file.
+ *
+ * @details Reads existing predictor matrix, creates augmented memory-mapped matrix
+ *          [X | D] with dummy variables. Uses openMP for parallel column-wise
+ *          copying operations and dummy generation.
+ *
+ * @param X_filepath Path to existing predictor matrix (raw binary, column-major).
+ * @param X_aug_filepath Output path for augmented matrix.
+ * @param n Number of observations.
+ * @param p Number of original predictors.
+ * @param num_dummies Number of dummy variables to append.
+ * @param seed Random seed for dummy generation (Default: -1 for random seed, >= 0 for
+ *             reproducible).
+ * @param dummy_dist Distribution for dummy variable generation (Default: Normal).
+ */
+inline void augment_existing_data_with_dummies(
+    const std::string& X_filepath,
+    const std::string& X_aug_filepath,
+    std::size_t n,
+    std::size_t p,
+    std::size_t num_dummies,
+    int seed = -1,
+    const dummygen::Distribution& dummy_dist = dummygen::Distribution::Normal()
+) {
+    namespace fs = std::filesystem;
+
+    // Validate input
+    if (!fs::exists(X_filepath)) {
+        throw std::runtime_error("Input file not found: " + X_filepath);
+    }
+
+    // Expected size
+    std::size_t expected_bytes = n * p * sizeof(double);
+    if (fs::file_size(X_filepath) != expected_bytes) {
+        throw std::runtime_error(
+            "File size mismatch. Expected " + std::to_string(expected_bytes) +
+            " bytes for (" + std::to_string(n) + " x " + std::to_string(p) + ") matrix."
+        );
+    }
+
+    // Create input memory map
+    memmap::MemoryMappedMatrix<double> X_mmap(
+        X_filepath, n, p, memmap::AccessMode::ReadOnly
+    );
+
+    // Create output memory map for augmented matrix
+    memmap::MemoryMappedMatrix<double> X_aug_mmap(
+        X_aug_filepath, n, p + num_dummies, memmap::AccessMode::ReadWrite
+    );
+
+    // Get maps
+    auto X_map = X_mmap.getMap();
+    auto X_aug_map = X_aug_mmap.getMap();
+
+    // Copy original data
+    #pragma omp parallel for schedule(static)
+    for (std::size_t j = 0; j < p; ++j) {
+        X_aug_map.col(j) = X_map.col(j);
+    }
+
+    // Generate dummies
+    auto dummies_view = X_aug_map.rightCols(num_dummies);
+    unsigned int base_seed = detail::get_base_seed(seed);
+    dummygen::generate_dummies(dummies_view, n, num_dummies, base_seed, dummy_dist);
 }
 
 
