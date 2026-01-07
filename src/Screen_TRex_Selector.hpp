@@ -1,6 +1,0 @@
-#ifndef SCREEN_TREX_SELECTOR_HPP
-#define SCREEN_TREX_SELECTOR_HPP
-
-
-
-#endif /* End of SCREEN_TREX_SELECTOR_HPP */

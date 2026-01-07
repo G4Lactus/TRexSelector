@@ -1,31 +1,61 @@
 {
     "version": "2.0.0",
     "tasks": [
-        {
-            "type": "shell",
-            "label": "CMake Full Build (Release)",
-            "command": "bash",
-            "args": [
-                "-c",
-                "mkdir -p build && cd build && cmake -DCMAKE_BUILD_TYPE=Release .. && cmake --build ."
-            ],
-            "options": {"cwd": "${workspaceFolder}"},
-            "group": {"kind": "build"},
-            "problemMatcher": "$gcc",
-            "detail": "Full CMake configuration and build (Release profile)"
-        },
+        // Debug profile: Configure and build in separate debug directory
         {
             "type": "shell",
             "label": "CMake Full Build (Debug)",
-            "command": "bash",
+            "command": "cmake",
             "args": [
-                "-c",
-                "mkdir -p build && cd build && cmake -DCMAKE_BUILD_TYPE=Debug .. && cmake --build ."
+                "-S", ".",
+                "-B", "build/debug",
+                "-DCMAKE_BUILD_TYPE=Debug",
+                "&&", // Unix/macOS
+                "cmake",
+                "--build", "build/debug"
             ],
+            "windows": {
+                "args": [
+                    "-S", ".",
+                    "-B", "build/debug",
+                    "-DCMAKE_BUILD_TYPE=Debug",
+                    ";", // Windows
+                    "cmake",
+                    "--build", "build/debug"
+                ]
+            },
             "options": {"cwd": "${workspaceFolder}"},
             "group": {"kind": "build"},
-            "problemMatcher": "$gcc",
-            "detail": "Full CMake configuration and build (Debug profile)"
+            "problemMatcher": ["$gcc"],
+            "detail": "CMake configure and build (Debug, separate directory)"
+        },
+        // Release profile: Single command for configure and build
+        {
+            "type": "shell",
+            "label": "CMake Full Build (Release)",
+            "command": "cmake",
+            "args": [
+                "-S", ".",
+                "-B", "build/release",
+                "-DCMAKE_BUILD_TYPE=Release",
+                "&&", // Unix/macOS
+                "cmake",
+                "--build", "build/release"
+            ],
+            "windows": {
+                "args": [
+                    "-S", ".",
+                    "-B", "build/release",
+                    "-DCMAKE_BUILD_TYPE=Release",
+                    ";", // Windows
+                    "cmake",
+                    "--build", "build/release"
+                ]
+            },
+            "options": {"cwd": "${workspaceFolder}"},
+            "group": {"kind": "build"},
+            "problemMatcher": ["$gcc"],
+            "detail": "CMake configure and build (Release, separate directory)"
         }
     ]
 }

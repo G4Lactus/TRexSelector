@@ -1,0 +1,321 @@
+// =========================================================================
+// Dummy Generation Strategies
+// =========================================================================
+
+/**
+ * @brief Strategies for generating dummy variables.
+ *
+ * @details Different strategies match different null distributions:
+ * - STANDARD: i.i.d. N(0,1), assumes independence
+ * - PERMUTATION: Permutes X columns, preserves marginal distributions
+ * - RESIDUAL: Uses residuals orthogonal to y, guaranteed y-independence
+ * - HYBRID: Permutation + sign flipping, good balance
+ */
+enum class DummyGenerationStrategy {
+    STANDARD,       ///< i.i.d. Gaussian N(0,1)
+    PERMUTATION,    ///< Permute columns from X
+    RESIDUAL,       ///< Use residuals from y-projection
+    HYBRID          ///< Permutation + random sign flips (recommended)
+};
+
+/**
+ * @brief Control parameters for T-Rex selector.
+ */
+struct TRexControlParameter {
+    std::size_t K = 20;                  ///< Number of random experiments
+    std::size_t max_num_dummies = 10;    ///< Maximum number of dummies per experiment
+    bool max_T_stop = true;              ///< Use automatic T_stop determination
+
+    // ... existing fields ...
+
+    /**
+     * @brief Strategy for dummy variable generation.
+     *
+     * @details For correlated data (e.g., biobanks with linkage disequilibrium),
+     * HYBRID or PERMUTATION strategies provide better null matching.
+     */
+    DummyGenerationStrategy dummy_strategy = DummyGenerationStrategy::STANDARD;
+};
+
+
+class TRexSelector {
+protected:
+    // ... existing members ...
+
+    /**
+     * @brief Generates dummy variables according to selected strategy.
+     *
+     * @param num_dummies Number of dummy variables to generate.
+     * @param rng Random number generator.
+     * @return Matrix of size (n × num_dummies) with L2-normalized columns.
+     */
+    Eigen::MatrixXd generateDummies(
+        std::size_t num_dummies,
+        std::mt19937& rng
+    ) const;
+
+    /**
+     * @brief Standard dummy generation: i.i.d. N(0,1).
+     *
+     * @details Default method, assumes independence between variables.
+     * Use for uncorrelated data or when computational speed is critical.
+     */
+    Eigen::MatrixXd generateStandardDummies(
+        std::size_t num_dummies,
+        std::mt19937& rng
+    ) const;
+
+    /**
+     * @brief Permutation-based dummy generation.
+     *
+     * @details Samples random columns from X and permutes rows to break
+     * association with y while preserving marginal distributions.
+     *
+     * Best for: Moderately correlated data, fast computation needed.
+     */
+    Eigen::MatrixXd generatePermutedDummies(
+        std::size_t num_dummies,
+        std::mt19937& rng
+    ) const;
+
+    /**
+     * @brief Residual-based dummy generation.
+     *
+     * @details Projects X onto residual space orthogonal to y, then samples
+     * and permutes. Guarantees independence from y.
+     *
+     * Best for: High-stakes applications requiring theoretical guarantees.
+     * Cost: O(np) additional computation per call.
+     */
+    Eigen::MatrixXd generateResidualDummies(
+        std::size_t num_dummies,
+        std::mt19937& rng
+    ) const;
+
+    /**
+     * @brief Hybrid dummy generation (recommended).
+     *
+     * @details Combines permutation with random sign flipping for maximum
+     * randomness while preserving computational efficiency.
+     *
+     * Best for: Correlated biobank data (default recommendation).
+     */
+    Eigen::MatrixXd generateHybridDummies(
+        std::size_t num_dummies,
+        std::mt19937& rng
+    ) const;
+};
+
+
+
+// =========================================================================
+// Dummy Variable Generation
+// =========================================================================
+
+Eigen::MatrixXd TRexSelector::generateDummies(
+    std::size_t num_dummies,
+    std::mt19937& rng
+) const {
+    /*
+        Dispatcher for dummy generation strategies.
+
+        Selects appropriate method based on trex_ctrl_.dummy_strategy.
+    */
+
+    switch (trex_ctrl_.dummy_strategy) {
+        case DummyGenerationStrategy::PERMUTATION:
+            return generatePermutedDummies(num_dummies, rng);
+
+        case DummyGenerationStrategy::RESIDUAL:
+            return generateResidualDummies(num_dummies, rng);
+
+        case DummyGenerationStrategy::HYBRID:
+            return generateHybridDummies(num_dummies, rng);
+
+        case DummyGenerationStrategy::STANDARD:
+        default:
+            return generateStandardDummies(num_dummies, rng);
+    }
+}
+
+Eigen::MatrixXd TRexSelector::generateStandardDummies(
+    std::size_t num_dummies,
+    std::mt19937& rng
+) const {
+    /*
+        Standard i.i.d. N(0,1) dummy generation.
+
+        Assumes variables are independent. Fast but may not match
+        null distribution in correlated data.
+    */
+
+    Eigen::MatrixXd dummies(n_, num_dummies);
+    std::normal_distribution<double> normal(0.0, 1.0);
+
+    for (std::size_t j = 0; j < num_dummies; ++j) {
+        for (std::size_t i = 0; i < n_; ++i) {
+            dummies(i, j) = normal(rng);
+        }
+        // L2 normalize
+        dummies.col(j) /= dummies.col(j).norm();
+    }
+
+    return dummies;
+}
+
+Eigen::MatrixXd TRexSelector::generatePermutedDummies(
+    std::size_t num_dummies,
+    std::mt19937& rng
+) const {
+    /*
+        Permutation-based dummy generation.
+
+        1. Sample random columns from X
+        2. Permute rows to destroy y-association
+        3. Normalize
+
+        Preserves marginal distributions while breaking y-dependence.
+    */
+
+    Eigen::MatrixXd dummies(n_, num_dummies);
+    std::uniform_int_distribution<std::size_t> col_dist(0, p_ - 1);
+
+    for (std::size_t j = 0; j < num_dummies; ++j) {
+        // Sample random column from X
+        std::size_t random_col = col_dist(rng);
+        Eigen::VectorXd dummy_col = X_->col(random_col);
+
+        // Permute rows
+        std::vector<std::size_t> indices(n_);
+        std::iota(indices.begin(), indices.end(), 0);
+        std::shuffle(indices.begin(), indices.end(), rng);
+
+        Eigen::VectorXd permuted(n_);
+        for (std::size_t i = 0; i < n_; ++i) {
+            permuted(i) = dummy_col(indices[i]);
+        }
+
+        // L2 normalize
+        dummies.col(j) = permuted / permuted.norm();
+    }
+
+    return dummies;
+}
+
+Eigen::MatrixXd TRexSelector::generateResidualDummies(
+    std::size_t num_dummies,
+    std::mt19937& rng
+) const {
+    /*
+        Residual-based dummy generation.
+
+        1. Project X onto residual space orthogonal to y
+        2. Sample columns from residuals
+        3. Permute and normalize
+
+        Guarantees independence from y, better null matching.
+        Cost: O(np) for residual computation.
+    */
+
+    // Compute y projection: y_normalized = y / ||y||
+    Eigen::VectorXd y_normalized = (*y_) / y_->norm();
+
+    // Compute residuals: X_res = X - (X'y) y'
+    Eigen::MatrixXd X_residual = *X_ -
+        ((*X_).transpose() * y_normalized).transpose() * y_normalized.transpose();
+
+    // Generate dummies from residual space
+    Eigen::MatrixXd dummies(n_, num_dummies);
+    std::uniform_int_distribution<std::size_t> col_dist(0, p_ - 1);
+
+    for (std::size_t j = 0; j < num_dummies; ++j) {
+        // Sample random residual column
+        std::size_t random_col = col_dist(rng);
+        Eigen::VectorXd dummy_col = X_residual.col(random_col);
+
+        // Permute rows for additional randomization
+        std::vector<std::size_t> indices(n_);
+        std::iota(indices.begin(), indices.end(), 0);
+        std::shuffle(indices.begin(), indices.end(), rng);
+
+        Eigen::VectorXd permuted(n_);
+        for (std::size_t i = 0; i < n_; ++i) {
+            permuted(i) = dummy_col(indices[i]);
+        }
+
+        // L2 normalize
+        dummies.col(j) = permuted / permuted.norm();
+    }
+
+    return dummies;
+}
+
+Eigen::MatrixXd TRexSelector::generateHybridDummies(
+    std::size_t num_dummies,
+    std::mt19937& rng
+) const {
+    /*
+        Hybrid dummy generation (recommended).
+
+        Combines permutation with random sign flipping:
+        1. Sample columns from X
+        2. Permute rows
+        3. Randomly flip signs
+        4. Normalize
+
+        Good balance: fast, theoretically sound, works well for correlated data.
+    */
+
+    Eigen::MatrixXd dummies(n_, num_dummies);
+    std::uniform_int_distribution<std::size_t> col_dist(0, p_ - 1);
+    std::bernoulli_distribution sign_flip(0.5);
+
+    for (std::size_t j = 0; j < num_dummies; ++j) {
+        // Sample random column
+        std::size_t random_col = col_dist(rng);
+        Eigen::VectorXd dummy_col = X_->col(random_col);
+
+        // Permute rows
+        std::vector<std::size_t> indices(n_);
+        std::iota(indices.begin(), indices.end(), 0);
+        std::shuffle(indices.begin(), indices.end(), rng);
+
+        Eigen::VectorXd permuted(n_);
+        for (std::size_t i = 0; i < n_; ++i) {
+            permuted(i) = dummy_col(indices[i]);
+        }
+
+        // Random sign flip
+        if (sign_flip(rng)) {
+            permuted = -permuted;
+        }
+
+        // L2 normalize
+        dummies.col(j) = permuted / permuted.norm();
+    }
+
+    return dummies;
+}
+
+
+
+// ==================================================================================
+// Dummy Strategies
+// ==================================================================================
+- Rademacher Dummies
+    std::mt19937 gen(seed);
+    std::bernoulli_distribution dist(0.5);
+    int rademacher = 2 * dist(gen) - 1;  // Maps {0,1} to {-1,1}
+
+    Alternative:
+    std::mt19937 gen(seed);
+    std::uniform_real_distribution<double> dist(0.0, 1.0);
+    int rademacher = (dist(gen) > 0.5) ? 1 : -1;
+
+- Uniform Dummies
+
+Boost based:
+- Student t Dummies
+- Laplace Dummies
+
+GNU Scientific Library

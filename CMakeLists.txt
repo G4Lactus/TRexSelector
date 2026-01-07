@@ -1,11 +1,14 @@
-# Root CMakeLists
-# =============================
-# This file defines project-wide settings and includes each subfolder in src/
+# Root CMakeLists.txt
+# =============================================================================
+# This file defines project-wide settings and includes each subfolder in src/ .
+#
 # It builds below /build/ a:
 # - release/  folder: optimized build without debug symbols
 # - debug/    folder: unoptimized build with debug symbols and extra checks
+# =============================================================================
 
 cmake_minimum_required(VERSION 3.18)
+
 
 # ============================================================================
 # Compiler Selection (MUST be before project())
@@ -26,6 +29,15 @@ if(APPLE AND NOT DEFINED CMAKE_CXX_COMPILER)
 endif()
 
 
+# ============================================================================
+# Output Directories (UNIFIED approach)
+# ============================================================================
+# Set output directories at the root level
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
+set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
+
+
 
 # ============================================================================
 # Project Definition
@@ -33,7 +45,8 @@ endif()
 project(TRexLearning
     VERSION 0.1
     DESCRIPTION "C++ Prototype for TRex Selector"
-    LANGUAGES CXX)
+    LANGUAGES CXX
+)
 
 # Build type (default to Release if not specified)
 if(NOT CMAKE_BUILD_TYPE)
@@ -49,6 +62,10 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_CXX_FLAGS_DEBUG "-g -O0 -Wall -Wextra")
 set(CMAKE_CXX_FLAGS_RELEASE "-O3 -DNDEBUG -march=native")
 
+# Generate compile_commands.json for IntelliSense
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
+
 
 # ============================================================================
 # Find packages with priority order
@@ -58,13 +75,19 @@ set(CMAKE_CXX_FLAGS_RELEASE "-O3 -DNDEBUG -march=native")
 find_package(OpenMP REQUIRED)
 
 # Eigen3 (required)
-find_package(Eigen3 3.3 REQUIRED NO_MODULE)
+find_package(Eigen3 REQUIRED NO_MODULE)
 
 # Cereal (required for serialization)
 find_package(cereal REQUIRED)
 if(NOT cereal_FOUND)
     message(STATUS "Cereal not found via find_package, using manual path")
 endif()
+
+# Boost: require at least 1.80
+if(POLICY CMP0167)
+    cmake_policy(SET CMP0167 NEW)
+endif()
+find_package(Boost 1.80 REQUIRED COMPONENTS headers iostreams)
 
 # BLAS/LAPACK with priority order
 # Priority: Accelerate > OpenBLAS > Reference BLAS
@@ -78,6 +101,8 @@ if(NOT BLAS_FOUND)
     find_package(BLAS REQUIRED)
     find_package(LAPACK REQUIRED)
 endif()
+
+
 
 # ============================================================================
 # Configuration Summary
@@ -95,17 +120,74 @@ message(STATUS "  - Version: ${CMAKE_CXX_COMPILER_VERSION}")
 message(STATUS "  - Path: ${CMAKE_CXX_COMPILER}")
 message(STATUS "")
 message(STATUS "Libraries:")
-message(STATUS "  - BLAS Vendor: ${BLA_VENDOR}")
-message(STATUS "  - BLAS: ${BLAS_LIBRARIES}")
-message(STATUS "  - OpenMP: ${OpenMP_CXX_VERSION}")
+# Eigen version
+if(Eigen3_FOUND)
+    message(STATUS "  - Eigen3: ${Eigen3_VERSION}")
+else()
+    message(STATUS "  - Eigen3: NOT FOUND")
+endif()
+#
+# Cereal version
+if(cereal_FOUND)
+    if(cereal_VERSION)
+        message(STATUS "  - Cereal: ${cereal_VERSION}")
+    else()
+        message(STATUS "  - Cereal: Found (version unknown)")
+    endif()
+else()
+    message(STATUS "  - Cereal: Manual path (/opt/homebrew/opt/cereal)")
+endif()
+#
+# Boost version and components
+if(Boost_FOUND)
+    message(STATUS "  - Boost: ${Boost_VERSION}")
+    message(STATUS "    * Headers: ${Boost_INCLUDE_DIRS}")
+    message(STATUS "    * IOStreams: ${Boost_iostreams_FOUND}")
+else()
+    message(STATUS "  - Boost: NOT FOUND")
+endif()
+#
+# OpenMP version
+if(OpenMP_FOUND)
+    if(OpenMP_CXX_VERSION)
+        message(STATUS "  - OpenMP: ${OpenMP_CXX_VERSION}")
+    else()
+        message(STATUS "  - OpenMP: Found (version unknown)")
+    endif()
+    message(STATUS "    * Flags: ${OpenMP_CXX_FLAGS}")
+    message(STATUS "    * Libraries: ${OpenMP_CXX_LIBRARIES}")
+else()
+    message(STATUS "  - OpenMP: NOT FOUND")
+endif()
+#
+# BLAS/LAPACK
+if(BLAS_FOUND)
+    message(STATUS "  - BLAS Vendor: ${BLA_VENDOR}")
+    message(STATUS "    * Libraries: ${BLAS_LIBRARIES}")
+else()
+    message(STATUS "  - BLAS: NOT FOUND")
+endif()
+#
+if(LAPACK_FOUND)
+    message(STATUS "  - LAPACK: ${LAPACK_LIBRARIES}")
+else()
+    message(STATUS "  - LAPACK: NOT FOUND")
+endif()
+#
+message(STATUS "")
+message(STATUS "Output Directories:")
+message(STATUS "  - Runtime (executables): ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}")
+message(STATUS "  - Libraries (static/shared): ${CMAKE_LIBRARY_OUTPUT_DIRECTORY}")
+message(STATUS "  - Archives (.a): ${CMAKE_ARCHIVE_OUTPUT_DIRECTORY}")
 message(STATUS "==============================================")
 
 
 # ============================================================================
-# Include directories (only for headers without CMake packages)
+# Include directories for headers (.hpp files)
 # ============================================================================
 include_directories(
     ${CMAKE_SOURCE_DIR}/include
+    ${CMAKE_SOURCE_DIR}/src
 )
 
 # Add Cereal include if not found as package
@@ -113,5 +195,9 @@ if(NOT cereal_FOUND)
     include_directories(/opt/homebrew/opt/cereal/include)
 endif()
 
-# Add subdirectories
+
+
+# ============================================================================
+# Add subdirectories with build targets (.cpp files)
+# ============================================================================
 add_subdirectory(src)

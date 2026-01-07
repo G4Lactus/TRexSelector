@@ -1,26 +1,45 @@
 {
   "version": "0.2.0",
   "configurations": [
+    // Setup profile for debugging: replace XXX with your executable name
     {
-        "name": "Debug demo_01_tlars",
-        "type": "lldb",
+        "name": "Debug",
+        "type": "cppdbg",
         "request": "launch",
         // Adjust the path to your built executable for debug
-        "program": "${workspaceFolder}/build/debug/src/demo_01_tlars",
+        "program": "${workspaceFolder}/build/debug/src/XXX",
         "args": [],
         "cwd": "${workspaceFolder}",
-        "stopOnEntry": false,
-        "preLaunchTask": "CMake Full Build (Debug)"
+        "preLaunchTask": "CMake Full Build (Debug)",
+        "osx": {
+            "MIMode": "lldb"
+        },
+        "linux": {
+            "MIMode": "gdb"
+        },
+        "windows": {
+            "MIMode": "gdb"
+        }
     },
+    // Setup profile for debugging release builds: replace XXX with your executable name
     {
-        "name": "Release demo_01_tlars",
-        "type": "lldb",
+        "name": "Release",
+        "type": "cppdbg",
         "request": "launch",
-        "program": "${workspaceFolder}/build/release/src/demo_01_tlars",
+        // Adjust the path to your built executable for release
+        "program": "${workspaceFolder}/build/release/src/XXX",
         "args": [],
         "cwd": "${workspaceFolder}",
-        "stopOnEntry": false,
-        "preLaunchTask": "CMake Full Build (Release)"
+        "preLaunchTask": "CMake Full Build (Release)",
+        "osx": {
+            "MIMode": "lldb"
+        },
+        "linux": {
+            "MIMode": "gdb"
+        },
+        "windows": {
+            "MIMode": "gdb"
+        }
     }
   ]
 }
