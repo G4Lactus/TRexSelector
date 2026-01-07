@@ -8,6 +8,14 @@
  *
  * @details Provides distribution types and parallel generation functions for
  *          dummy varibale generation and augmentation of feature matrices.
+ *
+ *          All distributions are centered (mean ≈ 0) and scaled appropriately
+ *          for use as null features in false discovery rate control methods.
+ *
+ *          Distributions must satisfy:
+ *          - Exchangeability: No inherent ordering or correlation structure
+ *          - Centered: E[D] ≈ 0 to avoid spurious correlation with response
+ *          - Appropriate variance: Similar scale to real predictors
  */
 // ===================================================================================
 
@@ -17,6 +25,7 @@
 // ===================================================================================
 
 #include <cmath>
+#include <numbers>
 #include <random>
 #include <stdexcept>
 #include <omp.h>
@@ -25,6 +34,9 @@
 
 #include <boost/random/laplace_distribution.hpp>
 #include <boost/math/distributions/holtsmark.hpp>
+#include <boost/random/uniform_on_sphere.hpp>
+#include <boost/random/generalized_inverse_gaussian_distribution.hpp>
+#include <boost/random/triangle_distribution.hpp>
 
 // ===================================================================================
 
@@ -70,7 +82,13 @@ struct Distribution {
         Gumbel,
 
         /** @brief Holtsmark distribution (heavy-tailed, stable with alpha=1.5). */
-        Holtsmark
+        Holtsmark,
+
+        /** @brief Triangular distribution with mean 0 and range [-b, b]. */
+        Triangle,
+
+        /** @brief Uniform distribution on the unit sphere. */
+        UniformSphere
     };
 
 
@@ -108,6 +126,18 @@ struct Distribution {
 
     /** @brief Holtsmark distribution: scale parameter (default: 1.0). */
     double holtsmark_scale = 1.0;
+
+    /** @brief Triangle: lower bound (default: -sqrt(6) for unit variance) */
+    double triangle_a = -std::sqrt(6.0);
+
+    /** @brief Triangle: mode (default: 0.0 for symmetric) */
+    double triangle_b = 0.0;
+
+    /** @brief Triangle: upper bound (default: +sqrt(6) for unit variance) */
+    double triangle_c = std::sqrt(6.0);
+
+    /** @brief Uniform Sphere: dimension of the sphere (default: 3 for 3D sphere). */
+    int sphere_dim = 3;
 
 
     // ============================================
@@ -211,6 +241,43 @@ struct Distribution {
         dist.holtsmark_scale = scale;
         return dist;
     }
+
+
+    /**
+     * @brief Create Triangle distribution.
+     *
+     * @param a Lower bound (default: -sqrt(6) for unit variance)
+     * @param b Mode (default: 0.0 for symmetric)
+     * @param c Upper bound (default: +sqrt(6) for unit variance)
+     *
+     * @return Distribution instance for Triangle distribution.
+     */
+    static Distribution Triangle(
+        double a = -std::sqrt(6.0),
+        double b = 0.0,
+        double c = std::sqrt(6.0)
+    ) {
+        Distribution dist(Type::Triangle);
+        dist.triangle_a = a;
+        dist.triangle_b = b;
+        dist.triangle_c = c;
+
+        return dist;
+    }
+
+    /**
+     * @brief Create Uniform distribution on the unit sphere.
+     *
+     * @param dim Dimension of the sphere (default: 3 for 3D sphere).
+     *
+     * @return Distribution instance for Uniform distribution on the unit sphere.
+     */
+    static Distribution UniformSphere(int dim = 3) {
+        Distribution dist(Type::UniformSphere);
+        dist.sphere_dim = dim;
+        return dist;
+    }
+
 
     // ============================================
     // Accessors
@@ -321,7 +388,11 @@ inline void generate_dummies(
         case Distribution::Type::Gumbel: {
             double location = dist.gumbel_location;
             double scale = dist.gumbel_scale;
-            std::extreme_value_distribution<double> distribution(location, scale);
+
+            // Gumbel mean: location + scale * gamma
+            double adjusted_location = location + scale * std::numbers::egamma;
+
+            std::extreme_value_distribution<double> distribution(adjusted_location, scale);
             #pragma omp parallel for schedule(static)
             for (std::size_t j = 0; j < p; ++j) {
                 std::mt19937 gen(base_seed + static_cast<unsigned int>(j) + 10000);
@@ -351,6 +422,55 @@ inline void generate_dummies(
             }
             break;
         }
+
+        /** @brief Generate Triangle distributed dummies using Boost.Random. */
+        case Distribution::Type::Triangle: {
+            double a = dist.triangle_a;
+            double b = dist.triangle_b;
+            double c = dist.triangle_c;
+            boost::random::triangle_distribution<double> distribution(a, b, c);
+
+            #pragma omp parallel for schedule(static)
+            for (std::size_t j = 0; j < p; ++j) {
+                std::mt19937 gen(base_seed + static_cast<unsigned int>(j) + 12000);
+                for (std::size_t i = 0; i < n; ++i) {
+                    X(i, j) = distribution(gen);
+                }
+            }
+            break;
+        }
+
+
+        /** @brief Generate Unit Sphere distributed dummies using Boost.Random. */
+        case Distribution::Type::UniformSphere: {
+            int dim = dist.sphere_dim;
+
+            // Validate dimensions
+            if (p % static_cast<std::size_t>(dim) != 0) {
+                throw std::invalid_argument(
+                    "Number of dummies p must be a multiple of sphere dimension."
+                );
+            }
+
+            // Boost uniform_on_sphere distribution
+            boost::random::uniform_on_sphere<double> distribution(dim);
+
+            #pragma omp parallel for schedule(static)
+            for (std::size_t j = 0; j < p; j += static_cast<std::size_t>(dim)) {
+                std::mt19937 gen(base_seed + static_cast<unsigned int>(j) + 14000);
+                for (std::size_t i = 0; i < n; ++i) {
+                    // Generate one point on sphere
+                    std::vector<double> point = distribution(gen);
+
+                    // Store across dim consecutive columns
+                    for (int k = 0; k < dim; ++k) {
+                        X(i, j + k) = point[k];
+                    }
+                }
+            }
+            break;
+        }
+
 
         default: {
             throw std::invalid_argument("Unsupported dummy distribution.");
