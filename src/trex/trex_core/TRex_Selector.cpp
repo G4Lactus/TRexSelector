@@ -1,5 +1,6 @@
-#include <filesystem>
 #include <cstdlib>
+#include <cassert>
+#include <filesystem>
 
 #include "TRex_Selector.hpp"
 
