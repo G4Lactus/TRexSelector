@@ -22,6 +22,7 @@ set(DEMO_LIBS
     # Core dependencies not covered above
     Boost::headers
     Boost::iostreams
+
     # Linear algebra backends
     ${BLAS_LIBRARIES}
     ${LAPACK_LIBRARIES}
@@ -56,6 +57,7 @@ macro(add_demo_target target_name demo_file)
     target_include_directories(${target_name} PRIVATE
         ${CMAKE_SOURCE_DIR}/include     # Public headers
         ${CMAKE_SOURCE_DIR}/src         # Source headers
+        ${ADDITIONAL_INCLUDES}          # Any additional includes
     )
 
     # Link libraries
@@ -75,6 +77,9 @@ macro(add_demo_target target_name demo_file)
         $<$<CONFIG:Debug>:-g -O0 -Wall -Wextra>
         $<$<CONFIG:Release>:-O3 -DNDEBUG -march=native -ffast-math -funroll-loops>
     )
+
+    # Clear additional includes for next use
+    set(ADDITIONAL_INCLUDES "")
 endmacro()
 # ------ End of macro ------
 
@@ -137,7 +142,11 @@ add_demo_target(demo_07_tacgp
 # ===================================================================================
 
 # Demo 08: TRex Selector basic usage, memory mapping based usage
-#add_demo_target(demo_08_trex demo_08_trex.cpp "${TREX_SOURCES}")
+set(ADDITIONAL_INCLUDES ${CMAKE_SOURCE_DIR}/src/trex/trex_core)
+add_demo_target(demo_08_trex
+    demo_08_trex.cpp
+    trex::core
+)
 
 # Demo 09: Screen TRex Selector basic usage, memory mapping based usage
 #add_demo_target(demo_09_screen_trex demo_09_screen_trex.cpp "${SCREEN_TREX_SOURCES}")
