@@ -11,6 +11,7 @@
  */
 // ============================================================================
 
+// std includes
 #include <algorithm>
 #include <fstream>
 #include <iomanip>
@@ -19,17 +20,18 @@
 #include <string>
 #include <vector>
 
+// Eigen includes
 #include <Eigen/Dense>
 
-#include "tsolvers/TLARS_Solver.hpp"
-#include "ml_methods/Normalizer.hpp"
-#include "utils/memmap/MemoryMappedMatrix.hpp"
-#include "utils/openMP/utils_openmp.hpp"
-#include "utils/datagen/utils_datagen.hpp"
-#include "utils/eval_metrics/utils_eval_cdiagnostics.hpp"
-#include "utils/eval_metrics/utils_eval_rates.hpp"
-#include "utils/eval_metrics/utils_eval_composites.hpp"
-
+// TRex Selector includes
+#include <tsolvers/TLARS_Solver.hpp>
+#include <ml_methods/Normalizer.hpp>
+#include <utils/memmap/MemoryMappedMatrix.hpp>
+#include <utils/openMP/utils_openmp.hpp>
+#include <utils/datagen/utils_datagen.hpp>
+#include <utils/eval_metrics/utils_eval_cdiagnostics.hpp>
+#include <utils/eval_metrics/utils_eval_rates.hpp>
+#include <utils/eval_metrics/utils_eval_composites.hpp>
 
 // ============================================================================
 // Namespace aliases
@@ -43,6 +45,7 @@ namespace rates = trex::utils::eval::rates;
 namespace counts = trex::utils::eval::counts;
 namespace composites = trex::utils::eval::composites;
 namespace fs = std::filesystem;
+
 
 // ============================================================================
 // Demo 1: Basic T-LARS with Early Stopping
@@ -65,7 +68,7 @@ void demo_TLARS_early_stopping(bool high_dim, bool rnd_coef, std::size_t T_stop)
                                            std::vector<double>{1, 1, 1, 1, 1};
     const double snr = 1.0;
 
-    std::cout << (high_dim ? "High-dimensional (p > n)\n" : "Low-dimensional (n > p)\n");
+    std::cout << (high_dim ? "High-dimensional (p > n)" : "Low-dimensional (n > p)") << "\n";
 
     // Print demo config
     cdiagnost::print_talgo_demo_config(n, p, num_dummies, T_stop, true_support, true_coefs, snr);

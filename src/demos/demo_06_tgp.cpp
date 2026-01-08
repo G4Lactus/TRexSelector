@@ -11,6 +11,7 @@
  */
 // ============================================================================
 
+// std includes
 #include <algorithm>
 #include <fstream>
 #include <iomanip>
@@ -19,16 +20,18 @@
 #include <string>
 #include <vector>
 
+// Eigen includes
 #include <Eigen/Dense>
 
-#include "tsolvers/TGP_Solver.hpp"
-#include "ml_methods/Normalizer.hpp"
-#include "utils/memmap/MemoryMappedMatrix.hpp"
-#include "utils/openMP/utils_openmp.hpp"
-#include "utils/datagen/utils_datagen.hpp"
-#include "utils/eval_metrics/utils_eval_cdiagnostics.hpp"
-#include "utils/eval_metrics/utils_eval_rates.hpp"
-#include "utils/eval_metrics/utils_eval_composites.hpp"
+// TRex Selector includes
+#include <tsolvers/TGP_Solver.hpp>
+#include <ml_methods/Normalizer.hpp>
+#include <utils/memmap/MemoryMappedMatrix.hpp>
+#include <utils/openMP/utils_openmp.hpp>
+#include <utils/datagen/utils_datagen.hpp>
+#include <utils/eval_metrics/utils_eval_cdiagnostics.hpp>
+#include <utils/eval_metrics/utils_eval_rates.hpp>
+#include <utils/eval_metrics/utils_eval_composites.hpp>
 
 
 // ============================================================================

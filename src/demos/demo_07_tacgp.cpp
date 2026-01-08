@@ -4,7 +4,8 @@
 /**
  * @file demo_07_tacgp.cpp
  *
- * @brief Demonstration of T-ACGP (Terminating Approximate Coordinate Gradient Pursuit) solver.
+ * @brief Demonstration of T-ACGP (Terminating Approximate Coordinate Gradient
+ *        Pursuit) solver.
  *
  * @details Shows basic usage, external/internal normalization, serialization,
  *          and comparison between in-memory and memory-mapped workflows.
@@ -44,6 +45,7 @@ namespace counts = trex::utils::eval::counts;
 namespace composites = trex::utils::eval::composites;
 namespace fs = std::filesystem;
 
+
 // ============================================================================
 // Demo 1: Basic T-ACGP with Early Stopping
 // ============================================================================
@@ -65,7 +67,7 @@ void demo_TACGP_early_stopping(bool high_dim, bool rnd_coef, std::size_t T_stop)
                                            std::vector<double>{1, 1, 1, 1, 1};
     const double snr = 1.0;
 
-    std::cout << (high_dim ? "High-dimensional (p > n)\n" : "Low-dimensional (n > p)\n");
+    std::cout << (high_dim ? "High-dimensional (p > n)" : "Low-dimensional (n > p)") << "\n";
 
     // Print demo config
     cdiagnost::print_talgo_demo_config(n, p, num_dummies, T_stop, true_support, true_coefs, snr);
@@ -122,7 +124,7 @@ void demo_TACGP_with_external_normalizer(bool high_dim, bool rnd_coef, std::size
                                            std::vector<double>{1, 1, 1, 1, 1};
     const double snr = 1.0;
 
-    std::cout << (high_dim ? "High-dimensional (p > n)\n" : "Low-dimensional (n > p)\n");
+    std::cout << (high_dim ? "High-dimensional (p > n)" : "Low-dimensional (n > p)") << "\n";
     cdiagnost::print_talgo_demo_config(n, p, num_dummies, T_stop, true_support, true_coefs, snr);
 
     // Generate data

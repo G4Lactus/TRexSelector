@@ -8,19 +8,20 @@
  */
 // ===================================================================================
 
+// std includes
 #include <iomanip>
 #include <iostream>
 #include <random>
 #include <string>
 
+// Eigen includes
 #include <Eigen/Dense>
 
-#include "ml_methods/Normalizer.hpp"
-#include "ml_methods/StandardScaler.hpp"
-
-#include "utils/openMP/utils_openmp.hpp"
-#include "utils/memmap/MemoryMappedMatrix.hpp"
-
+// TRex Selector includes
+#include <ml_methods/Normalizer.hpp>
+#include <ml_methods/StandardScaler.hpp>
+#include <utils/openMP/utils_openmp.hpp>
+#include <utils/memmap/MemoryMappedMatrix.hpp>
 
 // ============================================================================
 // Namespace aliases
