@@ -1,52 +1,80 @@
+// ==============================================================================
+// demo_08_trex.cpp
+// ==============================================================================
+/**
+ * @file demo_08_trex.cpp
+ *
+ * @brief Demonstration of T-Rex Selector.
+ *
+ * @details Shows basic usage of the T-Rex Selector for both low- and high-
+ *          dimensional settings and comparison between in-memory and
+ *          memory-mapped workflows.
+ */
+// ==============================================================================
+
+// std includes
 #include <iostream>
 #include <iomanip>
 #include <vector>
 #include <map>
 #include <unordered_set>
 
+// Eigen includes
 #include <Eigen/Dense>
 
-#include "TRex_Selector.hpp"
+// T-Rex Selector includes
+#include <trex/trex_core/TRex_Selector.hpp>
+#include <utils/datagen/utils_datagen.hpp>
+#include <utils/eval_metrics/utils_eval_cdiagnostics.hpp>
+#include <utils/eval_metrics/utils_eval_rates.hpp>
 
-#include "utils_talgos.hpp"
-#include "utils_fdr_control.hpp"
+
+// ==============================================================================
+// Namespace aliases
+// ==============================================================================
+namespace cdianostics = trex::utils::eval::cdiagnostics;
+namespace datagen = trex::utils::datagen;
+namespace rates = trex::utils::eval::rates;
+
+// ==============================================================================
 
 
+// ==============================================================================
+// Demo 1: Basic T-Rex Selector functionality
+// ==============================================================================
 
-void demo_TRexSelector(bool high_dim) {
+void demo_TRexSelector(bool high_dim, bool rnd_coef) {
 
-    std::cout << "=== Demo: T-Rex Selector Basic Functionality ===\n\n";
+    // Print Demo Header
+    cdianostics::print_section_header("Demo: T-Rex Selector Basic Functionality");
 
-    std::mt19937 rng(42);
-    std::normal_distribution<double> normal(0.0, 1.0);
+    // Setup
+    const std::size_t n = high_dim ? 1000 : 5000;
+    const std::size_t p = high_dim ? 5000 : 1000;
 
-    std::size_t n, p;
-    if (high_dim) {
-        std::cout << "High-dimensional setting (p > n)" << "\n";
-        n = 1000;
-        p = 5000;
-    } else {
-        std::cout << "Low-dimensional setting (n > p)" << "\n";
-        n = 5000;
-        p = 1000;
-    }
     const std::vector<std::size_t> true_support = {27, 149, 398, 420, 4};
-    const std::vector<double> true_coefs = {-0.4, -0.25, -0.8, 1.1, 2.5};
+    const std::vector<double> true_coefs = rnd_coef ?
+                                           std::vector<double>{-0.4, -0.25, -0.8, 1.1, 2.5} :
+                                           std::vector<double>{1, 1, 1, 1, 1};
     const double snr = 1.0;
 
+    std::cout << (high_dim ? "High-dimensional (p > n)" : "Low-dimensional (n > p)") << "\n";
+
     std::cout << "Generating synthetic data...\n";
-    utils_talgos::SyntheticData data(n, p, true_support, true_coefs, snr, /*seed=*/58);
+    datagen::SyntheticData data(n, p, true_support, true_coefs, snr, /*seed=*/58);
 
     // Create mapped views as lvalues (required by TRexSelector constructor)
     std::cout << "Creating maps of data...\n";
-    Eigen::Map<Eigen::MatrixXd> X_map(data.X.data(), data.X.rows(), data.X.cols());
-    Eigen::Map<Eigen::VectorXd> y_map(data.y.data(), data.y.size());
+
+    Eigen::Map<Eigen::MatrixXd> X_map(data.getX().data(), data.rows(), data.cols());
+    Eigen::Map<Eigen::VectorXd> y_map(data.getY().data(), data.rows());
 
     // Setup Control Structures
     TRexControlParameter trex_ctrl;
     trex_ctrl.K = 20;
     trex_ctrl.max_num_dummies = 10;
     trex_ctrl.max_T_stop = true;
+    trex_ctrl.dummy_distribution = dummygen::Distribution::Normal();
     trex_ctrl.lloop_strategy = LLoopStrategy::ADAPTIVE;
     trex_ctrl.tloop_stagnation_stop = true;
 
@@ -76,12 +104,12 @@ void demo_TRexSelector(bool high_dim) {
     }
     std::cout << "\n";
 
-    const double fdp = utils_fdr_control::compute_fdp(
+    const double fdp = rates::compute_fdp(
         /*selected_indices=*/selected_indices,
         /*true_support=*/true_support
     );
 
-    const double tpp = utils_fdr_control::compute_tpp(
+    const double tpp = rates::compute_tpp(
         /*selected_indices=*/selected_indices,
         /*true_support=*/true_support
     );
@@ -94,7 +122,7 @@ void demo_TRexSelector(bool high_dim) {
 }
 
 
-// ----------------------------------------------------------------------
+// ==============================================================================
 
 struct DemoSolverInfo {
     SolverTypeForTRex solver_type;
@@ -102,17 +130,16 @@ struct DemoSolverInfo {
     double lambda2;  // For TENET solver
 };
 
+// ==============================================================================
+// Demo 2: T-Rex Selector Monte Carlo Simulation
+// ==============================================================================
+
 void demo_TRexSelector_MonteCarlo(std::size_t num_MC, bool high_dim, bool rnd_coef) {
 
     std::cout.setf(std::ios::unitbuf); // Flush output after each std::endl
 
-    std::cout << "=== Demo: T-Rex Selector Monte Carlo Simulation ===\n\n";
-
-    if (high_dim) {
-        std::cout << "High-dimensional setting (p > n)\n";
-    } else {
-        std::cout << "Low-dimensional setting (n > p)\n";
-    }
+    cdianostics::print_section_header("Demo: T-Rex Selector Monte Carlo Simulation");
+    std::cout << (high_dim ? "High-dimensional (p > n)" : "Low-dimensional (n > p)") << "\n";
 
     const std::size_t n = high_dim ? 300 : 1000;
     const std::size_t p = high_dim ? 1000 : 300;
@@ -134,7 +161,7 @@ void demo_TRexSelector_MonteCarlo(std::size_t num_MC, bool high_dim, bool rnd_co
        {SolverTypeForTRex::TACGP,      "TACGP",     /*lambda2=*/{}  }
     };
 
-    // Results: solver x SNR
+    // Results: dim = solver x SNR
     std::map<std::string, Eigen::VectorXd> fdr_results_map;
     std::map<std::string, Eigen::VectorXd> tpr_results_map;
 
@@ -148,6 +175,7 @@ void demo_TRexSelector_MonteCarlo(std::size_t num_MC, bool high_dim, bool rnd_co
     trex_control.K = 20;
     trex_control.max_num_dummies = 10;
     trex_control.max_T_stop = true;
+    trex_control.dummy_distribution = dummygen::Distribution::Normal();
     trex_control.lloop_strategy = LLoopStrategy::ADAPTIVE;
     trex_control.tloop_stagnation_stop = true;
     trex_control.max_stagnant_steps = 3;
@@ -220,13 +248,13 @@ void demo_TRexSelector_MonteCarlo(std::size_t num_MC, bool high_dim, bool rnd_co
                           << (100.0 * (mc + 1) / num_MC) << "%\r";
 
                 // Generate data
-                utils_talgos::SyntheticData data(
+                datagen::SyntheticData data(
                     n, p, true_support, true_coefs, snr,
                     /*seed=*/24 + snr_idx * 1000 + mc
                 );
 
-                Eigen::Map<Eigen::MatrixXd> X_map(data.X.data(), data.X.rows(), data.X.cols());
-                Eigen::Map<Eigen::VectorXd> y_map(data.y.data(), data.y.size());
+                Eigen::Map<Eigen::MatrixXd> X_map(data.getX().data(), data.rows(), data.cols());
+                Eigen::Map<Eigen::VectorXd> y_map(data.getY().data(), data.rows());
 
                 // Setup Solver Control Parameters
                 SolverControl solver_control;
@@ -253,12 +281,12 @@ void demo_TRexSelector_MonteCarlo(std::size_t num_MC, bool high_dim, bool rnd_co
                 // Evaluate performance
                 auto selected_indices = trex.getSelectedIndices();
 
-                const double fdp = utils_fdr_control::compute_fdp(
+                const double fdp = rates::compute_fdp(
                     selected_indices,
                     true_support
                 );
 
-                const double tpp = utils_fdr_control::compute_tpp(
+                const double tpp = rates::compute_tpp(
                     selected_indices,
                     true_support
                 );
@@ -335,13 +363,8 @@ void demo_TRexSelector_varMonteCarlo(std::size_t num_MC, bool high_dim, bool rnd
 
     std::cout.setf(std::ios::unitbuf); // Flush output after each std::endl
 
-    std::cout << "=== Demo: T-Rex Selector Monte Carlo Simulation ===\n\n";
-
-    if (high_dim) {
-        std::cout << "High-dimensional setting (p > n)\n";
-    } else {
-        std::cout << "Low-dimensional setting (n > p)\n";
-    }
+    cdianostics::print_section_header("Demo: T-Rex Selector Monte Carlo Simulation");
+    std::cout << (high_dim ? "High-dimensional (p > n)" : "Low-dimensional (n > p)") << "\n";
 
     const std::size_t n = high_dim ? 300 : 1000;
     const std::size_t p = high_dim ? 1000 : 300;
@@ -448,13 +471,13 @@ void demo_TRexSelector_varMonteCarlo(std::size_t num_MC, bool high_dim, bool rnd
                 std::cout << "\n\n";
 
                 // Generate data
-                utils_talgos::SyntheticData data(
+                datagen::SyntheticData data(
                     n, p, true_support, true_coefs, snr,
                     /*seed=*/24 + snr_idx * 1000 + mc
                 );
 
-                Eigen::Map<Eigen::MatrixXd> X_map(data.X.data(), data.X.rows(), data.X.cols());
-                Eigen::Map<Eigen::VectorXd> y_map(data.y.data(), data.y.size());
+                Eigen::Map<Eigen::MatrixXd> X_map(data.getX().data(), data.rows(), data.cols());
+                Eigen::Map<Eigen::VectorXd> y_map(data.getY().data(), data.rows());
 
                 // Setup Solver Control Parameters
                 SolverControl solver_control;
@@ -481,12 +504,12 @@ void demo_TRexSelector_varMonteCarlo(std::size_t num_MC, bool high_dim, bool rnd
                 // Evaluate performance
                 auto selected_indices = trex.getSelectedIndices();
 
-                const double fdp = utils_fdr_control::compute_fdp(
+                const double fdp = rates::compute_fdp(
                     selected_indices,
                     true_support
                 );
 
-                const double tpp = utils_fdr_control::compute_tpp(
+                const double tpp = rates::compute_tpp(
                     selected_indices,
                     true_support
                 );
@@ -565,22 +588,25 @@ int main() {
 
     // Run basic T-Rex Selector demo
     // --------------------------------------------------------------------------------------
-    // demo_TRexSelector(/*high_dim=*/true);
+    demo_TRexSelector(/*high_dim=*/true, /*rnd_coef=*/false);
 
 
     // Monte Carlo simulation: Run T-Rex Selector with fixed support & coefficients
     // --------------------------------------------------------------------------------------
     // high-dimensional setting
-    // demo_TRexSelector_MonteCarlo(/*num_MC=*/100, /*high_dim=*/true, /*rnd_coef=*/false);
+    if (false)
+        demo_TRexSelector_MonteCarlo(/*num_MC=*/100, /*high_dim=*/true, /*rnd_coef=*/false);
 
     // low-dimensional setting
-    // demo_TRexSelector_MonteCarlo(/*num_MC=*/100, /*high_dim=*/false);
+    if (false)
+        demo_TRexSelector_MonteCarlo(/*num_MC=*/100, /*high_dim=*/false, /*rnd_coef=*/false);
 
 
     // Monte Carlo simulation: Run T-Rex Selector with variable data, support & coefficients
     // --------------------------------------------------------------------------------------
     // high-dimensional setting
-    demo_TRexSelector_varMonteCarlo(/*num_MC=*/100, /*high_dim=*/true, /*rnd_coef=*/false);
+    if (false)
+        demo_TRexSelector_varMonteCarlo(/*num_MC=*/100, /*high_dim=*/true, /*rnd_coef=*/false);
 
 
     return 0;
