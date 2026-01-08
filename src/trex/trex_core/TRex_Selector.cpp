@@ -113,11 +113,23 @@ void TRexSelector::validateTRexParameters() const {
     }
 
     // Validate max_num_dummies
-    if (trex_ctrl_.max_num_dummies < 1) {
+    if (trex_ctrl_.max_num_dummies == 0) {
         throw std::invalid_argument(
-            "Maximum number of dummy variables 'max_num_dummies' must be >= 1. Got: "
+            "Maximum number of dummy variables (max_num_dummies) must be >= 1. Got: "
             + std::to_string(trex_ctrl_.max_num_dummies)
         );
+    }
+
+    // Additional info for LLoopStrategy::SKIP
+    if (trex_ctrl_.lloop_strategy == LLoopStrategy::SKIP) {
+        std::size_t fixed_num_dummies = trex_ctrl_.max_num_dummies * p_;
+        if (verbose_) {
+            printProgress(
+                "L-loop strategy: SKIP. Using fixed number of dummies = " +
+                std::to_string(fixed_num_dummies) +
+                " (" + std::to_string(trex_ctrl_.max_num_dummies) + " * p)"
+            );
+        }
     }
 
 }
@@ -293,12 +305,18 @@ TRexSelector::SelectionResult TRexSelector::select() {
     ExperimentResults exp_results;
 
     switch (trex_ctrl_.lloop_strategy) {
+        case LLoopStrategy::SKIP:
+            runLLoopCalibration_SKIP(FDP_hat, exp_results);
+            break;
+
         case LLoopStrategy::STANDARD:
             runLLoopCalibration(FDP_hat, exp_results);
             break;
+
         case LLoopStrategy::ADAPTIVE:
             runLLoopCalibration_Adaptive(FDP_hat, exp_results);
             break;
+
         default:
             throw std::invalid_argument("Invalid L-loop strategy.");
     }
@@ -577,6 +595,51 @@ void TRexSelector::set75PercentOptPoint(const std::size_t v_len) {
 // Loop Calibration Methods
 // ===========================================================
 
+// Variant without dummy matrix size calibration
+
+void TRexSelector::runLLoopCalibration_SKIP(
+    Eigen::VectorXd& FDP_hat,
+    ExperimentResults& exp_results
+) {
+    // Set fixed number of dummies
+    num_dummies_ = trex_ctrl_.max_num_dummies * p_;
+
+    // Initialize Tstop
+    T_stop_ = 1;
+    FDP_hat.resize(0);                      // not initialized
+
+    if (verbose_) {
+        printProgress(
+            "L-Loop: SKIP strategy. Using fixed number of dummies = " +
+            std::to_string(num_dummies_)
+        );
+    }
+
+    // Run single experiment with fixed dummies for initial FDP estimates
+    exp_results = runRandomExperiments(
+        num_dummies_,
+        T_stop_,
+        /*generate_new_dummies=*/true,
+        /*use_warm_start=*/false
+    );
+
+    // Compute Phi_prime for FDP estimation
+    Eigen::VectorXd Phi_prime = computePhiPrime(
+        exp_results.phi_T_mat,
+        exp_results.Phi,
+        num_dummies_
+    );
+
+    // Compute FDP estimate
+    FDP_hat = computeFDPHat(voting_grid_, exp_results.Phi, Phi_prime);
+
+    if (verbose_) {
+        printProgress("Using fixed number of dummies: " + std::to_string(num_dummies_));
+    }
+
+}
+
+
 // Variant with new dummies each iteration
 
 void TRexSelector::runLLoopCalibration(Eigen::VectorXd& FDP_hat, ExperimentResults& exp_results) {
@@ -619,6 +682,7 @@ void TRexSelector::runLLoopCalibration(Eigen::VectorXd& FDP_hat, ExperimentResul
 
     dummy_multiplier_LL_ = (dummy_multiplier_LL > 1) ? (dummy_multiplier_LL - 1) : 1;
 }
+
 
 // Variant with dummy matrix augmentation
 
@@ -788,11 +852,11 @@ void TRexSelector::runTLoopCalibration(
             const double max_FDP = FDP_hat.maxCoeff();
 
             std::cout << "[T =" << std::setw(3) << T_stop_
-                      << "] v* =" << v_star
-                      << ", |S| =" << num_selected
+                      << "] v* = " << v_star
+                      << ", |S| = " << num_selected
                       << ", FDP ∈ [" << min_FDP << ", " << max_FDP << "]";
             if (stagnant_iterations > 0) {
-                std::cout << ", stagnant=" << stagnant_iterations;
+                std::cout << ", stagnant = " << stagnant_iterations;
             }
             std::cout << "\n";
         }
@@ -1004,27 +1068,22 @@ Eigen::MatrixXd TRexSelector::generateDummies(
     std::size_t experiment_id
 ) const {
     // Create random number generator with experiment-specific seed
-    std::size_t rng_seed;
-    if (seed_ >= 0) {
-        rng_seed = static_cast<std::size_t>(seed_) + experiment_id;
-    } else {
-        // Use random device for non-deterministic seed
-        std::random_device rd;
-        rng_seed = rd() + experiment_id;
-    }
+    std::size_t rng_seed = seed_ >= 0 ? static_cast<std::size_t>(seed_) + experiment_id :
+                                        std::random_device{}() + experiment_id;
 
-    std::mt19937_64 rng(rng_seed);
-    std::normal_distribution<double> dist(0.0, 1.0);
-
-    // Generate dummy matrix (n x num_dummies) with N(0,1) entries
+    // Generate dummy matrix (n x num_dummies)
     Eigen::MatrixXd D(n_, num_dummies);
-    for (std::size_t j = 0; j < num_dummies; ++j) {
-        for (std::size_t i = 0; i < n_; ++i) {
-            D(i, j) = dist(rng);
-        }
-    }
 
-    // Normalize dummies column-wise
+    // Generate dummies using configured distribution
+    trex::utils::dummygen::generate_dummies(
+        D,                                   // Matrix to fill
+        n_,                                  // Number of rows
+        num_dummies,                         // Number of columns
+        rng_seed,                            // RNG seed
+        trex_ctrl_.dummy_distribution        // Distribution configuration
+    );
+
+    // Normalize dummies column-wise (center + L2 norm)
     Eigen::Map<Eigen::MatrixXd> D_map(D.data(), D.rows(), D.cols());
     centerAndL2NormalizeMatrix(D_map);
 

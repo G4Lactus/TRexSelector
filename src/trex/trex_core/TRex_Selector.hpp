@@ -1,6 +1,20 @@
+// ===================================================================================
+// TRex_Selector.hpp
+// ===================================================================================
+/**
+ * @file TRex_Selector.hpp
+ *
+ * @brief Implementation of the T-Rex Selector for FDR-controlled variable selection.
+ *
+ */
+// ===================================================================================
+
 #ifndef TREX_SELECTOR_HPP
 #define TREX_SELECTOR_HPP
 
+// ===================================================================================
+
+// std includes
 #include <cstddef>
 #include <limits>
 #include <iostream>
@@ -11,15 +25,26 @@
 #include <vector>
 #include <random>
 
+// Eigen includes
 #include <Eigen/Dense>
 
-#include "tsolvers/TLARS_Solver.hpp"
-#include "tsolvers/TLASSO_Solver.hpp"
-#include "tsolvers/TSTEPWISE_Solver.hpp"
-#include "tsolvers/TENET_Solver.hpp"
-#include "tsolvers/TOMP_Solver.hpp"
-#include "tsolvers/TGP_Solver.hpp"
-#include "tsolvers/TACGP_Solver.hpp"
+// T-Rex Selector includes
+#include <tsolvers/TLARS_Solver.hpp>
+#include <tsolvers/TLASSO_Solver.hpp>
+#include <tsolvers/TSTEPWISE_Solver.hpp>
+#include <tsolvers/TENET_Solver.hpp>
+#include <tsolvers/TOMP_Solver.hpp>
+#include <tsolvers/TGP_Solver.hpp>
+#include <tsolvers/TACGP_Solver.hpp>
+#include <utils/datagen/utils_dummygen.hpp>
+
+
+// ===================================================================================
+// Namespace aliases
+// ===========================================================
+namespace dummygen = trex::utils::dummygen;
+
+// ===================================================================================
 
 
 // ============================================================
@@ -44,8 +69,9 @@ enum class SolverTypeForTRex {
  * @brief L-loop calibration strategies
  */
 enum class LLoopStrategy {
-    STANDARD,       // Generate fresh dummies each iteration (conservative)
-    ADAPTIVE        // Horizontally expand dummy matrices (faster)
+    SKIP,           // Skip L-loop calibration: use fixed number of dummies
+    STANDARD,       // Generate fresh dummies in each L-loop iteration (conservative)
+    ADAPTIVE        // Horizontally expand dummy matrices (faster - same result)
 };
 
 
@@ -58,24 +84,37 @@ enum class LLoopStrategy {
  *          - Calibration
  */
 struct TRexControlParameter {
-    /** @brief Number of random experiments (default: 20) */
+    /** @brief Number of random experiments (default: 20). */
     std::size_t K = 20;
 
-    /** @brief Maximum number of dummy variables as a multiple of p (L = p, 2p, .., 10p)
-     *         (default: 10)
+    /**
+     * @brief Maximum number of dummy variables as a multiple of p.
+     *
+     * @details For STANDARD/ADAPTIVE: L = p, 2p, .., max_num_dummies * p (Default: 10)
+     *          For NONE: Set fixed number of dummies = max_num_dummies * p.
      */
     std::size_t max_num_dummies = 10;
 
-    /** @brief If true, limit T_stop to ceiling(n/2) (default: true) */
+    /** @brief If true, limit T_stop to ceiling(n/2) (default: true). */
     bool max_T_stop = true;
 
-    /** @brief Strategy for L-loop calibration. STANDARD or ADAPTIVE (default: ADAPTIVE) */
+    /** @brief Distribution for generating dummies (default: Normal). */
+    dummygen::Distribution dummy_distribution = dummygen::Distribution::Normal();
+
+    /**
+     * @brief Strategy for L-loop calibration (default: ADAPTIVE).
+     *
+     * @details
+     *    - SKIP:     Skip L-loop calibration, use fixed number of dummies = max_num_dummies * p.
+     *    - STANDARD: Generate fresh dummies in each L-loop iteration (conservative).
+     *    - ADAPTIVE: Horizontally expand dummy matrices (faster - same result).
+     */
     LLoopStrategy lloop_strategy = LLoopStrategy::ADAPTIVE;
 
-    /** @brief If true, perform early stopping if support set stagnates (default: true) */
+    /** @brief If true, perform early stopping if support set stagnates (default: true). */
     bool tloop_stagnation_stop = true;
 
-    /** @brief Number of stagnant steps required to trigger early T-loop stopping (default: 3) */
+    /** @brief Number of stagnant steps required to trigger early T-loop stopping (default: 3). */
     std::size_t max_stagnant_steps = 3;
 };
 
@@ -445,7 +484,8 @@ protected:
 
     /**
      * @brief Restore X to original scale.
-     * @details Reverses z-score normalization: X = X_zscore * X_stds + X_means.
+     *
+     * @details Reverses l2-score normalization: X = X_l2normalized * X_l2norms + X_means.
      */
     void denormalizeX();
 
@@ -500,7 +540,21 @@ protected:
 
 
     /**
-     * @brief Run L-loop calibration to determine number of dummies.
+     * @brief Run L-loop with NONE strategy (fixed number of dummies).
+     *
+     * @details Skips L-loop calibration and uses fixed number_of_dummies = max_num_dummies * p.
+     *          Runs a single experiment to compute initial FDP estimate.
+     *
+     * @param FDP_hat FDP estimates.
+     * @param exp_results Experiment results structure to fill.
+     */
+    void runLLoopCalibration_SKIP(Eigen::VectorXd& FDP_hat, ExperimentResults& exp_results);
+
+
+    /**
+     * @brief Run L-loop calibration strategy to determine number of dummies.
+     *
+     * @details Generates fresh dummies in each L-loop iteration.
      *
      * @param FDP_hat FDP estimates.
      * @param exp_results Experiment results structure to fill.
@@ -509,7 +563,7 @@ protected:
 
 
     /**
-     * @brief Run L-loop calibration (ADAPTIVE strategy).
+     * @brief Run L-loop calibration with ADAPTIVE strategy.
      *
      * @details Horizontally expands dummy matrices across iterations.
      *
@@ -596,14 +650,16 @@ protected:
 
 
     /**
-     * @brief Generate dummy matrix.
+     * @brief Generate dummy matrix using configured distribution.
      *
-     * @details Generate dummy matrix with N(0,1) entries,
-     *          z-score normalized (n x num_dummies).
+     * @details Delegates to utils::dummygen::generate_dummies with distribution specified
+     *          in trex_ctrl_.dummy_distribution.
+     *          Default: Normal distribution.
      *
      * @param num_dummies Number of dummy columns.
      * @param experiment_id Experiment index (for seed offset).
-     * @return Dummy matrix with N(0,1) entries, z-score + L2 normalized.
+     *
+     * @return Dummy matrix with (n x num_dummies), L2 normalized columns.
      */
     Eigen::MatrixXd generateDummies(
         std::size_t num_dummies,
