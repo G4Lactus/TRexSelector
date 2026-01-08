@@ -1,7 +1,11 @@
 # src/ml_methods/CMakeLists.txt
 # ==================================================================================
 # CMake configuration for the ml_methods module
+#
+# This library provides preprocessing methods, machine learning algorithms, and
+# machine learning utilities for the T-Rex framework.
 # ==================================================================================
+
 
 # ==================================================================================
 # Library Target
@@ -14,10 +18,11 @@ add_library(trex_ml_methods STATIC
 
 # Add alias for consistent naming
 add_library(trex::ml_methods ALIAS trex_ml_methods)
+# ==================================================================================
 
 
 # ==================================================================================
-# Include Directories for hierarchical includes (Generator Expressions)
+# Include Directories
 # ==================================================================================
 target_include_directories(trex_ml_methods PUBLIC
     # Build-tree
@@ -28,20 +33,23 @@ target_include_directories(trex_ml_methods PUBLIC
     $<INSTALL_INTERFACE:src>
 )
 
-
 # ==================================================================================
 # Link Dependencies
 # ==================================================================================
 target_link_libraries(trex_ml_methods PUBLIC
-    Eigen3::Eigen
-    cereal::cereal
+    # Internal Dependencies
     trex::utils::openmp
     trex::utils::serialization
+
+    # External Dependencies
+    Eigen3::Eigen
+    cereal::cereal
 )
+# ==================================================================================
 
 
 # ==================================================================================
-# Compile Features and Definitions
+# Compiler Settings
 # ==================================================================================
 target_compile_features(trex_ml_methods PUBLIC cxx_std_20)
 
@@ -49,12 +57,9 @@ target_compile_definitions(trex_ml_methods PUBLIC
     EIGEN_USE_BLAS               # Use BLAS backend in Eigen
 )
 
-
-# ==================================================================================
-# Compile Options
-# ==================================================================================
 target_compile_options(trex_ml_methods PRIVATE
     -Wno-deprecated-declarations
     $<$<CONFIG:Debug>:-g -O0 -Wall -Wextra>
     $<$<CONFIG:Release>:-O3 -DNDEBUG -march=native -ffast-math -funroll-loops>
 )
+# ==================================================================================
