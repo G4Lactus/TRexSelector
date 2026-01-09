@@ -31,6 +31,7 @@ target_include_directories(trex_utils_serialization INTERFACE
 target_link_libraries(trex_utils_serialization INTERFACE
     Eigen3::Eigen
     # if armadillo gets added -> armadillo::arma
+    cereal::cereal
 )
 
 # Compiler settings
