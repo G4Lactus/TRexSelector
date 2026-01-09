@@ -13,6 +13,7 @@
 // ==============================================================================
 
 // std includes
+#include <filesystem>
 #include <iostream>
 #include <iomanip>
 #include <vector>
@@ -35,6 +36,7 @@
 namespace cdianostics = trex::utils::eval::cdiagnostics;
 namespace datagen = trex::utils::datagen;
 namespace rates = trex::utils::eval::rates;
+namespace fs = std::filesystem;
 
 // ==============================================================================
 
@@ -400,6 +402,7 @@ void demo_TRexSelector_varMonteCarlo(std::size_t num_MC, bool high_dim, bool rnd
     trex_control.K = 20;
     trex_control.max_num_dummies = 10;
     trex_control.max_T_stop = true;
+    trex_control.dummy_distribution = dummygen::Distribution::Rademacher();
     trex_control.lloop_strategy = LLoopStrategy::ADAPTIVE;
     trex_control.tloop_stagnation_stop = true;
     trex_control.max_stagnant_steps = 3;
@@ -579,16 +582,122 @@ void demo_TRexSelector_varMonteCarlo(std::size_t num_MC, bool high_dim, bool rnd
 }
 
 
-// ----------------------------------------------------------------------
+// ==============================================================================
 
+
+void demo_TRexSelector_memmap(bool high_dim, bool rnd_coef) {
+
+    cdianostics::print_section_header("Demo: T-Rex Selector with Memory-Mapped Data");
+
+    const std::size_t n = high_dim ? 1000 : 5000;
+    const std::size_t p = high_dim ? 5000 : 1000;
+    const std::vector<std::size_t> true_support = {27, 149, 398, 420, 4};
+    const std::vector<double> true_coefs = rnd_coef ?
+                                           std::vector<double>{-0.4, -0.25, -0.8, 1.1, 2.5} :
+                                           std::vector<double>{1, 1, 1, 1, 1};
+    const double snr = 1.0;
+
+    std::cout << (high_dim ? "High-dimensional (p > n)" : "Low-dimensional (n > p)") << "\n";
+
+    const std::string X_filepath = "X_mmap.dat";
+    const std::string y_filepath = "y_mmap.dat";
+
+    std::cout << "Generating synthetic data...\n";
+    datagen::SyntheticDataMapped data(
+        X_filepath,
+        y_filepath,
+        n,
+        p,
+        true_support,
+        true_coefs,
+        snr,
+        /*seed=*/58
+    );
+
+    // Create mapped views as lvalues (required by TRexSelector constructor)
+    std::cout << "Creating maps of data...\n";
+    Eigen::Map<Eigen::MatrixXd> X_map(data.getX().data(), data.rows(), data.cols());
+    Eigen::Map<Eigen::VectorXd> y_map(data.getY().data(), data.rows());
+
+    // Setup Control Structures
+    TRexControlParameter trex_ctrl;
+    trex_ctrl.K = 20;
+    trex_ctrl.max_num_dummies = 10;
+    trex_ctrl.max_T_stop = true;
+    trex_ctrl.dummy_distribution = dummygen::Distribution::Normal();
+    trex_ctrl.lloop_strategy = LLoopStrategy::ADAPTIVE;
+    trex_ctrl.tloop_stagnation_stop = true;
+    trex_ctrl.use_memory_mapping = true;
+
+    SolverControl solver_ctrl;
+    solver_ctrl.solver_type = SolverTypeForTRex::TLARS;
+
+    // Create T-Rex Selector instance
+    std::cout << "Creating T-Rex Selector instance...\n";
+    TRexSelector trex(
+        /*X=*/X_map,
+        /*y=*/y_map,
+        /*tFDR=*/0.1,
+        /*trex_control=*/trex_ctrl,
+        /*solver_control=*/std::move(solver_ctrl),
+        /*seed=*/-1,
+        /*verbose=*/true
+    );
+
+    // Execute T-Rex Selector
+    std::cout << "Executing T-Rex Selector...\n";
+    trex.select();
+
+    auto selected_indices = trex.getSelectedIndices();
+    std::cout << "Selected indices: ";
+    for (const auto& idx : selected_indices) {
+        std::cout << idx << " ";
+    }
+    std::cout << "\n";
+
+    const double fdp = rates::compute_fdp(
+        /*selected_indices=*/selected_indices,
+        /*true_support=*/true_support
+    );
+
+    const double tpp = rates::compute_tpp(
+        /*selected_indices=*/selected_indices,
+        /*true_support=*/true_support
+    );
+
+    std::cout << std::fixed << std::setprecision(4);
+    std::cout << "False Discovery Proportion (FDP): " << fdp << "\n";
+    std::cout << "True Positive Proportion (TPP):   " << tpp << "\n";
+
+    // Clean up memory-mapped files
+    fs::remove(X_filepath);
+    fs::remove(y_filepath);
+
+    std::cout << "\n\n";
+}
+
+
+
+// ==============================================================================
+
+
+void demo_TRexSelector_memmap_MonteCarlo() {
+
+}
+
+
+// ==============================================================================
 
 int main() {
 
     std::cout.setf(std::ios::unitbuf); // Flush output after each std::endl
+    omp_set_num_threads(6);
+    std::cout << "Running with " << omp_get_max_threads() << " threads\n\n";
 
     // Run basic T-Rex Selector demo
     // --------------------------------------------------------------------------------------
-    demo_TRexSelector(/*high_dim=*/true, /*rnd_coef=*/false);
+    if (false)
+        demo_TRexSelector(/*high_dim=*/true, /*rnd_coef=*/false);
 
 
     // Monte Carlo simulation: Run T-Rex Selector with fixed support & coefficients
@@ -607,6 +716,12 @@ int main() {
     // high-dimensional setting
     if (false)
         demo_TRexSelector_varMonteCarlo(/*num_MC=*/100, /*high_dim=*/true, /*rnd_coef=*/false);
+
+
+    // Memory-mapped T-Rex Selector demo
+    // --------------------------------------------------------------------------------------
+    if (true)
+        demo_TRexSelector_memmap(/*high_dim=*/false, /*rnd_coef=*/false);
 
 
     return 0;
