@@ -37,12 +37,13 @@
 #include <tsolvers/TGP_Solver.hpp>
 #include <tsolvers/TACGP_Solver.hpp>
 #include <utils/datagen/utils_dummygen.hpp>
-
+#include <utils/memmap/MemoryMappedMatrix.hpp>
 
 // ===================================================================================
 // Namespace aliases
 // ===========================================================
 namespace dummygen = trex::utils::dummygen;
+namespace memmap = trex::utils::memmap;
 
 // ===================================================================================
 
@@ -82,6 +83,7 @@ enum class LLoopStrategy {
  *          - Loop Strategies
  *          - Early stopping Strategies
  *          - Calibration
+ *          - Memory Management
  */
 struct TRexControlParameter {
     /** @brief Number of random experiments (default: 20). */
@@ -90,8 +92,8 @@ struct TRexControlParameter {
     /**
      * @brief Maximum number of dummy variables as a multiple of p.
      *
-     * @details For STANDARD/ADAPTIVE: L = p, 2p, .., max_num_dummies * p (Default: 10)
-     *          For NONE: Set fixed number of dummies = max_num_dummies * p.
+     * @details For STANDARD/ADAPTIVE: L = p, 2p, .., max_num_dummies * p (Default: 10).
+     *          For SKIP: Set fixed number of dummies = max_num_dummies * p.
      */
     std::size_t max_num_dummies = 10;
 
@@ -116,6 +118,24 @@ struct TRexControlParameter {
 
     /** @brief Number of stagnant steps required to trigger early T-loop stopping (default: 3). */
     std::size_t max_stagnant_steps = 3;
+
+    // ===================================
+    // Memory-Mapping Management
+    // ===================================
+
+    /**
+     * @brief Enable memory-mapped storage for augmented matrices.
+     *
+     * @details When true:
+     *   MemMap Strategy 1: Creates K memory-mapped files [X | D_k] on disk instead of storing
+     *                      dummy matrices in RAM. Essential for ultra-hihg-dimensional data,
+     *                      where K * n * num_dummies exceeds available RAM.
+     *
+     *                      Memory-mapped files are sparse and pre-allocated to max size:
+     *                      n x (p + max_num_dummies * p). Default: false.
+     */
+    bool use_memory_mapping = false;
+
 };
 
 
@@ -292,6 +312,30 @@ protected:
      * @brief Flag indicating if serialized solvers are available.
      */
     bool has_serialized_solvers_;
+
+    // ============================================================
+    // Memory-Mapping Matrix Storage
+    // ============================================================
+
+    /**
+     * @brief Setup memory-mapped augmented matrices [X | D_k] for K experiments.
+     *
+     * @details Only used if trex_ctrl_.use_memory_mapping is true.
+     *          Each matrix is pre-allocated to size n x (p + max_num_dummies * p)
+     *          as a sparse file. Active columns [0, p + num_dummies) are filled
+     *          during the L-loop. The remaining columns stay sparse (zero disk usage).
+     *          Files created in temo_dir_ as "XD_aug_{0}.bin", ..., "XD_aug_{K-1}.bin".
+     *          The memory is released when the TRexSelector instance is destroyed.
+     */
+    std::vector<std::unique_ptr<memmap::MemoryMappedMatrix<double>>> XD_memmaps_;
+
+    /**
+     * @brief Maximum number of columns allocated for memory-mapped matrices.
+     *
+     * @details max_cols = p + trex_ctrl_.max_num_dummies * p.
+     *          Set during initialization if memory-mapping is enabled.
+     */
+    std::size_t max_cols_memmap_;
 
 
 public:
@@ -528,6 +572,7 @@ protected:
      * @param T_stop Early stopping threshold.
      * @param generate_new_dummies If true, generate new dummies;
      * @param use_warm_start If true, load and continue from saved state.
+     * @param seed_offset Seed offset for dummy generation.
      *
      * @return Experiment results (phi_T_mat and Phi).
      */
@@ -535,7 +580,8 @@ protected:
         std::size_t num_dummies,
         std::size_t T_stop,
         bool generate_new_dummies,
-        bool use_warm_start
+        bool use_warm_start,
+        std::size_t seed_offset
     );
 
 
@@ -739,6 +785,59 @@ protected:
      * @brief Clean up temporary directory and all solver files.
      */
     void cleanupTempDirectory();
+
+    // ============================================================
+    // Memory-Mapping Matrix Management
+    // ============================================================
+
+    /**
+     * @brief Initialize K memory-mapped augmented matrices [X | D_k].
+     *
+     * @details Creates K sparse files in temp_dir_, each pre-allocated to
+     *          size n x (p + max_num_dummies * p). Files are initialized
+     *          as sparse matrices (zero disk usage) and filled incrementally
+     *          during L-loop iterations.
+     *          Only used if trex_ctrl_.use_memory_mapping is true.
+     */
+    void initializeMemoryMappedMatrices();
+
+    /**
+     * @brief Write X data to all K memory-mapped matrices.
+     *
+     * @details Copies X into the first p columns of each of the K augmented matrices at the
+     *          beginning of the L-loop to avoid redundant writes.
+     *          Only used if trex_ctrl_.use_memory_mapping is true.
+     */
+    void writeXToMemoryMappedMatrices();
+
+    /**
+     * @brief Clean up memory-mapped matrices and associated files.
+     *
+     * @details Closes and deletes all memory-mapped and temporary files.
+     *          Called at end of select() or during destructor.
+     */
+    void cleanupMemoryMappedMatrices();
+
+
+    /**
+     * @brief Run K random experiments using memory-mapped matrices.
+     *
+     * @details Memory-mapped version that operates on pre-allocated XD_mammaps_ instead
+     *          of in-memory dummy matrices.
+     *          Used when trex_ctrl_.use_memory_mapping is true.
+     *
+     * @param num_dummies Number of dummies to append.
+     * @param T_stop Early stopping threshold.
+     * @param use_warm_start If true, load from file; else create fresh.
+     *
+     * @return Experiment results (phi_T_mat and Phi).
+     */
+    ExperimentResults runRandomExperiments_MemMap(
+        std::size_t num_dummies,
+        std::size_t T_stop,
+        bool use_warm_start
+    );
+
 
 }; /* End of TRexSelector class */
 

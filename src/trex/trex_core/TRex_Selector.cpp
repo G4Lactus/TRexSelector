@@ -1,8 +1,13 @@
+// std includes
 #include <cstdlib>
 #include <cassert>
 #include <filesystem>
 
+// T-Rex Selector includes
 #include "TRex_Selector.hpp"
+
+// ===================================================================================
+
 
 // ===========================================================
 // Constructor
@@ -29,7 +34,8 @@ TRexSelector::TRexSelector(
     voting_threshold_(0.0),
     opt_point_(0),
     dummy_multiplier_LL_(0),
-    has_serialized_solvers_(false)
+    has_serialized_solvers_(false),
+    max_cols_memmap_(0)
 {
     // ===========================================================
     // 1. Extract dimensions
@@ -294,6 +300,14 @@ void TRexSelector::cleanupTempDirectory() {
 
 TRexSelector::SelectionResult TRexSelector::select() {
 
+    // TODO: branch into standard and memory-mapped selection methods
+    // If Memory-mapped data initialize
+    if (trex_ctrl_.use_memory_mapping) {
+        initializeMemoryMappedMatrices();
+        writeXToMemoryMappedMatrices();
+    }
+
+    // TRex Selection Procedure
     // 1. Initialize voting grid and set 75% optimization point
     voting_grid_ = createVotingGrid();
     const std::size_t v_len = voting_grid_.size();
@@ -304,6 +318,7 @@ TRexSelector::SelectionResult TRexSelector::select() {
     Eigen::VectorXd FDP_hat;
     ExperimentResults exp_results;
 
+    // TODO: define method 'applyLLoopStrategy' to encapsulate strategy selection
     switch (trex_ctrl_.lloop_strategy) {
         case LLoopStrategy::SKIP:
             runLLoopCalibration_SKIP(FDP_hat, exp_results);
@@ -355,6 +370,11 @@ TRexSelector::SelectionResult TRexSelector::select() {
             "Selection complete. Selected " +
             std::to_string(getNumSelected()) + " variables."
         );
+    }
+
+    // Clean-up memory-mapped files
+    if (trex_ctrl_.use_memory_mapping) {
+        cleanupMemoryMappedMatrices();
     }
 
     // Restoration for X
@@ -606,7 +626,7 @@ void TRexSelector::runLLoopCalibration_SKIP(
 
     // Initialize Tstop
     T_stop_ = 1;
-    FDP_hat.resize(0);                      // not initialized
+    FDP_hat.resize(0);                       // not initialized
 
     if (verbose_) {
         printProgress(
@@ -615,13 +635,33 @@ void TRexSelector::runLLoopCalibration_SKIP(
         );
     }
 
-    // Run single experiment with fixed dummies for initial FDP estimates
-    exp_results = runRandomExperiments(
-        num_dummies_,
-        T_stop_,
-        /*generate_new_dummies=*/true,
-        /*use_warm_start=*/false
-    );
+    // Run K random experiments in L-loop
+    if (!trex_ctrl_.use_memory_mapping) { // In-memory branch
+        // Run single experiment with fixed dummies for initial FDP estimates
+        exp_results = runRandomExperiments(
+            num_dummies_,
+            T_stop_,
+            /*generate_new_dummies=*/true,
+            /*use_warm_start=*/false,
+            /*seed_offset=*/0
+        );
+
+    } else { // Memory-mapped branch
+        // Write dummies to memory-mapped matrices
+        for (std::size_t k = 0; k < trex_ctrl_.K; ++k) {
+            auto XD_map = XD_memmaps_[k]->getMap();
+
+            // Generate and write dummies to columns [p_, p_ + num_dummies_)
+            XD_map.block(0, p_, n_, num_dummies_) = generateDummies(num_dummies_, k);
+        }
+
+        // Run experiments with memory-mapped matrices
+        exp_results = runRandomExperiments_MemMap(
+            num_dummies_,
+            T_stop_,
+            /*use_warm_start=*/false
+        );
+    }
 
     // Compute Phi_prime for FDP estimation
     Eigen::VectorXd Phi_prime = computePhiPrime(
@@ -646,22 +686,43 @@ void TRexSelector::runLLoopCalibration(Eigen::VectorXd& FDP_hat, ExperimentResul
 
     // L-loop starts with T_stop_ = 1
     T_stop_ = 1;
-    std::size_t dummy_multiplier_LL = 1;    // LL in R
-    FDP_hat.resize(0);                      // not initialized
+    dummy_multiplier_LL_ = 1;    // LL in R
+    FDP_hat.resize(0);           // not initialized
 
-    while (dummy_multiplier_LL <= trex_ctrl_.max_num_dummies &&
+    while (dummy_multiplier_LL_ <= trex_ctrl_.max_num_dummies &&
           (FDP_hat.size() == 0 || FDP_hat(opt_point_) > tFDR_)) {
 
         // num_dummies = LL * p
-        num_dummies_ = dummy_multiplier_LL * p_;
+        num_dummies_ = dummy_multiplier_LL_ * p_;
 
-        // Run K experiments with NEW dummies
-        exp_results = runRandomExperiments(
-            num_dummies_,
-            T_stop_,
-            /*generate_new_dummies=*/true,  // New dummies each time
-            /*use_warm_start=*/false        // Cold start required
-        );
+        if (!trex_ctrl_.use_memory_mapping) { // In-memory branch
+            // Run K experiments with NEW dummies
+            exp_results = runRandomExperiments(
+                num_dummies_,
+                T_stop_,
+                /*generate_new_dummies=*/true,  // New dummies each time
+                /*use_warm_start=*/false,        // Cold start required
+                /*seed_offset=*/dummy_multiplier_LL_ * 10000
+            );
+
+        } else { // Memory-mapped branch
+            // Overwrite dummies in memory-mapped matrices
+            for (std::size_t k = 0; k < trex_ctrl_.K; ++k) {
+                auto XD_map = XD_memmaps_[k]->getMap();
+
+                // Generate NEW dummies for this iteration
+                XD_map.block(0, p_, n_, num_dummies_) = generateDummies(num_dummies_,
+                                                         k + dummy_multiplier_LL_ * 10000);
+
+            }
+
+            // Run K experiments with memory-mapped matrices
+            exp_results = runRandomExperiments_MemMap(
+                num_dummies_,
+                T_stop_,
+                /*use_warm_start=*/false
+            );
+        }
 
         // Compute Phi_prime for FDP estimation
         Eigen::VectorXd Phi_prime = computePhiPrime(
@@ -677,10 +738,10 @@ void TRexSelector::runLLoopCalibration(Eigen::VectorXd& FDP_hat, ExperimentResul
             printProgress("Appended dummies: " + std::to_string(num_dummies_));
         }
 
-        ++dummy_multiplier_LL;
+        ++dummy_multiplier_LL_;
     }
 
-    dummy_multiplier_LL_ = (dummy_multiplier_LL > 1) ? (dummy_multiplier_LL - 1) : 1;
+    dummy_multiplier_LL_ = (dummy_multiplier_LL_ > 1) ? (dummy_multiplier_LL_ - 1) : 1;
 }
 
 
@@ -696,37 +757,64 @@ void TRexSelector::runLLoopCalibration_Adaptive(
     dummy_multiplier_LL_ = 1;    // LL in R
     FDP_hat.resize(0);           // not initialized
 
-    // Initialize dummy storage
-    stored_dummies_.clear();
-    stored_dummies_.reserve(trex_ctrl_.K);
+    // Intial setup
+    if (!trex_ctrl_.use_memory_mapping) { // In-memory branch
+        // Initialize dummy storage
+        stored_dummies_.clear();
+        stored_dummies_.reserve(trex_ctrl_.K);
+        num_dummies_ = p_;  // Start with p dummies
 
-    // Generate initial p dummies for each experiment
-    for (std::size_t k = 0; k < trex_ctrl_.K; ++k) {
-        Eigen::MatrixXd D = generateDummies(p_, k);
-        stored_dummies_.push_back(std::move(D));
+        // Generate initial p dummies for each experiment
+        for (std::size_t k = 0; k < trex_ctrl_.K; ++k) {
+            stored_dummies_.emplace_back(generateDummies(p_, k));
+        }
+
+    } else { // Memory-mapped branch
+        // Write initial p dummies into memory-mapped matrices
+        num_dummies_ = p_;
+        for (std::size_t k = 0; k < trex_ctrl_.K; ++k) {
+            auto XD_map = XD_memmaps_[k]->getMap();
+            XD_map.block(0, p_, n_, p_) = generateDummies(p_, k);
+        }
+
     }
 
-    num_dummies_ = p_;  // Start with p dummies
-
+    // Adaptive L-loop
     while (dummy_multiplier_LL_ <= trex_ctrl_.max_num_dummies &&
           (FDP_hat.size() == 0 || FDP_hat(opt_point_) > tFDR_)) {
 
         // Only augment AFTER first iteration
         if (dummy_multiplier_LL_ > 1) {
-            for (std::size_t k = 0; k < trex_ctrl_.K; ++k) {
-                // Generate p new dummies with different seed offset
-                Eigen::MatrixXd D_new = generateDummies(
-                    p_,
-                    k + dummy_multiplier_LL_ * 10000
-                );
 
-                // Horizontally concatenate: [D_old | D_new]
-                std::size_t old_cols = stored_dummies_[k].cols();
-                stored_dummies_[k].conservativeResize(
-                    Eigen::NoChange,
-                    old_cols + p_
-                );
-                stored_dummies_[k].rightCols(p_) = D_new;
+            if (!trex_ctrl_.use_memory_mapping) { // In-memory branch
+                for (std::size_t k = 0; k < trex_ctrl_.K; ++k) {
+                    // Horizontally concatenate: [D_old | D_new]
+                    std::size_t old_cols = stored_dummies_[k].cols();
+                    stored_dummies_[k].conservativeResize(
+                        Eigen::NoChange,
+                        old_cols + p_
+                    );
+
+                    // Generate p new dummies with different seed offset
+                    stored_dummies_[k].rightCols(p_) = generateDummies(
+                        p_,
+                        k + dummy_multiplier_LL_ * 10000
+                    );
+                }
+
+            } else { // Memory-mapped branch
+                // Append to memory-mapped matrices
+                std::size_t start_col = p_ + (dummy_multiplier_LL_ - 1) * p_;
+
+                for (std::size_t k = 0; k < trex_ctrl_.K; ++k) {
+                    auto XD_map = XD_memmaps_[k]->getMap();
+
+                    // Generate p new dummies with different seed offset
+                    XD_map.block(0, start_col, n_, p_) = generateDummies(
+                        p_,
+                        k + dummy_multiplier_LL_ * 10000
+                    );
+                }
             }
         }
 
@@ -734,12 +822,23 @@ void TRexSelector::runLLoopCalibration_Adaptive(
         num_dummies_ = dummy_multiplier_LL_ * p_;
 
         // Run K experiments with EXPANDED dummies
-        exp_results = runRandomExperiments(
-            num_dummies_,
-            T_stop_,
-            /*generate_new_dummies=*/false, // Reuse stored dummies
-            /*use_warm_start=*/false        // Cold start required
-        );
+        if (!trex_ctrl_.use_memory_mapping) { // In-memory branch
+            exp_results = runRandomExperiments(
+                num_dummies_,
+                T_stop_,
+                /*generate_new_dummies=*/false,  // Reuse stored dummies
+                /*use_warm_start=*/false,        // Cold start required
+                /*seed_offset=*/0
+            );
+
+        } else { // Memory-mapped branch
+            exp_results = runRandomExperiments_MemMap(
+                num_dummies_,
+                T_stop_,
+                /*use_warm_start=*/false
+            );
+        }
+
 
         // Compute Phi_prime for FDP estimation
         Eigen::VectorXd Phi_prime = computePhiPrime(
@@ -794,12 +893,22 @@ void TRexSelector::runTLoopCalibration(
     while (FDP_hat(v_len - 1) <= tFDR_ && T_stop_ < max_T) {
 
         // Run K experiments with SAME dummies (warm start)
-        exp_results = runRandomExperiments(
-            num_dummies_,
-            T_stop_,
-            /*generate_new_dummies=*/false,
-            /*use_warm_start=*/true
-        );
+        if (!trex_ctrl_.use_memory_mapping) { // In-memory branch
+            exp_results = runRandomExperiments(
+                num_dummies_,
+                T_stop_,
+                /*generate_new_dummies=*/false,
+                /*use_warm_start=*/true,
+                /*seed_offset=*/0
+            );
+
+        } else { // Memory-mapped branch
+            exp_results = runRandomExperiments_MemMap(
+                num_dummies_,
+                T_stop_,
+                /*use_warm_start=*/true
+            );
+        }
 
         // Compute Phi_prime for FDP estimation
         Eigen::VectorXd Phi_prime = computePhiPrime(
@@ -936,7 +1045,8 @@ TRexSelector::ExperimentResults TRexSelector::runRandomExperiments(
     std::size_t num_dummies,
     std::size_t T_stop,
     bool generate_new_dummies,
-    bool use_warm_start
+    bool use_warm_start,
+    std::size_t seed_offset
 ) {
 
     // ===========================================================
@@ -954,7 +1064,7 @@ TRexSelector::ExperimentResults TRexSelector::runRandomExperiments(
 
         // Generate K new dummy matrices
         for (std::size_t k = 0; k < trex_ctrl_.K; ++k) {
-            Eigen::MatrixXd D = generateDummies(num_dummies, k);
+            Eigen::MatrixXd D = generateDummies(num_dummies, k + seed_offset);
             stored_dummies_.push_back(std::move(D));
         }
 
@@ -1323,14 +1433,177 @@ Eigen::MatrixXd TRexSelector::runSingleExperimentWithSolver(
 }
 
 
-void TRexSelector::printDiagnostics() const {
-std::cout << "\n=== T-Rex Diagnostics ===\n";
-    std::cout << "n = " << n_ << ", p = " << p_ << "\n";
-    std::cout << "K = " << trex_ctrl_.K << ", tFDR = " << tFDR_ << "\n";
-    std::cout << "T_stop = " << T_stop_ << "\n";
-    std::cout << "num_dummies = " << num_dummies_ << "\n";
-    std::cout << "dummy_multiplier_LL = " << dummy_multiplier_LL_ << "\n";
-    std::cout << "Selected variables: " << getNumSelected() << "\n";
-    std::cout << "Voting threshold: " << voting_threshold_ << "\n";
-    std::cout << "=======================\n\n";
+
+// ===========================================================
+// Memory-Mapped Matrix Management
+// ===========================================================
+
+void TRexSelector::initializeMemoryMappedMatrices() {
+    if (!trex_ctrl_.use_memory_mapping) { return; }
+
+    // Ensure temp directory exists
+    if (temp_dir_.empty()) { temp_dir_ = createTempDirectory(); }
+
+    // Compute max columns
+    max_cols_memmap_ = p_ + (trex_ctrl_.max_num_dummies * p_);
+
+    if (verbose_) {
+        printProgress("Initializing " + std::to_string(trex_ctrl_.K) +
+                      " memory-mapped matrices...");
+    }
+
+    // Create K memory-mapped files
+    XD_memmaps_.clear();
+    XD_memmaps_.reserve(trex_ctrl_.K);
+
+    // Setup memory-mapped matrices
+    for (std::size_t k = 0; k < trex_ctrl_.K; ++k) {
+        std::string filename = temp_dir_ + "/XD_aug_memmap_" + std::to_string(k) + ".bin";
+
+        try {
+
+            auto memmap = std::make_unique<memmap::MemoryMappedMatrix<double>>(
+                filename,
+                n_,
+                max_cols_memmap_,
+                memmap::AccessMode::ReadWrite
+            );
+
+            XD_memmaps_.push_back(std::move(memmap));
+
+        } catch (const std::exception& e) {
+            // Clean up all previously created memory-mapped matrices
+            cleanupMemoryMappedMatrices();
+            throw std::runtime_error(
+                "Failed to create memory-mapped matrix " + std::to_string(k) +
+                ": " + std::string(e.what())
+            );
+        }
+    }
+}
+
+
+
+void TRexSelector::writeXToMemoryMappedMatrices() {
+    if (!trex_ctrl_.use_memory_mapping) { return; }
+
+    if (verbose_) { printProgress("Writing X to memory-mapped matrices..."); }
+
+    // Write X to each memory-mapped matrix
+    for (std::size_t k = 0; k < trex_ctrl_.K; ++k) {
+        auto XD_map = XD_memmaps_[k]->getMap();
+
+        // Copy X to first p columns
+        XD_map.leftCols(p_) = *X_;
+    }
+}
+
+
+
+void TRexSelector::cleanupMemoryMappedMatrices() {
+    if (!trex_ctrl_.use_memory_mapping) { return; }
+
+    if (verbose_) { printProgress("Cleaning up memory-mapped matrices..."); }
+
+    // Clear vector of memory-mapped matrix pointers
+    XD_memmaps_.clear();
+
+    // Clean temporary directory
+    cleanupTempDirectory();
+
+    if (verbose_) { printProgress("Memory-mapped matrices cleaned up."); }
+}
+
+
+TRexSelector::ExperimentResults TRexSelector::runRandomExperiments_MemMap(
+    std::size_t num_dummies,
+    std::size_t T_stop,
+    bool use_warm_start
+) {
+    if (verbose_) {
+        printProgress("Running " + std::to_string(trex_ctrl_.K) +
+                      " experiments (memory-mapped)" +
+                      (use_warm_start && has_serialized_solvers_ ? " (warm start)" : "")
+        );
+    }
+
+    // Verify memory-mapped matrices are initialized
+    if (XD_memmaps_.empty()) {
+        throw std::runtime_error(
+            "Memory-mapped matrices are not initialized."
+            " Call initializeMemoryMappedMatrices() first."
+        );
+    }
+
+    // Setup temp directory for solver serialization
+    if (use_warm_start && temp_dir_.empty()) {
+        temp_dir_ = createTempDirectory();
+        solver_files_.clear();
+        solver_files_.reserve(trex_ctrl_.K);
+    }
+
+    // Setup K random experiments
+    std::vector<Eigen::MatrixXd> beta_paths;
+    beta_paths.reserve(trex_ctrl_.K);
+
+    // Storage for new solver file paths
+    std::vector<std::string> new_solver_files;
+    new_solver_files.reserve(trex_ctrl_.K);
+
+    // Run K random experiments
+    for (std::size_t k = 0; k < trex_ctrl_.K; ++k) {
+        // Get memory-mapped augmented matrix pointers
+        auto full_map = XD_memmaps_[k]->getMap();
+
+        // Create Eigen::Map over active columns. [0, p + num_dummies)
+        Eigen::Map<Eigen::MatrixXd> XD_active(
+            full_map.data(),
+            n_,
+            p_ + num_dummies
+        );
+
+        Eigen::Map<Eigen::VectorXd> y_map(y_.data(), y_.size());
+
+        // Determine solver file path
+        std::string solver_file;
+        if (use_warm_start) {
+            if (has_serialized_solvers_ && k < solver_files_.size()) {
+                solver_file = solver_files_[k];
+            } else {
+                solver_file = temp_dir_ + "/solver_" + std::to_string(k) + ".bin";
+                new_solver_files.push_back(solver_file);
+            }
+        }
+
+        // Run solver an obtain beta path matrix
+        Eigen::MatrixXd pathMatrix = runSingleExperimentWithSolver(
+            XD_active,
+            y_map,
+            T_stop,
+            use_warm_start,
+            solver_file
+        );
+        beta_paths.push_back(std::move(pathMatrix));
+    }
+
+    // Update solver file paths
+    if (use_warm_start && !new_solver_files.empty()) {
+        solver_files_ = std::move(new_solver_files);
+        has_serialized_solvers_ = true;
+    } else if (use_warm_start) {
+        has_serialized_solvers_ = true;
+    }
+
+    // Compute phi_T_mat from betaPaths
+    Eigen::MatrixXd phi_T_mat = computePhiTMat(beta_paths, num_dummies, T_stop);
+
+    // Compute Phi vector
+    Eigen::VectorXd Phi = phi_T_mat.col(T_stop - 1);
+
+    // Gather results and return
+    ExperimentResults results;
+    results.phi_T_mat = phi_T_mat;
+    results.Phi = Phi;
+
+    return results;
 }
