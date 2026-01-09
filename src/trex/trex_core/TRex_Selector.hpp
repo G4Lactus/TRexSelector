@@ -80,12 +80,19 @@ enum class LLoopStrategy {
  * @brief Algorithmic control parameters for T-Rex Selector.
  *
  * @details Groups all T-Rex algorithm control parameters:
+ *          - Experiment configuration
+ *          - Dummy Generation
  *          - Loop Strategies
  *          - Early stopping Strategies
  *          - Calibration
  *          - Memory Management
+ *          - Solver Configuration
  */
 struct TRexControlParameter {
+
+    // ====================================
+    // Experiment Configuration
+    // ====================================
     /** @brief Number of random experiments (default: 20). */
     std::size_t K = 20;
 
@@ -100,9 +107,16 @@ struct TRexControlParameter {
     /** @brief If true, limit T_stop to ceiling(n/2) (default: true). */
     bool max_T_stop = true;
 
+    // ===================================
+    // Dummy Generation
+    // ===================================
+
     /** @brief Distribution for generating dummies (default: Normal). */
     dummygen::Distribution dummy_distribution = dummygen::Distribution::Normal();
 
+    // ===================================
+    // L-Loop Strategy
+    // ===================================
     /**
      * @brief Strategy for L-loop calibration (default: ADAPTIVE).
      *
@@ -113,11 +127,22 @@ struct TRexControlParameter {
      */
     LLoopStrategy lloop_strategy = LLoopStrategy::ADAPTIVE;
 
+    // ==================================
+    // T-Loop Early Strategy
+    // ==================================
+
     /** @brief If true, perform early stopping if support set stagnates (default: true). */
     bool tloop_stagnation_stop = true;
 
     /** @brief Number of stagnant steps required to trigger early T-loop stopping (default: 3). */
     std::size_t max_stagnant_steps = 3;
+
+    // =================================
+    // Parallel random experiments
+    // =================================
+
+    /** @brief If true, run K random experiments in T-loop parallel (default: false). */
+    bool parallel_rnd_experiments = false;
 
     // ===================================
     // Memory-Mapping Management
@@ -136,19 +161,18 @@ struct TRexControlParameter {
      */
     bool use_memory_mapping = false;
 
-};
+    // ===================================
+    // Solver Configuration
+    // ===================================
+    /** @brief Configuration for solvers (TLARS, TLASSO, TENET, TSTEPWISE, TOMP, TGP, TACGP) */
 
-
-/**
- * @brief Configuration for solvers (TLARS, TLASSO, TENET, TSTEPWISE, TOMP, TGP, TACGP)
- */
-struct SolverControl {
-    /** @brief Solver type. */
+    /** @brief Solver type for T-Rex Selector (default: TLARS). */
     SolverTypeForTRex solver_type = SolverTypeForTRex::TLARS;
 
-    // Optional TENET lambda2 parameter
-    double tenet_lambda2 = 1.0;
+    /** @brief L2 penalty for TENET solver (default: 0.1). */
+    double tenet_lambda2 = 0.1;
 };
+
 
 // ============================================================
 // T-Rex Selector Class
@@ -214,9 +238,6 @@ protected:
 
     /** @brief Algorithmic control parameters. */
     const TRexControlParameter trex_ctrl_;
-
-    /** @brief Solver control parameters (type and math config) */
-    const SolverControl solver_ctrl_;
 
     /** @brief Random seed. */
     const int seed_;
@@ -368,7 +389,6 @@ public:
      * @param y Response vector (n x 1) - accepts Eigen::Map.
      * @param tFDR Target False Discovery Rate (default: 0.1).
      * @param trex_control Algorithmic control parameters.
-     * @param solver_control Solver type and specific math config.
      * @param seed Random seed (< 0 for random seed).
      * @param verbose Enable verbose output (default: true).
      */
@@ -376,7 +396,6 @@ public:
                  Eigen::Map<Eigen::VectorXd>& y,
                  double tFDR = 0.1,
                  TRexControlParameter trex_control = TRexControlParameter(),
-                 SolverControl solver_control = SolverControl(),
                  int seed = -1,
                  bool verbose = true
     );
@@ -500,6 +519,10 @@ protected:
     // Protected Methods
     // ============================================================
 
+    // ===========================================================
+    // Data normalization methods
+    // ===========================================================
+
     /** @brief Center y in-place. Stores y_mean internally. */
     void centerY();
 
@@ -535,7 +558,7 @@ protected:
 
 
     // ===========================================================
-    // Core T-Rex algorithm methods
+    // Core T-Rex computation methods part 1
     // ===========================================================
 
     /** @brief Generate voting grid V = [0.5, 0.5 + 1/K, ..., 1-eps]. */
@@ -585,6 +608,10 @@ protected:
     );
 
 
+    // ===========================================================
+    // L-loop strategies
+    // ===========================================================
+
     /**
      * @brief Run L-loop with NONE strategy (fixed number of dummies).
      *
@@ -620,6 +647,21 @@ protected:
 
 
     /**
+     * @brief Apply L-loop strategy as configured.
+     *
+     * @details Dispatches appropriate L-loop strategy accordong to trex_ctrl_.lloop_strategy.
+     *
+     * @param FDP_hat FDP estimates.
+     * @param exp_results Experiment results structure to fill.
+     */
+    void applyLLoopStrategy(Eigen::VectorXd& FDP_hat, ExperimentResults& exp_results);
+
+
+    // ===========================================================
+    // T-loop method
+    // ===========================================================
+
+    /**
      * @brief Run T-loop calibration to determine stopping threshold T_stop.
      *
      * @param FDP_hat FDP estimates.
@@ -627,6 +669,10 @@ protected:
      */
     void runTLoopCalibration(Eigen::VectorXd& FDP_hat, ExperimentResults& exp_results);
 
+
+    // ===========================================================
+    // Core T-Rex computation methods part 2
+    // ===========================================================
 
     /**
      * @brief Compute phi_T_mat from collection of beta paths.
@@ -714,16 +760,6 @@ protected:
 
 
     /**
-     * @brief Create augmented matrix XD = [X | D].
-     *
-     * @param D Dummy matrix (n x num_dummies).
-     *
-     * @return Augmented matrix (n x (p + num_dummies)).
-     */
-    Eigen::MatrixXd createAugmentedMatrix(const Eigen::MatrixXd& D) const;
-
-
-    /**
      * @brief Run a single experiment with a specific solver type.
      *
      * @details Handles solver creation, warm start loading, execution, and saving.
@@ -766,9 +802,6 @@ protected:
 
     /** @brief Update selected_indices_ from selected_var_ */
     void updateSelectedIndices();
-
-    /** @brief Print diagnostics of current TRexSelector state */
-    void printDiagnostics() const;
 
     // ============================================================
     // Methods for Solver State Serialization (T-loop warm start)

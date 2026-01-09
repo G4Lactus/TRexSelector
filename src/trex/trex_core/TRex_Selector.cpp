@@ -2,9 +2,25 @@
 #include <cstdlib>
 #include <cassert>
 #include <filesystem>
+#include <sstream>
 
 // T-Rex Selector includes
 #include "TRex_Selector.hpp"
+
+// ===================================================================================
+// Debug mode only Macro
+// ===================================================================================
+
+#ifndef NDEBUG
+    #define TREX_DEBUG_PRINT(msg) \
+      do { \
+        if (verbose_) { \
+            std::cout << "T-Rex Selector: [DEBUG]" << (msg) << std::endl; \
+        } \
+      } while (0)
+#else
+    #define TREX_DEBUG_PRINT(msg) ((void)0)
+#endif
 
 // ===================================================================================
 
@@ -18,7 +34,6 @@ TRexSelector::TRexSelector(
     Eigen::Map<Eigen::VectorXd>& y,
     double tFDR,
     TRexControlParameter trex_control,
-    SolverControl solver_control,
     int seed,
     bool verbose
     ) :
@@ -26,7 +41,6 @@ TRexSelector::TRexSelector(
     y_(y),
     tFDR_(tFDR),
     trex_ctrl_(trex_control),
-    solver_ctrl_(std::move(solver_control)),
     seed_(seed),
     verbose_(verbose),
     T_stop_(0),
@@ -125,19 +139,6 @@ void TRexSelector::validateTRexParameters() const {
             + std::to_string(trex_ctrl_.max_num_dummies)
         );
     }
-
-    // Additional info for LLoopStrategy::SKIP
-    if (trex_ctrl_.lloop_strategy == LLoopStrategy::SKIP) {
-        std::size_t fixed_num_dummies = trex_ctrl_.max_num_dummies * p_;
-        if (verbose_) {
-            printProgress(
-                "L-loop strategy: SKIP. Using fixed number of dummies = " +
-                std::to_string(fixed_num_dummies) +
-                " (" + std::to_string(trex_ctrl_.max_num_dummies) + " * p)"
-            );
-        }
-    }
-
 }
 
 
@@ -157,87 +158,103 @@ void TRexSelector::decenterY() {
 
 
 void TRexSelector::denormalizeX() {
-
+    #pragma omp parallel for schedule(static) if(p_ > 100)
     for (std::size_t j = 0; j < p_; ++j) {
+        // Get column reference
+        auto col = X_->col(j);
+
         // Scale back from unit L2 norm
-        X_->col(j).array() *= X_l2norms_(j);
+        col.array() *= X_l2norms_(j);
 
         // Add back the mean
-        X_->col(j).array() += X_means_(j);
+        col.array() += X_means_(j);
     }
 }
 
 
 void TRexSelector::centerAndL2NormalizeX() {
-
     // Allocate storage for normalization parameters
     X_means_.resize(p_);
     X_l2norms_.resize(p_);
 
-    // Compute column means
-    X_means_ = X_->colwise().mean();
-
-    // Center X in-place
+    // Fused ONE pass operation: mean + center + norm + normalize
+    // Parallel across independent columns
+    #pragma omp parallel for schedule(static) if(p_ > 100)
     for (std::size_t j = 0; j < p_; ++j) {
-        X_->col(j).array() -= X_means_(j);
-    }
+        // Get column reference
+        auto col = X_->col(j);
 
-    // Compute L2 norms and normalize
-    for (std::size_t j = 0; j < p_; ++j) {
-        double l2norm_j = X_->col(j).norm();
+        // Compute mean
+        const double mean_j = col.mean();
+        X_means_[j] = mean_j;
 
-        // Avoid division by zero
+        // Center column
+        col.array() -= mean_j;
+
+        // Compute L2 norm
+        double l2norm_j = col.norm();
+
+        // Handle zero norm (avoid division by zero)
         if (l2norm_j < eps_) {
             l2norm_j = 1.0;
             if (verbose_) {
-                printProgress(
-                    "Warning: Column " + std::to_string(j) +
-                    " has zero L2 norm. Setting norm = 1.0"
-                );
+                // Note: Only thread 0 should print to avoid race
+                #pragma omp critical
+                {
+                    printProgress("Warning: Column " + std::to_string(j) +
+                                " has zero L2 norm. Setting norm = 1.0");
+                }
             }
         }
+        X_l2norms_[j] = l2norm_j;
 
-        // Store L2 norm
-        X_l2norms_(j) = l2norm_j;
-
-        // Normalize column j in-place
-        X_->col(j).array() /= l2norm_j;
+        // Normalize column
+        col.array() /= l2norm_j;
     }
-    // X is now L2 normalized: each column has mean=0, L2_norm=1
 }
 
 
-void TRexSelector::centerAndL2NormalizeMatrix(Eigen::Map<Eigen::MatrixXd>& M) const {
+void TRexSelector::centerAndL2NormalizeMatrix(
+    Eigen::Map<Eigen::MatrixXd>& M
+) const {
+    // Extract dimensions
+    const std::size_t p_local = M.cols();
 
-    const std::size_t p = M.cols();
+    // Fused ONE pass operation: mean + center + norm + normalize
+    // Parallel across independent columns
+    #pragma omp parallel for schedule(static) if(p_local > 100)
+    for (std::size_t j = 0; j < p_local; ++j) {
+        // Get column reference
+        auto col = M.col(j);
 
-    // Compute column means (for centering)
-    Eigen::VectorXd means = M.colwise().mean();
+        // Compute mean
+        const double mean_j = col.mean();
 
-    // Center X in-place
-    for (std::size_t j = 0; j < p; ++j) {
-        M.col(j).array() -= means(j);
-    }
+        // Center column
+        col.array() -= mean_j;
 
-    // Compute L2 norms
-    for (std::size_t j = 0; j < p; ++j) {
-        double l2norm_j = M.col(j).norm();
+        // Compute L2 norm
+        double l2norm_j = col.norm();
 
-        // Avoid division by zero
+        // Handle zero norm (avoid division by zero)
         if (l2norm_j < eps_) {
             l2norm_j = 1.0;
             if (verbose_) {
-                printProgress(
-                    "Warning: Column " + std::to_string(j) +
-                    " has zero L2 norm. Setting norm = 1.0"
-                );
+                // Note: Only thread 0 should print to avoid race
+                #pragma omp critical
+                {
+                    printProgress("Warning: Column " + std::to_string(j) +
+                                " has zero L2 norm. Setting norm = 1.0");
+                }
             }
         }
 
-        // Normalize column j in-place
-        M.col(j).array() /= l2norm_j;
+        // Normalize column
+        col.array() /= l2norm_j;
     }
 }
+
+
 
 // ===========================================================
 // Member Methods for Solver Serialization
@@ -300,7 +317,6 @@ void TRexSelector::cleanupTempDirectory() {
 
 TRexSelector::SelectionResult TRexSelector::select() {
 
-    // TODO: branch into standard and memory-mapped selection methods
     // If Memory-mapped data initialize
     if (trex_ctrl_.use_memory_mapping) {
         initializeMemoryMappedMatrices();
@@ -308,43 +324,31 @@ TRexSelector::SelectionResult TRexSelector::select() {
     }
 
     // TRex Selection Procedure
+    // ===============================
     // 1. Initialize voting grid and set 75% optimization point
     voting_grid_ = createVotingGrid();
     const std::size_t v_len = voting_grid_.size();
     set75PercentOptPoint(v_len);
 
-
     // 2. L-Loop: Calibrate num_dummies_ with  T_stop = 1
+    if (verbose_) {
+        printProgress("L-loop: Calibrating number of dummies...");
+    }
     Eigen::VectorXd FDP_hat;
     ExperimentResults exp_results;
-
-    // TODO: define method 'applyLLoopStrategy' to encapsulate strategy selection
-    switch (trex_ctrl_.lloop_strategy) {
-        case LLoopStrategy::SKIP:
-            runLLoopCalibration_SKIP(FDP_hat, exp_results);
-            break;
-
-        case LLoopStrategy::STANDARD:
-            runLLoopCalibration(FDP_hat, exp_results);
-            break;
-
-        case LLoopStrategy::ADAPTIVE:
-            runLLoopCalibration_Adaptive(FDP_hat, exp_results);
-            break;
-
-        default:
-            throw std::invalid_argument("Invalid L-loop strategy.");
+    applyLLoopStrategy(FDP_hat, exp_results);
+    if (verbose_) {
+        printProgress("L-loop: converged with " +
+                      std::to_string(num_dummies_) + " dummies.\n");
     }
 
 
     // 3. T-Loop: Calibrate T_stop
     runTLoopCalibration(FDP_hat, exp_results);
 
-
     // 4. Store final phi_T_mat and Phi_prime
     phi_T_mat_ = exp_results.phi_T_mat;
     Phi_prime_ = computePhiPrime(phi_T_mat_, exp_results.Phi, num_dummies_);
-
 
     // 5. Variable Selection
     SelectionResult result = selectedVariables(
@@ -353,6 +357,7 @@ TRexSelector::SelectionResult TRexSelector::select() {
         voting_grid_,
         T_stop_
     );
+    // ===============================
 
     // Store results & infors in result
     result.T_stop = T_stop_;
@@ -378,7 +383,7 @@ TRexSelector::SelectionResult TRexSelector::select() {
     }
 
     // Restoration for X
-    if (verbose_) printProgress("Denormalizing X to original scale...");
+    if (verbose_) printProgress("Denormalizing X to original scale.\n");
     denormalizeX();
 
     return result;
@@ -458,8 +463,10 @@ Eigen::VectorXd TRexSelector::computePhiPrime(
     Eigen::VectorXd delta_av_num_var_sel = Eigen::VectorXd::Zero(current_T);
 
     for (const auto idx : phi_geg_fifty_indices) {
+#ifndef NDEBUG
         // Verify dimension match (debug only)
         assert(static_cast<std::size_t>(phi_T_mat.row(idx).size()) == current_T);
+#endif
 
         delta_av_num_var_sel += phi_T_mat.row(idx).transpose();
     }
@@ -626,7 +633,7 @@ void TRexSelector::runLLoopCalibration_SKIP(
 
     // Initialize Tstop
     T_stop_ = 1;
-    FDP_hat.resize(0);                       // not initialized
+    FDP_hat.resize(0);     // not initialized
 
     if (verbose_) {
         printProgress(
@@ -700,7 +707,7 @@ void TRexSelector::runLLoopCalibration(Eigen::VectorXd& FDP_hat, ExperimentResul
             exp_results = runRandomExperiments(
                 num_dummies_,
                 T_stop_,
-                /*generate_new_dummies=*/true,  // New dummies each time
+                /*generate_new_dummies=*/true,   // New dummies each time
                 /*use_warm_start=*/false,        // Cold start required
                 /*seed_offset=*/dummy_multiplier_LL_ * 10000
             );
@@ -861,6 +868,33 @@ void TRexSelector::runLLoopCalibration_Adaptive(
 }
 
 
+// L-loop strategy dispatcher
+
+void TRexSelector::applyLLoopStrategy(
+    Eigen::VectorXd& FDP_hat,
+    ExperimentResults& exp_results
+) {
+    switch (trex_ctrl_.lloop_strategy) {
+        case LLoopStrategy::SKIP:
+            runLLoopCalibration_SKIP(FDP_hat, exp_results);
+            break;
+
+        case LLoopStrategy::STANDARD:
+            runLLoopCalibration(FDP_hat, exp_results);
+            break;
+
+        case LLoopStrategy::ADAPTIVE:
+            runLLoopCalibration_Adaptive(FDP_hat, exp_results);
+            break;
+
+        default:
+            throw std::invalid_argument("Invalid L-loop strategy.");
+    }
+}
+
+
+
+
 // ===========================================================
 // T-Loop Calibration
 // ===========================================================
@@ -869,6 +903,10 @@ void TRexSelector::runTLoopCalibration(
     Eigen::VectorXd& FDP_hat,
     ExperimentResults& exp_results
 ) {
+    if (verbose_) {
+        printProgress("T-loop: Calibrating stopping threshold (T_stop)...");
+    }
+
     const std::size_t v_len = voting_grid_.size();
 
     // Compute maximum T
@@ -887,9 +925,8 @@ void TRexSelector::runTLoopCalibration(
     std::size_t prev_num_selected = 0;
     std::size_t stagnant_iterations = 0;
 
-    std::size_t row_idx = 0;
-
     // Check FDP at highest v
+    std::size_t row_idx = 0;
     while (FDP_hat(v_len - 1) <= tFDR_ && T_stop_ < max_T) {
 
         // Run K experiments with SAME dummies (warm start)
@@ -942,9 +979,10 @@ void TRexSelector::runTLoopCalibration(
 
                 if (stagnant_iterations >= trex_ctrl_.max_stagnant_steps) {
                     if (verbose_) {
-                        std::cout << "\n[T-loop EARLY STOP] Stagnation detected\n";
-                        std::cout << "  |S(v=" << v_star << ", T=" << T_stop_
-                                  << ")| = " << num_selected << "\n";
+                        printProgress("T-loop EARLY STOP: Stagnation detected");
+                        printProgress("  S(v*) = " + std::to_string(v_star) +
+                                      ", T = " + std::to_string(T_stop_) +
+                                      " → " + std::to_string(num_selected));
                     }
                     break;  // early stop due to stagnation
                 }
@@ -960,14 +998,15 @@ void TRexSelector::runTLoopCalibration(
             const double min_FDP = FDP_hat.minCoeff();
             const double max_FDP = FDP_hat.maxCoeff();
 
-            std::cout << "[T =" << std::setw(3) << T_stop_
-                      << "] v* = " << v_star
-                      << ", |S| = " << num_selected
-                      << ", FDP ∈ [" << min_FDP << ", " << max_FDP << "]";
+            std::ostringstream oss;
+            oss << "T = " << std::setw(3) << T_stop_
+                << " | v* = " << v_star
+                << ", S = " << num_selected
+                << ", FDP ∈ [" << min_FDP << ", " << max_FDP << "]";
             if (stagnant_iterations > 0) {
-                std::cout << ", stagnant = " << stagnant_iterations;
+                oss << " (stagnant: " << stagnant_iterations << ")";
             }
-            std::cout << "\n";
+            printProgress(oss.str());
         }
 
         // Dynamic capacity growth
@@ -1006,7 +1045,7 @@ void TRexSelector::runTLoopCalibration(
         }
 
         printProgress("T-loop converged at T_stop = " +
-                      std::to_string(T_stop_) + stop_reason);
+                      std::to_string(T_stop_) + stop_reason + "\n");
     }
 }
 
@@ -1041,6 +1080,8 @@ void TRexSelector::printProgress(const std::string& message) const {
 // Random Experiments
 // ===========================================================
 
+// In-memory version for run K random experiments
+
 TRexSelector::ExperimentResults TRexSelector::runRandomExperiments(
     std::size_t num_dummies,
     std::size_t T_stop,
@@ -1064,8 +1105,7 @@ TRexSelector::ExperimentResults TRexSelector::runRandomExperiments(
 
         // Generate K new dummy matrices
         for (std::size_t k = 0; k < trex_ctrl_.K; ++k) {
-            Eigen::MatrixXd D = generateDummies(num_dummies, k + seed_offset);
-            stored_dummies_.push_back(std::move(D));
+            stored_dummies_.emplace_back(generateDummies(num_dummies, k + seed_offset));
         }
 
         if (verbose_) {
@@ -1078,19 +1118,21 @@ TRexSelector::ExperimentResults TRexSelector::runRandomExperiments(
     } else {
         // Reuse existing dummies from stored_dummies_
         if (stored_dummies_.size() != trex_ctrl_.K) {
-            throw std::runtime_error(
-                "Cannot reuse dummies: stored_dummies_ has size " +
-                std::to_string(stored_dummies_.size()) +
-                ", but K = " + std::to_string(trex_ctrl_.K)
-            );
+            if (stored_dummies_.size() != trex_ctrl_.K) {
+                throw std::runtime_error("Cannot reuse dummies: stored_dummies has size " +
+                                         std::to_string(stored_dummies_.size()) + ", but K = " +
+                                         std::to_string(trex_ctrl_.K)
+                                        );
+            }
         }
-
+#ifndef NDEBUG
         if (verbose_) {
             printProgress(
                 "Reusing " + std::to_string(trex_ctrl_.K) + " dummy matrices" +
                 (use_warm_start && has_serialized_solvers_ ? " (warm start)" : "")
             );
         }
+#endif
     }
 
     // ===========================================================
@@ -1107,50 +1149,97 @@ TRexSelector::ExperimentResults TRexSelector::runRandomExperiments(
     // 3. Run K random experiments
     // ===========================================================
 
-    std::vector<Eigen::MatrixXd> beta_paths;
-    beta_paths.reserve(trex_ctrl_.K);
+    // Determine if experiment are sequential/parallel
+    const bool do_parallel_rnd_experiments = trex_ctrl_.parallel_rnd_experiments &&
+                                            (trex_ctrl_.K > 1);
 
-    // Storage for new solver file paths
+    // Prepare storage for beta paths
+    std::vector<Eigen::MatrixXd> beta_paths(trex_ctrl_.K);
+
+    // Prepare new solver file paths if needed
     std::vector<std::string> new_solver_files;
-    new_solver_files.reserve(trex_ctrl_.K);
+    if (use_warm_start && !has_serialized_solvers_) {
+        new_solver_files.resize(trex_ctrl_.K);
+    }
 
-    for (std::size_t k = 0; k < trex_ctrl_.K; ++k) {
+    // Parallel loop over K experiments if do_parallel_rnd_experiments is true else sequential
+    #pragma omp parallel if(do_parallel_rnd_experiments)
+    {
+        // Create augmented data matrix XD
+        Eigen::MatrixXd XD(n_, p_ + num_dummies);
+        XD.leftCols(p_) = *X_; // copy X only once
 
-        // Create augmented matrix [X | D_k]
-        Eigen::MatrixXd XD = createAugmentedMatrix(stored_dummies_[k]);
-        // Create Eigen::Map for solver
-        Eigen::Map<Eigen::MatrixXd> XD_map(XD.data(), XD.rows(), XD.cols());
-        Eigen::Map<Eigen::VectorXd> y_map(y_.data(), y_.size());
+        // Due to time varying solvers (different dummies), use dynamic scheduling
+        // is sequential if do_parallel_rnd_experiments is false
+        #pragma omp for schedule(dynamic)
+        for (std::size_t k = 0; k < trex_ctrl_.K; ++k) {
 
-        // Determine solver file path
-        std::string solver_file;
-        if (use_warm_start) {
-            if (has_serialized_solvers_ && k < solver_files_.size()) {
-                solver_file = solver_files_[k];
-            } else {
-                solver_file = temp_dir_ + "/solver_" + std::to_string(k) + ".bin";
-                new_solver_files.push_back(solver_file);
+            // Addpend dummies [p_, p_ + num_dummies_)
+            XD.rightCols(num_dummies) = stored_dummies_[k];
+
+            // Setup Eigen maps
+            Eigen::Map<Eigen::MatrixXd> XD_map(XD.data(), XD.rows(), XD.cols());
+            Eigen::Map<Eigen::VectorXd> y_map(y_.data(), y_.size());
+
+            // Determine solver file path
+            std::string solver_file;
+            if (use_warm_start) {
+                if (has_serialized_solvers_ && k < solver_files_.size()) {
+                    // Load from existing
+                    solver_file = solver_files_[k];
+                } else {
+                    // Create new path
+                    solver_file = temp_dir_ + "/solver_" + std::to_string(k) + ".bin";
+                    // SAFE write: only if vector was pre-sized
+                    if (!new_solver_files.empty()) {
+                        new_solver_files[k] = solver_file;
+                    } else if (k == 0 && verbose_) {
+                        // Defensive & should not happen
+                        printProgress(
+                            "WARNING: new_solver_files is empty but trying to create new solver! " +
+                            std::string("has_serialized=") +
+                            (has_serialized_solvers_ ? "true" : "false") +
+                            ", solver_files_.size()=" + std::to_string(solver_files_.size())
+                        );
+                    }
+                }
             }
-        }
 
-        // Run solver and obtain beta path matrix
-        Eigen::MatrixXd pathMatrix = runSingleExperimentWithSolver(
-            XD_map,
-            y_map,
-            T_stop,
-            use_warm_start,
-            solver_file
-        );
-        beta_paths.push_back(std::move(pathMatrix));
+            // Catch empty solver_file early
+            if (use_warm_start && solver_file.empty()) {
+                throw std::runtime_error(
+                    "solver_file is empty at k=" + std::to_string(k) +
+                    "! has_serialized=" + (has_serialized_solvers_ ? "true" : "false") +
+                    ", solver_files_.size()=" + std::to_string(solver_files_.size()) +
+                    ", temp_dir_='" + temp_dir_ + "'"
+                );
+            }
+
+            beta_paths[k] = runSingleExperimentWithSolver(
+                XD_map, y_map, T_stop, use_warm_start, solver_file
+            );
+        }
     }
 
     // Update solver file paths
     if (use_warm_start && !new_solver_files.empty()) {
         solver_files_ = std::move(new_solver_files);
         has_serialized_solvers_ = true;
+#ifndef NDEBUG
+        if (verbose_) {
+            printProgress("Moved " + std::to_string(solver_files_.size()) + " solver file paths");
+        }
+#endif
     } else if (use_warm_start) {
         has_serialized_solvers_ = true;
+#ifndef NDEBUG
+        if (verbose_) {
+            printProgress("Kept existing " + std::to_string(solver_files_.size()) +
+                          " solver file paths");
+        }
+#endif
     }
+
 
     // ===========================================================
     // 4. Compute phi_T_mat from betaPaths
@@ -1198,32 +1287,6 @@ Eigen::MatrixXd TRexSelector::generateDummies(
     centerAndL2NormalizeMatrix(D_map);
 
     return D;
-}
-
-
-// Augmented Matrix Creation
-
-Eigen::MatrixXd TRexSelector::createAugmentedMatrix(
-    const Eigen::MatrixXd& D
-) const {
-    // Create XD = [X | D]
-    // X is (n × p), D is (n × num_dummies)
-    // XD is (n × (p + num_dummies))
-
-    const std::size_t num_dummies = D.cols();
-    Eigen::MatrixXd XD(n_, p_ + num_dummies);
-
-    // Copy X (leftmost p columns)
-    for (std::size_t j = 0; j < p_; ++j) {
-        XD.col(j) = X_->col(j);
-    }
-
-    // Copy D (rightmost num_dummies columns)
-    for (std::size_t j = 0; j < num_dummies; ++j) {
-        XD.col(p_ + j) = D.col(j);
-    }
-
-    return XD;
 }
 
 
@@ -1291,6 +1354,7 @@ Eigen::MatrixXd TRexSelector::computePhiTMat(
 }
 
 
+
 Eigen::MatrixXd TRexSelector::runSingleExperimentWithSolver(
     Eigen::Map<Eigen::MatrixXd>& XD_map,
     Eigen::Map<Eigen::VectorXd>& y_map,
@@ -1301,7 +1365,8 @@ Eigen::MatrixXd TRexSelector::runSingleExperimentWithSolver(
     Eigen::MatrixXd pathMatrix;
 
     // Dispatch to appropriate solver
-    switch (solver_ctrl_.solver_type) {
+    switch (trex_ctrl_.solver_type) {
+
         case SolverTypeForTRex::TLARS: {
             if (use_warm_start && has_serialized_solvers_) {
                 TLARS_Solver solver = TLARS_Solver::load(solver_file, XD_map);
@@ -1354,7 +1419,7 @@ Eigen::MatrixXd TRexSelector::runSingleExperimentWithSolver(
         }
 
         case SolverTypeForTRex::TENET: {
-            double lambda2 = solver_ctrl_.tenet_lambda2;
+            double lambda2 = trex_ctrl_.tenet_lambda2;
 
             if (use_warm_start && has_serialized_solvers_) {
                 TENET_Solver solver = TENET_Solver::load(solver_file, XD_map);
@@ -1438,6 +1503,9 @@ Eigen::MatrixXd TRexSelector::runSingleExperimentWithSolver(
 // Memory-Mapped Matrix Management
 // ===========================================================
 
+
+// Setup memory-mapped matrices
+
 void TRexSelector::initializeMemoryMappedMatrices() {
     if (!trex_ctrl_.use_memory_mapping) { return; }
 
@@ -1483,6 +1551,7 @@ void TRexSelector::initializeMemoryMappedMatrices() {
 }
 
 
+// Write X to memory-mapped matrices
 
 void TRexSelector::writeXToMemoryMappedMatrices() {
     if (!trex_ctrl_.use_memory_mapping) { return; }
@@ -1499,6 +1568,7 @@ void TRexSelector::writeXToMemoryMappedMatrices() {
 }
 
 
+// Clean up memory-mapped matrices
 
 void TRexSelector::cleanupMemoryMappedMatrices() {
     if (!trex_ctrl_.use_memory_mapping) { return; }
@@ -1514,6 +1584,8 @@ void TRexSelector::cleanupMemoryMappedMatrices() {
     if (verbose_) { printProgress("Memory-mapped matrices cleaned up."); }
 }
 
+
+// Run random experiments with memory-mapped matrices
 
 TRexSelector::ExperimentResults TRexSelector::runRandomExperiments_MemMap(
     std::size_t num_dummies,
@@ -1543,47 +1615,56 @@ TRexSelector::ExperimentResults TRexSelector::runRandomExperiments_MemMap(
     }
 
     // Setup K random experiments
-    std::vector<Eigen::MatrixXd> beta_paths;
-    beta_paths.reserve(trex_ctrl_.K);
+    std::vector<Eigen::MatrixXd> beta_paths(trex_ctrl_.K);
 
     // Storage for new solver file paths
     std::vector<std::string> new_solver_files;
-    new_solver_files.reserve(trex_ctrl_.K);
+    if (use_warm_start && !has_serialized_solvers_) {
+        new_solver_files.reserve(trex_ctrl_.K);
+    }
 
-    // Run K random experiments
-    for (std::size_t k = 0; k < trex_ctrl_.K; ++k) {
-        // Get memory-mapped augmented matrix pointers
-        auto full_map = XD_memmaps_[k]->getMap();
+    // Determine if experiments are sequential/parallel
+    const bool do_parallel_rnd_experiments = trex_ctrl_.parallel_rnd_experiments &&
+                                            (trex_ctrl_.K > 1);
 
-        // Create Eigen::Map over active columns. [0, p + num_dummies)
-        Eigen::Map<Eigen::MatrixXd> XD_active(
-            full_map.data(),
-            n_,
-            p_ + num_dummies
-        );
+    // Parallel execution over K experiments (if enabled)
+    #pragma omp parallel if(do_parallel_rnd_experiments)
+    {
+        // No thread-local variables here, each k has its own file
+        // Same structure as in-memory version for consistency
 
-        Eigen::Map<Eigen::VectorXd> y_map(y_.data(), y_.size());
+        #pragma omp for schedule(dynamic)
+        for (std::size_t k = 0; k < trex_ctrl_.K; ++k) {
+            // Get memory-mapped augmented matrix pointers
+            auto full_map = XD_memmaps_[k]->getMap();
 
-        // Determine solver file path
-        std::string solver_file;
-        if (use_warm_start) {
-            if (has_serialized_solvers_ && k < solver_files_.size()) {
-                solver_file = solver_files_[k];
-            } else {
-                solver_file = temp_dir_ + "/solver_" + std::to_string(k) + ".bin";
-                new_solver_files.push_back(solver_file);
+            // Create Eigen::Map over active columns [0, p + num_dummies)
+            Eigen::Map<Eigen::MatrixXd> XD_active(
+                full_map.data(),
+                n_,
+                p_ + num_dummies
+            );
+
+            Eigen::Map<Eigen::VectorXd> y_map(y_.data(), y_.size());
+
+            // Determine solver file path
+            std::string solver_file;
+            if (use_warm_start) {
+                if (has_serialized_solvers_ && k < solver_files_.size()) {
+                    solver_file = solver_files_[k];
+                } else {
+                    solver_file = temp_dir_ + "/solver_" + std::to_string(k) + ".bin";
+                    if (!new_solver_files.empty()) {
+                        new_solver_files[k] = solver_file;
+                    }
+                }
             }
-        }
 
-        // Run solver an obtain beta path matrix
-        Eigen::MatrixXd pathMatrix = runSingleExperimentWithSolver(
-            XD_active,
-            y_map,
-            T_stop,
-            use_warm_start,
-            solver_file
-        );
-        beta_paths.push_back(std::move(pathMatrix));
+            // Run solver and obtain beta path matrix
+            beta_paths[k] = runSingleExperimentWithSolver(
+                XD_active, y_map, T_stop, use_warm_start, solver_file
+            );
+        }
     }
 
     // Update solver file paths
