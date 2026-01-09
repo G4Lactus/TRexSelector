@@ -6,7 +6,6 @@
 # - release/  folder: optimized build without debug symbols
 # - debug/    folder: unoptimized build with debug symbols and extra checks
 # =============================================================================
-
 cmake_minimum_required(VERSION 3.18)
 
 
@@ -16,7 +15,6 @@ cmake_minimum_required(VERSION 3.18)
 # On macOS, prefer Homebrew LLVM over Apple Clang
 if(APPLE AND NOT DEFINED CMAKE_CXX_COMPILER)
     set(HOMEBREW_LLVM_PREFIX "/opt/homebrew/opt/llvm")
-
     if(EXISTS "${HOMEBREW_LLVM_PREFIX}/bin/clang++")
         set(CMAKE_C_COMPILER "${HOMEBREW_LLVM_PREFIX}/bin/clang" CACHE FILEPATH "C compiler")
         set(CMAKE_CXX_COMPILER "${HOMEBREW_LLVM_PREFIX}/bin/clang++" CACHE FILEPATH "C++ compiler")
@@ -30,7 +28,7 @@ endif()
 
 
 # ============================================================================
-# Output Directories (UNIFIED approach)
+# Output Directories
 # ============================================================================
 # Set output directories at the root level
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
@@ -57,11 +55,6 @@ endif()
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
-
-# Build type specific flags
-set(CMAKE_CXX_FLAGS_DEBUG "-g -O0 -Wall -Wextra")
-set(CMAKE_CXX_FLAGS_RELEASE "-O3 -DNDEBUG -march=native")
-
 # Generate compile_commands.json for IntelliSense
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
@@ -79,9 +72,6 @@ find_package(Eigen3 REQUIRED NO_MODULE)
 
 # Cereal (required for serialization)
 find_package(cereal REQUIRED)
-if(NOT cereal_FOUND)
-    message(STATUS "Cereal not found via find_package, using manual path")
-endif()
 
 # Boost: require at least 1.80
 if(POLICY CMP0167)
@@ -194,7 +184,6 @@ include_directories(
 if(NOT cereal_FOUND)
     include_directories(/opt/homebrew/opt/cereal/include)
 endif()
-
 
 
 # ============================================================================
