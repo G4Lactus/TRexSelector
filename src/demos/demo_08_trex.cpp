@@ -79,9 +79,8 @@ void demo_TRexSelector(bool high_dim, bool rnd_coef) {
     trex_ctrl.dummy_distribution = dummygen::Distribution::Normal();
     trex_ctrl.lloop_strategy = LLoopStrategy::ADAPTIVE;
     trex_ctrl.tloop_stagnation_stop = true;
-
-    SolverControl solver_ctrl;
-    solver_ctrl.solver_type = SolverTypeForTRex::TLARS;
+    trex_ctrl.parallel_rnd_experiments = false;
+    trex_ctrl.solver_type = SolverTypeForTRex::TLARS;
 
     // Create T-Rex Selector instance
     std::cout << "Creating T-Rex Selector instance...\n";
@@ -90,7 +89,6 @@ void demo_TRexSelector(bool high_dim, bool rnd_coef) {
         /*y=*/y_map,
         /*tFDR=*/0.1,
         /*trex_control=*/trex_ctrl,
-        /*solver_control=*/std::move(solver_ctrl),
         /*seed=*/-1,
         /*verbose=*/true
     );
@@ -259,9 +257,8 @@ void demo_TRexSelector_MonteCarlo(std::size_t num_MC, bool high_dim, bool rnd_co
                 Eigen::Map<Eigen::VectorXd> y_map(data.getY().data(), data.rows());
 
                 // Setup Solver Control Parameters
-                SolverControl solver_control;
-                solver_control.solver_type = current_solver.solver_type;
-                solver_control.tenet_lambda2 =
+                trex_control.solver_type = current_solver.solver_type;
+                trex_control.tenet_lambda2 =
                     current_solver.solver_type == SolverTypeForTRex::TENET
                     ? current_solver.lambda2
                     : 1.0;
@@ -272,7 +269,6 @@ void demo_TRexSelector_MonteCarlo(std::size_t num_MC, bool high_dim, bool rnd_co
                     /*y=*/y_map,
                     /*tFDR=*/0.1,
                     /*trex_control=*/trex_control,
-                    /*solver_control=*/std::move(solver_control),
                     /*seed=*/-1,
                     /*verbose=*/false
                 );
@@ -483,9 +479,8 @@ void demo_TRexSelector_varMonteCarlo(std::size_t num_MC, bool high_dim, bool rnd
                 Eigen::Map<Eigen::VectorXd> y_map(data.getY().data(), data.rows());
 
                 // Setup Solver Control Parameters
-                SolverControl solver_control;
-                solver_control.solver_type = current_solver.solver_type;
-                solver_control.tenet_lambda2 =
+                trex_control.solver_type = current_solver.solver_type;
+                trex_control.tenet_lambda2 =
                     current_solver.solver_type == SolverTypeForTRex::TENET
                     ? current_solver.lambda2
                     : 1.0;
@@ -496,7 +491,6 @@ void demo_TRexSelector_varMonteCarlo(std::size_t num_MC, bool high_dim, bool rnd
                     /*y=*/y_map,
                     /*tFDR=*/0.1,
                     /*trex_control=*/trex_control,
-                    /*solver_control=*/std::move(solver_control),
                     /*seed=*/-1,
                     /*verbose=*/false
                 );
@@ -628,9 +622,7 @@ void demo_TRexSelector_memmap(bool high_dim, bool rnd_coef) {
     trex_ctrl.lloop_strategy = LLoopStrategy::ADAPTIVE;
     trex_ctrl.tloop_stagnation_stop = true;
     trex_ctrl.use_memory_mapping = true;
-
-    SolverControl solver_ctrl;
-    solver_ctrl.solver_type = SolverTypeForTRex::TLARS;
+    trex_ctrl.solver_type = SolverTypeForTRex::TLARS;
 
     // Create T-Rex Selector instance
     std::cout << "Creating T-Rex Selector instance...\n";
@@ -639,7 +631,6 @@ void demo_TRexSelector_memmap(bool high_dim, bool rnd_coef) {
         /*y=*/y_map,
         /*tFDR=*/0.1,
         /*trex_control=*/trex_ctrl,
-        /*solver_control=*/std::move(solver_ctrl),
         /*seed=*/-1,
         /*verbose=*/true
     );
@@ -681,8 +672,10 @@ void demo_TRexSelector_memmap(bool high_dim, bool rnd_coef) {
 // ==============================================================================
 
 
-void demo_TRexSelector_memmap_MonteCarlo() {
+void demo_TRexSelector_memmap_MonteCarlo(std::size_t num_MC, bool high_dim, bool rnd_coef) {
+    cdianostics::print_section_header("Demo: T-Rex Selector Memory-Mapped Monte Carlo Simulation");
 
+    std::cout << "Not yet implemented.\n\n";
 }
 
 
@@ -714,14 +707,19 @@ int main() {
     // Monte Carlo simulation: Run T-Rex Selector with variable data, support & coefficients
     // --------------------------------------------------------------------------------------
     // high-dimensional setting
-    if (false)
+    if (true)
         demo_TRexSelector_varMonteCarlo(/*num_MC=*/100, /*high_dim=*/true, /*rnd_coef=*/false);
 
 
     // Memory-mapped T-Rex Selector demo
     // --------------------------------------------------------------------------------------
-    if (true)
+    if (false)
         demo_TRexSelector_memmap(/*high_dim=*/false, /*rnd_coef=*/false);
+
+    // Memory-mapped T-Rex Selector Monte Carlo demo
+    // --------------------------------------------------------------------------------------
+    if (false)
+        demo_TRexSelector_memmap_MonteCarlo(/*num_MC=*/100, /*high_dim=*/false, /*rnd_coef=*/false);
 
 
     return 0;
