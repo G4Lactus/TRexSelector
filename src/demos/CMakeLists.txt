@@ -11,13 +11,10 @@ get_filename_component(SUBDIR "${CMAKE_CURRENT_SOURCE_DIR}" NAME)
 
 
 # ===================================================================================
-# Common libraries for All demos
+# Common libraries for different demo types
 # ===================================================================================
-set(DEMO_LIBS
-    # TRex library components: bring in includes of dependencies
-    trex::utils::datagen            # Data generation utilities
-    trex::ml_methods                # ML tools
-    trex::tsolvers                  # T-Algorithm solvers
+# Base libraries for all demo executables
+set(BASE_LIBS
 
     # Core dependencies not covered above
     Boost::headers
@@ -28,6 +25,29 @@ set(DEMO_LIBS
     ${LAPACK_LIBRARIES}
 )
 
+# Libraries for Data Preprocessing demo
+set(DATA_PREPROCESSING_LIBS
+    ${BASE_LIBS}
+    trex::utils::datagen                # Data generation utilities
+    trex::ml_methods                    # ML tools
+    trex::utils::serialization          # Serialization utilities
+)
+
+# Libraries for T-Algorithm based demos
+set(T_ALGORITHM_LIBS
+    ${BASE_LIBS}
+    trex::utils::datagen                # Data generation utilities
+    trex::ml_methods                    # ML tools
+    trex::tsolvers                      # T-Algorithm solvers
+)
+
+# Libraries for TRex Selector based demos
+set(T_REX_SELECTOR_LIBS
+    ${BASE_LIBS}
+    trex::utils::datagen                # Data generation utilities
+    trex::core                          # T-Rex Selector core
+)
+
 
 # ==================================================================================
 # Macro: add_demo_target
@@ -35,19 +55,19 @@ set(DEMO_LIBS
 # Creates a demo executable with proper include paths, linking, and compile flags.
 #
 # Usage:
-#   add_demo_target(<target_name> <demo_file> "<solver_sources>" [additional_libraries...])
+#   add_demo_target(<target_name> <demo_file> <library_set> [additional_libraries...])
 #
 # Arguments:
 #   target_name          - Name of the demo executable (e.g., demo_00_scaler)
 #   demo_file            - Source file for the demo (e.g., demo_00_scaler.cpp)
-#   solver_sources       - Semicolon-separated list of solver .cpp files (can be empty)
+#   library_set          - Library variable to use (e.g., T_ALGORITHM_LIBS, T_REX_SELECTOR_LIBS,...)
 #   additional_libraries - (Optional) Additional libraries to link against
 #
 # Example:
-#   add_demo_target(demo_01_tlars demo_01_tlars.cpp "${TLARS_SOURCES}")
+#   add_demo_target(demo_01_tlars demo_01_tlars.cpp T_ALGORITHM_LIBS)
 #
 # ==================================================================================
-macro(add_demo_target target_name demo_file)
+macro(add_demo_target target_name demo_file library_set)
     # Create executable
     add_executable(${target_name}
         ${demo_file}
@@ -62,8 +82,9 @@ macro(add_demo_target target_name demo_file)
 
     # Link libraries
     target_link_libraries(${target_name} PRIVATE
-        ${DEMO_LIBS}
-        ${ARGN}         # Additional libraries passed to the macro
+        Eigen3::Eigen
+        ${${library_set}}               # Core libraries for the demo type
+        ${ARGN}                         # Additional libraries passed to the macro
     )
 
     # Compile definitions and options
@@ -87,54 +108,59 @@ endmacro()
 # ===================================================================================
 # Demo Targets
 # ===================================================================================
-# Template for new demos:
-# add_demo_target(<target_name>
-#   <demo_file>
-#   "<solver_sources>"
-#   [additional_libraries...]
-# )
-# ==================================================================================
 
-## T-Algorithm based demos
-# ==================================================================================
+# ML Methods based demos
+# ===================================================================================
+
 # Demo 00: Data preprocessing (StandardScaler, Normalizer)
 add_demo_target(demo_00_scaler
     demo_00_scaler.cpp
+    DATA_PREPROCESSING_LIBS
 )
+
+## T-Algorithm based demos
+# ==================================================================================
 
 # Demo 01: T-LARS basic usage, serialization, memory mapping
 add_demo_target(demo_01_tlars
     demo_01_tlars.cpp
+    T_ALGORITHM_LIBS
 )
 
 # Demo 02: T-LASSO basic usage, serialization, memory mapping
 add_demo_target(demo_02_tlasso
     demo_02_tlasso.cpp
+    T_ALGORITHM_LIBS
 )
 
 # Demo 03: T-Stepwise basic usage, serialization, memory mapping
 add_demo_target(demo_03_tstepwise
     demo_03_tstepwise.cpp
+    T_ALGORITHM_LIBS
 )
 
 # Demo 04: T-ENET basic usage, serialization, memory mapping
 add_demo_target(demo_04_tenet
     demo_04_tenet.cpp
+    T_ALGORITHM_LIBS
 )
 
 # Demo 05: T-OMP basic usage, serialization, memory mapping
 add_demo_target(demo_05_tomp
     demo_05_tomp.cpp
+    T_ALGORITHM_LIBS
 )
 
 # Demo 06: T-GP basic usage, serialization, memory mapping
 add_demo_target(demo_06_tgp
     demo_06_tgp.cpp
+    T_ALGORITHM_LIBS
 )
 
 # Demo 07: T-AC-GP basic usage, serialization, memory mapping
 add_demo_target(demo_07_tacgp
     demo_07_tacgp.cpp
+    T_ALGORITHM_LIBS
 )
 
 
@@ -145,11 +171,17 @@ add_demo_target(demo_07_tacgp
 set(ADDITIONAL_INCLUDES ${CMAKE_SOURCE_DIR}/src/trex/trex_core)
 add_demo_target(demo_08_trex
     demo_08_trex.cpp
-    trex::core
+    T_REX_SELECTOR_LIBS
 )
 
 # Demo 09: Screen TRex Selector basic usage, memory mapping based usage
-#add_demo_target(demo_09_screen_trex demo_09_screen_trex.cpp "${SCREEN_TREX_SOURCES}")
+#add_demo_target(demo_09_screen_trex
+#   demo_09_screen_trex.cpp
+#   T_REX_SELECTOR_LIBS
+#)
 
 # Demo 10: Biobank Screen TRex Selector basic usage, memory mapping based usage
-#add_demo_target(demo_10_biobank_screen_trex demo_10_biobank_screen_trex.cpp "${BIOSCREEN_TREX_SOURCES}")
+#add_demo_target(demo_10_biobank_screen_trex
+#   demo_10_biobank_screen_trex.cpp
+#   T_REX_SELECTOR_LIBS
+#)
