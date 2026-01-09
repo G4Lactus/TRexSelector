@@ -1,4 +1,4 @@
-# src/trex/trex/CMakeLists.txt
+# src/trex/CMakeLists.txt
 # ===========================================================================
 # CMake configuration for the trex module
 # ===========================================================================
