@@ -16,6 +16,8 @@
  *          - Exchangeability: No inherent ordering or correlation structure
  *          - Centered: E[D] ≈ 0 to avoid spurious correlation with response
  *          - Appropriate variance: Similar scale to real predictors
+ *
+ *          Note: In T-Rex dummy variables are L2-normalized after generation.
  */
 // ===================================================================================
 
@@ -25,10 +27,12 @@
 // ===================================================================================
 
 #include <cmath>
+#include <cstdint>
 #include <numbers>
 #include <random>
 #include <stdexcept>
 #include <omp.h>
+#include <unordered_map>
 
 #include <Eigen/Dense>
 
@@ -43,6 +47,42 @@
 namespace trex {
 namespace utils {
 namespace dummygen {
+
+
+// ============================================
+// Seeding Helper
+// ============================================
+
+/**
+ * @brief High-quality integer mixer (MurmurHash3 finalizer).
+ *
+ * @details Converts a (base, index) pair into a statistically independent random seed.
+ * This is O(1) and extremely fast (bitwise ops only).
+ * It ensures that sequential inputs (e.g., k=1, k=2) produce widely
+ * separated, uncorrelated seeds, preventing overlap or thread collisions.
+ *
+ * @see https://en.wikipedia.org/wiki/MurmurHash
+ *
+ * @param base The base identifier (e.g., experiment seed).
+ * @param index The second identifier (e.g., column index or loop index).
+ *
+ * @return std::uint32_t Unique mixed seed.
+ */
+inline std::uint32_t mix_seed(std::uint32_t base, std::size_t index) {
+    // 1. Combine inputs non-linearly (Standard hash combine)
+    //  0x9e3779b9 is the golden ratio constant (prevents zero-stuck states)
+    std::uint32_t h = base ^ (static_cast<std::uint32_t>(index) + 0x9e3779b9 +
+                      (base << 6) + (base >> 2));
+
+    // 2. Apply MurmurHash3 finalizer
+    h ^= h >> 16;
+    h *= 0x85ebca6b;
+    h ^= h >> 13;
+    h *= 0xc2b2ae35;
+    h ^= h >> 16;
+    return h;
+}
+
 
 // ============================================
 // Unified Distribution Configuration
@@ -88,7 +128,16 @@ struct Distribution {
         Triangle,
 
         /** @brief Uniform distribution on the unit sphere. */
-        UniformSphere
+        UniformSphere,
+
+        /** @brief Mammen distribution (two-point distribution). */
+        Mammen,
+
+        /** @brief Sparse Rademacher distribution with sparsity s. */
+        SparseRademacher,
+
+        /** @brief Logistic distribution. */
+        Logistic
     };
 
 
@@ -99,9 +148,9 @@ struct Distribution {
     Type type = Type::Normal;
 
 
-    // ============================================
-    // Distribution-specific parameters
-    // ============================================
+    // ===================================================
+    // Default members: Distribution-specific parameters
+    // ===================================================
 
     /** @brief Uniform: half-range parameter (default: sqrt(3)). */
     double uniform_a = std::sqrt(3.0);
@@ -139,6 +188,21 @@ struct Distribution {
     /** @brief Uniform Sphere: dimension of the sphere (default: 3 for 3D sphere). */
     int sphere_dim = 3;
 
+    /** @brief Mammen: p1 for value -(sqrt(5) - 1) / 2 */
+    double mammen_param_p1 = (std::sqrt(5.0) + 1.0) / (2.0 * std::sqrt(5.0));
+
+    /** @brief Mammen: p2 for value (sqrt(5) + 1) / 2 */
+    double mammen_param_p2 = (std::sqrt(5.0) - 1.0) / (2.0 * std::sqrt(5.0));
+
+    /** @brief Sparse Rademacher distribution: sparsity parameter (default: 0.1). */
+    double sparse_rademacher_s = 0.1;
+
+    /** @brief Logistic distribution: location parameter (default: 0.0). */
+    double logistic_location = 0.0;
+
+    /** @brief Logistic distribution: scale parameter (default: sqrt(3)/pi for unit variance). */
+    double logistic_scale = std::sqrt(3.0) / std::numbers::pi;
+
 
     // ============================================
     // Constructors
@@ -155,7 +219,11 @@ struct Distribution {
     // ============================================
 
     /**
-     * @brief Create standard normal N(0, 1) distribution.
+     * @brief Create standard standard normal distribution N(0, 1).
+     *
+     * @details Properties: Mean = 0, Variance = 1.
+     *
+     * @see https://en.wikipedia.org/wiki/Normal_distribution
      *
      * @return Distribution instance for Normal distribution.
      */
@@ -163,21 +231,37 @@ struct Distribution {
         return Distribution(Type::Normal);
     }
 
+
     /**
      * @brief Create uniform U(-a, a) distribution.
      *
-     * @param a Half-range parameter (default: sqrt(3)).
+     * @details The uniform distribution has mean = 0 and variance = a²/3.
+     *          For unit variance, use a = sqrt(3) (default).
+     *
+     * @see https://en.wikipedia.org/wiki/Continuous_uniform_distribution
+     *
+     * @param a Half-range parameter (default: sqrt(3) for unit variance).
      *
      * @return Distribution instance for Uniform distribution.
      */
     static Distribution Uniform(double a = std::sqrt(3.0)) {
+        if (a <= 0.0) {
+            throw std::invalid_argument("Uniform distribution parameter a must be > 0.");
+        }
         Distribution dist(Type::Uniform);
         dist.uniform_a = a;
         return dist;
     }
 
+
     /**
-     * @brief Create Rademacher distribution {-1, +1} distribution.
+     * @brief Create Rademacher distribution {-1, +1} with equal probability Pr = 0.5.
+     *
+     * @details The Rademacher distribution takes values {-1, +1} with P(X = -1) = P(X = +1) = 0.5.
+     *          Properties: Mean = 0, Variance = 1.
+     *          Named after Hans Rademacher.
+     *
+     * @see https://en.wikipedia.org/wiki/Rademacher_distribution
      *
      * @return Distribution instance for Rademacher distribution.
      */
@@ -185,21 +269,37 @@ struct Distribution {
         return Distribution(Type::Rademacher);
     }
 
+
     /**
      * @brief Create Student's t-distribution with df degrees of freedom.
+     *
+     * @details The Student's t-distribution with df degrees of freedom has mean = 0 for df > 1
+     *          and variance = df / (df - 2) for df > 2.
+     *          Implementation automatically scales to unit variance when df > 2.
+     *
+     * @see https://en.wikipedia.org/wiki/Student%27s_t-distribution
      *
      * @param df Degrees of freedom (default: 5.0).
      *
      * @return Distribution instance for Student's t-distribution.
      */
     static Distribution StudentT(double df = 5.0) {
+        if (df <= 0.0) {
+            throw std::invalid_argument("Student-t degrees of freedom must be > 0.");
+        }
         Distribution dist(Type::StudentT);
         dist.student_t_df = df;
         return dist;
     }
 
+
     /**
-     * @brief Create Laplace distribution with scale b.
+     * @brief Create Laplace (double exponential) distribution.
+     *
+     * @details  The Laplace distribution has mean = location and variance = 2 * scale^2.
+     *           Default scale = 1/sqrt(2) which provides unit variance.
+     *
+     * @see https://en.wikipedia.org/wiki/Laplace_distribution
      *
      * @param location Location parameter (default: 0.0).
      * @param scale Scale parameter (default: 1/sqrt(2)).
@@ -207,35 +307,67 @@ struct Distribution {
      * @return Distribution instance for Laplace distribution.
      */
     static Distribution Laplace(double location = 0.0, double scale = 1.0 / std::sqrt(2.0)) {
+        if (scale <= 0.0) {
+            throw std::invalid_argument("Laplace distribution scale parameter must be > 0.");
+        }
         Distribution dist(Type::Laplace);
         dist.laplace_location = location;
         dist.laplace_scale = scale;
         return dist;
     }
 
+
     /**
-     * @brief Create Gumbel distribution.
+     * @brief Create Gumbel (Type-I extreme value) distribution.
      *
-     * @param location  Location parameter (default: 0.0).
+     * @details The Gumbel distribution has mean = location + scale * gamma and
+     *          variance = (pi^2 / 6) * scale^2, where gamma is the Euler-Mascheroni constant.
+     *          The implementation centers the distribution at location = 0.
+     *
+     * @see https://en.wikipedia.org/wiki/Gumbel_distribution
+     *
+     * @param location Location parameter (default: 0.0, automatically adjusted for centering).
+     * @param scale Scale parameter (default: 1.0).
      *
      * @return Distribution instance for Gumbel distribution.
      */
     static Distribution Gumbel(double location = 0.0, double scale = 1.0) {
+        if (scale <= 0.0) {
+            throw std::invalid_argument("Gumbel distribution scale parameter must be > 0.");
+        }
         Distribution dist(Type::Gumbel);
         dist.gumbel_location = location;
         dist.gumbel_scale = scale;
         return dist;
     }
 
+
     /**
      * @brief Create Holtsmark distribution.
      *
-     * @param location Location parameter (default: 0.0)
-     * @param scale Scale parameter (default: 1.0)
+     * @details The Holtsmark distribution is a symmetric stable distribution with shape
+     *          parameter alpha = 3/2 and skewness parameter beta = 0.
+     *
+     *          Properties:
+     *          - Mean: location (well-defined, alpha = 3/2 > 1)
+     *          - Variance: INFINITE (since alpha = 3/2 < 2)
+     *          - All higher moments: infinite
+     *          - Symmetric around location parameter
+     *
+     *          Applications: Plasma physics, astrophysics (Coulomb forces), testing
+     *          robustness to extreme heavy-tailed noise.
+     *
+     * @see https://en.wikipedia.org/wiki/Holtsmark_distribution
+     *
+     * @param location Location parameter (mean, median, mode; default: 0.0)
+     * @param scale Scale parameter (controls dispersion; default: 1.0)
      *
      * @return Distribution instance for Holtsmark distribution.
      */
     static Distribution Holtsmark(double location = 0.0, double scale = 1.0) {
+        if (scale <= 0.0) {
+            throw std::invalid_argument("Holtsmark distribution scale parameter must be > 0.");
+        }
         Distribution dist(Type::Holtsmark);
         dist.holtsmark_location = location;
         dist.holtsmark_scale = scale;
@@ -246,8 +378,17 @@ struct Distribution {
     /**
      * @brief Create Triangle distribution.
      *
+     * @details The Triangle distribution with parameters (a, b, c) has:
+     *          - Mean = (a + b + c) / 3
+     *          - Variance = (a^2 + b^2 + c^2 - ab - ac - bc) / 18.
+     *
+     *          Default parameters (a = -sqrt(6), b = 0, c = +sqrt(6)) yield unit variance and
+     *          mean = 0.
+     *
+     * @see https://en.wikipedia.org/wiki/Triangular_distribution
+     *
      * @param a Lower bound (default: -sqrt(6) for unit variance)
-     * @param b Mode (default: 0.0 for symmetric)
+     * @param b Mode (default: 0.0 for symmetric distribution)
      * @param c Upper bound (default: +sqrt(6) for unit variance)
      *
      * @return Distribution instance for Triangle distribution.
@@ -257,6 +398,9 @@ struct Distribution {
         double b = 0.0,
         double c = std::sqrt(6.0)
     ) {
+        if (!(a < b && b < c)) {
+            throw std::invalid_argument("Triangle distribution parameters must satisfy a < b < c.");
+        }
         Distribution dist(Type::Triangle);
         dist.triangle_a = a;
         dist.triangle_b = b;
@@ -265,16 +409,122 @@ struct Distribution {
         return dist;
     }
 
+
     /**
-     * @brief Create Uniform distribution on the unit sphere.
+     * @brief Create Uniform distribution on the unit d-sphere.
      *
-     * @param dim Dimension of the sphere (default: 3 for 3D sphere).
+     * @details Generates points uniformly distributed on the surface of a unit sphere in
+     *          d-dimensional space. Each coordinate has mean = 0 and variance = 1 / d.
      *
-     * @return Distribution instance for Uniform distribution on the unit sphere.
+     *          Note: Requires that the number of dummy columns p is actually a multiple of dim.
+     *
+     * @see https://en.wikipedia.org/wiki/N-sphere#Uniformly_at_random_on_the_sphere
+     *
+     * @param dim Dimension of the sphere (default: 3 for 3D sphere, must be >= 2).
+     *
+     * @return Distribution instance for uniform distribution on the unit sphere.
      */
     static Distribution UniformSphere(int dim = 3) {
+        if (dim < 2) {
+            throw std::invalid_argument("Sphere dimension must be >= 2.");
+        }
         Distribution dist(Type::UniformSphere);
         dist.sphere_dim = dim;
+        return dist;
+    }
+
+
+    /**
+     * @brief Create Mammen two-point distribution.
+     *
+     * @details The Mammen distribution is a two-point distribution proposed by Mammen (1993)
+     *          for use in the wild bootstrap. It takes values:
+     *
+     *          - X = -(sqrt(5) - 1) / 2  with probability (sqrt(5) + 1) / (2 * sqrt(5))
+     *          - X = +(sqrt(5) + 1) / 2  with probability (sqrt(5) - 1) / (2 * sqrt(5))
+     *
+     *          Properties: Mean = 0, Variance = 1.
+     *          These values are based on the golden ratio for which the distribution is
+     *          als called the "golden ratio distribution".
+     *
+     * @see: https://en.wikipedia.org/wiki/Bootstrapping_(statistics)
+     *
+     * @param p1 Probability for value -(sqrt(5) - 1) / 2
+     * @param p2 Probability for value +(sqrt(5) + 1) / 2
+     *
+     * @return Distribution instance for Mammen distribution.
+     */
+    static Distribution Mammen(
+        double p1 = (std::sqrt(5.0) + 1.0) / (2.0 * std::sqrt(5.0)),
+        double p2 = (std::sqrt(5.0) - 1.0) / (2.0 * std::sqrt(5.0))
+    ) {
+        Distribution dist(Type::Mammen);
+        dist.mammen_param_p1 = p1;
+        dist.mammen_param_p2 = p2;
+        return dist;
+    }
+
+
+    /**
+     * @brief Create Sparse Rademacher distribution.
+     *
+     * @details The sparse Rademacher distribution takes values:
+     *          - X =  0 with probability (1 - s)
+     *          - X = +1 with probability s / 2
+     *          - X = -1 with probability s / 2
+     *
+     *          Properties: Mean = 0, Variance = s.
+     *          The parameter s [0, 1) controls the sparsity level (fraction of non-zeros).
+     *
+     *          Applications: Compressed sensing, sparse signal processing, testing robustness
+     *          to sparse noise structures.
+     *
+     *          Note: The sparse Rademacher distribution is a modified standard Rademacher.
+     *
+     * @see https://en.wikipedia.org/wiki/Rademacher_distribution
+     *
+     * @param s Sparsity parameter in [0, 1), fraction of non-zero entries.
+     *
+     * @return Distribution instance for Sparse Rademacher distribution.
+     */
+    static Distribution SparseRademacher(const double s) {
+        if (s < 0.0 || s >= 1.0) {
+            throw std::invalid_argument("Sparsity parameter s must be in [0, 1).");
+        }
+        Distribution dist(Type::SparseRademacher);
+        dist.sparse_rademacher_s = s;
+        return dist;
+    }
+
+
+    /**
+     * @brief Create Logistic distribution.
+     *
+     * @details The Logistic distribution has:
+     *          - Mean = location
+     *          - Variance = (pi^2 / 3) * scale^2.
+     *          The default scale = sqrt(3) / pi provides unit variance.
+     *
+     *          The logistic distribution has heavier tails than the normal distribution but
+     *          lighter than Cauchy and Laplace and can be understood as a middle ground.
+     *
+     * @see https://en.wikipedia.org/wiki/Logistic_distribution
+     *
+     * @param location Location parameter (default: 0.0).
+     * @param scale Scale parameter (default: sqrt(3)/pi for unit variance).
+     *
+     * @return Distribution instance for Logistic distribution.
+     */
+    static Distribution Logistic(
+        double location = 0.0,
+        double scale = std::sqrt(3.0) / std::numbers::pi
+    ) {
+        if (scale <= 0.0) {
+            throw std::invalid_argument("Logistic distribution scale parameter must be > 0.");
+        }
+        Distribution dist(Type::Logistic);
+        dist.logistic_location = location;
+        dist.logistic_scale = scale;
         return dist;
     }
 
@@ -293,15 +543,15 @@ struct Distribution {
 // ============================================
 
 /**
- * @brief Generate dummy variables with specified distribution.
+ * @brief Generate dummy variables using hashed seeding for uniqueness.
  *
- * @tparam MatrixType Type of the matrix (e.g., Eigen::MatrixXd).
+ * @details Avoid the overflow/overlap risk of linear seeding (base + i).
  *
  * @param X Reference to the matrix to be filled with dummies.
  * @param n Number of rows.
  * @param p Number of columns (number of dummies).
  * @param base_seed Base seed for random number generation.
- * @param dist_type Distribution configuration.
+ * @param dist Distribution configuration.
  */
 template<typename MatrixType>
 inline void generate_dummies(
@@ -311,28 +561,37 @@ inline void generate_dummies(
     unsigned int base_seed,
     const Distribution& dist = Distribution::Normal()
 ) {
+    // OpenMP Safety:
+    // Each column iteration uses a local PRNG.
+    // The seed is mix_seed(base, j), which is deterministic and unique per column.
+    // Threads cannot generate duplicates or race on the PRNG state.
+
+    // Choose generation method based on distribution type
     switch (dist.get_type()) {
 
         /** @brief Generate Normal distributed dummies. */
         case Distribution::Type::Normal: {
             std::normal_distribution<double> distribution(0.0, 1.0);
+
             #pragma omp parallel for schedule(static)
             for (std::size_t j = 0; j < p; ++j) {
-                std::mt19937 gen(base_seed + static_cast<unsigned int>(j) + 5000);
+                std::mt19937 gen(mix_seed(base_seed, j));
                 for (std::size_t i = 0; i < n; ++i) {
                     X(i, j) = distribution(gen);
                 }
             }
             break;
         }
+
 
         /** @brief Generate Uniform distributed dummies. */
         case Distribution::Type::Uniform: {
             double a = dist.uniform_a;
             std::uniform_real_distribution<double> distribution(-a, a);
+
             #pragma omp parallel for schedule(static)
             for (std::size_t j = 0; j < p; ++j) {
-                std::mt19937 gen(base_seed + static_cast<unsigned int>(j) + 6000);
+                std::mt19937 gen(mix_seed(base_seed, j));
                 for (std::size_t i = 0; i < n; ++i) {
                     X(i, j) = distribution(gen);
                 }
@@ -340,12 +599,14 @@ inline void generate_dummies(
             break;
         }
 
+
         /** @brief Generate Rademacher distributed dummies. */
         case Distribution::Type::Rademacher: {
             std::bernoulli_distribution distribution(0.5);
+
             #pragma omp parallel for schedule(static)
             for (std::size_t j = 0; j < p; ++j) {
-                std::mt19937 gen(base_seed + static_cast<unsigned int>(j) + 7000);
+                std::mt19937 gen(mix_seed(base_seed, j));
                 for (std::size_t i = 0; i < n; ++i) {
                     X(i, j) = distribution(gen) ? 1.0 : -1.0;
                 }
@@ -353,15 +614,17 @@ inline void generate_dummies(
             break;
         }
 
+
         /** @brief Generate Student's t-distributed dummies. */
         case Distribution::Type::StudentT: {
             double df = dist.student_t_df;
             std::student_t_distribution<double> distribution(df);
             // Scale to unit variance if df > 2
             double scale = (df > 2.0) ? std::sqrt((df - 2.0) / df) :  1.0;
+
             #pragma omp parallel for schedule(static)
             for (std::size_t j = 0; j < p; ++j) {
-                std::mt19937 gen(base_seed + static_cast<unsigned int>(j) + 8000);
+                std::mt19937 gen(mix_seed(base_seed, j));
                 for (std::size_t i = 0; i < n; ++i) {
                     X(i, j) = distribution(gen) * scale;
                 }
@@ -369,20 +632,23 @@ inline void generate_dummies(
             break;
         }
 
+
         /** @brief Generate Laplace distributed dummies using Boost.Math. */
         case Distribution::Type::Laplace: {
             double location = dist.laplace_location;
             double scale = dist.laplace_scale;
             boost::random::laplace_distribution<double> distribution(location, scale);
+
             #pragma omp parallel for schedule(static)
             for (std::size_t j = 0; j < p; ++j) {
-                std::mt19937 gen(base_seed + static_cast<unsigned int>(j) + 9000);
+                std::mt19937 gen(mix_seed(base_seed, j));
                 for (std::size_t i = 0; i < n; ++i) {
                     X(i, j) = distribution(gen);
                 }
             }
             break;
         }
+
 
         /** @brief Generate Gumbel distributed dummies. */
         case Distribution::Type::Gumbel: {
@@ -391,17 +657,18 @@ inline void generate_dummies(
 
             // Gumbel mean: location + scale * gamma
             double adjusted_location = location + scale * std::numbers::egamma;
-
             std::extreme_value_distribution<double> distribution(adjusted_location, scale);
+
             #pragma omp parallel for schedule(static)
             for (std::size_t j = 0; j < p; ++j) {
-                std::mt19937 gen(base_seed + static_cast<unsigned int>(j) + 10000);
+                std::mt19937 gen(mix_seed(base_seed, j));
                 for (std::size_t i = 0; i < n; ++i) {
                     X(i, j) = distribution(gen);
                 }
             }
             break;
         }
+
 
         /** @brief Generate Holtsmark distributed dummies. */
         case Distribution::Type::Holtsmark: {
@@ -414,7 +681,7 @@ inline void generate_dummies(
 
             #pragma omp parallel for schedule(static)
             for (std::size_t j = 0; j < p; ++j) {
-                std::mt19937 gen(base_seed + static_cast<unsigned int>(j) + 11000);
+                std::mt19937 gen(mix_seed(base_seed, j));
                 for (std::size_t i = 0; i < n; ++i) {
                     double u = uniform_dist(gen);
                     X(i, j) = boost::math::quantile(distribution, u);
@@ -422,6 +689,7 @@ inline void generate_dummies(
             }
             break;
         }
+
 
         /** @brief Generate Triangle distributed dummies using Boost.Random. */
         case Distribution::Type::Triangle: {
@@ -432,7 +700,7 @@ inline void generate_dummies(
 
             #pragma omp parallel for schedule(static)
             for (std::size_t j = 0; j < p; ++j) {
-                std::mt19937 gen(base_seed + static_cast<unsigned int>(j) + 12000);
+                std::mt19937 gen(mix_seed(base_seed, j));
                 for (std::size_t i = 0; i < n; ++i) {
                     X(i, j) = distribution(gen);
                 }
@@ -457,7 +725,7 @@ inline void generate_dummies(
 
             #pragma omp parallel for schedule(static)
             for (std::size_t j = 0; j < p; j += static_cast<std::size_t>(dim)) {
-                std::mt19937 gen(base_seed + static_cast<unsigned int>(j) + 14000);
+                std::mt19937 gen(mix_seed(base_seed, j));
                 for (std::size_t i = 0; i < n; ++i) {
                     // Generate one point on sphere
                     std::vector<double> point = distribution(gen);
@@ -466,6 +734,67 @@ inline void generate_dummies(
                     for (int k = 0; k < dim; ++k) {
                         X(i, j + k) = point[k];
                     }
+                }
+            }
+            break;
+        }
+
+
+        /** @brief Generate Mammen distributed dummies. */
+        case Distribution::Type::Mammen: {
+            double p1 = dist.mammen_param_p1; // Pr for value -(sqrt(5) - 1) / 2
+            double p2 = dist.mammen_param_p2; // Pr for value +(sqrt(5) + 1) / 2
+            std::discrete_distribution<int> distribution({p1, p2});
+
+            #pragma omp parallel for schedule(static)
+            for (std::size_t j = 0; j < p; ++j) {
+                std::mt19937 gen(mix_seed(base_seed, j));
+                for (std::size_t i = 0; i < n; ++i) {
+                    int sample = distribution(gen);
+                    X(i, j) = (sample == 0) ? (-(std::sqrt(5.0) - 1.0) / 2.0)
+                                            : (+(std::sqrt(5.0) + 1.0) / 2.0);
+                }
+            }
+            break;
+        }
+
+
+        /** @brief Generate Sparse Rademacher distributed dummies. */
+        case Distribution::Type::SparseRademacher: {
+            double s = dist.sparse_rademacher_s;
+            // {0 with Pr = 1 - s, +1 with Pr = s/2, -1 with Pr = s/2}
+            std::discrete_distribution<int> distribution({(1.0 - s), s / 2.0, s / 2.0});
+
+            #pragma omp parallel for schedule(static)
+            for (std::size_t j = 0; j < p; ++j) {
+                std::mt19937 gen(mix_seed(base_seed, j));
+                for (std::size_t i = 0; i < n; ++i) {
+                    int sample = distribution(gen);
+                    if (sample == 0) {
+                        X(i, j) = 0.0;
+                    } else if (sample == 1) {
+                        X(i, j) = 1.0;
+                    } else {
+                        X(i, j) = -1.0;
+                    }
+                }
+            }
+            break;
+        }
+
+
+        /** @brief Generate Logistic distributed dummies */
+        case Distribution::Type::Logistic: {
+            double location = dist.logistic_location;
+            double scale = dist.logistic_scale;
+            std::uniform_real_distribution<double> uniform_dist(0.0, 1.0);
+
+            #pragma omp parallel for schedule (static)
+            for (std::size_t j = 0; j < p; ++j) {
+                std::mt19937 gen(mix_seed(base_seed, j));
+                for (std::size_t i = 0; i < n; ++i) {
+                    double u = uniform_dist(gen);
+                    X(i, j) = location + scale * std::log(u / (1.0 - u));
                 }
             }
             break;
