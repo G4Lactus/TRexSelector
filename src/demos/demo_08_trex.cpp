@@ -74,7 +74,7 @@ void demo_TRexSelector(bool high_dim, bool rnd_coef) {
     // Setup Control Structures
     TRexControlParameter trex_ctrl;
     trex_ctrl.K = 20;
-    trex_ctrl.max_num_dummies = 10;
+    trex_ctrl.max_dummy_multiplier = 10;
     trex_ctrl.max_T_stop = true;
     trex_ctrl.dummy_distribution = dummygen::Distribution::Normal();
     trex_ctrl.lloop_strategy = LLoopStrategy::ADAPTIVE;
@@ -173,7 +173,7 @@ void demo_TRexSelector_MonteCarlo(std::size_t num_MC, bool high_dim, bool rnd_co
     // Setup TRex Parameters
     TRexControlParameter trex_control;
     trex_control.K = 20;
-    trex_control.max_num_dummies = 10;
+    trex_control.max_dummy_multiplier = 10;
     trex_control.max_T_stop = true;
     trex_control.dummy_distribution = dummygen::Distribution::Normal();
     trex_control.lloop_strategy = LLoopStrategy::ADAPTIVE;
@@ -364,8 +364,8 @@ void demo_TRexSelector_varMonteCarlo(std::size_t num_MC, bool high_dim, bool rnd
     cdianostics::print_section_header("Demo: T-Rex Selector Monte Carlo Simulation");
     std::cout << (high_dim ? "High-dimensional (p > n)" : "Low-dimensional (n > p)") << "\n";
 
-    const std::size_t n = high_dim ? 300 : 1000;
-    const std::size_t p = high_dim ? 1000 : 300;
+    const std::size_t n = high_dim ? 1000 : 1000;
+    const std::size_t p = high_dim ? 10000 : 300;
     std::cout << "n = " << n << ", p = " << p << "\n";
     const std::size_t cardinality_true_support = 10;
     const std::vector<double> snr_values = {0.1, 0.5, 1.0, 2.0, 5.0};
@@ -396,7 +396,7 @@ void demo_TRexSelector_varMonteCarlo(std::size_t num_MC, bool high_dim, bool rnd
     // Setup TRex Parameters
     TRexControlParameter trex_control;
     trex_control.K = 20;
-    trex_control.max_num_dummies = 10;
+    trex_control.max_dummy_multiplier = 10;
     trex_control.max_T_stop = true;
     trex_control.dummy_distribution = dummygen::Distribution::Rademacher();
     trex_control.lloop_strategy = LLoopStrategy::ADAPTIVE;
@@ -616,7 +616,7 @@ void demo_TRexSelector_memmap(bool high_dim, bool rnd_coef) {
     // Setup Control Structures
     TRexControlParameter trex_ctrl;
     trex_ctrl.K = 20;
-    trex_ctrl.max_num_dummies = 10;
+    trex_ctrl.max_dummy_multiplier = 10;
     trex_ctrl.max_T_stop = true;
     trex_ctrl.dummy_distribution = dummygen::Distribution::Normal();
     trex_ctrl.lloop_strategy = LLoopStrategy::ADAPTIVE;
@@ -689,7 +689,7 @@ int main() {
 
     // Run basic T-Rex Selector demo
     // --------------------------------------------------------------------------------------
-    if (false)
+    if (true)
         demo_TRexSelector(/*high_dim=*/true, /*rnd_coef=*/false);
 
 
@@ -707,7 +707,7 @@ int main() {
     // Monte Carlo simulation: Run T-Rex Selector with variable data, support & coefficients
     // --------------------------------------------------------------------------------------
     // high-dimensional setting
-    if (true)
+    if (false)
         demo_TRexSelector_varMonteCarlo(/*num_MC=*/100, /*high_dim=*/true, /*rnd_coef=*/false);
 
 
