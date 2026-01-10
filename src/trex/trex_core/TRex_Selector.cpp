@@ -1,3 +1,7 @@
+// =================================================================================
+// TRex_Selector.cpp
+// =================================================================================
+
 // std includes
 #include <cstdlib>
 #include <cassert>
@@ -40,7 +44,12 @@ TRexSelector::TRexSelector(
     X_(&X),
     y_(y),
     tFDR_(tFDR),
-    trex_ctrl_(trex_control),
+    // Resource configuration at construction time
+    trex_ctrl_([&]() {
+        auto ctrl = trex_control;
+        ctrl.autoConfigResources(); // Compute hybrid strategy
+        return ctrl;
+    }()),
     seed_(seed),
     verbose_(verbose),
     T_stop_(0),
@@ -132,11 +141,11 @@ void TRexSelector::validateTRexParameters() const {
         );
     }
 
-    // Validate max_num_dummies
-    if (trex_ctrl_.max_num_dummies == 0) {
+    // Validate max_dummy_multiplier
+    if (trex_ctrl_.max_dummy_multiplier == 0) {
         throw std::invalid_argument(
-            "Maximum number of dummy variables (max_num_dummies) must be >= 1. Got: "
-            + std::to_string(trex_ctrl_.max_num_dummies)
+            "Maximum number of dummy variables (max_dummy_multiplier) must be >= 1. Got: "
+            + std::to_string(trex_ctrl_.max_dummy_multiplier)
         );
     }
 }
@@ -516,7 +525,7 @@ TRexSelector::SelectionResult TRexSelector::selectedVariables(
         std::size_t T_stop
     ) const
 {
-    // Remove last row in FDP_hat_mat and Phi_matif T_stop_ > 1
+    // Remove last row in FDP_hat_mat and Phi_mat if T_stop_ > 1
     Eigen::MatrixXd FDP_use = FDP_hat_mat;
     Eigen::MatrixXd Phi_use = Phi_mat;
     if (T_stop > 1) {
@@ -629,7 +638,7 @@ void TRexSelector::runLLoopCalibration_SKIP(
     ExperimentResults& exp_results
 ) {
     // Set fixed number of dummies
-    num_dummies_ = trex_ctrl_.max_num_dummies * p_;
+    num_dummies_ = trex_ctrl_.max_dummy_multiplier * p_;
 
     // Initialize Tstop
     T_stop_ = 1;
@@ -696,7 +705,7 @@ void TRexSelector::runLLoopCalibration(Eigen::VectorXd& FDP_hat, ExperimentResul
     dummy_multiplier_LL_ = 1;    // LL in R
     FDP_hat.resize(0);           // not initialized
 
-    while (dummy_multiplier_LL_ <= trex_ctrl_.max_num_dummies &&
+    while (dummy_multiplier_LL_ <= trex_ctrl_.max_dummy_multiplier &&
           (FDP_hat.size() == 0 || FDP_hat(opt_point_) > tFDR_)) {
 
         // num_dummies = LL * p
@@ -707,9 +716,9 @@ void TRexSelector::runLLoopCalibration(Eigen::VectorXd& FDP_hat, ExperimentResul
             exp_results = runRandomExperiments(
                 num_dummies_,
                 T_stop_,
-                /*generate_new_dummies=*/true,   // New dummies each time
-                /*use_warm_start=*/false,        // Cold start required
-                /*seed_offset=*/dummy_multiplier_LL_ * 10000
+                /*generate_new_dummies=*/true,       // New dummies each time
+                /*use_warm_start=*/false,            // Cold start required
+                /*seed_factor=*/dummy_multiplier_LL_ // direct pass
             );
 
         } else { // Memory-mapped branch
@@ -717,9 +726,17 @@ void TRexSelector::runLLoopCalibration(Eigen::VectorXd& FDP_hat, ExperimentResul
             for (std::size_t k = 0; k < trex_ctrl_.K; ++k) {
                 auto XD_map = XD_memmaps_[k]->getMap();
 
+                // Generate unique ID via hashing (k, L)
+                unsigned int unique_iter_id = dummygen::mix_seed(
+                    static_cast<uint32_t>(k),
+                    dummy_multiplier_LL_
+                );
+
                 // Generate NEW dummies for this iteration
-                XD_map.block(0, p_, n_, num_dummies_) = generateDummies(num_dummies_,
-                                                         k + dummy_multiplier_LL_ * 10000);
+                XD_map.block(0, p_, n_, num_dummies_) = generateDummies(
+                    num_dummies_,
+                    unique_iter_id
+                );
 
             }
 
@@ -764,7 +781,10 @@ void TRexSelector::runLLoopCalibration_Adaptive(
     dummy_multiplier_LL_ = 1;    // LL in R
     FDP_hat.resize(0);           // not initialized
 
-    // Intial setup
+    // ===========================================
+    // 1. Initial setup (L = 1)
+    // ===========================================
+
     if (!trex_ctrl_.use_memory_mapping) { // In-memory branch
         // Initialize dummy storage
         stored_dummies_.clear();
@@ -773,6 +793,7 @@ void TRexSelector::runLLoopCalibration_Adaptive(
 
         // Generate initial p dummies for each experiment
         for (std::size_t k = 0; k < trex_ctrl_.K; ++k) {
+            // Initial seed ID just k
             stored_dummies_.emplace_back(generateDummies(p_, k));
         }
 
@@ -781,13 +802,17 @@ void TRexSelector::runLLoopCalibration_Adaptive(
         num_dummies_ = p_;
         for (std::size_t k = 0; k < trex_ctrl_.K; ++k) {
             auto XD_map = XD_memmaps_[k]->getMap();
+            // Initial seed ID just k
             XD_map.block(0, p_, n_, p_) = generateDummies(p_, k);
         }
 
     }
 
-    // Adaptive L-loop
-    while (dummy_multiplier_LL_ <= trex_ctrl_.max_num_dummies &&
+    // ===========================================
+    // 2. Adaptive L-loop
+    // ===========================================
+
+    while (dummy_multiplier_LL_ <= trex_ctrl_.max_dummy_multiplier &&
           (FDP_hat.size() == 0 || FDP_hat(opt_point_) > tFDR_)) {
 
         // Only augment AFTER first iteration
@@ -802,10 +827,16 @@ void TRexSelector::runLLoopCalibration_Adaptive(
                         old_cols + p_
                     );
 
+                    // Generate unique ID via hashing (k, L)
+                    unsigned int unique_iter_id = dummygen::mix_seed(
+                        static_cast<uint32_t>(k),
+                        dummy_multiplier_LL_
+                    );
+
                     // Generate p new dummies with different seed offset
                     stored_dummies_[k].rightCols(p_) = generateDummies(
                         p_,
-                        k + dummy_multiplier_LL_ * 10000
+                        unique_iter_id
                     );
                 }
 
@@ -816,10 +847,16 @@ void TRexSelector::runLLoopCalibration_Adaptive(
                 for (std::size_t k = 0; k < trex_ctrl_.K; ++k) {
                     auto XD_map = XD_memmaps_[k]->getMap();
 
+                    // Generate unique ID via hashing (k, L)
+                    unsigned int unique_iter_id = dummygen::mix_seed(
+                        static_cast<uint32_t>(k),
+                        dummy_multiplier_LL_
+                    );
+
                     // Generate p new dummies with different seed offset
                     XD_map.block(0, start_col, n_, p_) = generateDummies(
                         p_,
-                        k + dummy_multiplier_LL_ * 10000
+                        unique_iter_id
                     );
                 }
             }
@@ -936,7 +973,7 @@ void TRexSelector::runTLoopCalibration(
                 T_stop_,
                 /*generate_new_dummies=*/false,
                 /*use_warm_start=*/true,
-                /*seed_offset=*/0
+                /*seed_factor=*/0
             );
 
         } else { // Memory-mapped branch
@@ -1087,7 +1124,7 @@ TRexSelector::ExperimentResults TRexSelector::runRandomExperiments(
     std::size_t T_stop,
     bool generate_new_dummies,
     bool use_warm_start,
-    std::size_t seed_offset
+    std::size_t seed_factor
 ) {
 
     // ===========================================================
@@ -1105,7 +1142,16 @@ TRexSelector::ExperimentResults TRexSelector::runRandomExperiments(
 
         // Generate K new dummy matrices
         for (std::size_t k = 0; k < trex_ctrl_.K; ++k) {
-            stored_dummies_.emplace_back(generateDummies(num_dummies, k + seed_offset));
+            // Generate unique ID for this experiment k at iteration L (seed_factor)
+            unsigned int unique_iter_id;
+
+            if (seed_factor == 0) {
+                 unique_iter_id = static_cast<unsigned int>(k);
+            } else {
+                 unique_iter_id = dummygen::mix_seed(static_cast<uint32_t>(k), seed_factor);
+            }
+
+            stored_dummies_.emplace_back(generateDummies(num_dummies, unique_iter_id));
         }
 
         if (verbose_) {
@@ -1118,12 +1164,9 @@ TRexSelector::ExperimentResults TRexSelector::runRandomExperiments(
     } else {
         // Reuse existing dummies from stored_dummies_
         if (stored_dummies_.size() != trex_ctrl_.K) {
-            if (stored_dummies_.size() != trex_ctrl_.K) {
-                throw std::runtime_error("Cannot reuse dummies: stored_dummies has size " +
-                                         std::to_string(stored_dummies_.size()) + ", but K = " +
-                                         std::to_string(trex_ctrl_.K)
-                                        );
-            }
+            throw std::runtime_error("Cannot reuse dummies: stored_dummies has size " +
+                                     std::to_string(stored_dummies_.size()) + ", but K = " +
+                                     std::to_string(trex_ctrl_.K));
         }
 #ifndef NDEBUG
         if (verbose_) {
@@ -1149,10 +1192,6 @@ TRexSelector::ExperimentResults TRexSelector::runRandomExperiments(
     // 3. Run K random experiments
     // ===========================================================
 
-    // Determine if experiment are sequential/parallel
-    const bool do_parallel_rnd_experiments = trex_ctrl_.parallel_rnd_experiments &&
-                                            (trex_ctrl_.K > 1);
-
     // Prepare storage for beta paths
     std::vector<Eigen::MatrixXd> beta_paths(trex_ctrl_.K);
 
@@ -1162,19 +1201,46 @@ TRexSelector::ExperimentResults TRexSelector::runRandomExperiments(
         new_solver_files.resize(trex_ctrl_.K);
     }
 
-    // Parallel loop over K experiments if do_parallel_rnd_experiments is true else sequential
-    #pragma omp parallel if(do_parallel_rnd_experiments)
+    // --- OpenMP Resource Setup ---
+#ifdef _OPENMP
+    int old_max_levels = omp_get_max_active_levels();
+
+    // Allow up to 2 levels of parallelism:
+    // Level 1: The loop over K experiments
+    // Level 2: The loop inside the solver (Eigen/MKL)
+    omp_set_max_active_levels(2);
+#endif
+
+    // Determine parallel execution condition
+    // Use the pre-calculated 'max_outer_threads' from trex_ctrl_
+    bool do_parallel_exps = (trex_ctrl_.max_outer_threads > 1);
+
+    // Parallel loop over K experiments if do_parallel_exps is true else sequential
+    #pragma omp parallel if(do_parallel_exps)
     {
-        // Create augmented data matrix XD
+        // --- Inner Thread Configuration ---
+        // If Hybrid (Cluster): outer=20, inner=6.
+        // If Mutual (Laptop):  outer=8,  inner=1.
+        // If Serial:           outer=1,  inner=Total.
+
+        // --- Inner Thread Configuration ---
+#ifdef _OPENMP
+        // Set thread count for Solvers (Eigen/MKL) running inside this experiment
+        omp_set_num_threads(trex_ctrl_.max_inner_threads);
+#endif
+        // Explicitly tell Eigen to adhere to this limit
+        Eigen::setNbThreads(trex_ctrl_.max_inner_threads);
+
+        // Create augmented data matrix XD (thread-local)
         Eigen::MatrixXd XD(n_, p_ + num_dummies);
         XD.leftCols(p_) = *X_; // copy X only once
 
         // Due to time varying solvers (different dummies), use dynamic scheduling
-        // is sequential if do_parallel_rnd_experiments is false
+        // is sequential if do_parallel_exps is false
         #pragma omp for schedule(dynamic)
         for (std::size_t k = 0; k < trex_ctrl_.K; ++k) {
 
-            // Addpend dummies [p_, p_ + num_dummies_)
+            // Append dummies [p_, p_ + num_dummies_)
             XD.rightCols(num_dummies) = stored_dummies_[k];
 
             // Setup Eigen maps
@@ -1215,11 +1281,16 @@ TRexSelector::ExperimentResults TRexSelector::runRandomExperiments(
                 );
             }
 
+            // Solver run: inherits 'max_inner_threads'
             beta_paths[k] = runSingleExperimentWithSolver(
                 XD_map, y_map, T_stop, use_warm_start, solver_file
             );
         }
     }
+    // --- OpenMP Cleanup ---
+#ifdef _OPENMP
+    omp_set_max_active_levels(old_max_levels); // Restore previous state
+#endif
 
     // Update solver file paths
     if (use_warm_start && !new_solver_files.empty()) {
@@ -1266,9 +1337,18 @@ Eigen::MatrixXd TRexSelector::generateDummies(
     std::size_t num_dummies,
     std::size_t experiment_id
 ) const {
-    // Create random number generator with experiment-specific seed
-    std::size_t rng_seed = seed_ >= 0 ? static_cast<std::size_t>(seed_) + experiment_id :
-                                        std::random_device{}() + experiment_id;
+    // Determine robust seed
+    unsigned int base_seed; // match mixer input
+    if (seed_ >= 0) {
+        // Deterministic: User seed + Experiment ID
+        // The hash mixer ensures that Seed(X) and Seed(X + 1) are uncorrelated.
+        base_seed = static_cast<unsigned int>(seed_);
+    } else {
+        // Random: Random Device + Experiment ID
+        // (Adding ID ensures uniqueness even if random_device has low entropy/repetition)
+        base_seed = std::random_device{}();
+    }
+    base_seed += static_cast<unsigned int>(experiment_id);
 
     // Generate dummy matrix (n x num_dummies)
     Eigen::MatrixXd D(n_, num_dummies);
@@ -1278,7 +1358,7 @@ Eigen::MatrixXd TRexSelector::generateDummies(
         D,                                   // Matrix to fill
         n_,                                  // Number of rows
         num_dummies,                         // Number of columns
-        rng_seed,                            // RNG seed
+        base_seed,                           // RNG seed
         trex_ctrl_.dummy_distribution        // Distribution configuration
     );
 
@@ -1513,7 +1593,7 @@ void TRexSelector::initializeMemoryMappedMatrices() {
     if (temp_dir_.empty()) { temp_dir_ = createTempDirectory(); }
 
     // Compute max columns
-    max_cols_memmap_ = p_ + (trex_ctrl_.max_num_dummies * p_);
+    max_cols_memmap_ = p_ + (trex_ctrl_.max_dummy_multiplier * p_);
 
     if (verbose_) {
         printProgress("Initializing " + std::to_string(trex_ctrl_.K) +
@@ -1624,15 +1704,24 @@ TRexSelector::ExperimentResults TRexSelector::runRandomExperiments_MemMap(
     }
 
     // Determine if experiments are sequential/parallel
-    const bool do_parallel_rnd_experiments = trex_ctrl_.parallel_rnd_experiments &&
-                                            (trex_ctrl_.K > 1);
+    const bool do_parallel_exps = (trex_ctrl_.max_outer_threads > 1);
+
+    // --- OpenMP Resource Setup ---
+#ifdef _OPENMP
+    int old_max_levels = omp_get_max_active_levels();
+    omp_set_max_active_levels(2);
+#endif
 
     // Parallel execution over K experiments (if enabled)
-    #pragma omp parallel if(do_parallel_rnd_experiments)
+    #pragma omp parallel if(do_parallel_exps)
     {
+#ifdef _OPENMP
+        omp_set_num_threads(trex_ctrl_.max_inner_threads);
+#endif
+        Eigen::setNbThreads(trex_ctrl_.max_inner_threads);
+
         // No thread-local variables here, each k has its own file
         // Same structure as in-memory version for consistency
-
         #pragma omp for schedule(dynamic)
         for (std::size_t k = 0; k < trex_ctrl_.K; ++k) {
             // Get memory-mapped augmented matrix pointers
@@ -1666,6 +1755,11 @@ TRexSelector::ExperimentResults TRexSelector::runRandomExperiments_MemMap(
             );
         }
     }
+
+    // --- OpenMP Cleanup ---
+#ifdef _OPENMP
+    omp_set_max_active_levels(old_max_levels);
+#endif
 
     // Update solver file paths
     if (use_warm_start && !new_solver_files.empty()) {

@@ -99,10 +99,10 @@ struct TRexControlParameter {
     /**
      * @brief Maximum number of dummy variables as a multiple of p.
      *
-     * @details For STANDARD/ADAPTIVE: L = p, 2p, .., max_num_dummies * p (Default: 10).
-     *          For SKIP: Set fixed number of dummies = max_num_dummies * p.
+     * @details For STANDARD/ADAPTIVE: L = p, 2p, .., max_dummy_multiplier * p (Default: 10).
+     *          For SKIP: Set fixed number of dummies = max_dummy_multiplier * p.
      */
-    std::size_t max_num_dummies = 10;
+    std::size_t max_dummy_multiplier = 10;
 
     /** @brief If true, limit T_stop to ceiling(n/2) (default: true). */
     bool max_T_stop = true;
@@ -121,7 +121,8 @@ struct TRexControlParameter {
      * @brief Strategy for L-loop calibration (default: ADAPTIVE).
      *
      * @details
-     *    - SKIP:     Skip L-loop calibration, use fixed number of dummies = max_num_dummies * p.
+     *    - SKIP:     Skip L-loop calibration, use fixed number of
+     *                dummies = max_dummy_multiplier * p.
      *    - STANDARD: Generate fresh dummies in each L-loop iteration (conservative).
      *    - ADAPTIVE: Horizontally expand dummy matrices (faster - same result).
      */
@@ -141,8 +142,46 @@ struct TRexControlParameter {
     // Parallel random experiments
     // =================================
 
-    /** @brief If true, run K random experiments in T-loop parallel (default: false). */
+    /** @brief If true, allows parallel execution of random experiments. */
     bool parallel_rnd_experiments = false;
+
+    /** @brief Computed number of threads for the outer loop (experiments). */
+    int max_outer_threads = 1;
+
+    /** @brief Computed number of threads for the inner loop (solvers/Eigen). */
+    int max_inner_threads = 1;
+
+    /**
+     * @brief Automatically configures thread resources based on K and hardware.
+     */
+    void autoConfigResources() {
+#ifdef _OPENMP
+        // Only auto-config if parallel is requested
+        if (parallel_rnd_experiments) {
+            int total_cores = omp_get_max_threads();
+            int k_experiments = static_cast<int>(K);
+
+            if (k_experiments > 1) {
+                // Hybrid: Limit outer threads to K
+                max_outer_threads = std::min(total_cores, k_experiments);
+                // Give remaining capacity to the solver (floor division)
+                max_inner_threads = std::max(1, total_cores / max_outer_threads);
+            } else {
+                // Single experiment -> Solver gets everything
+                max_outer_threads = 1;
+                max_inner_threads = total_cores;
+            }
+        } else {
+             // Serial experiments -> Solver gets everything
+             max_outer_threads = 1;
+             max_inner_threads = omp_get_max_threads();
+        }
+#else
+        // Fallback for non-OpenMP builds
+        max_outer_threads = 1;
+        max_inner_threads = 1;
+#endif
+    }
 
     // ===================================
     // Memory-Mapping Management
@@ -153,11 +192,11 @@ struct TRexControlParameter {
      *
      * @details When true:
      *   MemMap Strategy 1: Creates K memory-mapped files [X | D_k] on disk instead of storing
-     *                      dummy matrices in RAM. Essential for ultra-hihg-dimensional data,
+     *                      dummy matrices in RAM. Essential for ultra-high-dimensional data,
      *                      where K * n * num_dummies exceeds available RAM.
      *
      *                      Memory-mapped files are sparse and pre-allocated to max size:
-     *                      n x (p + max_num_dummies * p). Default: false.
+     *                      n x (p + max_dummy_multiplier * p). Default: false.
      */
     bool use_memory_mapping = false;
 
@@ -197,8 +236,8 @@ struct TRexControlParameter {
  *   2. Call select() for variable selection
  *   3. Access results via getters
  *
- * Derived classes implement specfic T-Rex variants, s.a.:
- *  - Dependendy Aware (DA) T-Rex
+ * Derived classes implement specific T-Rex variants, s.a.:
+ *  - Dependency Aware (DA) T-Rex
  *  - Screen-TRex
  *  - Dummy Permutation (DP) T-Rex
  *  - GVS TRex
@@ -298,7 +337,7 @@ protected:
     Eigen::VectorXd Phi_prime_;
 
     /** @brief Tracks dummy inclusion frequencies across experiments.
-     *         Dimensions: (K x num_dummies_) or aggreated form.
+     *         Dimensions: (K x num_dummies_) or aggregated form.
      */
     Eigen::MatrixXd phi_T_mat_;
 
@@ -342,10 +381,10 @@ protected:
      * @brief Setup memory-mapped augmented matrices [X | D_k] for K experiments.
      *
      * @details Only used if trex_ctrl_.use_memory_mapping is true.
-     *          Each matrix is pre-allocated to size n x (p + max_num_dummies * p)
+     *          Each matrix is pre-allocated to size n x (p + max_dummy_multiplier * p)
      *          as a sparse file. Active columns [0, p + num_dummies) are filled
      *          during the L-loop. The remaining columns stay sparse (zero disk usage).
-     *          Files created in temo_dir_ as "XD_aug_{0}.bin", ..., "XD_aug_{K-1}.bin".
+     *          Files created in temp_dir_ as "XD_aug_{0}.bin", ..., "XD_aug_{K-1}.bin".
      *          The memory is released when the TRexSelector instance is destroyed.
      */
     std::vector<std::unique_ptr<memmap::MemoryMappedMatrix<double>>> XD_memmaps_;
@@ -353,7 +392,7 @@ protected:
     /**
      * @brief Maximum number of columns allocated for memory-mapped matrices.
      *
-     * @details max_cols = p + trex_ctrl_.max_num_dummies * p.
+     * @details max_cols = p + trex_ctrl_.max_dummy_multiplier * p.
      *          Set during initialization if memory-mapping is enabled.
      */
     std::size_t max_cols_memmap_;
@@ -372,7 +411,7 @@ public:
         std::size_t T_stop;             /** Number of dummies used */
         std::size_t num_dummies;        /** Total number of dummies used */
         Eigen::MatrixXd FDP_hat_mat;    /** Estimated FDP matrix */
-        Eigen::MatrixXd Phi_mat;        /** Relative occurence matrix */
+        Eigen::MatrixXd Phi_mat;        /** Relative occurrence matrix */
         Eigen::VectorXd Phi_prime;      /** Adjusted relative occurrences (p x 1) */
         Eigen::VectorXd voting_grid;    /** Voting grid used */
     };
@@ -451,7 +490,7 @@ public:
 
     /** @brief Get dummy multiplier. */
     inline std::size_t getMaxNumDummies() const noexcept {
-        return trex_ctrl_.max_num_dummies;
+        return trex_ctrl_.max_dummy_multiplier;
     }
 
     /** @brief Get maximum T_stop flag. */
@@ -505,7 +544,7 @@ public:
     /** @brief Get FDP estimates matrix. */
     inline const Eigen::MatrixXd& getFDPHatMat() const noexcept { return FDP_hat_mat_; }
 
-    /** @brief Get relative occurence matrix Phi. */
+    /** @brief Get relative occurrence matrix Phi. */
     inline const Eigen::MatrixXd& getPhiMat() const noexcept { return Phi_mat_; }
 
     /** @brief Get selection frequency matrix R. */
@@ -595,7 +634,7 @@ protected:
      * @param T_stop Early stopping threshold.
      * @param generate_new_dummies If true, generate new dummies;
      * @param use_warm_start If true, load and continue from saved state.
-     * @param seed_offset Seed offset for dummy generation.
+     * @param seed_factor Seed factor for dummy generation.
      *
      * @return Experiment results (phi_T_mat and Phi).
      */
@@ -604,7 +643,7 @@ protected:
         std::size_t T_stop,
         bool generate_new_dummies,
         bool use_warm_start,
-        std::size_t seed_offset
+        std::size_t seed_factor
     );
 
 
@@ -615,7 +654,7 @@ protected:
     /**
      * @brief Run L-loop with NONE strategy (fixed number of dummies).
      *
-     * @details Skips L-loop calibration and uses fixed number_of_dummies = max_num_dummies * p.
+     * @details Skips L-loop calibration and uses fixed number_of_dummies = max_dummy_multiplier * p.
      *          Runs a single experiment to compute initial FDP estimate.
      *
      * @param FDP_hat FDP estimates.
@@ -649,7 +688,7 @@ protected:
     /**
      * @brief Apply L-loop strategy as configured.
      *
-     * @details Dispatches appropriate L-loop strategy accordong to trex_ctrl_.lloop_strategy.
+     * @details Dispatches appropriate L-loop strategy according to trex_ctrl_.lloop_strategy.
      *
      * @param FDP_hat FDP estimates.
      * @param exp_results Experiment results structure to fill.
@@ -827,7 +866,7 @@ protected:
      * @brief Initialize K memory-mapped augmented matrices [X | D_k].
      *
      * @details Creates K sparse files in temp_dir_, each pre-allocated to
-     *          size n x (p + max_num_dummies * p). Files are initialized
+     *          size n x (p + max_dummy_multiplier * p). Files are initialized
      *          as sparse matrices (zero disk usage) and filled incrementally
      *          during L-loop iterations.
      *          Only used if trex_ctrl_.use_memory_mapping is true.
