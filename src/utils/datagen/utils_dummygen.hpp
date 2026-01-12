@@ -133,7 +133,7 @@ struct Distribution {
         /** @brief Mammen distribution (two-point distribution). */
         Mammen,
 
-        /** @brief Sparse Rademacher distribution with sparsity s. */
+        /** @brief Sparse Rademacher distribution with sparsity density parameter s. */
         SparseRademacher,
 
         /** @brief Logistic distribution. */
@@ -483,7 +483,8 @@ struct Distribution {
      *
      * @see https://en.wikipedia.org/wiki/Rademacher_distribution
      *
-     * @param s Sparsity parameter in [0, 1), fraction of non-zero entries.
+     * @param s Density parameter in [0, 1) representing the fraction of non-zero entries.
+     *          Probability of zero is (1 - s).
      *
      * @return Distribution instance for Sparse Rademacher distribution.
      */
