@@ -70,9 +70,10 @@ enum class SolverTypeForTRex {
  * @brief L-loop calibration strategies
  */
 enum class LLoopStrategy {
-    SKIP,           // Skip L-loop calibration: use fixed number of dummies
-    STANDARD,       // Generate fresh dummies in each L-loop iteration (conservative)
-    ADAPTIVE        // Horizontally expand dummy matrices (faster - same result)
+    SKIP,            // Skip L-loop calibration: use fixed number of dummies
+    STANDARD,        // Generate fresh dummies in each L-loop iteration (conservative)
+    ADAPTIVE,        // Horizontally expand dummy matrices (faster - same result)
+    PERMUTATION      // Determinstic permutations of base dummies
 };
 
 
@@ -125,6 +126,7 @@ struct TRexControlParameter {
      *                dummies = max_dummy_multiplier * p.
      *    - STANDARD: Generate fresh dummies in each L-loop iteration (conservative).
      *    - ADAPTIVE: Horizontally expand dummy matrices (faster - same result).
+     *    - PERMUTATION: Deterministic permutations of base dummies.
      */
     LLoopStrategy lloop_strategy = LLoopStrategy::ADAPTIVE;
 
@@ -344,8 +346,21 @@ protected:
     /** @brief Optimization point for dummy calibration (typically at v = 0.75). */
     std::size_t opt_point_;
 
+    // ============================================================
+    // Members for L-Loop Dummy Management
+    // ============================================================
+
     /** @brief Current dummy multiplier in L-loop. */
     std::size_t dummy_multiplier_LL_;
+
+    /** @brief Flag indicating if base dummies for PERMUTATION strategy are initialized. */
+    bool base_dummies_initialized_;
+
+    /** @brief Base dummy matrix for PERMUTATION strategy (n x num_dummies). */
+    Eigen::MatrixXd base_dummies_perm_;
+
+    /** @brief Base seed for PERMUTATION strategy. */
+    unsigned int base_seed_perm_;
 
     // ============================================================
     // Members for Solver Serialization (T-loop warm start)
@@ -611,32 +626,25 @@ protected:
     void set75PercentOptPoint(const std::size_t v_len);
 
 
-    /**
-     * @brief Run K random experiments and compute phi_T_mat.
-     *
-     * @param num_dummies Number of dummies to append.
-     * @param T_stop Early stopping threshold.
-     * @param generate_new_dummies If true, generate new dummies;
-     *                             if false, reuse stored dummies.
-     *
-     * @return phi_T_mat (p x T_stop) and Phi vector.
-     */
+    /** @brief Structure to hold experiment results. */
     struct ExperimentResults {
-        Eigen::MatrixXd phi_T_mat;   /** Dummy inclusion tracking matrix (p x T_stop) */
-        Eigen::VectorXd Phi;         /** Relative occurrence vector (p x 1) */
+        /** @brief Dummy inclusion tracking matrix (p x T_stop) */
+        Eigen::MatrixXd phi_T_mat;
+        /** @brief Relative occurrence vector (p x 1) */
+        Eigen::VectorXd Phi;
     };
 
 
     /**
-     * @brief Run K random experiments.
+     * @brief Run K random experiments and compute phi_T_mat and Phi vector.
      *
      * @param num_dummies Number of dummies to append.
      * @param T_stop Early stopping threshold.
-     * @param generate_new_dummies If true, generate new dummies;
-     * @param use_warm_start If true, load and continue from saved state.
-     * @param seed_factor Seed factor for dummy generation.
+     * @param generate_new_dummies If true, generate new dummies, else reuse stored dummies.
+     * @param use_warm_start If true, use warm start from serialized solvers.
+     * @param seed_factor Seed factor to modify base seed for reproducibility.
      *
-     * @return Experiment results (phi_T_mat and Phi).
+     * @return phi_T_mat (p x T_stop) and Phi vector.
      */
     ExperimentResults runRandomExperiments(
         std::size_t num_dummies,
@@ -647,9 +655,30 @@ protected:
     );
 
 
+    /**
+     * @brief Run K random experiments with PERMUTATION strategy and compute phi_T_mat and
+     *        Phi vector.
+     *
+     * @param num_dummies Number of dummies to append.
+     * @param T_stop Early stopping threshold.
+     * @param use_warm_start If true, use warm start from serialized solvers.
+     *
+     * @return phi_T_mat (p x T_stop) and Phi vector.
+     */
+    ExperimentResults runRandomExperiments_Permutation(
+        std::size_t num_dummies,
+        std::size_t T_stop,
+        bool use_warm_start
+    );
+
+
     // ===========================================================
     // L-loop strategies
     // ===========================================================
+
+    // ==================
+    // Strategies
+    // ==================
 
     /**
      * @brief Run L-loop with NONE strategy (fixed number of dummies).
@@ -671,7 +700,7 @@ protected:
      * @param FDP_hat FDP estimates.
      * @param exp_results Experiment results structure to fill.
      */
-    void runLLoopCalibration(Eigen::VectorXd& FDP_hat, ExperimentResults& exp_results);
+    void runLLoopCalibration_Standard(Eigen::VectorXd& FDP_hat, ExperimentResults& exp_results);
 
 
     /**
@@ -686,6 +715,21 @@ protected:
 
 
     /**
+     * @brief Run L-loop calibration with PERMUTATION strategy.
+     *
+     * @details Uses deterministic permutations of base dummies.
+     *
+     * @param FDP_hat FDP estimates.
+     * @param exp_results Experiment results structure to fill.
+     */
+    void runLLoopCalibration_Permutation(Eigen::VectorXd& FDP_hat, ExperimentResults& exp_results);
+
+
+    // ====================
+    // Strategy Dispatcher
+    // ====================
+
+    /**
      * @brief Apply L-loop strategy as configured.
      *
      * @details Dispatches appropriate L-loop strategy according to trex_ctrl_.lloop_strategy.
@@ -694,6 +738,44 @@ protected:
      * @param exp_results Experiment results structure to fill.
      */
     void applyLLoopStrategy(Eigen::VectorXd& FDP_hat, ExperimentResults& exp_results);
+
+
+    // ===================
+    // L Strategy Helpers
+    // ===================
+
+    /**
+     * @brief Apply deterministic row permutation to dummy matrix.
+     *
+     * @details Preserves L2 norm of each column. Creates genuinely different dummy variables
+     *          by shuffling elements within columns.
+     *
+     * @param dummies Input dummy matrix (n x num_dummies).
+     * @param rng Random number generator (seeded deterministically).
+     *
+     * @return Row-permuted dummy matrix (n x num_dummies), L2 normalized columns preserved.
+     */
+    Eigen::MatrixXd applyRowPermutation(const Eigen::MatrixXd& dummies, std::mt19937& rng) const;
+
+
+    /**
+     * @brief Get the dummy matrix for experiment k using configured permutation strategy.
+     *
+     * @details Applies deterministic permutation to base dummies.
+     *         - Row Permutation strategy:
+     *           - Experiment 0: Returns base_dummies_perm_ as is.
+     *           - Experiment k>0: Returns deterministic row permutation of base_dummies_perm_.
+     *           - Uses seed_ + experiment_id + 1 for reproducibility across T-loop iterations.
+     *
+     * @param experiment_id Experiment index k in [0, K-1].
+     * @param num_dummies Number of dummy columns.
+     *
+     * @return
+     */
+    Eigen::MatrixXd getPermutedDummiesForExperiment(
+        std::size_t experiment_id,
+        std::size_t num_dummies
+    );
 
 
     // ===========================================================
@@ -836,8 +918,10 @@ protected:
     /** @brief Validate input data dimensions */
     void validateTRexParameters() const;
 
+
     /** @brief Print progress message (if verbose == true) */
     void printProgress(const std::string& message) const;
+
 
     /** @brief Update selected_indices_ from selected_var_ */
     void updateSelectedIndices();
@@ -853,10 +937,12 @@ protected:
      */
     std::string createTempDirectory();
 
+
     /**
      * @brief Clean up temporary directory and all solver files.
      */
     void cleanupTempDirectory();
+
 
     // ============================================================
     // Memory-Mapping Matrix Management
@@ -873,6 +959,7 @@ protected:
      */
     void initializeMemoryMappedMatrices();
 
+
     /**
      * @brief Write X data to all K memory-mapped matrices.
      *
@@ -881,6 +968,7 @@ protected:
      *          Only used if trex_ctrl_.use_memory_mapping is true.
      */
     void writeXToMemoryMappedMatrices();
+
 
     /**
      * @brief Clean up memory-mapped matrices and associated files.
@@ -904,11 +992,33 @@ protected:
      *
      * @return Experiment results (phi_T_mat and Phi).
      */
-    ExperimentResults runRandomExperiments_MemMap(
+    ExperimentResults runRandomExperimentsMemMap(
         std::size_t num_dummies,
         std::size_t T_stop,
         bool use_warm_start
     );
+
+
+    /**
+     * @brief Run K random experiments using memory-mapped matrices with dummy PERMUTATION strategy.
+     *
+     * @details Memory-mapped version that operates on pre-allocated XD_mammaps_ instead of
+     *          in-memory dummy matrices. The dummy part for the kth experiment is obtained
+     *          by applying a deterministic permutation to the base dummy matrix.
+     *
+     * @param num_dummies Number of dummies to append.
+     * @param T_stop Early stopping threshold.
+     * @param use_warm_start If true, load from file; else create fresh.
+     *
+     * @return Experiment results (phi_T_mat and Phi).
+     */
+    ExperimentResults runRandomExperimentsMemMap_Permutation(
+        std::size_t num_dummies,
+        std::size_t T_stop,
+        bool use_warm_start
+    );
+
+   // ============================================================
 
 
 }; /* End of TRexSelector class */

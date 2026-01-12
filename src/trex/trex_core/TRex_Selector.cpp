@@ -57,6 +57,7 @@ TRexSelector::TRexSelector(
     voting_threshold_(0.0),
     opt_point_(0),
     dummy_multiplier_LL_(0),
+    base_dummies_initialized_(false),
     has_serialized_solvers_(false),
     max_cols_memmap_(0)
 {
@@ -627,11 +628,15 @@ void TRexSelector::set75PercentOptPoint(const std::size_t v_len) {
 
 }
 
-// ===========================================================
+// =======================================================================
 // Loop Calibration Methods
-// ===========================================================
+// =======================================================================
 
-// Variant without dummy matrix size calibration
+// Strategies for L-loop
+// ======================================================
+
+// L-Loop Variant without dummy matrix size calibration
+// ======================================================
 
 void TRexSelector::runLLoopCalibration_SKIP(
     Eigen::VectorXd& FDP_hat,
@@ -672,7 +677,7 @@ void TRexSelector::runLLoopCalibration_SKIP(
         }
 
         // Run experiments with memory-mapped matrices
-        exp_results = runRandomExperiments_MemMap(
+        exp_results = runRandomExperimentsMemMap(
             num_dummies_,
             T_stop_,
             /*use_warm_start=*/false
@@ -696,9 +701,13 @@ void TRexSelector::runLLoopCalibration_SKIP(
 }
 
 
-// Variant with new dummies each iteration
+// L-Loop Variant with new dummies each iteration
+// ======================================================
 
-void TRexSelector::runLLoopCalibration(Eigen::VectorXd& FDP_hat, ExperimentResults& exp_results) {
+void TRexSelector::runLLoopCalibration_Standard(
+    Eigen::VectorXd& FDP_hat,
+    ExperimentResults& exp_results
+) {
 
     // L-loop starts with T_stop_ = 1
     T_stop_ = 1;
@@ -741,7 +750,7 @@ void TRexSelector::runLLoopCalibration(Eigen::VectorXd& FDP_hat, ExperimentResul
             }
 
             // Run K experiments with memory-mapped matrices
-            exp_results = runRandomExperiments_MemMap(
+            exp_results = runRandomExperimentsMemMap(
                 num_dummies_,
                 T_stop_,
                 /*use_warm_start=*/false
@@ -769,7 +778,8 @@ void TRexSelector::runLLoopCalibration(Eigen::VectorXd& FDP_hat, ExperimentResul
 }
 
 
-// Variant with dummy matrix augmentation
+// L-Loop Variant with dummy matrix augmentation
+// ======================================================
 
 void TRexSelector::runLLoopCalibration_Adaptive(
     Eigen::VectorXd& FDP_hat,
@@ -876,7 +886,7 @@ void TRexSelector::runLLoopCalibration_Adaptive(
             );
 
         } else { // Memory-mapped branch
-            exp_results = runRandomExperiments_MemMap(
+            exp_results = runRandomExperimentsMemMap(
                 num_dummies_,
                 T_stop_,
                 /*use_warm_start=*/false
@@ -905,7 +915,117 @@ void TRexSelector::runLLoopCalibration_Adaptive(
 }
 
 
+// L-loop strategy with permutations
+// ======================================================
+
+void TRexSelector::runLLoopCalibration_Permutation(
+    Eigen::VectorXd& FDP_hat,
+    ExperimentResults& exp_results
+) {
+    /*
+        L-loop calibration with PERMUTATION strategy.
+
+        Features:
+        - Stores only ONE base dummy matrix (n x num_dummies_)
+        - Experiments 1...K use deterministic row permutations
+        - Memory: n x L (vs K x n x L for SIMPLE/STANDARD/ADAPTIVE)
+
+        Workflow:
+        - L = p: Generate base_dummies_perm_ (n x p), run K experiments
+        - L = 2p: Expand base_dummies_perm_ to (n x 2p), run K experiments
+        - ...
+        - Stop when FDP_hat(opt_point_) <= tFDR_ or max_dummy_multiplier reached
+    */
+
+    // L-loop starts with T_stop_ = 1
+    T_stop_ = 1;
+    dummy_multiplier_LL_ = 1;    // LL in R
+    FDP_hat.resize(0);           // not initialized
+
+    // ===========================================
+    // L-Loop: Calibrate number of dummies
+    // ===========================================
+    // Set base seed for permutations
+    // >= 0: Deterministic mode: use supplied seed
+    //  < 0: Random mode: generate random seed for this L-loop
+    base_seed_perm_ = (seed_ >= 0) ? static_cast<unsigned int>(seed_) :
+                                     std::random_device{}();
+
+    while (dummy_multiplier_LL_ <= trex_ctrl_.max_dummy_multiplier &&
+            (FDP_hat.size() == 0 || FDP_hat(opt_point_) > tFDR_)) {
+
+        // num_dummies = LL * p
+        num_dummies_ = dummy_multiplier_LL_ * p_;
+
+        // Generate or expand base dummy matrix
+        // ============================================
+        if (dummy_multiplier_LL_ == 1) {
+            // Generate initial base dummies (n x p)
+            base_dummies_perm_ = generateDummies(p_, base_seed_perm_);
+            base_dummies_initialized_ = true;
+
+        } else {
+            // Generate p new columns with unique seed
+            unsigned int expansion_seed = dummygen::mix_seed(base_seed_perm_, dummy_multiplier_LL_);
+
+            // Horizontally concatenate to base_dummies_perm_: [D_old | D_new]
+            std::size_t old_cols = base_dummies_perm_.cols();
+            base_dummies_perm_.conservativeResize(Eigen::NoChange, old_cols + p_);
+            base_dummies_perm_.rightCols(p_) = generateDummies(p_, expansion_seed);
+        }
+
+        // Run K experiments with base + permutations
+        // ============================================
+
+        if (!trex_ctrl_.use_memory_mapping) { // In-memory branch
+            exp_results = runRandomExperiments_Permutation(
+                num_dummies_,
+                T_stop_,
+                /*use_warm_start=*/false         // Cold start in L-loop
+            );
+
+        } else { // Memory-mapped branch
+            exp_results = runRandomExperimentsMemMap_Permutation(
+                num_dummies_,
+                T_stop_,
+                /*use_warm_start=*/false         // Cold start in L-loop
+            );
+        }
+
+        // ===========================================
+        // Compute FDP estimate
+        // ===========================================
+
+        Eigen::VectorXd Phi_prime = computePhiPrime(
+            exp_results.phi_T_mat,
+            exp_results.Phi,
+            num_dummies_
+        );
+
+        FDP_hat = computeFDPHat(voting_grid_, exp_results.Phi, Phi_prime);
+
+        if (verbose_) {
+            printProgress("Appended dummies: " + std::to_string(num_dummies_));
+        }
+
+        // Increment dummy multiplier
+        ++dummy_multiplier_LL_;
+    }
+
+    // Adjust dummy multiplier back
+    dummy_multiplier_LL_ = (dummy_multiplier_LL_ > 1) ? (dummy_multiplier_LL_ - 1) : 1;
+
+    if (verbose_) {
+        printProgress(
+            "L-loop converged: " + std::to_string(num_dummies_) +
+            " dummies (base matrix stored, K permutations on-demand)."
+        );
+    }
+}
+
+
 // L-loop strategy dispatcher
+// ======================================================
 
 void TRexSelector::applyLLoopStrategy(
     Eigen::VectorXd& FDP_hat,
@@ -917,11 +1037,15 @@ void TRexSelector::applyLLoopStrategy(
             break;
 
         case LLoopStrategy::STANDARD:
-            runLLoopCalibration(FDP_hat, exp_results);
+            runLLoopCalibration_Standard(FDP_hat, exp_results);
             break;
 
         case LLoopStrategy::ADAPTIVE:
             runLLoopCalibration_Adaptive(FDP_hat, exp_results);
+            break;
+
+        case LLoopStrategy::PERMUTATION:
+            runLLoopCalibration_Permutation(FDP_hat, exp_results);
             break;
 
         default:
@@ -929,6 +1053,109 @@ void TRexSelector::applyLLoopStrategy(
     }
 }
 
+
+// L-loop strategy helpers
+// ===========================================================
+
+Eigen::MatrixXd TRexSelector::applyRowPermutation(
+    const Eigen::MatrixXd& dummies,
+    std::mt19937& rng
+) const {
+    /*
+        Apply row permutation to dummy matrix.
+
+        Preserves L2 norm of each column, since the sum of
+        squared elements is invariant under reordering.
+
+        Unique dummies are generated by shuffling elements
+        within each column independently.
+    */
+
+    const std::size_t n = dummies.rows();
+    const std::size_t L = dummies.cols();
+
+    // Generate row permutation indices
+    std::vector<std::size_t> row_indices(n);
+    std::iota(row_indices.begin(), row_indices.end(), 0);
+    std::shuffle(row_indices.begin(), row_indices.end(), rng);
+
+    // Variant 3:
+    // Transpose: Now rows become columns (cache-friendly!)
+    Eigen::MatrixXd dummies_T = dummies.transpose();  // L × n
+
+    // Permute columns (fast!)
+    Eigen::MatrixXd permuted_T(L, n);
+    for (std::size_t j = 0; j < n; ++j) {
+        permuted_T.col(j) = dummies_T.col(row_indices[j]);
+    }
+
+    // Transpose back
+    return permuted_T.transpose();  // n × L
+
+
+    // Variant 2:
+    // Create Eigen permutation matrix
+    //Eigen::PermutationMatrix<Eigen::Dynamic> perm(n);
+    //for (std::size_t i = 0; i < n; ++i) {
+    //    perm.indices()[i] = row_indices[i];
+    //}
+    //// Apply permutation: P * dummies
+    //return perm * dummies;  // Eigen optimizes this internally
+
+
+    // Variant 1:
+    //// Apply permutation
+    //Eigen::MatrixXd permuted_dummies(n, L);
+    //for (std::size_t i = 0; i < n; ++i) {
+    //    permuted_dummies.row(i) = dummies.row(row_indices[i]);
+    //}
+    //return permuted_dummies;
+}
+
+
+Eigen::MatrixXd TRexSelector::getPermutedDummiesForExperiment(
+    std::size_t experiment_id,
+    std::size_t num_dummies
+) {
+    /*
+        Retrieve dummy matrix for experiment k.
+
+        Strategy depends on trex_ctrl.lloop_strategy:
+        - PERMUTATION: Requirement for deterministic permuted dummies across random experiments.
+    */
+
+
+    // Validate base dummies are initialized
+    if (!base_dummies_initialized_) {
+        throw std::runtime_error(
+            "Base dummies not initialized. "
+            "Call runLLoopCalibration_Permutation() first."
+        );
+    }
+
+    // Validate size
+    if (static_cast<std::size_t>(base_dummies_perm_.cols()) != num_dummies) {
+        throw std::invalid_argument(
+            "Base dummies size mismatch. Expected " +
+            std::to_string(num_dummies) + " columns, " +
+            "got " + std::to_string(base_dummies_perm_.cols())
+        );
+    }
+
+    // Experiment 0: use base dummies directly
+    if (experiment_id == 0) {
+        return base_dummies_perm_;
+    }
+
+    // Experiments k > 0: apply deterministic row permutation
+    // Use base_seed_perm_ + k + 1 for reproducibility across T-loop iterations
+    std::mt19937 experiment_rng(base_seed_perm_ + experiment_id + 1);
+
+    // Return permuted dummies according to chosen permutation strategy
+    return applyRowPermutation(base_dummies_perm_, experiment_rng);
+}
+
+// =======================================================================
 
 
 
@@ -967,6 +1194,7 @@ void TRexSelector::runTLoopCalibration(
     while (FDP_hat(v_len - 1) <= tFDR_ && T_stop_ < max_T) {
 
         // Run K experiments with SAME dummies (warm start)
+        // =======================================================
         if (!trex_ctrl_.use_memory_mapping) { // In-memory branch
             exp_results = runRandomExperiments(
                 num_dummies_,
@@ -977,12 +1205,13 @@ void TRexSelector::runTLoopCalibration(
             );
 
         } else { // Memory-mapped branch
-            exp_results = runRandomExperiments_MemMap(
+            exp_results = runRandomExperimentsMemMap(
                 num_dummies_,
                 T_stop_,
                 /*use_warm_start=*/true
             );
         }
+        // =======================================================
 
         // Compute Phi_prime for FDP estimation
         Eigen::VectorXd Phi_prime = computePhiPrime(
@@ -1113,226 +1342,6 @@ void TRexSelector::printProgress(const std::string& message) const {
 }
 
 
-// ===========================================================
-// Random Experiments
-// ===========================================================
-
-// In-memory version for run K random experiments
-
-TRexSelector::ExperimentResults TRexSelector::runRandomExperiments(
-    std::size_t num_dummies,
-    std::size_t T_stop,
-    bool generate_new_dummies,
-    bool use_warm_start,
-    std::size_t seed_factor
-) {
-
-    // ===========================================================
-    // 1. Generate or reuse dummy matrices
-    // ===========================================================
-
-    if (generate_new_dummies) {
-
-        // Clear old dummies and generate K new ones
-        stored_dummies_.clear();
-        stored_dummies_.reserve(trex_ctrl_.K);
-
-        // Clear serialized solvers (dummies changed)
-        cleanupTempDirectory();
-
-        // Generate K new dummy matrices
-        for (std::size_t k = 0; k < trex_ctrl_.K; ++k) {
-            // Generate unique ID for this experiment k at iteration L (seed_factor)
-            unsigned int unique_iter_id;
-
-            if (seed_factor == 0) {
-                 unique_iter_id = static_cast<unsigned int>(k);
-            } else {
-                 unique_iter_id = dummygen::mix_seed(static_cast<uint32_t>(k), seed_factor);
-            }
-
-            stored_dummies_.emplace_back(generateDummies(num_dummies, unique_iter_id));
-        }
-
-        if (verbose_) {
-            printProgress(
-                "Generated " + std::to_string(trex_ctrl_.K) +
-                " dummy matrices (" + std::to_string(num_dummies) +
-                " dummies each)."
-            );
-        }
-    } else {
-        // Reuse existing dummies from stored_dummies_
-        if (stored_dummies_.size() != trex_ctrl_.K) {
-            throw std::runtime_error("Cannot reuse dummies: stored_dummies has size " +
-                                     std::to_string(stored_dummies_.size()) + ", but K = " +
-                                     std::to_string(trex_ctrl_.K));
-        }
-#ifndef NDEBUG
-        if (verbose_) {
-            printProgress(
-                "Reusing " + std::to_string(trex_ctrl_.K) + " dummy matrices" +
-                (use_warm_start && has_serialized_solvers_ ? " (warm start)" : "")
-            );
-        }
-#endif
-    }
-
-    // ===========================================================
-    // 2. Setup temp directory for solver serialization
-    // ===========================================================
-
-    if (use_warm_start && temp_dir_.empty()) {
-        temp_dir_ = createTempDirectory();
-        solver_files_.clear();
-        solver_files_.reserve(trex_ctrl_.K);
-    }
-
-    // ===========================================================
-    // 3. Run K random experiments
-    // ===========================================================
-
-    // Prepare storage for beta paths
-    std::vector<Eigen::MatrixXd> beta_paths(trex_ctrl_.K);
-
-    // Prepare new solver file paths if needed
-    std::vector<std::string> new_solver_files;
-    if (use_warm_start && !has_serialized_solvers_) {
-        new_solver_files.resize(trex_ctrl_.K);
-    }
-
-    // --- OpenMP Resource Setup ---
-#ifdef _OPENMP
-    int old_max_levels = omp_get_max_active_levels();
-
-    // Allow up to 2 levels of parallelism:
-    // Level 1: The loop over K experiments
-    // Level 2: The loop inside the solver (Eigen/MKL)
-    omp_set_max_active_levels(2);
-#endif
-
-    // Determine parallel execution condition
-    // Use the pre-calculated 'max_outer_threads' from trex_ctrl_
-    bool do_parallel_exps = (trex_ctrl_.max_outer_threads > 1);
-
-    // Parallel loop over K experiments if do_parallel_exps is true else sequential
-    #pragma omp parallel if(do_parallel_exps)
-    {
-        // --- Inner Thread Configuration ---
-        // If Hybrid (Cluster): outer=20, inner=6.
-        // If Mutual (Laptop):  outer=8,  inner=1.
-        // If Serial:           outer=1,  inner=Total.
-
-        // --- Inner Thread Configuration ---
-#ifdef _OPENMP
-        // Set thread count for Solvers (Eigen/MKL) running inside this experiment
-        omp_set_num_threads(trex_ctrl_.max_inner_threads);
-#endif
-        // Explicitly tell Eigen to adhere to this limit
-        Eigen::setNbThreads(trex_ctrl_.max_inner_threads);
-
-        // Create augmented data matrix XD (thread-local)
-        Eigen::MatrixXd XD(n_, p_ + num_dummies);
-        XD.leftCols(p_) = *X_; // copy X only once
-
-        // Due to time varying solvers (different dummies), use dynamic scheduling
-        // is sequential if do_parallel_exps is false
-        #pragma omp for schedule(dynamic)
-        for (std::size_t k = 0; k < trex_ctrl_.K; ++k) {
-
-            // Append dummies [p_, p_ + num_dummies_)
-            XD.rightCols(num_dummies) = stored_dummies_[k];
-
-            // Setup Eigen maps
-            Eigen::Map<Eigen::MatrixXd> XD_map(XD.data(), XD.rows(), XD.cols());
-            Eigen::Map<Eigen::VectorXd> y_map(y_.data(), y_.size());
-
-            // Determine solver file path
-            std::string solver_file;
-            if (use_warm_start) {
-                if (has_serialized_solvers_ && k < solver_files_.size()) {
-                    // Load from existing
-                    solver_file = solver_files_[k];
-                } else {
-                    // Create new path
-                    solver_file = temp_dir_ + "/solver_" + std::to_string(k) + ".bin";
-                    // SAFE write: only if vector was pre-sized
-                    if (!new_solver_files.empty()) {
-                        new_solver_files[k] = solver_file;
-                    } else if (k == 0 && verbose_) {
-                        // Defensive & should not happen
-                        printProgress(
-                            "WARNING: new_solver_files is empty but trying to create new solver! " +
-                            std::string("has_serialized=") +
-                            (has_serialized_solvers_ ? "true" : "false") +
-                            ", solver_files_.size()=" + std::to_string(solver_files_.size())
-                        );
-                    }
-                }
-            }
-
-            // Catch empty solver_file early
-            if (use_warm_start && solver_file.empty()) {
-                throw std::runtime_error(
-                    "solver_file is empty at k=" + std::to_string(k) +
-                    "! has_serialized=" + (has_serialized_solvers_ ? "true" : "false") +
-                    ", solver_files_.size()=" + std::to_string(solver_files_.size()) +
-                    ", temp_dir_='" + temp_dir_ + "'"
-                );
-            }
-
-            // Solver run: inherits 'max_inner_threads'
-            beta_paths[k] = runSingleExperimentWithSolver(
-                XD_map, y_map, T_stop, use_warm_start, solver_file
-            );
-        }
-    }
-    // --- OpenMP Cleanup ---
-#ifdef _OPENMP
-    omp_set_max_active_levels(old_max_levels); // Restore previous state
-#endif
-
-    // Update solver file paths
-    if (use_warm_start && !new_solver_files.empty()) {
-        solver_files_ = std::move(new_solver_files);
-        has_serialized_solvers_ = true;
-#ifndef NDEBUG
-        if (verbose_) {
-            printProgress("Moved " + std::to_string(solver_files_.size()) + " solver file paths");
-        }
-#endif
-    } else if (use_warm_start) {
-        has_serialized_solvers_ = true;
-#ifndef NDEBUG
-        if (verbose_) {
-            printProgress("Kept existing " + std::to_string(solver_files_.size()) +
-                          " solver file paths");
-        }
-#endif
-    }
-
-
-    // ===========================================================
-    // 4. Compute phi_T_mat from betaPaths
-    // ===========================================================
-
-    Eigen::MatrixXd phi_T_mat = computePhiTMat(beta_paths, num_dummies, T_stop);
-
-    // ===========================================================
-    // 5. Compute Phi vector
-    // ===========================================================
-
-    Eigen::VectorXd Phi = phi_T_mat.col(T_stop - 1);
-
-    // Return results
-    ExperimentResults results;
-    results.phi_T_mat = phi_T_mat;
-    results.Phi = Phi;
-
-    return results;
-}
-
-
 Eigen::MatrixXd TRexSelector::generateDummies(
     std::size_t num_dummies,
     std::size_t experiment_id
@@ -1434,6 +1443,368 @@ Eigen::MatrixXd TRexSelector::computePhiTMat(
 }
 
 
+// ===========================================================
+// Random Experiments
+// ===========================================================
+
+// In-memory version for run K random experiments
+// ===========================================================
+
+TRexSelector::ExperimentResults TRexSelector::runRandomExperiments(
+    std::size_t num_dummies,
+    std::size_t T_stop,
+    bool generate_new_dummies,
+    bool use_warm_start,
+    std::size_t seed_factor
+) {
+    /*
+        Run K random experiments with dummy variables.
+
+        Dispatches to strategy-specific implementations.
+    */
+
+    // ==========================================================
+    // Strategy dispatcher
+    // ==========================================================
+    // Strategy: PERMUTATION
+    // ==========================================================
+    if (trex_ctrl_.lloop_strategy == LLoopStrategy::PERMUTATION) {
+        return runRandomExperiments_Permutation(
+            num_dummies,
+            T_stop,
+            use_warm_start
+        );
+    }
+
+
+    // ===========================================================
+    // Strategies: STANDARD, ADAPTIVE, SKIP
+    // ===========================================================
+    // 1. Generate or reuse dummy matrices
+    // ===========================================================
+
+    if (generate_new_dummies) {
+
+        // Clear old dummies and generate K new ones
+        stored_dummies_.clear();
+        stored_dummies_.reserve(trex_ctrl_.K);
+
+        // Clear serialized solvers (dummies changed)
+        cleanupTempDirectory();
+
+        // Generate K new dummy matrices
+        for (std::size_t k = 0; k < trex_ctrl_.K; ++k) {
+            // Generate unique ID for this experiment k at iteration L (seed_factor)
+            unsigned int unique_iter_id;
+
+            if (seed_factor == 0) {
+                 unique_iter_id = static_cast<unsigned int>(k);
+            } else {
+                 unique_iter_id = dummygen::mix_seed(static_cast<uint32_t>(k), seed_factor);
+            }
+
+            stored_dummies_.emplace_back(generateDummies(num_dummies, unique_iter_id));
+        }
+
+        if (verbose_) {
+            printProgress(
+                "Generated " + std::to_string(trex_ctrl_.K) +
+                " dummy matrices (" + std::to_string(num_dummies) +
+                " dummies each)."
+            );
+        }
+    } else {
+        // Reuse existing dummies from stored_dummies_
+        if (stored_dummies_.size() != trex_ctrl_.K) {
+            throw std::runtime_error("Cannot reuse dummies: stored_dummies has size " +
+                                     std::to_string(stored_dummies_.size()) + ", but K = " +
+                                     std::to_string(trex_ctrl_.K));
+        }
+        #ifndef NDEBUG
+        if (verbose_) {
+            printProgress(
+                "Reusing " + std::to_string(trex_ctrl_.K) + " dummy matrices" +
+                (use_warm_start && has_serialized_solvers_ ? " (warm start)" : "")
+            );
+        }
+        #endif
+    }
+
+    // ===========================================================
+    // 2. Setup temp directory for solver serialization
+    // ===========================================================
+
+    if (use_warm_start && temp_dir_.empty()) {
+        temp_dir_ = createTempDirectory();
+        solver_files_.clear();
+        solver_files_.reserve(trex_ctrl_.K);
+    }
+
+    // ===========================================================
+    // 3. Run K random experiments
+    // ===========================================================
+
+    // Prepare storage for beta paths
+    std::vector<Eigen::MatrixXd> beta_paths(trex_ctrl_.K);
+
+    // Prepare new solver file paths if needed
+    std::vector<std::string> new_solver_files;
+    if (use_warm_start && !has_serialized_solvers_) {
+        new_solver_files.resize(trex_ctrl_.K);
+    }
+
+    // --- OpenMP Resource Setup ---
+    #ifdef _OPENMP
+    int old_max_levels = omp_get_max_active_levels();
+
+    // Allow up to 2 levels of parallelism:
+    // Level 1: The loop over K experiments
+    // Level 2: The loop inside the solver (Eigen/MKL)
+    omp_set_max_active_levels(2);
+    #endif
+
+    // Determine parallel execution condition
+    // Use the pre-calculated 'max_outer_threads' from trex_ctrl_
+    bool do_parallel_exps = (trex_ctrl_.max_outer_threads > 1);
+
+    // Parallel loop over K experiments if do_parallel_exps is true else sequential
+    #pragma omp parallel if(do_parallel_exps)
+    {
+        // --- Inner Thread Configuration ---
+        // If Hybrid (Cluster): outer=20, inner=6.
+        // If Mutual (Laptop):  outer=8,  inner=1.
+        // If Serial:           outer=1,  inner=Total.
+
+        // --- Inner Thread Configuration ---
+        #ifdef _OPENMP
+        // Set thread count for Solvers (Eigen/MKL) running inside this experiment
+        omp_set_num_threads(trex_ctrl_.max_inner_threads);
+        #endif
+
+        // Explicitly tell Eigen to adhere to this limit
+        Eigen::setNbThreads(trex_ctrl_.max_inner_threads);
+
+        // Create augmented data matrix XD (thread-local)
+        Eigen::MatrixXd XD(n_, p_ + num_dummies);
+        XD.leftCols(p_) = *X_; // copy X only once
+
+        // Due to time varying solvers (different dummies), use dynamic scheduling
+        // is sequential if do_parallel_exps is false
+        #pragma omp for schedule(dynamic)
+        for (std::size_t k = 0; k < trex_ctrl_.K; ++k) {
+
+            // Append dummies [p_, p_ + num_dummies_)
+            XD.rightCols(num_dummies) = stored_dummies_[k];
+
+            // Setup Eigen maps
+            Eigen::Map<Eigen::MatrixXd> XD_map(XD.data(), XD.rows(), XD.cols());
+            Eigen::Map<Eigen::VectorXd> y_map(y_.data(), y_.size());
+
+            // Determine solver file path
+            std::string solver_file;
+            if (use_warm_start) {
+                if (has_serialized_solvers_ && k < solver_files_.size()) {
+                    // Load from existing
+                    solver_file = solver_files_[k];
+                } else {
+                    // Create new path
+                    solver_file = temp_dir_ + "/solver_" + std::to_string(k) + ".bin";
+                    // SAFE write: only if vector was pre-sized
+                    if (!new_solver_files.empty()) {
+                        new_solver_files[k] = solver_file;
+                    } else if (k == 0 && verbose_) {
+                        // Defensive & should not happen
+                        printProgress(
+                            "WARNING: new_solver_files is empty but trying to create new solver! " +
+                            std::string("has_serialized=") +
+                            (has_serialized_solvers_ ? "true" : "false") +
+                            ", solver_files_.size()=" + std::to_string(solver_files_.size())
+                        );
+                    }
+                }
+            }
+
+            // Catch empty solver_file early
+            if (use_warm_start && solver_file.empty()) {
+                throw std::runtime_error(
+                    "solver_file is empty at k=" + std::to_string(k) +
+                    "! has_serialized=" + (has_serialized_solvers_ ? "true" : "false") +
+                    ", solver_files_.size()=" + std::to_string(solver_files_.size()) +
+                    ", temp_dir_='" + temp_dir_ + "'"
+                );
+            }
+
+            // Solver run: inherits 'max_inner_threads'
+            beta_paths[k] = runSingleExperimentWithSolver(
+                XD_map, y_map, T_stop, use_warm_start, solver_file
+            );
+        }
+    }
+    // --- OpenMP Cleanup ---
+    #ifdef _OPENMP
+    omp_set_max_active_levels(old_max_levels); // Restore previous state
+    #endif
+
+    // Update solver file paths
+    if (use_warm_start && !new_solver_files.empty()) {
+        solver_files_ = std::move(new_solver_files);
+        has_serialized_solvers_ = true;
+        #ifndef NDEBUG
+        if (verbose_) {
+            printProgress("Moved " + std::to_string(solver_files_.size()) + " solver file paths");
+        }
+        #endif
+    } else if (use_warm_start) {
+        has_serialized_solvers_ = true;
+        #ifndef NDEBUG
+        if (verbose_) {
+            printProgress("Kept existing " + std::to_string(solver_files_.size()) +
+                          " solver file paths");
+        }
+        #endif
+    }
+
+
+    // ===========================================================
+    // 4. Compute and compile results
+    // ===========================================================
+    // Return results
+    ExperimentResults results;
+    // Compute phi_T_mat from betaPaths
+    results.phi_T_mat = computePhiTMat(beta_paths, num_dummies, T_stop);
+    // Compute Phi vector
+    results.Phi = results.phi_T_mat.col(T_stop - 1);
+
+    return results;
+}
+
+
+// Permutation-based version for run K random experiments
+// ===========================================================
+
+TRexSelector::ExperimentResults TRexSelector::runRandomExperiments_Permutation(
+    std::size_t num_dummies,
+    std::size_t T_stop,
+    bool use_warm_start
+) {
+    /*
+        PERMUTATION strategy: Sequential execution, minimal memory.
+
+        Peak memory: ~2 x n x L (base + XD with temporary during assignment) vs
+                     ~K x n x L for SIMPLE/STANDARD/ADAPTIVE.
+
+        For K=20: 10x memory saving!
+    */
+
+    // Validation
+    if (!base_dummies_initialized_) {
+        throw std::runtime_error("Base dummies not initialized. "
+                                 "Call runLLoopCalibration_Permutation() first."
+                                );
+    }
+
+    if (static_cast<std::size_t>(base_dummies_perm_.cols()) != num_dummies) {
+        throw std::runtime_error(
+            "Base dummies size mismatch: expected " + std::to_string(num_dummies) +
+            " columns, got " + std::to_string(base_dummies_perm_.cols())
+        );
+    }
+
+
+    // Warm start setup
+    if (use_warm_start && temp_dir_.empty()) {
+       temp_dir_ = createTempDirectory();
+       solver_files_.clear();
+       solver_files_.reserve(trex_ctrl_.K);
+    }
+
+    std::vector<Eigen::MatrixXd> beta_paths(trex_ctrl_.K);
+    std::vector<std::string> new_solver_files;
+    if (use_warm_start && !has_serialized_solvers_) {
+       new_solver_files.resize(trex_ctrl_.K);
+    }
+
+    // Configure Eigen threads for solver (sequential experiments, parallel internals)
+    #ifdef _OPENMP
+    Eigen::setNbThreads(omp_get_max_threads());
+    #endif
+
+    // ===========================================================
+    // Sequential loop over K experiments
+    //
+    // NOTE: NO parallelism here - would defeat memory savings
+    //       T thread-local copies of XD (T x n x (p + L) memory)
+    //       Sequential: 2 x n x L peak memory
+    // ===========================================================
+
+    Eigen::MatrixXd XD(n_, p_ + num_dummies);
+    XD.leftCols(p_) = *X_; // copy X only once
+
+    for (std::size_t k = 0; k < trex_ctrl_.K; ++k) {
+
+        // Get dummies for experiment k (base or permuted)
+        // Append dummies [p_, p_ + num_dummies_)
+        XD.rightCols(num_dummies) = getPermutedDummiesForExperiment(k, num_dummies);
+
+        // Setup Eigen maps
+        Eigen::Map<Eigen::MatrixXd> XD_map(XD.data(), XD.rows(), XD.cols());
+        Eigen::Map<Eigen::VectorXd> y_map(y_.data(), y_.size());
+
+        // Set solver file path
+        std::string solver_file;
+        if (use_warm_start) {
+            if (has_serialized_solvers_ && k < solver_files_.size()) {
+                // Load from existing
+                solver_file = solver_files_[k];
+            } else {
+                // Create new path
+                solver_file = temp_dir_ + "/solver_" + std::to_string(k) + ".bin";
+                if (!new_solver_files.empty()) {
+                     new_solver_files[k] = solver_file;
+                }
+            }
+        }
+
+        // Catch empty solver_file early
+        if (use_warm_start && solver_file.empty()) {
+            throw std::runtime_error(
+                "solver_file is empty at k=" + std::to_string(k) +
+                "! has_serialized=" + (has_serialized_solvers_ ? "true" : "false") +
+                ", solver_files_.size()=" + std::to_string(solver_files_.size()) +
+                ", temp_dir_='" + temp_dir_ + "'"
+            );
+        }
+
+        // Run solver
+        beta_paths[k] = runSingleExperimentWithSolver(
+            XD_map, y_map, T_stop, use_warm_start, solver_file
+        );
+    }
+
+    // Update solver file tracking
+    if (use_warm_start && !new_solver_files.empty()) {
+        solver_files_ = std::move(new_solver_files);
+        has_serialized_solvers_ = true;
+    } else if (use_warm_start) {
+        has_serialized_solvers_ = true;
+    }
+
+    // ===========================================================
+    // Compute & compile results
+    // ===========================================================
+    ExperimentResults results;
+    results.phi_T_mat = computePhiTMat(beta_paths, num_dummies, T_stop);
+    results.Phi = results.phi_T_mat.col(T_stop - 1);
+
+    // Return results
+    return results;
+}
+
+
+
+// ===========================================================
+// Solver Dispatch for single experiment
+// ===========================================================
 
 Eigen::MatrixXd TRexSelector::runSingleExperimentWithSolver(
     Eigen::Map<Eigen::MatrixXd>& XD_map,
@@ -1580,7 +1951,7 @@ Eigen::MatrixXd TRexSelector::runSingleExperimentWithSolver(
 
 
 // ===========================================================
-// Memory-Mapped Matrix Management
+// Memory-Mapped Matrix Management & Helper Methods
 // ===========================================================
 
 
@@ -1595,6 +1966,48 @@ void TRexSelector::initializeMemoryMappedMatrices() {
     // Compute max columns
     max_cols_memmap_ = p_ + (trex_ctrl_.max_dummy_multiplier * p_);
 
+    // ===========================================================
+    // Strategy dispatcher
+    // ===========================================================
+    // Strategy: PERMUTATION - Create 1 file
+    // ===========================================================
+    if (trex_ctrl_.lloop_strategy == LLoopStrategy::PERMUTATION) {
+        if (verbose_) {
+            printProgress("Initializing 1 memory-mapped matrix for PERMUTATION strategy...");
+        }
+
+        XD_memmaps_.clear();
+        XD_memmaps_.reserve(1);
+
+        std::string filename = temp_dir_ + "/XD_aug_memmap_permutation.bin";
+
+        try {
+
+            auto memmap = std::make_unique<memmap::MemoryMappedMatrix<double>>(
+                filename,
+                n_,
+                max_cols_memmap_,          // setup at max size: n x (p + max_dummy_multiplier * p)
+                memmap::AccessMode::ReadWrite
+            );
+            XD_memmaps_.push_back(std::move(memmap));
+
+        } catch (const std::exception& e) {
+            // Clean up all previously created memory-mapped matrices
+            cleanupMemoryMappedMatrices();
+            throw std::runtime_error(
+                "Failed to create memory-mapped matrix for PERMUTATION strategy: " +
+                std::string(e.what())
+            );
+        }
+
+        // End of PERMUTATION strategy setup
+        return;
+    }
+
+
+    // ===========================================================
+    // Strategies: STANDARD/ADAPTIVE/SKIP - Create K files
+    // ===========================================================
     if (verbose_) {
         printProgress("Initializing " + std::to_string(trex_ctrl_.K) +
                       " memory-mapped matrices...");
@@ -1616,7 +2029,6 @@ void TRexSelector::initializeMemoryMappedMatrices() {
                 max_cols_memmap_,
                 memmap::AccessMode::ReadWrite
             );
-
             XD_memmaps_.push_back(std::move(memmap));
 
         } catch (const std::exception& e) {
@@ -1638,12 +2050,10 @@ void TRexSelector::writeXToMemoryMappedMatrices() {
 
     if (verbose_) { printProgress("Writing X to memory-mapped matrices..."); }
 
-    // Write X to each memory-mapped matrix
-    for (std::size_t k = 0; k < trex_ctrl_.K; ++k) {
+    // Write X to first p columns of one/each memory-mapped matrix
+    for (std::size_t k = 0; k < XD_memmaps_.size(); ++k) {
         auto XD_map = XD_memmaps_[k]->getMap();
-
-        // Copy X to first p columns
-        XD_map.leftCols(p_) = *X_;
+        XD_map.leftCols(p_) = *X_;  // Copy X to first p columns
     }
 }
 
@@ -1667,11 +2077,36 @@ void TRexSelector::cleanupMemoryMappedMatrices() {
 
 // Run random experiments with memory-mapped matrices
 
-TRexSelector::ExperimentResults TRexSelector::runRandomExperiments_MemMap(
+TRexSelector::ExperimentResults TRexSelector::runRandomExperimentsMemMap(
     std::size_t num_dummies,
     std::size_t T_stop,
     bool use_warm_start
 ) {
+    /*
+        Run K random experiments using memory-mapped matrices.
+
+        Dispatches to strategy-specific implementations.
+    */
+
+    // ==========================================================
+    // Strategy dispatcher
+    // ==========================================================
+    // Strategy: PERMUTATION
+    // ==========================================================
+
+    if (trex_ctrl_.lloop_strategy == LLoopStrategy::PERMUTATION) {
+        return runRandomExperimentsMemMap_Permutation(
+            num_dummies,
+            T_stop,
+            use_warm_start
+        );
+    }
+
+    // ===========================================================
+    // Strategies: STANDARD, ADAPTIVE, SKIP
+    // ===========================================================
+
+    // Validation
     if (verbose_) {
         printProgress("Running " + std::to_string(trex_ctrl_.K) +
                       " experiments (memory-mapped)" +
@@ -1707,17 +2142,17 @@ TRexSelector::ExperimentResults TRexSelector::runRandomExperiments_MemMap(
     const bool do_parallel_exps = (trex_ctrl_.max_outer_threads > 1);
 
     // --- OpenMP Resource Setup ---
-#ifdef _OPENMP
+    #ifdef _OPENMP
     int old_max_levels = omp_get_max_active_levels();
     omp_set_max_active_levels(2);
-#endif
+    #endif
 
     // Parallel execution over K experiments (if enabled)
     #pragma omp parallel if(do_parallel_exps)
     {
-#ifdef _OPENMP
+        #ifdef _OPENMP
         omp_set_num_threads(trex_ctrl_.max_inner_threads);
-#endif
+        #endif
         Eigen::setNbThreads(trex_ctrl_.max_inner_threads);
 
         // No thread-local variables here, each k has its own file
@@ -1757,9 +2192,9 @@ TRexSelector::ExperimentResults TRexSelector::runRandomExperiments_MemMap(
     }
 
     // --- OpenMP Cleanup ---
-#ifdef _OPENMP
+    #ifdef _OPENMP
     omp_set_max_active_levels(old_max_levels);
-#endif
+    #endif
 
     // Update solver file paths
     if (use_warm_start && !new_solver_files.empty()) {
@@ -1769,16 +2204,166 @@ TRexSelector::ExperimentResults TRexSelector::runRandomExperiments_MemMap(
         has_serialized_solvers_ = true;
     }
 
-    // Compute phi_T_mat from betaPaths
-    Eigen::MatrixXd phi_T_mat = computePhiTMat(beta_paths, num_dummies, T_stop);
-
-    // Compute Phi vector
-    Eigen::VectorXd Phi = phi_T_mat.col(T_stop - 1);
-
     // Gather results and return
     ExperimentResults results;
-    results.phi_T_mat = phi_T_mat;
-    results.Phi = Phi;
+    // Compute phi_T_mat from betaPaths
+    results.phi_T_mat = computePhiTMat(beta_paths, num_dummies, T_stop);
+    // Compute Phi vector
+    results.Phi = results.phi_T_mat.col(T_stop - 1);
 
     return results;
 }
+
+
+// Memory-mapped version for random experiments with dummy permutation
+
+TRexSelector::ExperimentResults TRexSelector::runRandomExperimentsMemMap_Permutation(
+    std::size_t num_dummies,
+    std::size_t T_stop,
+    bool use_warm_start
+) {
+    /*
+        Memory-mapped PERMUTATION strategy: Sequential execution.
+
+        Strategy:
+        - Uses pre-allocated memory-mapped file (n × (p + max_L))
+        - X already written to columns [0, p)
+        - Active region: [0, p + num_dummies)
+        - Overwrites dummy columns [p, p + num_dummies) for each experiment k
+        - OS treats unfilled regions as sparse (no disk waste)
+
+        Peak RAM: ~n x L (temporary permutation only, base is already in RAM)
+        Peak disk: n x (p + max_L) (single memory-mapped file)
+    */
+
+    // ========================================================
+    // Validation
+    // ========================================================
+
+    if (!base_dummies_initialized_) {
+        throw std::runtime_error(
+            "Base dummies not initialized. "
+            "Call runLLoopCalibration_Permutation() first."
+        );
+    }
+
+    if (static_cast<std::size_t>(base_dummies_perm_.cols()) != num_dummies) {
+        throw std::runtime_error(
+            "Base dummies size mismatch: expected " + std::to_string(num_dummies) +
+            " columns, got " + std::to_string(base_dummies_perm_.cols())
+        );
+    }
+
+    if (XD_memmaps_.empty()) {
+        throw std::runtime_error(
+            "Memory-mapped matrices are not initialized."
+            " Call initializeMemoryMappedMatrices() first."
+        );
+    }
+
+    // ========================================================
+    // Get pre-allocated memory-mapped file
+    // ========================================================
+
+    // X is already written to columns [0, p)
+    // PERMUTATION uses only XD_memmaps_[0] (single file)
+    auto xd_map = XD_memmaps_[0]->getMap();
+
+    // ===========================================================
+    // Warm start setup
+    // ===========================================================
+
+    if (use_warm_start && temp_dir_.empty()) {
+        temp_dir_ = createTempDirectory();
+        solver_files_.clear();
+        solver_files_.reserve(trex_ctrl_.K);
+    }
+
+    std::vector<Eigen::MatrixXd> beta_paths(trex_ctrl_.K);
+    std::vector<std::string> new_solver_files;
+    if (use_warm_start && !has_serialized_solvers_) {
+        new_solver_files.resize(trex_ctrl_.K);
+    }
+
+    // Only solvers use parallel internals
+    #ifdef _OPENMP
+    Eigen::setNbThreads(omp_get_max_threads());
+    #endif
+
+    // ===========================================================================
+    // Sequential loop over K experiments (would otherwise invalidate permutation strategy)
+    //
+    // NOTE: Overwrite dummy columns [p, p + num_dummies) for each k
+    //       Active region: [0, p + num_dummies)
+    //       Inactive region: [p + num_dummies, p + max_L) remains sparse
+    // ===========================================================================
+
+    for (std::size_t k = 0; k < trex_ctrl_.K; ++k) {
+
+        // Generate permuted dummies and overwrite columns [p, p + num_dummies)
+        xd_map.block(0, p_, n_, num_dummies) = getPermutedDummiesForExperiment(k, num_dummies);
+
+        // Create Eigen::Map over active columns [0, p + num_dummies)
+        Eigen::Map<Eigen::MatrixXd> XD_active(
+            xd_map.data(),
+            n_,
+            p_ + num_dummies
+        );
+        Eigen::Map<Eigen::VectorXd> y_map(y_.data(), y_.size());
+
+        // Determine solver file path
+        std::string solver_file;
+        if (use_warm_start) {
+            if (has_serialized_solvers_ && k < solver_files_.size()) {
+                // Load from existing
+                solver_file = solver_files_[k];
+            } else {
+                // Create new path
+                solver_file = temp_dir_ + "/solver_" + std::to_string(k) + ".bin";
+                if (!new_solver_files.empty()) {
+                    new_solver_files[k] = solver_file;
+                }
+            }
+        }
+
+        // Catch empty solver_file early
+        if (use_warm_start && solver_file.empty()) {
+            throw std::runtime_error(
+                "solver_file is empty at k=" + std::to_string(k) +
+                " in PERMUTATION memory-mapped! has_serialized=" +
+                (has_serialized_solvers_ ? "true" : "false") +
+                ", solver_files_.size()=" + std::to_string(solver_files_.size()) +
+                ", temp_dir_='" + temp_dir_ + "'"
+            );
+        }
+
+        // Run solver
+        beta_paths[k] = runSingleExperimentWithSolver(
+            XD_active, y_map, T_stop, use_warm_start, solver_file
+        );
+    }
+
+    // ========================================================
+    // Update solver file tracking
+    // ========================================================
+
+    if (use_warm_start && !new_solver_files.empty()) {
+        solver_files_ = std::move(new_solver_files);
+        has_serialized_solvers_ = true;
+    } else if (use_warm_start) {
+        has_serialized_solvers_ = true;
+    }
+
+    // ========================================================
+    // Compute & compile results
+    // ========================================================
+
+    ExperimentResults results;
+    results.phi_T_mat = computePhiTMat(beta_paths, num_dummies, T_stop);
+    results.Phi = results.phi_T_mat.col(T_stop - 1);
+
+    return results;
+}
+
+
+// ===========================================================
