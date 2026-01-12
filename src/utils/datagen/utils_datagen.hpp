@@ -74,7 +74,7 @@ inline void validate_support(
         if (idx >= p) {
             throw std::out_of_range(
                 "Support index " + std::to_string(idx) +
-                "out of range [0, " + std::to_string(p) + ")."
+                " out of range [0, " + std::to_string(p) + ")."
             );
         }
     }
@@ -111,6 +111,97 @@ inline void generate_standard_normal_matrix(
 ) {
     // Use dummygen to generate standard normal dummies
     dummygen::generate_dummies(X, n, p, base_seed, dummygen::Distribution::Normal());
+}
+
+
+/**
+ * @brief Generate Student's t-distribution matrix.
+ *
+ * @tparam MatrixType Type of the matrix (e.g., Eigen::MatrixXd).
+ *
+ * @param X Reference to the matrix to be filled.
+ * @param n Number of rows.
+ * @param p Number of columns.
+ * @param df Degrees of freedom.
+ * @param base_seed Base seed for random number generation.
+ */
+template<typename MatrixType>
+inline void generate_student_t_matrix(
+    MatrixType& X,
+    std::size_t n,
+    std::size_t p,
+    std::size_t df,
+    unsigned int base_seed
+) {
+    // Use dummygen to generate Student's t-distribution dummies
+    dummygen::generate_dummies(X, n, p, base_seed, dummygen::Distribution::StudentT(df));
+}
+
+
+/**
+ * @brief Generate Gumbel distribution matrix.
+ *
+ * @tparam MatrixType Type of the matrix (e.g., Eigen::MatrixXd).
+ *
+ * @param X Reference to the matrix to be filled.
+ * @param n Number of rows.
+ * @param p Number of columns.
+ * @param location Location parameter.
+ * @param scale Scale parameter.
+ * @param base_seed Base seed for random number generation.
+ */
+template<typename MatrixType>
+inline void generate_gumbel_matrix(
+    MatrixType& X,
+    std::size_t n,
+    std::size_t p,
+    unsigned int base_seed,
+    double location = 0.0,
+    double scale = 1.0
+) {
+    // Use dummygen to generate Gumbel distribution dummies
+    dummygen::generate_dummies(X, n, p, base_seed, dummygen::Distribution::Gumbel(location, scale));
+}
+
+
+/**
+ * @brief Generate AR(1) row-wise correlated matrix.
+ *
+ * @tparam MatrixType Type of the matrix (e.g., Eigen::MatrixXd).
+ *
+ * @param X Reference to the matrix to be filled.
+ * @param n Number of rows.
+ * @param p Number of columns.
+ * @param rho Autoregressive parameter.
+ * @param base_seed Base seed for random number generation.
+ */
+template<typename MatrixType>
+inline void generate_ar1_rowwise_matrix(
+    MatrixType& X,
+    std::size_t n,
+    std::size_t p,
+    double rho,
+    unsigned int base_seed
+) {
+    // double variance for unit marginal variance: sigma^2 = 1 - rho^2
+    double innovation_std = std::sqrt(1.0 - rho * rho);
+
+    // Data generation with row-wise AR(1) process
+    #pragma omp parallel for schedule(static)
+    for (std::size_t i = 0; i < n; ++i) {
+        // Thread-safe seeding using mix_seed
+        std::mt19937 row_gen(dummygen::mix_seed(base_seed, i));
+        std::normal_distribution<double> dist(0.0, 1.0);
+
+        // Initialize first column elements with stationary N(0, 1)
+        X(i, 0) = dist(row_gen);
+
+        // Generate AR(1) process across columns
+        for (std::size_t j = 1; j < p; ++j) {
+            double innovation = innovation_std * dist(row_gen);
+            X(i, j) = rho * X(i, j - 1) + innovation;
+        }
+    }
 }
 
 
@@ -178,7 +269,7 @@ inline std::pair<double, double> calculate_noise_params(
  *
  * @param y Reference to the response vector to which noise will be added.
  * @param n Number of observations.
- * @param noise_std Standard deviation of the Gaussian noise.
+ * @param noise_std Target standard deviation of the noise.
  * @param noise_seed Seed for random number generation.
  */
 template<typename VectorType>
@@ -188,7 +279,9 @@ inline void add_gaussian_noise(
     double noise_std,
     unsigned int noise_seed
 ) {
-    if (noise_std <= 0) return;
+    if (noise_std <= 0) {
+        throw std::invalid_argument("Noise standard deviation must be > 0.");
+    }
 
     std::mt19937 noise_gen(noise_seed + 999999);
     std::normal_distribution<double> noise_dist(0.0, noise_std);
@@ -198,7 +291,255 @@ inline void add_gaussian_noise(
     }
 }
 
+
+/**
+ * @brief Add Student's t-distributed noise to response vector y.
+ *
+ * @details Generates i.i.d. Student-t noise with heavy tails.
+ *          Automatically scales to achieve target noise_std when df > 2.
+ *
+ * @tparam VectorType Type of the vector (e.g., Eigen::VectorXd).
+ *
+ * @param y Reference to the response vector to which noise will be added.
+ * @param n Number of observations.
+ * @param noise_std Target standard deviation of the noise.
+ * @param df Degrees of freedom for Student's t-distribution (default: 5.0).
+ * @param noise_seed Seed for random number generation.
+ */
+template <typename VectorType>
+inline void add_student_t_noise(
+    VectorType& y,
+    std::size_t n,
+    double noise_std,
+    double df,
+    unsigned int noise_seed
+) {
+    if (df <= 0.0) {
+        throw std::invalid_argument("Student-t degrees of freedom must be > 0.");
+    }
+    if (noise_std <= 0) return;
+
+    std::mt19937 noise_gen(noise_seed + 999999);
+    std::student_t_distribution<double> noise_dist(df);
+
+    // variance of Student's t: df / (df - 2) for df > 2
+    double base_scale = (df > 2.0) ? std::sqrt((df - 2.0) / df) : 1.0;
+    double scale = (df > 2.0) ? noise_std * base_scale : noise_std;
+
+    for (std::size_t i = 0; i < n; ++i) {
+        y(i) += scale * noise_dist(noise_gen);
+    }
+}
+
+
+/**
+ * @brief Generate AR(1) noise and add it to the response vector y.
+ *
+ * @details Generates an AR(1) process:
+ *          epsilon[i] = rho * epsilon[i-1] + eta[i]
+ *          where eta[i] ~ N(0, sigma_eta^2) with sigma_eta^2 = (1 - rho^2) * noise_std^2.
+ *
+ *          Properties (|rho| < 1, stationary):
+ *          - Mean = 0
+ *          - Marginal variance: noise_std^2
+ *          - Autocorrelation: Corr(epsilon[i], epsilon[j]) = rho^|i-j|
+ *
+ *          Unit root / Explosive process (|rho| >= 1):
+ *          - Variance grows over time (non-stationary)
+ *          - SNR control is NOT guaranteed
+ *          - innovation_std = noise_std (no scaling adjustment)
+ *
+ *          Note: AR(1) noise violates i.i.d. assumption.
+ *
+ * @tparam VectorType Type of the vector (e.g., Eigen::VectorXd).
+ *
+ * @param y Reference to the response vector to which noise will be added.
+ * @param n Number of observations.
+ * @param noise_std Target standard deviation of the noise (only for |rho| < 1).
+ * @param rho Autoregressive parameter. |rho| < 1 for stationary process, |rho| = 1 for unit root,
+ *            |rho| > 1 for explosive process.
+ * @param noise_seed Seed for random number generation.
+ */
+template<typename VectorType>
+inline void add_ar1_noise(
+    VectorType& y,
+    std::size_t n,
+    double noise_std,
+    double rho,
+    unsigned int noise_seed
+) {
+    if (noise_std <= 0) {
+        throw std::invalid_argument("Noise standard deviation must be > 0.");
+    }
+
+    // Innovation variance: sigma_eta^2 = (1 - rho^2) * noise_std^2
+    double innovation_std;
+    if (std::abs(rho) < 1.0) {
+        // Stationary case: sigma_eta^2 = (1 - rho^2) * noise_std^2
+        innovation_std = noise_std * std::sqrt(1.0 - rho * rho);
+    } else {
+        // Unit root or explosive case: no scaling possible
+        innovation_std = noise_std;
+    }
+
+    std::mt19937 noise_gen(noise_seed + 999999);
+    std::normal_distribution<double> innovation_dist(0.0, innovation_std);
+
+    // Generate AR(1) noise
+    VectorType ar1_noise(n);
+
+    // Initialize first value
+    if (std::abs(rho) < 1.0) {
+        // Stationary case: draw from N(0, noise_std^2)
+        std::normal_distribution<double> stationary_dist(0.0, noise_std);
+        ar1_noise(0) = stationary_dist(noise_gen);
+    } else {
+        // Unit root or explosive case: start from innovation
+        ar1_noise(0) = innovation_dist(noise_gen);
+    }
+    // Remainder recursion
+    for (std::size_t i = 1; i < n; ++i) {
+        double eta = innovation_dist(noise_gen);
+        ar1_noise(i) = rho * ar1_noise(i - 1) + eta;
+    }
+
+    // Add AR(1) noise to response
+    y += ar1_noise;
+}
+
 } /* End of namespace detail */
+
+
+// ==============================================================================
+// Noise Type Enumeration
+// ==============================================================================
+
+/**
+ * @brief Enumeration for noise types.
+ *
+ * @details Specifies the distribution of additive noise in synthetic data generation.
+ *          The noise is additive and designed for a linear model: y = X * beta + noise.
+ */
+enum class NoiseType {
+    /** @brief Gaussian (Normal) noise: epsilon ~N(0, sigma^2). */
+    Gaussian,
+
+    /**
+     * @brief Student's t-distributed noise: epsilon ~ t(df) scaled to sigma^2.
+     *        Heavy-tailed noise for robustness testing.
+     */
+    StudentT,
+
+    /**
+     * @brief AR(1) autoregressive noise: epsilon[i] = rho * epsilon[i-1] + eta[i].
+     *        Temporally correlated. Violates i.i.d. assumption.
+     *        Properties:
+     *        - |rho| < 1: stationary with controlled variance.
+     *        - |rho| >= 1: unit root/explosive, SNR control lost.
+     */
+    AR1
+};
+
+
+/**
+ * @brief Configuration for noise generation.
+ */
+struct NoiseConfig {
+    // =======================================
+    // Data members
+    // =======================================
+
+    /** @brief Type of noise distribution (default: Gaussian). */
+    NoiseType type = NoiseType::Gaussian;
+
+    /** @brief Degrees of freedom for Student's t-distribution (default: 5.0) */
+    double student_t_df = 5.0;
+
+    /**
+     * @brief Autoregressive parameter for AR(1) noise (default: 0.5).
+     *        - |rho| < 1: stationary
+     *        - |rho| = 1: unit root
+     *        - |rho| > 1: explosive
+     */
+    double ar1_rho = 0.5;
+
+
+    // =======================================
+    // Constructors
+    // =======================================
+
+    /** @brief Default constructor (Gaussian noise). */
+    NoiseConfig() : type(NoiseType::Gaussian) {}
+
+    /** @brief Construct with specific noise type. */
+    explicit NoiseConfig(NoiseType t) : type(t) {}
+
+    // =======================================
+    // Named constructors (factory pattern)
+    // =======================================
+
+    /** @brief Create Gaussian noise configuration. */
+    static NoiseConfig Gaussian() {
+        return NoiseConfig(NoiseType::Gaussian);
+    }
+
+    /**
+     * @brief Create Student's t-distributed noise configuration.
+     *
+     * @param df Degrees of freedom (default: 5.0).
+     */
+    static NoiseConfig StudentT(double df = 5.0) {
+        NoiseConfig config(NoiseType::StudentT);
+        config.student_t_df = df;
+        return config;
+    }
+
+    /**
+     * @brief Create AR(1) noise configuration.
+     *
+     * @param rho Autoregressive parameter.
+    */
+    static NoiseConfig AR1(double rho = 0.5) {
+        NoiseConfig config(NoiseType::AR1);
+        config.ar1_rho = rho;
+        return config;
+    }
+};
+
+
+/**
+ * @brief Add noise to response vector y based on noise configuration.
+ *
+ * @tparam VectorType Type of the vector (e.g., Eigen::VectorXd).
+ *
+ * @param y Reference to the response vector to which noise will be added.
+ * @param n Number of observations.
+ * @param noise_std Target standard deviation of the noise (only for |rho| < 1).
+ * @param config Noise configuration specifying the distribution and parameters of the noise.
+ * @param noise_seed Seed for noise random number generation.
+ */
+template <typename VectorType>
+inline void add_noise(
+    VectorType& y,
+    std::size_t n,
+    double noise_std,
+    const NoiseConfig& config,
+    unsigned int noise_seed
+) {
+    switch (config.type) {
+        case NoiseType::Gaussian:
+            detail::add_gaussian_noise(y, n, noise_std, noise_seed);
+            break;
+        case NoiseType::StudentT:
+            detail::add_student_t_noise(y, n, noise_std, config.student_t_df, noise_seed);
+            break;
+        case NoiseType::AR1:
+            detail::add_ar1_noise(y, n, noise_std, config.ar1_rho, noise_seed);
+            break;
+        default:
+            throw std::invalid_argument("Unsupported noise type.");
+    }
+}
 
 
 // ==============================================================================
@@ -206,10 +547,10 @@ inline void add_gaussian_noise(
 // ==============================================================================
 
 /**
- * @brief Generate synthetic regression data with known support in-memory:
- *        y = X[, support] * coefs + noise
+ * @brief Generate synthetic regression data with known support and configurable noise.
  *
- * @details In-memory storage suitable for small to medium datasets.
+ * @details Generates in-memory data according to the linear model.
+ *          y = X[, support] * coefs + noise.
  *          Uses openMP for parallel random number generation.
  */
 class SyntheticData {
@@ -244,7 +585,8 @@ public:
      * @param coefs Values of true coefficients
      * @param snr Signal-to-noise ratio (linear scale)
      * @param seed Seed for random number generation (Default: -1 for random seed, >= for
-     *             reproducible).
+     *             reproducible data).
+     * @param noise_config Noise configuration (default: Gaussian).
      */
     SyntheticData(
         std::size_t n,
@@ -252,7 +594,8 @@ public:
         const std::vector<std::size_t>& support,
         const std::vector<double>& coefs,
         double snr = 1.0,
-        int seed = -1
+        int seed = -1,
+        const NoiseConfig& noise_config = NoiseConfig::Gaussian()
     ) {
         // Validate inputs
         detail::validate_support(support, coefs, p);
@@ -270,7 +613,7 @@ public:
 
         // Calculate noise level and add noise
         std::tie(signal_power_, noise_std_) = detail::calculate_noise_params(y_, n, snr);
-        detail::add_gaussian_noise(y_, n, noise_std_, base_seed);
+        add_noise(y_, n, noise_std_, noise_config, base_seed);
     }
 
     // =======================================
@@ -365,6 +708,7 @@ public:
      * @param snr Signal-to-noise ratio (linear scale).
      * @param seed Seed for random number generation (Default: -1 for random seed, >= 0
      *             for reproducible).
+     * @param noise_config Noise configuration (default: Gaussian).
      */
     SyntheticDataMapped(
         const std::string& X_filepath,
@@ -374,7 +718,8 @@ public:
         const std::vector<std::size_t>& support,
         const std::vector<double>& coefs,
         double snr = 1.0,
-        int seed = -1
+        int seed = -1,
+        const NoiseConfig& noise_config = NoiseConfig::Gaussian()
     ) : X_filepath_(X_filepath),
         y_filepath_(y_filepath),
         n_(n),
@@ -408,7 +753,9 @@ public:
 
         // Calculate noise level and add noise
         std::tie(signal_power_, noise_std_) = detail::calculate_noise_params(y_vec, n, snr);
-        detail::add_gaussian_noise(y_vec, n, noise_std_, base_seed);
+        add_noise(y_vec, n, noise_std_, noise_config, base_seed);
+
+        // Update response in memory-mapped file
         y_map.col(0) = y_vec;
     }
 
@@ -501,7 +848,7 @@ public:
     // Constructor
     // =======================================
 
-    /** @brief Constructor for SyntheticDataMappedWithDummies
+    /** @brief Constructor for SyntheticDataMappedWithDummies with configurable noise.
      *
      * @param X_aug_filepath File path for memory-mapped augmented predictor matrix.
      * @param y_filepath File path for memory-mapped response vector.
@@ -518,6 +865,7 @@ public:
      * @param dummy_seed Seed for generating dummy variables (Default: -1 for random seed,
      *                   >= 0 for reproducible).
      * @param dummy_dist Distribution for dummy variable generation (Default: Normal).
+     * @param noise_config Noise configuration (default: Gaussian).
      */
     SyntheticDataMappedWithDummies(
         const std::string& X_aug_filepath,
@@ -531,7 +879,8 @@ public:
         int seed = -1,
         int X_seed = -1,
         int dummy_seed = -1,
-        const dummygen::Distribution& dummy_dist = dummygen::Distribution::Normal()
+        const dummygen::Distribution& dummy_dist = dummygen::Distribution::Normal(),
+        const NoiseConfig& noise_config = NoiseConfig::Gaussian()
     ) : X_aug_filepath_(X_aug_filepath),
         y_filepath_(y_filepath),
         n_(n),
@@ -576,7 +925,9 @@ public:
 
         // Add noise
         std::tie(signal_power_, noise_std_) = detail::calculate_noise_params(y_vec, n, snr);
-        detail::add_gaussian_noise(y_vec, n, noise_std_, base_seed);
+        add_noise(y_vec, n, noise_std_, noise_config, base_seed);
+
+        // Update response in memory-mapped file
         y_map.col(0) = y_vec;
     }
 
