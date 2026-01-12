@@ -364,8 +364,8 @@ void demo_TRexSelector_varMonteCarlo(std::size_t num_MC, bool high_dim, bool rnd
     cdianostics::print_section_header("Demo: T-Rex Selector Monte Carlo Simulation");
     std::cout << (high_dim ? "High-dimensional (p > n)" : "Low-dimensional (n > p)") << "\n";
 
-    const std::size_t n = high_dim ? 1000 : 1000;
-    const std::size_t p = high_dim ? 10000 : 300;
+    const std::size_t n = high_dim ? 300 : 1000;
+    const std::size_t p = high_dim ? 1000 : 300;
     std::cout << "n = " << n << ", p = " << p << "\n";
     const std::size_t cardinality_true_support = 10;
     const std::vector<double> snr_values = {0.1, 0.5, 1.0, 2.0, 5.0};
@@ -376,12 +376,12 @@ void demo_TRexSelector_varMonteCarlo(std::size_t num_MC, bool high_dim, bool rnd
 
     const std::vector<DemoSolverInfo> solvers_to_test = {
        {SolverTypeForTRex::TLARS,      "TLARS",     /*lambda2=*/{}  },
-       {SolverTypeForTRex::TLASSO,     "TLASSO",    /*lambda2=*/{}  },
-       {SolverTypeForTRex::TENET,      "TENET",     /*lambda2=*/0.1 },
-       {SolverTypeForTRex::TSTEPWISE,  "TSTEPWISE", /*lambda2=*/{}  },
-       {SolverTypeForTRex::TOMP,       "TOMP",      /*lambda2=*/{}  },
-       {SolverTypeForTRex::TGP,        "TGP",       /*lambda2=*/{}  },
-       {SolverTypeForTRex::TACGP,      "TACGP",     /*lambda2=*/{}  }
+      // {SolverTypeForTRex::TLASSO,     "TLASSO",    /*lambda2=*/{}  },
+      // {SolverTypeForTRex::TENET,      "TENET",     /*lambda2=*/0.1 },
+      // {SolverTypeForTRex::TSTEPWISE,  "TSTEPWISE", /*lambda2=*/{}  },
+      // {SolverTypeForTRex::TOMP,       "TOMP",      /*lambda2=*/{}  },
+      // {SolverTypeForTRex::TGP,        "TGP",       /*lambda2=*/{}  },
+      // {SolverTypeForTRex::TACGP,      "TACGP",     /*lambda2=*/{}  }
     };
 
     // Results: solver x SNR
@@ -398,8 +398,8 @@ void demo_TRexSelector_varMonteCarlo(std::size_t num_MC, bool high_dim, bool rnd
     trex_control.K = 20;
     trex_control.max_dummy_multiplier = 10;
     trex_control.max_T_stop = true;
-    trex_control.dummy_distribution = dummygen::Distribution::Rademacher();
-    trex_control.lloop_strategy = LLoopStrategy::ADAPTIVE;
+    trex_control.dummy_distribution = dummygen::Distribution::Normal();
+    trex_control.lloop_strategy = LLoopStrategy::PERMUTATION;
     trex_control.tloop_stagnation_stop = true;
     trex_control.max_stagnant_steps = 3;
 
@@ -689,7 +689,7 @@ int main() {
 
     // Run basic T-Rex Selector demo
     // --------------------------------------------------------------------------------------
-    if (true)
+    if (false)
         demo_TRexSelector(/*high_dim=*/true, /*rnd_coef=*/false);
 
 
@@ -707,7 +707,7 @@ int main() {
     // Monte Carlo simulation: Run T-Rex Selector with variable data, support & coefficients
     // --------------------------------------------------------------------------------------
     // high-dimensional setting
-    if (false)
+    if (true)
         demo_TRexSelector_varMonteCarlo(/*num_MC=*/100, /*high_dim=*/true, /*rnd_coef=*/false);
 
 
