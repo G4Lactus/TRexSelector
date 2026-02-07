@@ -183,8 +183,15 @@ inline void generate_ar1_rowwise_matrix(
     double rho,
     unsigned int base_seed
 ) {
-    // double variance for unit marginal variance: sigma^2 = 1 - rho^2
-    double innovation_std = std::sqrt(1.0 - rho * rho);
+    // If rho is 1.0 (Random Walk), we want standard noise (1.0).
+    // If rho < 1.0 (Stationary), we scale noise to keep marginal variance = 1.0.
+    double innovation_std;
+    if (std::abs(rho) >= 1.0) {
+        innovation_std = 1.0;
+    } else {
+        // prevent floating errors: IEEE 754
+        innovation_std = std::sqrt(std::max(0.0, 1.0 - rho * rho));
+    }
 
     // Data generation with row-wise AR(1) process
     #pragma omp parallel for schedule(static)
@@ -203,6 +210,276 @@ inline void generate_ar1_rowwise_matrix(
         }
     }
 }
+
+
+/**
+ * @brief Generate Hardy-Weinberg Equilibrium genotype matrix.
+ *
+ * @tparam MatrixType Type of the matrix (e.g., Eigen::MatrixXd).
+ *
+ * @param X Reference to the matrix to be filled.
+ * @param n Number of rows.
+ * @param p Number of columns.
+ * @param maf Minor allele frequency in [0.0, 0.5].
+ * @param base_seed Base seed for random number generation.
+ */
+template<typename MatrixType>
+inline void generate_HWE_Genotype_matrix(
+    MatrixType& X,
+    std::size_t n,
+    std::size_t p,
+    double maf,
+    unsigned int base_seed
+) {
+    if (maf < 0.0 || maf > 0.5) {
+        throw std::invalid_argument("MAF must be in [0.0, 0.5].");
+    }
+
+    const double p0 = (1.0 - maf) * (1.0 - maf);
+    const double p1 = 2.0 * maf * (1.0 - maf);
+
+    #pragma omp parallel  for schedule(static)
+    for (std::size_t j = 0; j < p; ++j) {
+        std::mt19937 col_gen(dummygen::mix_seed(base_seed, j));
+        std::uniform_real_distribution<double> unif_dist(0.0, 1.0);
+        for (std::size_t i = 0; i < n; ++i) {
+            double u = unif_dist(col_gen);
+            if (u < p0) {
+                X(i, j) = 0.0;
+            } else if (u < p0 + p1) {
+                X(i, j) = 1.0;
+            } else {
+                X(i, j) = 2.0;
+            }
+        }
+    }
+}
+
+
+// ==============================================================================
+// Predictor Matrix Distribution Configuration
+// ==============================================================================
+
+/**
+ * @brief Configuration for predictor matrix distribution.
+ *
+ * @details Unified structure to specify distribution type and parameters for
+ * generating the predictor matrix X in synthetic regression problems.
+ */
+struct PredictorConfig {
+    // ============================================
+    // Enumeration for distribution types
+    // ============================================
+
+    /**
+     * @brief Distribution type enumeration for predictor matrix.
+     */
+    enum class Type {
+        /** @brief Standard Normal distribution N(0, 1). */
+        Normal,
+
+        /** @brief Student's t-distribution with df degrees of freedom. */
+        StudentT,
+
+        /** @brief Gumbel distribution (Extreme value distribution). */
+        Gumbel,
+
+        /** @brief AR(1) row-wise autoregressive process. */
+        AR1,
+
+        /** @brief Hardy-Weinberg Equilibrium genotype distribution. */
+        HWE
+    };
+
+    // ============================================
+    // Core member: distribution type
+    // ============================================
+
+    /** @brief Distribution type (Default: Normal). */
+    Type type = Type::Normal;
+
+    // ===================================================
+    // Default members: Distribution-specific parameters
+    // ===================================================
+
+    /** @brief Student's t-distribution: degrees of freedom (default: 5.0). */
+    double student_t_df = 5.0;
+
+    /** @brief Gumbel distribution: location parameter (default: 0.0). */
+    double gumbel_location = 0.0;
+
+    /** @brief Gumbel distribution: scale parameter (default: 1.0). */
+    double gumbel_scale = 1.0;
+
+    /**
+     * @brief AR(1): autoregressive parameter (default: 0.5).
+     * - |rho| < 1: stationary with unit marginal variance
+     * - |rho| >= 1: non-stationary
+     */
+    double ar1_rho = 0.5;
+
+    /** @brief HWE: minor allele frequency (default: 0.1). */
+    double maf = 0.1;
+
+    // ============================================
+    // Constructors
+    // ============================================
+
+    /** @brief Default constructor (Normal distribution) */
+    PredictorConfig() : type(Type::Normal) {}
+
+    /** @brief Construct with specific type, using default parameters */
+    explicit PredictorConfig(Type t) : type(t) {}
+
+    // ============================================
+    // Named constructors (factory pattern)
+    // ============================================
+
+    /**
+     * @brief Create standard normal distribution N(0, 1).
+     *
+     * @details Properties: Mean = 0, Variance = 1.
+     *
+     * @return PredictorConfig instance for Normal distribution.
+     */
+    static PredictorConfig Normal() {
+        return PredictorConfig(Type::Normal);
+    }
+
+    /**
+     * @brief Create Student's t-distribution with df degrees of freedom.
+     *
+     * @details The Student's t-distribution has mean = 0 for df > 1
+     * and variance = df / (df - 2) for df > 2.
+     * Implementation automatically scales to unit variance when df > 2.
+     *
+     * @param df Degrees of freedom (default: 5.0).
+     *
+     * @return PredictorConfig instance for Student's t-distribution.
+     */
+    static PredictorConfig StudentT(double df = 5.0) {
+        if (df <= 0.0) {
+            throw std::invalid_argument("Student-t degrees of freedom must be > 0.");
+        }
+        PredictorConfig config(Type::StudentT);
+        config.student_t_df = df;
+        return config;
+    }
+
+    /**
+     * @brief Create Gumbel (Type-I extreme value) distribution.
+     *
+     * @details The Gumbel distribution has mean = location + scale * gamma and
+     * variance = (pi^2 / 6) * scale^2, where gamma is the Euler-Mascheroni constant.
+     *
+     * @param location Location parameter (default: 0.0).
+     * @param scale Scale parameter (default: 1.0).
+     *
+     * @return PredictorConfig instance for Gumbel distribution.
+     */
+    static PredictorConfig Gumbel(double location = 0.0, double scale = 1.0) {
+        if (scale <= 0.0) {
+            throw std::invalid_argument("Gumbel distribution scale parameter must be > 0.");
+        }
+        PredictorConfig config(Type::Gumbel);
+        config.gumbel_location = location;
+        config.gumbel_scale = scale;
+        return config;
+    }
+
+    /**
+     * @brief Create AR(1) row-wise autoregressive process.
+     *
+     * @details Each row follows: X[i,j] = rho * X[i,j-1] + eta[i,j],
+     * where eta ~ N(0, (1-rho^2)) for |rho| < 1 (stationary).
+     *
+     * Properties:
+     * - |rho| < 1: stationary, unit marginal variance
+     * - |rho| = 1: unit root (random walk)
+     * - |rho| > 1: explosive process
+     *
+     * @param rho Autoregressive parameter (default: 0.5).
+     *
+     * @return PredictorConfig instance for AR(1) process.
+     */
+    static PredictorConfig AR1(double rho = 0.5) {
+        PredictorConfig config(Type::AR1);
+        config.ar1_rho = rho;
+        return config;
+    }
+
+    /**
+     * @brief Create Hardy-Weinberg Equilibrium genotype distribution.
+     *
+     * @param maf Minor allele frequency in [0.0, 0.5] (default: 0.1).
+     *
+     * @return PredictorConfig instance for HWE genotype distribution.
+     */
+    static PredictorConfig HWE(double maf = 0.1) {
+        if (maf < 0.0 || maf > 0.5) {
+            throw std::invalid_argument("MAF must be in [0.0, 0.5].");
+        }
+        PredictorConfig config(Type::HWE);
+        config.maf = maf;
+        return config;
+    }
+
+    // ============================================
+    // Accessors
+    // ============================================
+
+    /** @brief Get distribution type. */
+    Type get_type() const { return type; }
+};
+
+
+/**
+ * @brief Generate predictor matrix based on distribution configuration.
+ *
+ * @tparam MatrixType Type of the matrix (e.g., Eigen::MatrixXd).
+ *
+ * @param X Reference to the matrix to be filled.
+ * @param n Number of rows.
+ * @param p Number of columns.
+ * @param config Predictor distribution configuration.
+ * @param base_seed Base seed for random number generation.
+ */
+template<typename MatrixType>
+inline void generate_predictor_matrix(
+    MatrixType& X,
+    std::size_t n,
+    std::size_t p,
+    const PredictorConfig& config,
+    unsigned int base_seed
+) {
+    switch (config.get_type()) {
+        case PredictorConfig::Type::Normal:
+            detail::generate_standard_normal_matrix(X, n, p, base_seed);
+            break;
+
+        case PredictorConfig::Type::StudentT:
+            detail::generate_student_t_matrix(X, n, p, config.student_t_df, base_seed);
+            break;
+
+        case PredictorConfig::Type::Gumbel:
+            detail::generate_gumbel_matrix(X, n, p, base_seed,
+                                          config.gumbel_location, config.gumbel_scale);
+            break;
+
+        case PredictorConfig::Type::AR1:
+            detail::generate_ar1_rowwise_matrix(X, n, p, config.ar1_rho, base_seed);
+            break;
+
+        case PredictorConfig::Type::HWE:
+            detail::generate_HWE_Genotype_matrix(X, n, p, config.maf, base_seed);
+
+        default:
+            throw std::invalid_argument("Unsupported predictor distribution type.");
+    }
+}
+
+
+
 
 
 /**
@@ -372,39 +649,40 @@ inline void add_ar1_noise(
         throw std::invalid_argument("Noise standard deviation must be > 0.");
     }
 
-    // Innovation variance: sigma_eta^2 = (1 - rho^2) * noise_std^2
+    // Determine Innovation Standard Deviation
     double innovation_std;
+    // Apply the safety guard for floating point errors near 1.0
     if (std::abs(rho) < 1.0) {
-        // Stationary case: sigma_eta^2 = (1 - rho^2) * noise_std^2
-        innovation_std = noise_std * std::sqrt(1.0 - rho * rho);
+        innovation_std = noise_std * std::sqrt(std::max(0.0, 1.0 - rho * rho));
     } else {
-        // Unit root or explosive case: no scaling possible
         innovation_std = noise_std;
     }
 
-    std::mt19937 noise_gen(noise_seed + 999999);
+    std::mt19937 noise_gen(dummygen::mix_seed(noise_seed, 0xDEADBEEF));
     std::normal_distribution<double> innovation_dist(0.0, innovation_std);
 
-    // Generate AR(1) noise
-    VectorType ar1_noise(n);
-
-    // Initialize first value
+    // Process First Element
+    double current_noise_val;
     if (std::abs(rho) < 1.0) {
-        // Stationary case: draw from N(0, noise_std^2)
         std::normal_distribution<double> stationary_dist(0.0, noise_std);
-        ar1_noise(0) = stationary_dist(noise_gen);
+        current_noise_val = stationary_dist(noise_gen);
     } else {
-        // Unit root or explosive case: start from innovation
-        ar1_noise(0) = innovation_dist(noise_gen);
+        current_noise_val = innovation_dist(noise_gen);
     }
-    // Remainder recursion
+
+    // Add first noise value to y
+    y(0) += current_noise_val;
+
+    // Generate next noise, add to y, update state
     for (std::size_t i = 1; i < n; ++i) {
         double eta = innovation_dist(noise_gen);
-        ar1_noise(i) = rho * ar1_noise(i - 1) + eta;
-    }
 
-    // Add AR(1) noise to response
-    y += ar1_noise;
+        // Calculate AR(1) step
+        current_noise_val = rho * current_noise_val + eta;
+
+        // Add to the signal
+        y(i) += current_noise_val;
+    }
 }
 
 } /* End of namespace detail */
@@ -584,9 +862,9 @@ public:
      * @param support Indices of true support (0-indexed)
      * @param coefs Values of true coefficients
      * @param snr Signal-to-noise ratio (linear scale)
-     * @param seed Seed for random number generation (Default: -1 for random seed, >= for
-     *             reproducible data).
-     * @param noise_config Noise configuration (default: Gaussian).
+     * @param seed Seed for random number generation (Default: -1 for random seed)
+     * @param predictor_config Predictor matrix distribution (default: Normal)
+     * @param noise_config Noise distribution (default: Gaussian)
      */
     SyntheticData(
         std::size_t n,
@@ -595,6 +873,7 @@ public:
         const std::vector<double>& coefs,
         double snr = 1.0,
         int seed = -1,
+        const detail::PredictorConfig& predictor_config = detail::PredictorConfig::Normal(),
         const NoiseConfig& noise_config = NoiseConfig::Gaussian()
     ) {
         // Validate inputs
@@ -603,9 +882,9 @@ public:
         // Get reproducible seed
         unsigned int base_seed = detail::get_base_seed(seed);
 
-        // Generate X ~ N(0, 1)
+        // Generate X with specified distribution
         X_.resize(n, p);
-        detail::generate_standard_normal_matrix(X_, n, p, base_seed);
+        detail::generate_predictor_matrix(X_, n, p, predictor_config, base_seed);
 
         // Generate signal: y = X[support] * coefs
         y_.resize(n);
@@ -615,6 +894,7 @@ public:
         std::tie(signal_power_, noise_std_) = detail::calculate_noise_params(y_, n, snr);
         add_noise(y_, n, noise_std_, noise_config, base_seed);
     }
+
 
     // =======================================
     // Accessors
@@ -706,9 +986,9 @@ public:
      * @param support Indices of true support (0-indexed).
      * @param coefs Values of true coefficients.
      * @param snr Signal-to-noise ratio (linear scale).
-     * @param seed Seed for random number generation (Default: -1 for random seed, >= 0
-     *             for reproducible).
-     * @param noise_config Noise configuration (default: Gaussian).
+     * @param seed Seed for random number generation (Default: -1 for random seed).
+     * @param predictor_config Predictor matrix distribution (default: Normal).
+     * @param noise_config Noise distribution (default: Gaussian).
      */
     SyntheticDataMapped(
         const std::string& X_filepath,
@@ -719,6 +999,7 @@ public:
         const std::vector<double>& coefs,
         double snr = 1.0,
         int seed = -1,
+        const detail::PredictorConfig& predictor_config = detail::PredictorConfig::Normal(),
         const NoiseConfig& noise_config = NoiseConfig::Gaussian()
     ) : X_filepath_(X_filepath),
         y_filepath_(y_filepath),
@@ -743,8 +1024,8 @@ public:
         auto X_map = X_mmap_->getMap();
         auto y_map = y_mmap_->getMap();
 
-        // Generate X ~ N(0, 1)
-        detail::generate_standard_normal_matrix(X_map, n, p, base_seed);
+        // Generate X with specified distribution
+        generate_predictor_matrix(X_map, n, p, predictor_config, base_seed);
 
         // Generate signal
         Eigen::VectorXd y_vec = y_map.col(0);
@@ -758,6 +1039,7 @@ public:
         // Update response in memory-mapped file
         y_map.col(0) = y_vec;
     }
+
 
     // =======================================
     // Accessors
@@ -848,7 +1130,8 @@ public:
     // Constructor
     // =======================================
 
-    /** @brief Constructor for SyntheticDataMappedWithDummies with configurable noise.
+    /**
+     * @brief Constructor for SyntheticDataMappedWithDummies with configurable predictor, dummy, and noise distributions.
      *
      * @param X_aug_filepath File path for memory-mapped augmented predictor matrix.
      * @param y_filepath File path for memory-mapped response vector.
@@ -864,6 +1147,7 @@ public:
      *               >= 0 for reproducible).
      * @param dummy_seed Seed for generating dummy variables (Default: -1 for random seed,
      *                   >= 0 for reproducible).
+     * @param predictor_config Predictor matrix distribution (default: Normal).
      * @param dummy_dist Distribution for dummy variable generation (Default: Normal).
      * @param noise_config Noise configuration (default: Gaussian).
      */
@@ -879,6 +1163,7 @@ public:
         int seed = -1,
         int X_seed = -1,
         int dummy_seed = -1,
+        const detail::PredictorConfig& predictor_config = detail::PredictorConfig::Normal(),
         const dummygen::Distribution& dummy_dist = dummygen::Distribution::Normal(),
         const NoiseConfig& noise_config = NoiseConfig::Gaussian()
     ) : X_aug_filepath_(X_aug_filepath),
@@ -893,15 +1178,14 @@ public:
         // Get seeds
         unsigned int base_seed = detail::get_base_seed(seed);
         unsigned int x_gen_seed = (X_seed >= 0) ? static_cast<unsigned int>(X_seed) :
-                                              base_seed + 51242;
+                                                base_seed + 51242;
         unsigned int dummy_gen_seed = (dummy_seed >= 0) ? static_cast<unsigned int>(dummy_seed) :
-                                                  base_seed + 14273785;
+                                                        base_seed + 14273785;
 
         // Create memory-mapped augmented matrix (sparse file)
         X_aug_mmap_ = std::make_unique<memmap::MemoryMappedMatrix<double>>(
             X_aug_filepath_, n, p + num_dummies, memmap::AccessMode::ReadWrite
         );
-
         y_mmap_ = std::make_unique<memmap::MemoryMappedMatrix<double>>(
             y_filepath_, n, 1, memmap::AccessMode::ReadWrite
         );
@@ -910,9 +1194,9 @@ public:
         auto X_aug_map = X_aug_mmap_->getMap();
         auto y_map = y_mmap_->getMap();
 
-        // Generate X in first p columns
+        // Generate X in first p columns with specified distribution
         auto X_view = X_aug_map.leftCols(p);
-        detail::generate_standard_normal_matrix(X_view, n, p, x_gen_seed);
+        detail::generate_predictor_matrix(X_view, n, p, predictor_config, x_gen_seed);
 
         // Generate dummies in last num_dummies columns
         auto dummies_view = X_aug_map.rightCols(num_dummies);
@@ -930,6 +1214,7 @@ public:
         // Update response in memory-mapped file
         y_map.col(0) = y_vec;
     }
+
 
     // =======================================
     // Accessors

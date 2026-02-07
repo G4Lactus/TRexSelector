@@ -185,3 +185,39 @@ add_demo_target(demo_08_trex
 #   demo_10_biobank_screen_trex.cpp
 #   T_REX_SELECTOR_LIBS
 #)
+
+
+# Matplot++ based demos
+# ===================================================================================
+# Demo 11: Plot dummy matrices
+set(ADDITIONAL_INCLUDES ${CMAKE_SOURCE_DIR}/src/trex/trex_core)
+add_demo_target(demo_11_plot_dummy_matrices
+    demo_11_plot_dummy_matrices.cpp
+    T_REX_SELECTOR_LIBS
+    Matplot++::matplot
+)
+
+set(ADDITIONAL_INCLUDES ${CMAKE_SOURCE_DIR}/src/trex/trex_core)
+add_demo_target(demo_12_biodata
+    demo_12_biodata.cpp
+    T_REX_SELECTOR_LIBS
+    Matplot++::matplot
+)
+
+
+set(ADDITIONAL_INCLUDES ${CMAKE_SOURCE_DIR}/src/trex/trex_core)
+add_demo_target(demo_13_plot_fdr_tpr_results
+    demo_13_plot_fdr_tpr_results.cpp
+    T_REX_SELECTOR_LIBS
+    Matplot++::matplot
+)
+
+
+# Demo 14: TRex Selector with HapGen Data
+# ===================================================================================
+# set(ADDITIONAL_INCLUDES ${CMAKE_SOURCE_DIR}/src/trex/trex_core)
+# add_demo_target(demo_14_trex_hapgen
+#     demo_14_trex_hapgen.cpp
+#     T_REX_SELECTOR_LIBS
+#     Matplot++::matplot
+# )

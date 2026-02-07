@@ -136,6 +136,9 @@ struct Distribution {
         /** @brief Sparse Rademacher distribution with sparsity density parameter s. */
         SparseRademacher,
 
+        /** @brief Sparsity-constrained Rademacher distribution with sparsity density parameter s. */
+        ConstrainedSparseRademacher,
+
         /** @brief Logistic distribution. */
         Logistic
     };
@@ -196,6 +199,9 @@ struct Distribution {
 
     /** @brief Sparse Rademacher distribution: sparsity parameter (default: 0.1). */
     double sparse_rademacher_s = 0.1;
+
+    /** @brief Constrained Sparse Rademacher distribution: sparsity parameter (default: 0.1). */
+    double constrained_sparse_rademacher_s = 0.1;
 
     /** @brief Logistic distribution: location parameter (default: 0.0). */
     double logistic_location = 0.0;
@@ -498,6 +504,16 @@ struct Distribution {
     }
 
 
+    static Distribution ConstrainedSparseRademacher(const double s) {
+        if (s <= 0.0 || s > 1.0) {
+            throw std::invalid_argument("Sparsity parameter s must be in (0, 1].");
+        }
+        Distribution dist(Type::ConstrainedSparseRademacher);
+        dist.constrained_sparse_rademacher_s = s;
+        return dist;
+    }
+
+
     /**
      * @brief Create Logistic distribution.
      *
@@ -778,6 +794,42 @@ inline void generate_dummies(
                     } else {
                         X(i, j) = -1.0;
                     }
+                }
+            }
+            break;
+        }
+
+
+        case Distribution::Type::ConstrainedSparseRademacher: {
+            double s = dist.constrained_sparse_rademacher_s;
+
+            #pragma omp parallel for schedule(static)
+            for (std::size_t j = 0; j < p; ++j) {
+                std::mt19937 gen(mix_seed(base_seed, j));
+
+                // Calculate even number of non-zeros: k = floor(s * n / 2) (floor -> std::size_t)
+                std::size_t k = 2 * static_cast<std::size_t>(n * s / 2.0);
+
+                // Handle ultra-sparse case (s < 2 / n)
+                // Ensure a minimum of 2 non-zeros for balance
+                if (k < 2) { k = 2; }
+                std::size_t k_half = k / 2;
+
+                // Initialize column to zeros
+                X.col(j).setZero();
+
+                // Create shuffled index vector for random placement
+                std::vector<std::size_t> indices(n);
+                std::iota(indices.begin(), indices.end(), 0);
+                std::shuffle(indices.begin(), indices.end(), gen);
+
+                // Assign +1 to first k/2 and -1 to next k/2 shuffled positions
+                // splitting saves wasted 50% of lookups in rejection sampling
+                for (std::size_t i = 0; i < k_half; ++i) {
+                    X(indices[i], j) = 1.0;
+                }
+                for (std::size_t i = k_half; i < k; ++i) {
+                    X(indices[i], j) = -1.0;
                 }
             }
             break;

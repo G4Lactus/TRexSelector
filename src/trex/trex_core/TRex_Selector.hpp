@@ -70,10 +70,12 @@ enum class SolverTypeForTRex {
  * @brief L-loop calibration strategies
  */
 enum class LLoopStrategy {
-    SKIP,            // Skip L-loop calibration: use fixed number of dummies
-    STANDARD,        // Generate fresh dummies in each L-loop iteration (conservative)
-    ADAPTIVE,        // Horizontally expand dummy matrices (faster - same result)
-    PERMUTATION      // Determinstic permutations of base dummies
+    SKIP,                  // Skip L-loop calibration: use fixed number of dummies
+    STANDARD,              // Generate fresh dummies in each L-loop iteration (conservative)
+    HCONCAT,               // Horizontally concat dummy matrices (faster - same result)
+    PERMUTATION,           // Determinstic permutations of base dummy matrix
+    PERMUTATION_DIRECT,    // Seed-based permutations without base dummy matrix
+    DIRECT                 // Seed-based direction generation without base dummy matrix
 };
 
 
@@ -100,13 +102,13 @@ struct TRexControlParameter {
     /**
      * @brief Maximum number of dummy variables as a multiple of p.
      *
-     * @details For STANDARD/ADAPTIVE: L = p, 2p, .., max_dummy_multiplier * p (Default: 10).
+     * @details For STANDARD/HCONCAT: L = p, 2p, .., max_dummy_multiplier * p (Default: 10).
      *          For SKIP: Set fixed number of dummies = max_dummy_multiplier * p.
      */
     std::size_t max_dummy_multiplier = 10;
 
     /** @brief If true, limit T_stop to ceiling(n/2) (default: true). */
-    bool max_T_stop = true;
+    bool use_max_T_stop = true;
 
     // ===================================
     // Dummy Generation
@@ -119,16 +121,16 @@ struct TRexControlParameter {
     // L-Loop Strategy
     // ===================================
     /**
-     * @brief Strategy for L-loop calibration (default: ADAPTIVE).
+     * @brief Strategy for L-loop calibration (default: HCONCAT).
      *
      * @details
      *    - SKIP:     Skip L-loop calibration, use fixed number of
      *                dummies = max_dummy_multiplier * p.
      *    - STANDARD: Generate fresh dummies in each L-loop iteration (conservative).
-     *    - ADAPTIVE: Horizontally expand dummy matrices (faster - same result).
+     *    - HCONCAT: Horizontally expand dummy matrices (faster - same result).
      *    - PERMUTATION: Deterministic permutations of base dummies.
      */
-    LLoopStrategy lloop_strategy = LLoopStrategy::ADAPTIVE;
+    LLoopStrategy lloop_strategy = LLoopStrategy::HCONCAT;
 
     // ==================================
     // T-Loop Early Strategy
@@ -137,8 +139,8 @@ struct TRexControlParameter {
     /** @brief If true, perform early stopping if support set stagnates (default: true). */
     bool tloop_stagnation_stop = true;
 
-    /** @brief Number of stagnant steps required to trigger early T-loop stopping (default: 3). */
-    std::size_t max_stagnant_steps = 3;
+    /** @brief Number of stagnant steps required to trigger early T-loop stopping (default: 5). */
+    std::size_t tloop_max_stagnant_steps = 5;
 
     // =================================
     // Parallel random experiments
@@ -264,10 +266,10 @@ protected:
     Eigen::VectorXd y_{};
 
     /** @brief Number of observations. */
-    std::size_t n_;
+    const std::size_t n_;
 
     /** @brief Number of features. */
-    std::size_t p_;
+    const std::size_t p_;
 
 
     // ============================================================
@@ -420,15 +422,16 @@ public:
 
     /** @brief Result from variable selection step. */
     struct SelectionResult {
-        Eigen::VectorXi selected_var;   /** Binary support vector (0/1) */
-        double v_thresh;                /** Voting threshold */
-        Eigen::MatrixXd R_mat;          /** Selection frequency matrix */
-        std::size_t T_stop;             /** Number of dummies used */
-        std::size_t num_dummies;        /** Total number of dummies used */
-        Eigen::MatrixXd FDP_hat_mat;    /** Estimated FDP matrix */
-        Eigen::MatrixXd Phi_mat;        /** Relative occurrence matrix */
-        Eigen::VectorXd Phi_prime;      /** Adjusted relative occurrences (p x 1) */
-        Eigen::VectorXd voting_grid;    /** Voting grid used */
+        Eigen::VectorXi selected_var;       /** Binary support vector (0/1) */
+        double v_thresh;                    /** Voting threshold */
+        Eigen::MatrixXd R_mat;              /** Selection frequency matrix */
+        std::size_t T_stop;                 /** Number of dummies used */
+        std::size_t num_dummies;            /** Total number of dummies used */
+        std::size_t dummy_factor_L;         /** Average number of dummies used in L-loop */
+        Eigen::MatrixXd FDP_hat_mat;        /** Estimated FDP matrix */
+        Eigen::MatrixXd Phi_mat;            /** Relative occurrence matrix */
+        Eigen::VectorXd Phi_prime;          /** Adjusted relative occurrences (p x 1) */
+        Eigen::VectorXd voting_grid;        /** Voting grid used */
     };
 
 
@@ -455,7 +458,7 @@ public:
     );
 
     /** @brief Virtual destructor for proper polymorphic behavior. */
-    virtual ~TRexSelector() = default;
+    virtual ~TRexSelector();
 
     // Delete copy semantics
     /** @brief Delete copy constructor. */
@@ -509,7 +512,7 @@ public:
     }
 
     /** @brief Get maximum T_stop flag. */
-    inline bool getMaxTStop() const noexcept { return trex_ctrl_.max_T_stop; }
+    inline bool getMaxTStop() const noexcept { return trex_ctrl_.use_max_T_stop; }
 
     /** @brief Get stagnation check flag. */
     inline bool getStagnationCheck() const noexcept {
@@ -567,6 +570,13 @@ public:
 
     /** @brief Get adjusted relative occurrences Phi'. */
     inline const Eigen::VectorXd& getPhiPrime() const noexcept { return Phi_prime_; }
+
+    /** @brief Get dummy multiplier L. */
+    inline std::size_t getDummyMultiplierL() const noexcept { return dummy_multiplier_LL_; }
+
+    /** @brief Get stopping time T. */
+    inline std::size_t getStoppingTimeT() const noexcept { return T_stop_; }
+
 
 protected:
     // ============================================================
@@ -635,6 +645,10 @@ protected:
     };
 
 
+    // ===========================================================
+    // Random Experiment Strategies according to L-Loop Strategy
+    // ===========================================================
+
     /**
      * @brief Run K random experiments and compute phi_T_mat and Phi vector.
      *
@@ -671,6 +685,25 @@ protected:
         bool use_warm_start
     );
 
+    /**
+     * @brief Run K random experiments with DIRECT strategy (in-memory).
+     *
+     * @details Generates experiment-specific dummies on-demand from seeds.
+     *          No base matrix needed. Deterministic across L-loop and T-loop.
+     *
+     * @param num_dummies umber of dummies to append.
+     * @param T_stop Early stopping threshold.
+     * @param use_warm_start If true, use warm start from serialized solvers.
+     *
+     * @return phi_T_mat (p x T_stop) and Phi vector.
+     */
+    ExperimentResults runRandomExperiments_Direct(
+        std::size_t num_dummies,
+        std::size_t T_stop,
+        bool use_warm_start
+    );
+
+
 
     // ===========================================================
     // L-loop strategies
@@ -704,14 +737,14 @@ protected:
 
 
     /**
-     * @brief Run L-loop calibration with ADAPTIVE strategy.
+     * @brief Run L-loop calibration with HCONCAT strategy.
      *
      * @details Horizontally expands dummy matrices across iterations.
      *
      * @param FDP_hat FDP estimates.
      * @param exp_results Experiment results structure to fill.
      */
-    void runLLoopCalibration_Adaptive(Eigen::VectorXd& FDP_hat, ExperimentResults& exp_results);
+    void runLLoopCalibration_HCONCAT(Eigen::VectorXd& FDP_hat, ExperimentResults& exp_results);
 
 
     /**
@@ -723,6 +756,9 @@ protected:
      * @param exp_results Experiment results structure to fill.
      */
     void runLLoopCalibration_Permutation(Eigen::VectorXd& FDP_hat, ExperimentResults& exp_results);
+
+
+    void runLLoopCalibration_Direct(Eigen::VectorXd& FDP_hat, ExperimentResults& exp_results);
 
 
     // ====================
@@ -776,6 +812,7 @@ protected:
         std::size_t experiment_id,
         std::size_t num_dummies
     );
+
 
 
     // ===========================================================
@@ -863,24 +900,6 @@ protected:
 
 
     /**
-     * @brief Generate dummy matrix using configured distribution.
-     *
-     * @details Delegates to utils::dummygen::generate_dummies with distribution specified
-     *          in trex_ctrl_.dummy_distribution.
-     *          Default: Normal distribution.
-     *
-     * @param num_dummies Number of dummy columns.
-     * @param experiment_id Experiment index (for seed offset).
-     *
-     * @return Dummy matrix with (n x num_dummies), L2 normalized columns.
-     */
-    Eigen::MatrixXd generateDummies(
-        std::size_t num_dummies,
-        std::size_t experiment_id
-    ) const;
-
-
-    /**
      * @brief Run a single experiment with a specific solver type.
      *
      * @details Handles solver creation, warm start loading, execution, and saving.
@@ -910,6 +929,47 @@ protected:
     void storeResults(
         const SelectionResult& result
     );
+
+
+    // ===========================================================
+    // Dummy Generation Methods
+    // ===========================================================
+
+    /**
+     * @brief Generate dummy matrix using configured distribution.
+     *
+     * @details Delegates to utils::dummygen::generate_dummies with distribution specified
+     *          in trex_ctrl_.dummy_distribution.
+     *          Default: Normal distribution.
+     *
+     * @param num_dummies Number of dummy columns.
+     * @param experiment_id Experiment index (for seed offset).
+     *
+     * @return Dummy matrix with (n x num_dummies), L2 normalized columns.
+     */
+    Eigen::MatrixXd generateDummies(
+        std::size_t num_dummies,
+        std::size_t experiment_id
+    ) const;
+
+
+    /**
+     * @brief Generate dummy matrix for experiment k using direction generation.
+     *
+     * @details Creates dummies from experiment-specific seed without base matrix.
+     *          Deterministic: same seed_k always produces identical dummies.
+     *          Used by both DIRECT strategy variants (in-memory and memory-mapped).
+     *
+     * @param num_dummies Number of dummy columns.
+     * @param experiment_id Experiment index k in [0, K-1].
+     *
+     * @return Dummy matrix with (n x num_dummies), L2 normalized columns.
+     */
+    Eigen::MatrixXd generateDummiesForExperiment_Direct(
+        std::size_t num_dummies,
+        std::size_t experiment_id
+    ) const;
+
 
     // ===========================================================
     // Utilities
@@ -1013,6 +1073,25 @@ protected:
      * @return Experiment results (phi_T_mat and Phi).
      */
     ExperimentResults runRandomExperimentsMemMap_Permutation(
+        std::size_t num_dummies,
+        std::size_t T_stop,
+        bool use_warm_start
+    );
+
+
+    /**
+     * @brief Run K random experiments with DIRECT strategy (memory-mapped).
+     *
+     * @details Generates dummies directly into memory-mapped file region.
+     *          No base matrix needed. Single memory-mapped file reused.
+     *
+     * @param num_dummies Number of dummy variables L.
+     * @param T_stop Stopping time for solvers.
+     * @param use_warm_start If true, load serialized solver states.
+     *
+     * @return Aggregated experiment results.
+     */
+    ExperimentResults runRandomExperimentsMemMap_Direct(
         std::size_t num_dummies,
         std::size_t T_stop,
         bool use_warm_start

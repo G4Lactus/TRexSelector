@@ -43,6 +43,8 @@ TRexSelector::TRexSelector(
     ) :
     X_(&X),
     y_(y),
+    n_(static_cast<std::size_t>(X_->rows())),
+    p_(static_cast<std::size_t>(X_->cols())),
     tFDR_(tFDR),
     // Resource configuration at construction time
     trex_ctrl_([&]() {
@@ -61,21 +63,15 @@ TRexSelector::TRexSelector(
     has_serialized_solvers_(false),
     max_cols_memmap_(0)
 {
-    // ===========================================================
-    // 1. Extract dimensions
-    // ===========================================================
-
-    n_ = static_cast<std::size_t>(X_->rows());
-    p_ = static_cast<std::size_t>(X_->cols());
 
     // ===========================================================
-    // 2. Validate input parameters
+    // 1. Validate input parameters
     // ===========================================================
 
     validateTRexParameters();
 
     // ===========================================================
-    // 3. Normalize X (center & l2-score normalization), center y
+    // 2. Normalize X (center & l2-score normalization), center y
     // ===========================================================
 
     // Center y
@@ -85,7 +81,7 @@ TRexSelector::TRexSelector(
     centerAndL2NormalizeX();
 
     // ===========================================================
-    // 4. Initialize result containers
+    // 3. Initialize result containers
     // ===========================================================
 
     selected_var_.resize(0);
@@ -273,24 +269,52 @@ void TRexSelector::centerAndL2NormalizeMatrix(
 std::string TRexSelector::createTempDirectory() {
 
     namespace fs = std::filesystem;
-
-    // robust randomization
-    std::random_device rd;
-    std::mt19937 gen(rd());
-    std::uniform_int_distribution<> uidist(10000, 99999);
-
-    // create temp directory in system temp location
     fs::path temp_base = fs::temp_directory_path();
-    fs::path temp_dir = temp_base / ("trex_solvers_" + std::to_string(uidist(gen)));
+    fs::space_info si = fs::space(temp_base);
 
-    // Create directory
-    fs::create_directories(temp_dir);
-
-    if (verbose_) {
-        printProgress("Created temp directory: " + temp_dir.string());
+    // Safety check : disk space
+    if (si.available < 10LL * 1024 * 1024 * 1024) {
+        throw std::runtime_error(
+            "Disk Almost full! Less than 10 GB remaining. Aborting to safeguard system stability."
+        );
     }
 
-    return temp_dir.string();
+    // Seeding based on three entropy sources:
+    // 1. Random Device (Hardware noise)
+    std::random_device rd;
+    // 2. High-res timestamp (Time uniqueness)
+    auto now = std::chrono::high_resolution_clock::now().time_since_epoch().count();
+    // 3. Memory address of 'this'
+    auto addr_seed = reinterpret_cast<uintptr_t>(this);
+
+    // 64-bit Mersenne Twister seeded with combined entropy
+    std::mt19937_64 gen(rd() ^ now ^ addr_seed);
+    std::uniform_int_distribution<uint64_t> dist;
+
+    const int max_retries = 100;
+    for (int i = 0; i < max_retries; ++i) {
+        // Generate Name based on refreshed timestamp for every attempt
+        auto current_tick = std::chrono::high_resolution_clock::now().time_since_epoch().count();
+
+        std::stringstream ss;
+        ss << "trex_solvers_" << std::hex << current_tick << "_" << dist(gen);
+
+        fs::path temp_dir = temp_base / ss.str();
+
+        // Atomic Creation Check
+        std::error_code ec;
+        // create_directory returns true ONLY if we created it.
+        if (fs::create_directory(temp_dir, ec)) {
+            if (verbose_) {
+                printProgress("Created unique temp directory: " + temp_dir.string());
+            }
+            return temp_dir.string();
+        }
+        // If false, we collided. Loop repeats with new random numbers.
+    }
+
+    throw std::runtime_error(
+        "Failed to create unique temporary directory after multiple attempts.");
 }
 
 
@@ -319,10 +343,17 @@ void TRexSelector::cleanupTempDirectory() {
     has_serialized_solvers_ = false;
 }
 
+// ==========================================================
+// Destructor
+// ==========================================================
+TRexSelector::~TRexSelector() {
+    // Clean up temp directory if it exists
+    cleanupTempDirectory();
+}
 
 
 // ===========================================================
-// Main Selection Method
+// Main: Selection Method
 // ===========================================================
 
 TRexSelector::SelectionResult TRexSelector::select() {
@@ -348,12 +379,12 @@ TRexSelector::SelectionResult TRexSelector::select() {
     ExperimentResults exp_results;
     applyLLoopStrategy(FDP_hat, exp_results);
     if (verbose_) {
-        printProgress("L-loop: converged with " +
-                      std::to_string(num_dummies_) + " dummies.\n");
+        printProgress("L-loop: converged with " + std::to_string(num_dummies_) +
+                      " dummies.\n"
+                    );
     }
 
-
-    // 3. T-Loop: Calibrate T_stop
+    // 3. T-Loop: Calibrate T_stop >= 1
     runTLoopCalibration(FDP_hat, exp_results);
 
     // 4. Store final phi_T_mat and Phi_prime
@@ -494,12 +525,18 @@ Eigen::VectorXd TRexSelector::computePhiPrime(
     Eigen::VectorXd phi_scale = Eigen::VectorXd::Zero(current_T);
     for (std::size_t t = 0; t < current_T; ++t) {
         if (delta_av_num_var_sel(t) > eps_) {
-            // Note: reference R index is (t+1)
+            // Note: reference R index is (t+1) -> C++ index t
+            // Numerator: unselected candidates (p - sum(Phi))
             double num_remaining_orig = static_cast<double>(p_) - av_num_var_sel(t);
+
+            // Denominator part 1: Remaining slots for dummies (L - (t-1))
             double num_remaining_dummies = static_cast<double>(num_dummies) -
                                             static_cast<double>(t);
+
+            // Denominator part 2: Average number of variables selected at step t
             double ratio_remaining = num_remaining_orig / num_remaining_dummies;
 
+            // Deflation factor
             phi_scale(t) = 1.0 - (ratio_remaining / delta_av_num_var_sel(t));
         } else {
             phi_scale(t) = 0.0;
@@ -526,36 +563,68 @@ TRexSelector::SelectionResult TRexSelector::selectedVariables(
         std::size_t T_stop
     ) const
 {
-    // Remove last row in FDP_hat_mat and Phi_mat if T_stop_ > 1
-    Eigen::MatrixXd FDP_use = FDP_hat_mat;
-    Eigen::MatrixXd Phi_use = Phi_mat;
-    if (T_stop > 1) {
-        FDP_use = FDP_hat_mat.topRows(T_stop - 1);
-        Phi_use = Phi_mat.topRows(T_stop - 1);
+    if (FDP_hat_mat.rows() == 0 || Phi_mat.rows() == 0) {
+        if (verbose_) {
+            printProgress(
+                "[T-Rex Selector] Warning: No valid T-steps recorded (FDP > tFDR at start)."
+                " Returning empty selection."
+            );
+        }
+        SelectionResult result;
+        result.selected_var = Eigen::VectorXi::Zero(p_);
+        result.v_thresh = 1.0;
+        result.R_mat = Eigen::MatrixXd::Zero(0, 0); // appropriate empty size
+        return result;
     }
 
+    // Ensure T_stop is within bounds
+    std::size_t safe_T = std::min(T_stop, static_cast<std::size_t>(FDP_hat_mat.rows()));
+
+    /* Safety fallback:
+       If T_stop was 0 but matrix has data, take at least 1 row.
+       Or strictly respect safe_T.
+       If safe_T is still 0 here (should be caught by check above), return empty.
+    */
+    if (safe_T == 0) {
+         SelectionResult result;
+         result.selected_var = Eigen::VectorXi::Zero(p_);
+         result.v_thresh = 1.0;
+         result.R_mat = Eigen::MatrixXd::Zero(0, 0);
+         return result;
+    }
+
+    // Remove last row in FDP_hat_mat and Phi_mat if T_stop_ > 1
+    Eigen::MatrixXd FDP_use = FDP_hat_mat.topRows(safe_T);
+    Eigen::MatrixXd Phi_use = Phi_mat.topRows(safe_T);
     const std::size_t n_rows = FDP_use.rows();
     const std::size_t n_cols = FDP_use.cols();
 
-    // Generate R_mat
+    // Generate R_mat (Consensus size matrix)
     Eigen::MatrixXd R_mat = Eigen::MatrixXd::Zero(n_rows, n_cols);
     for (std::size_t VV = 0; VV < n_cols; ++VV) {
         const double threshold = voting_grid(VV);
-
         for (std::size_t TT = 0; TT < n_rows; ++TT) {
-            // Vectorized count
+            // Vectorized count of variables with stability Phi > threshold
             R_mat(TT, VV) = (Phi_use.row(TT).array() > threshold).count();
         }
     }
 
-    // Find maximum in R_mat where FDP_use <= tFDR_ (no infinity!)
-    double val_max = -1.0;  // Start with invalid value
+    // Find maximum in R_mat where FDP_use <= tFDR_
+    double val_max = -1.0;          // Start with invalid value
     std::size_t ind_max_row = 0;
     std::size_t ind_max_col = 0;
 
-    // Iterate in COLUMN-MAJOR order
-    for (std::size_t j = 0; j < n_cols; ++j) {      // Columns
-        for (std::size_t i = 0; i < n_rows; ++i) {  // Rows
+    /* Iterate in COLUMN-MAJOR order
+       Outer Loop: Columns (Voting Thresholds v) - usually 0.5 to 1.0
+       Inner Loop: Rows (Time T) - 1 to T_stop
+       Optimization Preference:
+       By using '>=' update, we prefer:
+         1. Larger R (primary goal)
+         2. Later T (secondary, if R is equal) - implies more "settled" stability
+         3. Stricter v (tertiary, if R/T equal) - higher confidence
+    */
+    for (std::size_t j = 0; j < n_cols; ++j) {
+        for (std::size_t i = 0; i < n_rows; ++i) {
             // Check FDP constraint directly (no infinity needed)
             if (FDP_use(i, j) <= tFDR_ && R_mat(i, j) >= val_max) { // NOTE: changed == to >=
                 val_max = R_mat(i, j);
@@ -569,25 +638,24 @@ TRexSelector::SelectionResult TRexSelector::selectedVariables(
     if (std::isinf(val_max) || val_max < 0) {
         SelectionResult result;
         result.selected_var = Eigen::VectorXi::Zero(p_);
-        result.v_thresh = 1.0;  // maximum threshold - no selection
+        result.v_thresh = 1.0;  // conservative fallback no selection
         result.R_mat = R_mat;
         return result;
     }
 
-    double threshold = voting_grid(ind_max_col);
-
-    // Select variables where Phi > threshold
+    // Select variables where Phi > best_threshold
+    double best_threshold = voting_grid(ind_max_col);
     Eigen::VectorXi selected_var = Eigen::VectorXi::Zero(p_);
     for (std::size_t j = 0; j < p_; ++j) {
-        if (Phi_use(ind_max_row, j) > threshold) {
+        if (Phi_use(ind_max_row, j) > best_threshold) {
             selected_var(j) = 1;
         }
     }
 
-    // compile results
+    // Compile selection results
     SelectionResult result;
     result.selected_var = selected_var;
-    result.v_thresh = threshold;
+    result.v_thresh = best_threshold;
     result.R_mat = R_mat;
 
     return result;
@@ -620,9 +688,9 @@ void TRexSelector::set75PercentOptPoint(const std::size_t v_len) {
     opt_point_ = 0;
     double target_v = 0.75;
 
-    // Ensure opt_point_ corresponds to voting_grid_ value <= 0.75
+    // Ensure opt_point_ corresponds to voting_grid_value <= 0.75
     for (std::size_t i = 0; i < v_len; ++i) {
-        if (voting_grid_(i) < target_v) { opt_point_ = i; }
+        if (voting_grid_(i) <= target_v) { opt_point_ = i; }
         else { break; } // grid is sorted -> break allowed
     }
 
@@ -781,7 +849,7 @@ void TRexSelector::runLLoopCalibration_Standard(
 // L-Loop Variant with dummy matrix augmentation
 // ======================================================
 
-void TRexSelector::runLLoopCalibration_Adaptive(
+void TRexSelector::runLLoopCalibration_HCONCAT(
     Eigen::VectorXd& FDP_hat,
     ExperimentResults& exp_results
 ) {
@@ -819,7 +887,7 @@ void TRexSelector::runLLoopCalibration_Adaptive(
     }
 
     // ===========================================
-    // 2. Adaptive L-loop
+    // 2. HCONCAT L-loop
     // ===========================================
 
     while (dummy_multiplier_LL_ <= trex_ctrl_.max_dummy_multiplier &&
@@ -928,7 +996,7 @@ void TRexSelector::runLLoopCalibration_Permutation(
         Features:
         - Stores only ONE base dummy matrix (n x num_dummies_)
         - Experiments 1...K use deterministic row permutations
-        - Memory: n x L (vs K x n x L for SIMPLE/STANDARD/ADAPTIVE)
+        - Memory: n x L (vs K x n x L for SIMPLE/STANDARD/HCONCAT)
 
         Workflow:
         - L = p: Generate base_dummies_perm_ (n x p), run K experiments
@@ -1024,6 +1092,89 @@ void TRexSelector::runLLoopCalibration_Permutation(
 }
 
 
+// L-loop variant with direct in-place generation
+// ======================================================
+
+void TRexSelector::runLLoopCalibration_Direct(
+    Eigen::VectorXd& FDP_hat,
+    ExperimentResults& exp_results
+) {
+    /*
+        L-loop calibration with DIRECT strategy.
+
+        Properties:
+        - No base matrix stored (50% memory savings vs PERMUTATION)
+        - Each experiment k generates dummies from seed_k = mixseed(base_seed, k, L)
+        - Deterministic: same seed_k always produces same D_k
+        - Sequential execution
+
+        Memory: 1 x n x (p + L)  only one XD exists
+     */
+
+     // L-loop intialization
+     T_stop_ = 1;
+     dummy_multiplier_LL_ = 1;    // LL in R
+     FDP_hat.resize(0);           // not initialized
+
+     // Set base seed for deterministic generation
+     base_seed_perm_ = (seed_ >= 0) ? static_cast<unsigned int>(seed_) :
+                                      std::random_device{}();
+    // L-loop calibration
+
+    while (dummy_multiplier_LL_ <= trex_ctrl_.max_dummy_multiplier &&
+          (FDP_hat.size() == 0 || FDP_hat(opt_point_) > tFDR_)) {
+
+        // num_dummies = LL * p
+        num_dummies_ = dummy_multiplier_LL_ * p_;
+
+        if (!trex_ctrl_.use_memory_mapping) { // In-memory branch
+            exp_results = runRandomExperiments_Direct(
+                num_dummies_,
+                T_stop_,
+                /*use_warm_start=*/false         // Cold start in L-loop
+            );
+
+        } else { // Memory-mapped branch
+            // NOTE: NOT IMPLEMENTED YET
+            throw std::runtime_error(
+                "DIRECT strategy with memory-mapping not implemented."
+            );
+            exp_results = runRandomExperimentsMemMap_Direct(
+                num_dummies_,
+                T_stop_,
+                /*use_warm_start=*/false         // Cold start in L-loop
+            );
+        }
+
+        // Compute Phi_prime for FDP estimation
+        Eigen::VectorXd Phi_prime = computePhiPrime(
+            exp_results.phi_T_mat,
+            exp_results.Phi,
+            num_dummies_
+        );
+
+        // Compute FDP estimate
+        FDP_hat = computeFDPHat(voting_grid_, exp_results.Phi, Phi_prime);
+
+        if (verbose_) {
+            printProgress("Appended dummies: " + std::to_string(num_dummies_));
+        }
+
+        ++dummy_multiplier_LL_;
+    }
+
+    // Adjust dummy multiplier back
+    dummy_multiplier_LL_ = (dummy_multiplier_LL_ > 1) ? (dummy_multiplier_LL_ - 1) : 1;
+
+    if (verbose_) {
+        printProgress("L-loop converged: " + std::to_string(num_dummies_) +
+                     " dummies (L=" + std::to_string(dummy_multiplier_LL_) + ")");
+        printProgress("Strategy: Direct generation from seeds (no base matrix)");
+    }
+}
+
+
+
 // L-loop strategy dispatcher
 // ======================================================
 
@@ -1040,12 +1191,16 @@ void TRexSelector::applyLLoopStrategy(
             runLLoopCalibration_Standard(FDP_hat, exp_results);
             break;
 
-        case LLoopStrategy::ADAPTIVE:
-            runLLoopCalibration_Adaptive(FDP_hat, exp_results);
+        case LLoopStrategy::HCONCAT:
+            runLLoopCalibration_HCONCAT(FDP_hat, exp_results);
             break;
 
         case LLoopStrategy::PERMUTATION:
             runLLoopCalibration_Permutation(FDP_hat, exp_results);
+            break;
+
+        case LLoopStrategy::DIRECT:
+            runLLoopCalibration_Direct(FDP_hat, exp_results);
             break;
 
         default:
@@ -1080,18 +1235,16 @@ Eigen::MatrixXd TRexSelector::applyRowPermutation(
     std::shuffle(row_indices.begin(), row_indices.end(), rng);
 
     // Variant 3:
-    // Transpose: Now rows become columns (cache-friendly!)
+    // Transpose: Now rows become columns
     Eigen::MatrixXd dummies_T = dummies.transpose();  // L × n
-
-    // Permute columns (fast!)
+    // Permute columns
     Eigen::MatrixXd permuted_T(L, n);
+    #pragma omp parallel for schedule(static) if (n > 100)
     for (std::size_t j = 0; j < n; ++j) {
         permuted_T.col(j) = dummies_T.col(row_indices[j]);
     }
-
     // Transpose back
     return permuted_T.transpose();  // n × L
-
 
     // Variant 2:
     // Create Eigen permutation matrix
@@ -1101,15 +1254,6 @@ Eigen::MatrixXd TRexSelector::applyRowPermutation(
     //}
     //// Apply permutation: P * dummies
     //return perm * dummies;  // Eigen optimizes this internally
-
-
-    // Variant 1:
-    //// Apply permutation
-    //Eigen::MatrixXd permuted_dummies(n, L);
-    //for (std::size_t i = 0; i < n; ++i) {
-    //    permuted_dummies.row(i) = dummies.row(row_indices[i]);
-    //}
-    //return permuted_dummies;
 }
 
 
@@ -1174,14 +1318,13 @@ void TRexSelector::runTLoopCalibration(
     const std::size_t v_len = voting_grid_.size();
 
     // Compute maximum T
-    std::size_t max_T = trex_ctrl_.max_T_stop ?
+    std::size_t max_T = trex_ctrl_.use_max_T_stop ?
         std::min(num_dummies_, static_cast<std::size_t>(std::ceil(n_ / 2.0))) :
         num_dummies_;
 
-    // Initialize matrices for accumulation (with capacity doubling)
+    // Initialize matrices for accumulation (with capacity doubling) (purely computational)
     const std::size_t initial_capacity = 20;
     std::size_t capacity = std::min(initial_capacity, max_T);
-
     Phi_mat_ = Eigen::MatrixXd::Zero(capacity, p_);
     FDP_hat_mat_ = Eigen::MatrixXd::Zero(capacity, v_len);
 
@@ -1193,7 +1336,7 @@ void TRexSelector::runTLoopCalibration(
     std::size_t row_idx = 0;
     while (FDP_hat(v_len - 1) <= tFDR_ && T_stop_ < max_T) {
 
-        // Run K experiments with SAME dummies (warm start)
+        // Run K experiments in T-loop (warm start)
         // =======================================================
         if (!trex_ctrl_.use_memory_mapping) { // In-memory branch
             exp_results = runRandomExperiments(
@@ -1243,10 +1386,10 @@ void TRexSelector::runTLoopCalibration(
             if (num_selected == prev_num_selected) {
                 stagnant_iterations++;
 
-                if (stagnant_iterations >= trex_ctrl_.max_stagnant_steps) {
+                if (stagnant_iterations >= trex_ctrl_.tloop_max_stagnant_steps) {
                     if (verbose_) {
                         printProgress("T-loop EARLY STOP: Stagnation detected");
-                        printProgress("  S(v*) = " + std::to_string(v_star) +
+                        printProgress("  R(v*) = " + std::to_string(v_star) +
                                       ", T = " + std::to_string(T_stop_) +
                                       " → " + std::to_string(num_selected));
                     }
@@ -1267,7 +1410,7 @@ void TRexSelector::runTLoopCalibration(
             std::ostringstream oss;
             oss << "T = " << std::setw(3) << T_stop_
                 << " | v* = " << v_star
-                << ", S = " << num_selected
+                << ", R = " << num_selected
                 << ", FDP ∈ [" << min_FDP << ", " << max_FDP << "]";
             if (stagnant_iterations > 0) {
                 oss << " (stagnant: " << stagnant_iterations << ")";
@@ -1275,7 +1418,7 @@ void TRexSelector::runTLoopCalibration(
             printProgress(oss.str());
         }
 
-        // Dynamic capacity growth
+        // Dynamic capacity growth (purely computational)
         if (row_idx >= capacity) {
             std::size_t new_capacity = std::min(capacity * 2, max_T);
             Phi_mat_.conservativeResize(new_capacity, Eigen::NoChange);
@@ -1292,9 +1435,6 @@ void TRexSelector::runTLoopCalibration(
         T_stop_++;
     }
 
-    // Revert look-ahead increment for T_stop_
-    if (T_stop_ > 1) { T_stop_--; }
-
     // Trim to to actual size
     Phi_mat_.conservativeResize(row_idx, Eigen::NoChange);
     FDP_hat_mat_.conservativeResize(row_idx, Eigen::NoChange);
@@ -1302,7 +1442,7 @@ void TRexSelector::runTLoopCalibration(
     // Enhanced final summary
     if (verbose_) {
         std::string stop_reason;
-        if (stagnant_iterations >= trex_ctrl_.max_stagnant_steps) {
+        if (stagnant_iterations >= trex_ctrl_.tloop_max_stagnant_steps) {
             stop_reason = " (early stop: stagnation)";
         } else if (T_stop_ >= max_T) {
             stop_reason = " (reached max_T)";
@@ -1379,6 +1519,33 @@ Eigen::MatrixXd TRexSelector::generateDummies(
 }
 
 
+Eigen::MatrixXd TRexSelector::generateDummiesForExperiment_Direct(
+    std::size_t num_dummies,
+    std::size_t experiment_id
+) const {
+
+    // Generate deterministic experiment-specific seed
+    unsigned int seed_k;
+    if (seed_ > 0) {
+        // Deterministic mode: seed_k = mixseed(base_seed_perm, k)
+        seed_k = trex::utils::dummygen::mix_seed(
+            static_cast<uint32_t>(base_seed_perm_),
+            static_cast<uint32_t>(experiment_id)
+        );
+    } else {
+        // TODO:Random mode: seed_k = random + k --> makes no sense, must be reproducible
+        seed_k = std::random_device{}() + static_cast<unsigned int>(experiment_id);
+    }
+
+    // Generate dummy matrix D_k
+    return generateDummies(num_dummies, seed_k);
+}
+
+
+
+
+
+
 Eigen::MatrixXd TRexSelector::computePhiTMat(
     const std::vector<Eigen::MatrixXd>& beta_paths,
     std::size_t num_dummies,
@@ -1387,8 +1554,9 @@ Eigen::MatrixXd TRexSelector::computePhiTMat(
     // Initialize phi_T_mat: (p x T_stop)
     Eigen::MatrixXd phi_T_mat = Eigen::MatrixXd::Zero(p_, T_stop);
 
-    // For each experiment
-    for (const auto& beta_path_k : beta_paths) {
+    // For each experiment: k = 1...K
+    for (std::size_t k = 0; k < trex_ctrl_.K; ++k) {
+        const auto& beta_path_k = beta_paths[k];
 
         // beta_path is (p + num_dummies) x num_steps
         const std::size_t num_steps = static_cast<std::size_t>(beta_path_k.cols());
@@ -1423,10 +1591,14 @@ Eigen::MatrixXd TRexSelector::computePhiTMat(
                 }
             }
 
+            // Warning if T not reached: selector model saturated before T_stop dummies
             if (!found && verbose_) {
                 printProgress(
-                    "Warning: Experiment did not reach T= " + std::to_string(t) +
-                    " dummies included. Using last step."
+                    "Warning: Experiment k=" + std::to_string(k) +
+                    " did not reach T= " + std::to_string(t) +
+                    " dummies. Using last step."
+                    ". Max dummies found: " + std::to_string(dummy_num_path.maxCoeff()) +
+                    ". (Model Saturation likely)"
                 );
             }
 
@@ -1448,7 +1620,7 @@ Eigen::MatrixXd TRexSelector::computePhiTMat(
 // ===========================================================
 
 // In-memory version for run K random experiments
-// ===========================================================
+// ------------------------------------------------------------
 
 TRexSelector::ExperimentResults TRexSelector::runRandomExperiments(
     std::size_t num_dummies,
@@ -1459,7 +1631,6 @@ TRexSelector::ExperimentResults TRexSelector::runRandomExperiments(
 ) {
     /*
         Run K random experiments with dummy variables.
-
         Dispatches to strategy-specific implementations.
     */
 
@@ -1478,7 +1649,7 @@ TRexSelector::ExperimentResults TRexSelector::runRandomExperiments(
 
 
     // ===========================================================
-    // Strategies: STANDARD, ADAPTIVE, SKIP
+    // Strategies: STANDARD, HCONCAT, SKIP
     // ===========================================================
     // 1. Generate or reuse dummy matrices
     // ===========================================================
@@ -1672,7 +1843,7 @@ TRexSelector::ExperimentResults TRexSelector::runRandomExperiments(
     ExperimentResults results;
     // Compute phi_T_mat from betaPaths
     results.phi_T_mat = computePhiTMat(beta_paths, num_dummies, T_stop);
-    // Compute Phi vector
+    // Compute Phi vector (remember 0-based indexing)
     results.Phi = results.phi_T_mat.col(T_stop - 1);
 
     return results;
@@ -1680,7 +1851,7 @@ TRexSelector::ExperimentResults TRexSelector::runRandomExperiments(
 
 
 // Permutation-based version for run K random experiments
-// ===========================================================
+// ------------------------------------------------------------
 
 TRexSelector::ExperimentResults TRexSelector::runRandomExperiments_Permutation(
     std::size_t num_dummies,
@@ -1691,7 +1862,7 @@ TRexSelector::ExperimentResults TRexSelector::runRandomExperiments_Permutation(
         PERMUTATION strategy: Sequential execution, minimal memory.
 
         Peak memory: ~2 x n x L (base + XD with temporary during assignment) vs
-                     ~K x n x L for SIMPLE/STANDARD/ADAPTIVE.
+                     ~K x n x L for SIMPLE/STANDARD/HCONCAT.
 
         For K=20: 10x memory saving!
     */
@@ -1794,6 +1965,99 @@ TRexSelector::ExperimentResults TRexSelector::runRandomExperiments_Permutation(
     // ===========================================================
     ExperimentResults results;
     results.phi_T_mat = computePhiTMat(beta_paths, num_dummies, T_stop);
+    // Compute Phi vector (remember 0-based indexing)
+    results.Phi = results.phi_T_mat.col(T_stop - 1);
+
+    // Return results
+    return results;
+}
+
+
+// Random experiments with in-place dummy generation
+// ------------------------------------------------------------
+
+TRexSelector::ExperimentResults TRexSelector::runRandomExperiments_Direct(
+    std::size_t num_dummies,
+    std::size_t T_stop,
+    bool use_warm_start
+) {
+    // Warm-start setup
+    if (use_warm_start && temp_dir_.empty()) {
+        temp_dir_ = createTempDirectory();
+        solver_files_.clear();
+        solver_files_.reserve(trex_ctrl_.K);
+    }
+
+    std::vector<Eigen::MatrixXd> beta_paths(trex_ctrl_.K);
+    std::vector<std::string> new_solver_files;
+
+    if (use_warm_start && !has_serialized_solvers_) {
+        new_solver_files.resize(trex_ctrl_.K);
+    }
+
+    // Configure threading (solvers only, experiments are sequential)
+    #ifdef _OPENMP
+    Eigen::setNbThreads(omp_get_max_threads());
+    #endif
+
+    // Sequential loop over K experiments
+    // NOTE: NO parallelism here - each experiment generates different dummies, requires copies
+    Eigen::MatrixXd XD(n_, p_ + num_dummies);
+    XD.leftCols(p_) = *X_; // copy X once
+
+    Eigen::Map<Eigen::VectorXd> y_map(y_.data(), n_);
+
+    for (std::size_t k = 0; k < trex_ctrl_.K; ++k) {
+
+        // Generate dummies for experiment k and append dummies to XD
+        XD.rightCols(num_dummies) = generateDummiesForExperiment_Direct(k, num_dummies);
+
+        // Setup Eigen map for XD
+        Eigen::Map<Eigen::MatrixXd> XD_map(XD.data(), XD.rows(), XD.cols());
+
+        // Determine solver state file for warm-start
+        std::string solver_file;
+        if (use_warm_start) {
+            if (has_serialized_solvers_ && k < solver_files_.size()) {
+                // Load from existing
+                solver_file = solver_files_[k];
+            } else {
+                // Create new path
+                solver_file = temp_dir_ + "/solver_" + std::to_string(k) + ".bin";
+                if (!new_solver_files.empty()) {
+                    new_solver_files[k] = solver_file;
+                }
+            }
+        }
+
+        // Catch empty solver_file early
+        if (use_warm_start && solver_file.empty()) {
+            throw std::runtime_error(
+                "solver_file is empty at k=" + std::to_string(k) +
+                "! has_serialized=" + (has_serialized_solvers_ ? "true" : "false") +
+                ", solver_files_.size()=" + std::to_string(solver_files_.size()) +
+                ", temp_dir_='" + temp_dir_ + "'"
+            );
+        }
+
+        // Run solver
+        beta_paths[k] = runSingleExperimentWithSolver(
+            XD_map, y_map, T_stop, use_warm_start, solver_file
+        );
+    }
+
+    // Update solver file tracking
+    if (use_warm_start && !new_solver_files.empty()) {
+        solver_files_ = std::move(new_solver_files);
+        has_serialized_solvers_ = true;
+    } else if (use_warm_start) {
+        has_serialized_solvers_ = true;
+    }
+
+    // Aggregate results across K experiments
+    ExperimentResults results;
+    results.phi_T_mat = computePhiTMat(beta_paths, num_dummies, T_stop);
+    // Compute Phi vector (remember 0-based indexing)
     results.Phi = results.phi_T_mat.col(T_stop - 1);
 
     // Return results
@@ -1950,12 +2214,13 @@ Eigen::MatrixXd TRexSelector::runSingleExperimentWithSolver(
 
 
 
-// ===========================================================
+// ========================================================================
 // Memory-Mapped Matrix Management & Helper Methods
-// ===========================================================
+// ========================================================================
 
 
 // Setup memory-mapped matrices
+// -----------------------------------------------------------------------
 
 void TRexSelector::initializeMemoryMappedMatrices() {
     if (!trex_ctrl_.use_memory_mapping) { return; }
@@ -2006,7 +2271,7 @@ void TRexSelector::initializeMemoryMappedMatrices() {
 
 
     // ===========================================================
-    // Strategies: STANDARD/ADAPTIVE/SKIP - Create K files
+    // Strategies: STANDARD/HCONCAT/SKIP - Create K files
     // ===========================================================
     if (verbose_) {
         printProgress("Initializing " + std::to_string(trex_ctrl_.K) +
@@ -2044,6 +2309,7 @@ void TRexSelector::initializeMemoryMappedMatrices() {
 
 
 // Write X to memory-mapped matrices
+// -----------------------------------------------------------------------
 
 void TRexSelector::writeXToMemoryMappedMatrices() {
     if (!trex_ctrl_.use_memory_mapping) { return; }
@@ -2059,6 +2325,7 @@ void TRexSelector::writeXToMemoryMappedMatrices() {
 
 
 // Clean up memory-mapped matrices
+// -----------------------------------------------------------------------
 
 void TRexSelector::cleanupMemoryMappedMatrices() {
     if (!trex_ctrl_.use_memory_mapping) { return; }
@@ -2076,6 +2343,7 @@ void TRexSelector::cleanupMemoryMappedMatrices() {
 
 
 // Run random experiments with memory-mapped matrices
+// -----------------------------------------------------------------------
 
 TRexSelector::ExperimentResults TRexSelector::runRandomExperimentsMemMap(
     std::size_t num_dummies,
@@ -2103,7 +2371,7 @@ TRexSelector::ExperimentResults TRexSelector::runRandomExperimentsMemMap(
     }
 
     // ===========================================================
-    // Strategies: STANDARD, ADAPTIVE, SKIP
+    // Strategies: STANDARD, HCONCAT, SKIP
     // ===========================================================
 
     // Validation
@@ -2216,6 +2484,7 @@ TRexSelector::ExperimentResults TRexSelector::runRandomExperimentsMemMap(
 
 
 // Memory-mapped version for random experiments with dummy permutation
+// -----------------------------------------------------------------------
 
 TRexSelector::ExperimentResults TRexSelector::runRandomExperimentsMemMap_Permutation(
     std::size_t num_dummies,

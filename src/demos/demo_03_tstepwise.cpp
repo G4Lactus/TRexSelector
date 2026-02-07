@@ -65,8 +65,8 @@ void demo_TSTEPWISE_early_stopping(bool high_dim, bool rnd_coef, std::size_t T_s
     const std::vector<std::size_t> true_support = {27, 149, 398, 420, 4};
     const std::vector<double> true_coefs = rnd_coef ?
                                            std::vector<double>{-0.4, -0.2, -0.8, 1.1, 2.5} :
-                                           std::vector<double>{1, 1, 1, 1, 1};
-    const double snr = 1.0;
+                                           std::vector<double>{0.5, 1, 1, 1, 0.5};
+    const double snr = 0.1;
 
     std::cout << (high_dim ? "High-dimensional (p > n)\n" : "Low-dimensional (n > p)\n");
 
@@ -74,7 +74,7 @@ void demo_TSTEPWISE_early_stopping(bool high_dim, bool rnd_coef, std::size_t T_s
     cdiagnost::print_talgo_demo_config(n, p, num_dummies, T_stop, true_support, true_coefs, snr);
 
     // Generate data
-    datagen::SyntheticData data(n, p, true_support, true_coefs, /*snr=*/snr, /*seed=*/42);
+    datagen::SyntheticData data(n, p, true_support, true_coefs, /*snr=*/snr, /*seed=*/-1);
 
     // Augment with dummies
     Eigen::MatrixXd X_aug = datagen::append_dummies_to_matrix(data.getX(), num_dummies,
@@ -342,6 +342,8 @@ int main() {
 
         // Demo 1: Basic usage with internal normalization
         demo_TSTEPWISE_early_stopping(/*high_dim=*/true, /*rnd_coef=*/false, /*T_stop=*/10);
+
+        if (false) {
         demo_TSTEPWISE_early_stopping(/*high_dim=*/false, /*rnd_coef=*/false, /*T_stop=*/10);
 
         // Demo 2: External normalization
@@ -353,6 +355,7 @@ int main() {
 
         // Demo 4: Memory-mapped
         demo_04_memory_mapped(/*high_dim=*/true, /*rnd_coef=*/false, /*T_stop=*/10);
+        }
 
         cdiagnost::print_section_header("✓ All demos completed successfully");
 

@@ -5,6 +5,7 @@
  */
 
 
+ // std includes
 #include <iostream>
 #include <iomanip>
 #include <map>
@@ -12,11 +13,12 @@
 #include <random>
 #include <vector>
 
+// Eigen includes
 #include <Eigen/Dense>
 
+// TRex Selector includes
 #include "utils_talgos.hpp"
 #include "utils_fdr_control.hpp"
-
 #include "Screen_TRex_Selector.hpp"
 
 

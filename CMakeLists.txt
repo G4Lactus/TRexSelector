@@ -92,6 +92,8 @@ if(NOT BLAS_FOUND)
     find_package(LAPACK REQUIRED)
 endif()
 
+# Plotting: Matplot++
+find_package(Matplot++ REQUIRED)
 
 
 # ============================================================================
@@ -164,6 +166,11 @@ else()
     message(STATUS "  - LAPACK: NOT FOUND")
 endif()
 #
+if(Matplot++_FOUND)
+    message(STATUS "  - Matplot++: ${Matplot++_VERSION}")
+else()
+    message(STATUS "  - Matplot++: NOT FOUND")
+endif()
 message(STATUS "")
 message(STATUS "Output Directories:")
 message(STATUS "  - Runtime (executables): ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}")
