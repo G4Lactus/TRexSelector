@@ -237,75 +237,81 @@ add_demo_target(demo_trx_01_classic_trex_inmem
     T_REX_SELECTOR_LIBS
 )
 
-# Demo 02: TRex Selector with memory-mapped workflows
+# Demo 02: TRex Selector with memory-mapped workflows (single runs)
 add_demo_target(demo_trx_02_classic_trex_mmap
     trex_selector_methods/trex/demo_trx_02_classic_trex_mmap.cpp
     T_REX_SELECTOR_LIBS
 )
 
-# --- trex_screening/ subfolder --- (Screen-TRex) --------------------------------
-
-## Demo 03: Screen-TRex Selector — in-memory
-add_demo_target(demo_trx_03_screen_trex
-    trex_selector_methods/trex_screening/demo_trx_01_screen_trex.cpp
+# Demo 03: Classic TRex — memory-mapped Monte Carlo simulations (Demo C & D)
+add_demo_target(demo_trx_03_classic_trex_mmap_mc_sim
+    trex_selector_methods/trex/demo_trx_03_classic_trex_mmap_mc_sim.cpp
     T_REX_SELECTOR_LIBS
 )
 
-## Demo 04: Screen-TRex Selector — memory-mapped D files
-add_demo_target(demo_trx_04_screen_trex_mmap
-    trex_selector_methods/trex_screening/demo_trx_02_screen_trex_mmap.cpp
+# --- trex_screening/ subfolder --- (Screen-TRex) --------------------------------
+
+## Demo scr_01: Screen-TRex Selector — in-memory
+add_demo_target(demo_trx_scr_01_screen_trex
+    trex_selector_methods/trex_screening/demo_trx_scr_01_screen_trex.cpp
+    T_REX_SELECTOR_LIBS
+)
+
+## Demo scr_02: Screen-TRex Selector — memory-mapped D files
+add_demo_target(demo_trx_scr_02_screen_trex_mmap
+    trex_selector_methods/trex_screening/demo_trx_scr_02_screen_trex_mmap.cpp
     T_REX_SELECTOR_LIBS
 )
 
 # --- trex_biobank_screening/ subfolder --- (Biobank Screen-TRex) -----------------
 
-## Demo 05: Biobank Screen-TRex Selector
-add_demo_target(demo_trx_05_biobank_screen_trex
-    trex_selector_methods/trex_biobank_screening/demo_trx_01_biobank_screen_trex.cpp
+## Demo scr_bb_01: Biobank Screen-TRex Selector
+add_demo_target(demo_trx_scr_bb_01_biobank_screen_trex
+    trex_selector_methods/trex_biobank_screening/demo_trx_scr_bb_01_biobank_screen_trex.cpp
     T_REX_SELECTOR_LIBS
 )
 
-## Demo 06: Biobank Screen-TRex Selector — in-memory
-add_demo_target(demo_trx_06_biobank_screen_trex_inmem
-    trex_selector_methods/trex_biobank_screening/demo_trx_02_biobank_screen_trex_inmem.cpp
+## Demo scr_bb_02: Biobank Screen-TRex Selector — in-memory
+add_demo_target(demo_trx_scr_bb_02_biobank_screen_trex_inmem
+    trex_selector_methods/trex_biobank_screening/demo_trx_scr_bb_02_biobank_screen_trex_inmem.cpp
     T_REX_SELECTOR_LIBS
 )
 
-## Demo 07: Biobank Screen-TRex Selector — memory-mapped D files
-add_demo_target(demo_trx_07_biobank_screen_trex_mmap
-    trex_selector_methods/trex_biobank_screening/demo_trx_03_biobank_screen_trex_mmap.cpp
+## Demo scr_bb_03: Biobank Screen-TRex Selector — memory-mapped D files
+add_demo_target(demo_trx_scr_bb_03_biobank_screen_trex_mmap
+    trex_selector_methods/trex_biobank_screening/demo_trx_scr_bb_03_biobank_screen_trex_mmap.cpp
     T_REX_SELECTOR_LIBS
 )
 
 # --- trex_da/ subfolder --- (DA-TRex) -------------------------------------------
 
-## Demo 08: Dependency-Aware T-Rex Selector — all 5 DA methods
-add_demo_target(demo_trx_08_da_trex
-    trex_selector_methods/trex_da/demo_trx_01_da_trex.cpp
+## Demo da_01: Dependency-Aware T-Rex Selector — all 5 DA methods
+add_demo_target(demo_trx_da_01_da_trex
+    trex_selector_methods/trex_da/demo_trx_da_01_da_trex.cpp
     T_REX_SELECTOR_LIBS
 )
 
-## Sim 01: DA-TRex Monte Carlo simulation — SNR sweep, 3 solvers × 5 scenarios
-add_demo_target(sim_trx_01_da_trex_mc
-    trex_selector_methods/trex_da/sim_trx_01_da_trex_mc.cpp
+## Demo da_02: DA-TRex Monte Carlo simulation — SNR sweep, 3 solvers × 5 scenarios
+add_demo_target(demo_trx_da_02_da_trex_mc_sim
+    trex_selector_methods/trex_da/demo_trx_da_02_da_trex_mc_sim.cpp
     T_REX_SELECTOR_LIBS
 )
 
-## Sim 02: DA-TRex block-Toeplitz MC — 4 ceteris paribus parameter sweeps
-add_demo_target(sim_trx_02_da_block_mc
-    trex_selector_methods/trex_da/sim_trx_02_da_block_mc.cpp
+## Demo da_03: DA-TRex block-Toeplitz MC — 4 ceteris paribus parameter sweeps
+add_demo_target(demo_trx_da_03_da_block_mc_sim
+    trex_selector_methods/trex_da/demo_trx_da_03_da_block_mc_sim.cpp
     T_REX_SELECTOR_LIBS
 )
 
-## Sim 03: DA-TRex tFDR sweep — FDP/TPR vs target FDR for multiple rho values
-add_demo_target(sim_trx_03_da_fdr_mc
-    trex_selector_methods/trex_da/sim_trx_03_da_fdr_mc.cpp
+## Demo da_04: DA-TRex tFDR sweep — FDP/TPR vs target FDR for multiple rho values
+add_demo_target(demo_trx_da_04_da_fdr_mc_sim
+    trex_selector_methods/trex_da/demo_trx_da_04_da_fdr_mc_sim.cpp
     T_REX_SELECTOR_LIBS
 )
 
-## Sim 04: DA-TRex heavy-tailed variants — 4 combos of heavy X / heavy noise
-add_demo_target(sim_trx_04_da_heavy_mc
-    trex_selector_methods/trex_da/sim_trx_04_da_heavy_mc.cpp
+## Demo da_05: DA-TRex heavy-tailed variants — 4 combos of heavy X / heavy noise
+add_demo_target(demo_trx_da_05_da_heavy_mc_sim
+    trex_selector_methods/trex_da/demo_trx_da_05_da_heavy_mc_sim.cpp
     T_REX_SELECTOR_LIBS
 )
 

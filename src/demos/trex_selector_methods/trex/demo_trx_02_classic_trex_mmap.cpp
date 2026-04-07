@@ -4,16 +4,16 @@
 /**
  * @file demo_trx_02_classic_trex_mmap.cpp
  *
- * @brief Demonstration of T-Rex Selector with memory-mapped workflows.
+ * @brief Demo of T-Rex Selector with memory-mapped workflows.
  *
- * @details Shows two memory-mapped usage patterns:
+ * @details Shows two single-run memory-mapped usage patterns:
  *
  *  (A) In-memory X with internal mmap support enabled:
  *      Setting use_memory_mapping = true activates both solver serialization
  *      (e.g., the LARS-path state of size (p+L) x T_stop per solver is written to
  *      disk between T-loop iterations instead of being kept in RAM) and
  *      memory-mapped storage for the internal dummy matrices D. Solvers never
- *      store X or D; their footprint scales as O(T*(p+L)). Solver serialization
+ *      store X or D; their footprint scales as O(T * (p + L)). Solver serialization
  *      and D mmap are currently coupled via the single use_memory_mapping flag.
  *
  *  (B) Fully memory-mapped pipeline:
@@ -25,9 +25,10 @@
 // ==============================================================================
 
 // std includes
-#include <filesystem>
-#include <iomanip>
+#include <fstream>
+#include <functional>
 #include <iostream>
+#include <string>
 #include <vector>
 
 // Eigen includes
@@ -41,6 +42,9 @@
 #include <utils/datageneration/utils_datagen.hpp>
 #include <utils/eval_metrics/utils_eval_cdiagnostics.hpp>
 #include <utils/eval_metrics/utils_eval_rates.hpp>
+
+// Demo utilities
+#include "demo_trx_utils.hpp"
 
 // ==============================================================================
 // Namespace aliases
@@ -62,25 +66,49 @@ using trex::trex_selector_methods::utils::solver_dispatch::SolverTypeForTRex;
 
 
 // ==============================================================================
-// Helper: print selection results
+// Shared demo configuration
 // ==============================================================================
 
-static void print_results(
-    const std::vector<std::size_t>& selected_indices,
-    const std::vector<std::size_t>& true_support)
-{
-    std::cout << "Selected indices: ";
-    for (const auto& idx : selected_indices) { std::cout << idx << " "; }
-    std::cout << "\n";
+struct MmapDemoConfig {
+    Eigen::Index             n, p;
+    std::vector<std::size_t> true_support;
+    std::vector<double>      true_coefs;
+    double snr  = 1.0;
+    double tFDR = 0.1;
+};
 
-    const double fdp = rates::compute_fdp(selected_indices, true_support);
-    const double tpp = rates::compute_tpp(selected_indices, true_support);
-
-    std::cout << std::fixed << std::setprecision(4);
-    std::cout << "False Discovery Proportion (FDP): " << fdp << "\n";
-    std::cout << "True Positive Proportion (TPP):   " << tpp << "\n";
+static MmapDemoConfig make_mmap_demo_config(bool high_dim, bool rnd_coef) {
+    MmapDemoConfig cfg;
+    cfg.n            = high_dim ? 1000 : 5000;
+    cfg.p            = high_dim ? 5000 : 1000;
+    cfg.true_support = {27, 149, 398, 420, 4};
+    cfg.true_coefs   = rnd_coef
+        ? std::vector<double>{-0.4, -0.25, -0.8, 1.1, 2.5}
+        : std::vector<double>{1, 1, 1, 1, 1};
+    cfg.snr  = 1.0;
+    cfg.tFDR = 0.1;
+    return cfg;
 }
 
+/**
+ * @brief Shared TRexControlParameter baseline for all mmap demos.
+ * @note  use_memory_mapping = true couples two behaviours:
+ *   (1) Internal dummy matrices D are memory-mapped (TRexMemMapManager).
+ *   (2) Solver warm-start state is serialized to disk between T-loop iterations
+ *       (SERIALIZED WarmStartMode). Solver footprint scales as O(T * (p + L)).
+ */
+static TRexControlParameter make_mmap_trex_ctrl() {
+    TRexControlParameter ctrl;
+    ctrl.K                     = 20;
+    ctrl.max_dummy_multiplier  = 10;
+    ctrl.use_max_T_stop        = true;
+    ctrl.dummy_distribution    = dummygen::Distribution::Normal();
+    ctrl.lloop_strategy        = LLoopStrategy::HCONCAT;
+    ctrl.tloop_stagnation_stop = true;
+    ctrl.use_memory_mapping    = true;  // enables D mmap + solver serialization
+    ctrl.solver_type           = SolverTypeForTRex::TLARS;
+    return ctrl;
+}
 
 // ==============================================================================
 // Demo A: In-memory X + use_memory_mapping=true
@@ -92,53 +120,65 @@ void demo_TRexSelector_d_mmap_solver_serial(bool high_dim, bool rnd_coef) {
     cdianostics::print_section_header(
         "Demo A: In-Memory X — Solver Serialization + D Memory-Mapping");
 
-    const Eigen::Index n = high_dim ? 1000 : 5000;
-    const Eigen::Index p = high_dim ? 5000 : 1000;
-    std::cout << (high_dim ? "High-dimensional (p > n)" : "Low-dimensional (n > p)") << "\n";
+    const auto cfg = make_mmap_demo_config(high_dim, rnd_coef);
 
-    const std::vector<std::size_t> true_support = {27, 149, 398, 420, 4};
-    const std::vector<double> true_coefs = rnd_coef ?
-        std::vector<double>{-0.4, -0.25, -0.8, 1.1, 2.5} :
-        std::vector<double>{1, 1, 1, 1, 1};
-    const double snr = 1.0;
+    // Setup dual output (console + file)
+    const std::string folder = "simulations/";
+    const std::string stem   = "trex_mmap_demo_a_n" + std::to_string(cfg.n) +
+                               "_p" + std::to_string(cfg.p);
+    std::ofstream out_file(folder + stem + ".txt");
+    PrintFn print_dual = [&](const std::string& s) {
+        std::cout << s;
+        if (out_file.is_open()) out_file << s;
+    };
+
+    print_dual(std::string(high_dim ? "High-dimensional (p > n)"
+                                    : "Low-dimensional (n > p)") + "\n");
 
     // Generate design matrix and response in RAM
-    std::cout << "Generating synthetic data (in-memory)...\n";
-    datagen::SyntheticData data(n, p, true_support, true_coefs, snr, /*seed=*/58);
+    print_dual("Generating synthetic data (in-memory)...\n");
+    datagen::SyntheticData data(cfg.n,
+                                cfg.p,
+                                cfg.true_support,
+                                cfg.true_coefs,
+                                cfg.snr,
+                                58);
 
     // Eigen::Map views required by TRexSelector
-    Eigen::Map<Eigen::MatrixXd> X_map(data.getX().data(), data.rows(), data.cols());
+    Eigen::Map<Eigen::MatrixXd> X_map(data.getX().data(),
+                                      data.rows(),
+                                      data.cols());
     Eigen::Map<Eigen::VectorXd> y_map(data.getY().data(), data.rows());
 
-    // NOTE: use_memory_mapping = true couples two behaviours:
-    //   (1) Internal dummy matrices D are stored in Boost memory-mapped files
-    //       rather than in RAM (MemmapManager).
-    //   (2) Solver warm-start state (the LARS path of size (p+L) x T_stop,
-    //       where L is the number of dummies and T_stop the selected stopping
-    //       step) is serialized to disk between T-loop iterations instead of
-    //       being kept as in-memory objects (SERIALIZED WarmStartMode).
-    //       Solvers never store X or D; their footprint scales as O(T*(p+L)).
-    // Both are kept coupled for now; a dedicated serialize_solvers flag
-    // can be introduced independently once a concrete use case arises.
-    TRexControlParameter trex_ctrl;
-    trex_ctrl.K                     = 20;
-    trex_ctrl.max_dummy_multiplier  = 10;
-    trex_ctrl.use_max_T_stop        = true;
-    trex_ctrl.dummy_distribution    = dummygen::Distribution::Normal();
-    trex_ctrl.lloop_strategy        = LLoopStrategy::HCONCAT;
-    trex_ctrl.tloop_stagnation_stop = true;
-    trex_ctrl.use_memory_mapping    = true;   // <<< enables D mmap + solver serialization
-    trex_ctrl.solver_type           = SolverTypeForTRex::TLARS;
+    TRexControlParameter trex_ctrl = make_mmap_trex_ctrl();
 
-    std::cout << "Creating T-Rex Selector instance...\n";
-    TRexSelector trex(X_map, y_map, /*tFDR=*/0.1, trex_ctrl, /*seed=*/-1,
-                        /*verbose=*/true);
+    print_dual("Creating T-Rex Selector instance...\n");
+    TRexSelector trex(X_map,
+                      y_map,
+                      cfg.tFDR,
+                      trex_ctrl,
+                      -1,
+                      true);
 
-    std::cout << "Executing T-Rex Selector...\n";
+    print_dual("Executing T-Rex Selector...\n");
     trex.select();
 
-    print_results(trex.getSelectedIndices(), true_support);
-    std::cout << "\n\n";
+    print_results(trex.getSelectedIndices(),
+                  cfg.true_support,
+                  trex,
+                  print_dual);
+    save_selection_csv(folder + stem + ".csv",
+                       cfg.p,
+                       trex.getPhiPrime(),
+                       trex.getSelectedIndices(),
+                       cfg.true_support);
+
+    print_dual("\n\n");
+
+    if (out_file.is_open()) {
+        std::cout << "[Info] Results saved to:              " << folder + stem + ".txt\n";
+        out_file.close();
+    }
 }
 
 
@@ -152,32 +192,48 @@ void demo_TRexSelector_full_mmap(bool high_dim, bool rnd_coef) {
     cdianostics::print_section_header(
         "Demo B: Memory-Mapped X — Full mmap Pipeline (X + D + Solver Serialization)");
 
-    const Eigen::Index n = high_dim ? 1000 : 5000;
-    const Eigen::Index p = high_dim ? 5000 : 1000;
-    std::cout << (high_dim ? "High-dimensional (p > n)" : "Low-dimensional (n > p)") << "\n";
+    const auto cfg = make_mmap_demo_config(high_dim, rnd_coef);
 
-    const std::vector<std::size_t> true_support = {27, 149, 398, 420, 4};
-    const std::vector<double> true_coefs = rnd_coef ?
-        std::vector<double>{-0.4, -0.25, -0.8, 1.1, 2.5} :
-        std::vector<double>{1, 1, 1, 1, 1};
-    const double snr = 1.0;
+    // Setup dual output (console + file)
+    const std::string folder = "simulations/";
+    const std::string stem   = "trex_mmap_demo_b_n" + std::to_string(cfg.n) +
+                               "_p" + std::to_string(cfg.p);
+    std::ofstream out_file(folder + stem + ".txt");
+    PrintFn print_dual = [&](const std::string& s) {
+        std::cout << s;
+        if (out_file.is_open()) out_file << s;
+    };
 
-    // X and y are written to disk and accessed via Boost mmap —
-    // the design matrix never fully resides in RAM.
+    print_dual(std::string(high_dim ? "High-dimensional (p > n)"
+                                    : "Low-dimensional (n > p)") + "\n");
+
     const std::string X_filepath = "X_mmap.dat";
     const std::string y_filepath = "y_mmap.dat";
 
-    std::cout << "Generating synthetic data (memory-mapped files: "
-              << X_filepath << ", " << y_filepath << ")...\n";
+    // RAII guard: removes X/y backing files on scope exit — even if an exception
+    // is thrown. Declared BEFORE `data` so that C++ reverse-LIFO destruction
+    // runs:
+    // (1) data dtor closes mmap handles,
+    // (2) guard dtor removes the files.
+    MmapFileGuard mmap_guard{{X_filepath, y_filepath}};
+
+    // X and y are written to disk and never fully resides in RAM
+    print_dual("Generating synthetic data (memory-mapped files: " +
+               X_filepath + ", " + y_filepath + ")...\n");
     datagen::SyntheticDataMapped data(
-        X_filepath, y_filepath,
-        n, p,
-        true_support, true_coefs,
-        snr, /*seed=*/58
+        X_filepath,
+        y_filepath,
+        cfg.n,
+        cfg.p,
+        cfg.true_support,
+        cfg.true_coefs,
+        cfg.snr,
+        58
     );
 
     // Eigen::Map views as lvalues (required by TRexSelector constructor)
-    Eigen::Map<Eigen::MatrixXd> X_map(data.getX().data(), data.rows(),
+    Eigen::Map<Eigen::MatrixXd> X_map(data.getX().data(),
+                                      data.rows(),
                                       data.cols());
     Eigen::Map<Eigen::VectorXd> y_map(data.getY().data(), data.rows());
 
@@ -185,30 +241,36 @@ void demo_TRexSelector_full_mmap(bool high_dim, bool rnd_coef) {
     // additionally stores the internal dummy matrices D in mmap files and
     // serializes solver LARS-path checkpoints ((p+L) x T_stop per solver) to
     // disk between T-loop iterations.
-    TRexControlParameter trex_ctrl;
-    trex_ctrl.K                     = 20;
-    trex_ctrl.max_dummy_multiplier  = 10;
-    trex_ctrl.use_max_T_stop        = true;
-    trex_ctrl.dummy_distribution    = dummygen::Distribution::Normal();
-    trex_ctrl.lloop_strategy        = LLoopStrategy::HCONCAT;
-    trex_ctrl.tloop_stagnation_stop = true;
-    trex_ctrl.use_memory_mapping    = true;   // <<< enables D mmap + solver serialization
-    trex_ctrl.solver_type           = SolverTypeForTRex::TLARS;
+    TRexControlParameter trex_ctrl = make_mmap_trex_ctrl();
 
-    std::cout << "Creating T-Rex Selector instance...\n";
-    TRexSelector trex(X_map, y_map, /*tFDR=*/0.1, trex_ctrl, /*seed=*/-1,
-                        /*verbose=*/true);
+    print_dual("Creating T-Rex Selector instance...\n");
+    TRexSelector trex(X_map,
+                      y_map,
+                      cfg.tFDR,
+                      trex_ctrl,
+                      -1,
+                      true);
 
-    std::cout << "Executing T-Rex Selector...\n";
+    print_dual("Executing T-Rex Selector...\n");
     trex.select();
 
-    print_results(trex.getSelectedIndices(), true_support);
+    print_results(trex.getSelectedIndices(),
+                  cfg.true_support,
+                  trex,
+                  print_dual);
+    save_selection_csv(folder + stem + ".csv",
+                       cfg.p,
+                       trex.getPhiPrime(),
+                       trex.getSelectedIndices(),
+                       cfg.true_support);
 
-    // Remove mmap backing files
-    fs::remove(X_filepath);
-    fs::remove(y_filepath);
+    print_dual("\n\n");
 
-    std::cout << "\n\n";
+    if (out_file.is_open()) {
+        std::cout << "[Info] Results saved to:              " << folder + stem + ".txt\n";
+        out_file.close();
+    }
+    // mmap_guard dtor removes X_filepath + y_filepath
 }
 
 
@@ -223,16 +285,21 @@ int main() {
     std::cout << "Running with " << omp_get_max_threads() << " threads\n\n";
 
     // ============================================================
-    // Demo A: in-memory X + solver serialization + D mmap
+    // Demo A: single run — in-memory X + solver serialization + D mmap
     // ============================================================
-    demo_TRexSelector_d_mmap_solver_serial(/*high_dim=*/false, /*rnd_coef=*/false);
-    demo_TRexSelector_d_mmap_solver_serial(/*high_dim=*/true,  /*rnd_coef=*/false);
+    if (false)
+        demo_TRexSelector_d_mmap_solver_serial(/*high_dim=*/false, /*rnd_coef=*/false);
+    if (false)
+        demo_TRexSelector_d_mmap_solver_serial(/*high_dim=*/true,  /*rnd_coef=*/false);
 
     // ============================================================
-    // Demo B: fully memory-mapped pipeline (X + D + solver serialization)
+    // Demo B: single run — fully memory-mapped pipeline (X + D + solver serialization)
     // ============================================================
-    demo_TRexSelector_full_mmap(/*high_dim=*/false, /*rnd_coef=*/false);
-    demo_TRexSelector_full_mmap(/*high_dim=*/true,  /*rnd_coef=*/false);
+    if (false)
+        demo_TRexSelector_full_mmap(/*high_dim=*/false, /*rnd_coef=*/false);
+    if (false)
+        demo_TRexSelector_full_mmap(/*high_dim=*/true,  /*rnd_coef=*/false);
 
     return 0;
 }
+// ==============================================================================

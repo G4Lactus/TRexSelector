@@ -7,8 +7,8 @@
  * @brief Demonstration of classical T-Rex Selector.
  *
  * @details Shows basic usage of the classical T-Rex Selector for both low- and
- *          high-dimensional settings. Furthermore, we compare between in-memory
- *          and memory-mapped workflows.
+ *          high-dimensional settings.
+ *          Furthermore, we compare between in-memory and memory-mapped workflows.
  */
 // ==============================================================================
 
@@ -28,6 +28,9 @@
 #include <utils/datageneration/utils_datagen.hpp>
 #include <utils/eval_metrics/utils_eval_cdiagnostics.hpp>
 #include <utils/eval_metrics/utils_eval_rates.hpp>
+
+// Demo utilities
+#include "demo_trx_utils.hpp"
 
 
 // ==============================================================================
@@ -68,22 +71,31 @@ void demo_TRexSelector(bool high_dim, bool rnd_coef) {
         std::vector<double>{1, 1, 1, 1, 1, 1};
     const double snr = 1.0;
     const double tFDR = 0.1;
-    std::cout << (high_dim ? "High-dimensional (p > n)" : "Low-dimensional (n > p)") << "\n";
 
+    // Setup dual output (console + file)
+    const std::string folder = "simulations/";
+    const std::string filename = "trex_basic_n" + std::to_string(n) +
+                                 "_p" + std::to_string(p) + ".txt";
+    std::ofstream out_file(folder + filename);
+    auto print_dual = [&](const std::string& text) {
+        std::cout << text;
+        if (out_file.is_open()) out_file << text;
+    };
+
+    print_dual(std::string(high_dim ? "High-dimensional (p > n)"
+                                    : "Low-dimensional (n > p)") + "\n");
 
     // Generate synthetic data
-    std::cout << "Generating synthetic data...\n";
+    print_dual("Generating synthetic data...\n");
     datagen::SyntheticData data(n, p, true_support, true_coefs, snr, /*seed=*/58);
 
-
     // Create mapped views as lvalues (required by TRexSelector constructor)
-    std::cout << "Creating maps of data...\n";
+    print_dual("Creating maps of data...\n");
     Eigen::Map<Eigen::MatrixXd> X_map(data.getX().data(),
                                       data.rows(),
                                       data.cols());
     Eigen::Map<Eigen::VectorXd> y_map(data.getY().data(),
                                       data.rows());
-
 
     // Setup Control Structures
     TRexControlParameter trex_ctrl;
@@ -98,62 +110,74 @@ void demo_TRexSelector(bool high_dim, bool rnd_coef) {
     trex_ctrl.solver_type = SolverTypeForTRex::TLARS;
 
     // Create T-Rex Selector instance
-    std::cout << "Creating T-Rex Selector instance...\n";
-    TRexSelector trex(
-        X_map,
-        y_map,
-        tFDR,
-        trex_ctrl,
-        -1,
-        true
-    );
+    print_dual("Creating T-Rex Selector instance...\n");
+    TRexSelector trex(X_map, y_map, tFDR, trex_ctrl, -1, true);
 
     // Execute T-Rex Selector
-    std::cout << "Executing T-Rex Selector...\n";
+    print_dual("Executing T-Rex Selector...\n");
     trex.select();
 
-    auto selected_indices = trex.getSelectedIndices();
-    std::cout << "Selected indices: ";
-    for (const auto& idx : selected_indices) {
-        std::cout << idx << " ";
+    const auto selected_indices = trex.getSelectedIndices();
+    {
+        std::ostringstream ss;
+        ss << "Selected indices: ";
+        for (const auto& idx : selected_indices) ss << idx << " ";
+        ss << "\n";
+        print_dual(ss.str());
     }
-    std::cout << "\n";
 
-    const double fdp = rates::compute_fdp(
-        /*selected_indices=*/selected_indices,
-        /*true_support=*/true_support
-    );
+    const double fdp = rates::compute_fdp(selected_indices, true_support);
+    const double tpp = rates::compute_tpp(selected_indices, true_support);
+    {
+        std::ostringstream ss;
+        ss << std::fixed << std::setprecision(4);
+        ss << "False Discovery Proportion (FDP): " << fdp << "\n";
+        ss << "True Positive Proportion (TPP):   " << tpp << "\n";
+        print_dual(ss.str());
+    }
 
-    const double tpp = rates::compute_tpp(
-        /*selected_indices=*/selected_indices,
-        /*true_support=*/true_support
-    );
+    {
+        const auto& phi_prime = trex.getPhiPrime();
+        std::ostringstream ss;
+        ss << "\nAdjusted Relative Occurrences (Phi_prime):\n"
+           << phi_prime.transpose() << "\n";
+        print_dual(ss.str());
+    }
 
-    std::cout << std::fixed << std::setprecision(4);
-    std::cout << "False Discovery Proportion (FDP): " << fdp << "\n";
-    std::cout << "True Positive Proportion (TPP):   " << tpp << "\n";
+    {
+        const auto& phi_mat = trex.getPhiMat();
+        std::ostringstream ss;
+        ss << "\nPhi Matrix (Phi):\n" << phi_mat << "\n";
+        print_dual(ss.str());
+    }
 
-    auto phi_prime = trex.getPhiPrime();
-    std::cout << "\nAdjusted Relative Occurrences (Phi_prime):\n";
-    std::cout << phi_prime.transpose() << "\n";
+    {
+        const auto& fdp_hat_mat = trex.getFDPHatMat();
+        std::ostringstream ss;
+        ss << "\nEstimated FDP Matrix (FDP_hat):\n" << fdp_hat_mat << "\n";
+        print_dual(ss.str());
+    }
 
-    auto phi_mat = trex.getPhiMat();
-    std::cout << "\nPhi Matrix (Phi):\n";
-    std::cout << phi_mat << "\n";
+    {
+        const auto& r_mat = trex.getRMat();
+        std::ostringstream ss;
+        ss << "\nR Matrix (R):\n" << r_mat << "\n";
+        print_dual(ss.str());
+    }
 
-    auto fdp_hat_mat = trex.getFDPHatMat();
-    std::cout << "\nEstimated FDP Matrix (FDP_hat):\n";
-    std::cout << fdp_hat_mat << "\n";
+    {
+        const auto& voting_grid = trex.getVotingGrid();
+        std::ostringstream ss;
+        ss << "\nVoting Grid:\n" << voting_grid.transpose() << "\n";
+        print_dual(ss.str());
+    }
 
-    auto r_mat = trex.getRMat();
-    std::cout << "\nR Matrix (R):\n";
-    std::cout << r_mat << "\n";
+    print_dual("\n\n");
 
-    auto voting_grid = trex.getVotingGrid();
-    std::cout << "\nVoting Grid:\n";
-    std::cout << voting_grid.transpose() << "\n";
-
-    std::cout << "\n\n";
+    if (out_file.is_open()) {
+        std::cout << "[Info] Results saved to: " << folder + filename << "\n";
+        out_file.close();
+    }
 }
 
 
@@ -161,147 +185,44 @@ void demo_TRexSelector(bool high_dim, bool rnd_coef) {
 // More sophisticated demos
 // ==============================================================================
 
-struct DemoSolverInfo {
-    SolverTypeForTRex solver_type;
-    std::string solver_name;
-    double lambda2 = 0.0;
-    double rho_afs = 0.0;
-    int ncgmp_variant = 0;
-};
+// ==============================================================================
+// Shared configuration helpers
+// ==============================================================================
 
-
-#include <iostream>
-#include <fstream>
-#include <sstream>
-#include <iomanip>
-#include <vector>
-#include <map>
-#include <string>
-
-void save_and_print_results(
-    std::size_t num_MC,
-    std::size_t n,
-    std::size_t p,
-    std::size_t stagnation_window,
-    const std::vector<double>& snr_values,
-    const std::vector<DemoSolverInfo>& solvers_to_test,
-    const std::map<std::string, Eigen::VectorXd>& fdr_results_map,
-    const std::map<std::string, Eigen::VectorXd>& tpr_results_map,
-    const std::map<std::string, Eigen::VectorXd>& avg_L_results_map,
-    const std::map<std::string, Eigen::VectorXd>& avg_T_results_map
-) {
-    // 1. Setup File Output
-    // -----------------------------------
-    std::string folder = "simulations/";
-    std::string filename = "trex_results_n" + std::to_string(n) + "_p" +
-                           std::to_string(p) + "_stagnation_window_" +
-                           std::to_string(stagnation_window) + ".txt";
-
-    // Use folder + filename instead of folder.append() to avoid modifying the folder variable
-    std::ofstream out_file(folder + filename);
-
-    // Lambda to print to both console and file simultaneously
-    auto print_dual = [&](const std::string& text) {
-        std::cout << text;
-        if (out_file.is_open()) out_file << text;
+static std::vector<DemoSolverInfo> make_default_solvers_to_test() {
+    return {
+        {SolverTypeForTRex::TLARS,      "TLARS"},
+        {SolverTypeForTRex::TLASSO,     "TLASSO"},
+        {SolverTypeForTRex::TENET,      "TENET",
+            0.1},
+        {SolverTypeForTRex::TSTEPWISE,  "TSTEPWISE"},
+        {SolverTypeForTRex::TSTAGEWISE, "TSTAGEWISE"},
+        {SolverTypeForTRex::TOMP,       "TOMP"},
+        {SolverTypeForTRex::TGP,        "TGP"},
+        {SolverTypeForTRex::TACGP,      "TACGP"},
+        {SolverTypeForTRex::TMP,        "TMP"},
+        {SolverTypeForTRex::TAFS,       "TAFS_rho_0.3",
+            0.0, 0.3},
+        {SolverTypeForTRex::TAFS,       "TAFS_rho_1.0",
+            0.0, 1.0},
+        {SolverTypeForTRex::TNCGMP,     "TNCGMP_v1",
+            0.0, 0.0, 1},
+        {SolverTypeForTRex::TNCGMP,     "TNCGMP_v0",
+            0.0, 0.0, 0},
+        {SolverTypeForTRex::TOOLS,      "TOOLS"}
     };
-
-    // 2. Print Headers
-    // -----------------------------------
-    std::stringstream ss;
-    ss << "\n";
-    ss << "======================================================================\n";
-    ss << "=== T-Rex Results (averaged over " << num_MC << " Monte Carlo runs) ===\n";
-    ss << "======================================================================\n\n";
-    print_dual(ss.str());
-
-    // 3. Setup Table Dimensions
-    // -----------------------------------
-    const std::size_t solver_width = 15;
-    const std::size_t metric_width = 8;
-    const std::size_t snr_col_width = 5;
-    const std::size_t col_width = 10;
-
-    // 4. Print Table Header
-    // -----------------------------------
-    std::stringstream ss_header;
-
-    // Put Solver, Metric, and SNR on the same line with tailored spacing
-    ss_header << std::left << std::setw(solver_width) << "Solver"
-              << std::left << std::setw(metric_width) << "Metric"
-              << std::right << std::setw(snr_col_width) << "SNR";
-
-    // Print the SNR values
-    for (double snr : snr_values) {
-        ss_header << std::fixed << std::setprecision(1) << std::setw(col_width) << snr;
-    }
-    ss_header << "\n";
-
-    // Adjust dashed line length to account for the exact new dimensions
-    ss_header << std::string(solver_width + metric_width + snr_col_width +
-        col_width * snr_values.size(), '-') << "\n";
-    print_dual(ss_header.str());
-
-    // Helper lambda to print a single metric row cleanly
-    auto print_metric_row = [&](const std::string& solver_name,
-        const std::string& metric_name, const Eigen::VectorXd& data, bool is_first_row) {
-        std::stringstream ss_row;
-
-        // Print the text columns, plus an empty gap matching snr_col_width
-        ss_row << std::left << std::setw(solver_width) << (is_first_row ? solver_name : "")
-               << std::left << std::setw(metric_width) << metric_name
-               << std::setw(snr_col_width) << "";
-
-        // Switch to right-alignment for numerical data
-        ss_row << std::right;
-        for (Eigen::Index i = 0; i < static_cast<Eigen::Index>(snr_values.size()); ++i) {
-            ss_row << std::fixed << std::setprecision(4)
-                   << std::setw(col_width) << data(i);
-        }
-        ss_row << "\n";
-        print_dual(ss_row.str());
-    };
-
-    // 5. Print Data Rows
-    // -----------------------------------
-    for (const auto& solver : solvers_to_test) {
-        std::string name = solver.solver_name;
-
-        // FDR and TPR are standard, so we assume they always exist
-        print_metric_row(name, "FDR",
-                        fdr_results_map.at(name),
-                        true);
-
-        print_metric_row(name,
-                         "TPR",
-                         tpr_results_map.at(name),
-                         false);
-
-        // Conditionally print Avg L if the map contains data for this solver
-        if (avg_L_results_map.count(name) > 0) {
-            print_metric_row(name, "Avg L",
-                avg_L_results_map.at(name), false);
-        }
-
-        // Conditionally print Avg T if the map contains data for this solver
-        if (avg_T_results_map.count(name) > 0) {
-            print_metric_row(name, "Avg T",
-                avg_T_results_map.at(name), false);
-        }
-
-        print_dual("\n");
-    }
-
-    // 6. Footer
-    // -----------------------------------
-    if (out_file.is_open()) {
-        std::cout << "[Info] Results successfully saved to: " << folder + filename << "\n\n";
-        out_file.close();
-    } else {
-        std::cout << "[Warning] Could not open output file: " << folder + filename << "\n\n";
-    }
 }
 
+static TRexControlParameter make_base_trex_control() {
+    TRexControlParameter ctrl;
+    ctrl.K = 20;
+    ctrl.max_dummy_multiplier = 10;
+    ctrl.use_max_T_stop = true;
+    ctrl.dummy_distribution = dummygen::Distribution::Normal();
+    ctrl.lloop_strategy = LLoopStrategy::HCONCAT;
+    ctrl.tloop_stagnation_stop = true;
+    return ctrl;
+}
 
 // ==============================================================================
 // ==============================================================================
@@ -329,26 +250,7 @@ void demo_TRexSelector_MonteCarlo(std::size_t num_MC, bool high_dim, bool rnd_co
     // Define solvers to test & T-Rex control parameters
     // ===================================================================
 
-    const std::vector<DemoSolverInfo> solvers_to_test = {
-       {SolverTypeForTRex::TLARS,      "TLARS"},
-       {SolverTypeForTRex::TLASSO,     "TLASSO"},
-       {SolverTypeForTRex::TENET,      "TENET", 0.1},
-       {SolverTypeForTRex::TSTEPWISE,  "TSTEPWISE"},
-       {SolverTypeForTRex::TSTAGEWISE, "TSTAGEWISE"},
-       {SolverTypeForTRex::TOMP,       "TOMP"},
-       {SolverTypeForTRex::TGP,        "TGP"},
-       {SolverTypeForTRex::TACGP,      "TACGP"},
-       {SolverTypeForTRex::TMP,        "TMP"},
-       {SolverTypeForTRex::TAFS,       "TAFS_rho_0.3",
-            {},  0.3},
-        {SolverTypeForTRex::TAFS,       "TAFS_rho_1.0",
-            {},  1.0},
-       {SolverTypeForTRex::TNCGMP,    "TNCGMP_v1", {},
-            {}, 1},
-        {SolverTypeForTRex::TNCGMP,    "TNCGMP_v0", {},
-            {}, 0},
-       {SolverTypeForTRex::TOOLS,     "TOOLS"}
-    };
+    const std::vector<DemoSolverInfo> solvers_to_test = make_default_solvers_to_test();
 
     // Results: dim = solver x SNR
     std::map<std::string, Eigen::VectorXd> fdr_results_map;
@@ -360,13 +262,7 @@ void demo_TRexSelector_MonteCarlo(std::size_t num_MC, bool high_dim, bool rnd_co
     }
 
     // Setup TRex Parameters
-    TRexControlParameter trex_control;
-    trex_control.K = 20;
-    trex_control.max_dummy_multiplier = 10;
-    trex_control.use_max_T_stop = true;
-    trex_control.dummy_distribution = dummygen::Distribution::Normal();
-    trex_control.lloop_strategy = LLoopStrategy::HCONCAT;
-    trex_control.tloop_stagnation_stop = true;
+    TRexControlParameter trex_control = make_base_trex_control();
     trex_control.tloop_max_stagnant_steps = 7;
     trex_control.parallel_rnd_experiments = false;
     trex_control.opt_threshold = 0.75;
@@ -549,26 +445,7 @@ void demo_TRexSelector_varMonteCarlo(std::size_t num_MC, bool high_dim, bool rnd
     // Define solvers to test & T-Rex control parameters
     // ===================================================================
 
-    const std::vector<DemoSolverInfo> solvers_to_test = {
-       {SolverTypeForTRex::TLARS,      "TLARS"},
-       {SolverTypeForTRex::TLASSO,     "TLASSO"},
-       {SolverTypeForTRex::TENET,      "TENET", 0.1},
-       {SolverTypeForTRex::TSTEPWISE,  "TSTEPWISE"},
-       {SolverTypeForTRex::TSTAGEWISE, "TSTAGEWISE"},
-       {SolverTypeForTRex::TOMP,       "TOMP"},
-       {SolverTypeForTRex::TGP,        "TGP"},
-       {SolverTypeForTRex::TACGP,      "TACGP"},
-       {SolverTypeForTRex::TMP,        "TMP"},
-       {SolverTypeForTRex::TAFS,       "TAFS_rho_0.3",
-            {},  0.3},
-        {SolverTypeForTRex::TAFS,       "TAFS_rho_1.0",
-            {},  1.0},
-       {SolverTypeForTRex::TNCGMP,    "TNCGMP_v1", {},
-            {}, 1},
-        {SolverTypeForTRex::TNCGMP,    "TNCGMP_v0", {},
-            {}, 0},
-       {SolverTypeForTRex::TOOLS,     "TOOLS"}
-    };
+    const std::vector<DemoSolverInfo> solvers_to_test = make_default_solvers_to_test();
 
     // Results: solver x SNR
     std::map<std::string, Eigen::VectorXd> fdr_results_map;
@@ -584,13 +461,7 @@ void demo_TRexSelector_varMonteCarlo(std::size_t num_MC, bool high_dim, bool rnd
     }
 
     // Setup TRex Parameters
-    TRexControlParameter trex_control;
-    trex_control.K = 20;
-    trex_control.max_dummy_multiplier = 10;
-    trex_control.use_max_T_stop = true;
-    trex_control.dummy_distribution = dummygen::Distribution::Normal();
-    trex_control.lloop_strategy = LLoopStrategy::HCONCAT;
-    trex_control.tloop_stagnation_stop = true;
+    TRexControlParameter trex_control = make_base_trex_control();
     trex_control.tloop_max_stagnant_steps = 3;
 
 
@@ -762,20 +633,20 @@ int main() {
     omp_set_num_threads(6);
     std::cout << "Running with " << omp_get_max_threads() << " threads\n\n";
 
-    // Run basic T-Rex Selector demo
+    // Run basic T-Rex Selector demo without Monte Carlo simulation
     // --------------------------------------------------------------------------------------
     if (false)
         demo_TRexSelector(/*high_dim=*/true, /*rnd_coef=*/false);
 
-    // Monte Carlo simulation: Run T-Rex Selector with fixed support & coefficients
+    // Monte Carlo simulation: Run T-Rex Selector with fixed support & variable data
     // --------------------------------------------------------------------------------------
     // high-dimensional setting
     if (true)
-        demo_TRexSelector_MonteCarlo(/*num_MC=*/500, /*high_dim=*/true, /*rnd_coef=*/false);
+        demo_TRexSelector_MonteCarlo(/*num_MC=*/100, /*high_dim=*/true, /*rnd_coef=*/false);
 
     // low-dimensional setting
-    if (false)
-        demo_TRexSelector_MonteCarlo(/*num_MC=*/500, /*high_dim=*/false, /*rnd_coef=*/false);
+    if (true)
+        demo_TRexSelector_MonteCarlo(/*num_MC=*/100, /*high_dim=*/false, /*rnd_coef=*/false);
 
 
     // STANDARD SIMULATION
@@ -783,8 +654,8 @@ int main() {
     // Monte Carlo simulation: Run T-Rex Selector with variable data, support & coefficients
     // --------------------------------------------------------------------------------------
     // high-dimensional setting
-    if (false)
-        demo_TRexSelector_varMonteCarlo(/*num_MC=*/500, /*high_dim=*/true, /*rnd_coef=*/false);
+    if (true)
+        demo_TRexSelector_varMonteCarlo(/*num_MC=*/100, /*high_dim=*/true, /*rnd_coef=*/false);
 
     return 0;
 }
