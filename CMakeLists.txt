@@ -1,4 +1,5 @@
-# Root CMakeLists.txt
+# =============================================================================
+# Project Root CMakeLists.txt
 # =============================================================================
 # This file defines project-wide settings and includes each subfolder in src/ .
 #
@@ -6,7 +7,7 @@
 # - release/  folder: optimized build without debug symbols
 # - debug/    folder: unoptimized build with debug symbols and extra checks
 # =============================================================================
-cmake_minimum_required(VERSION 3.18)
+cmake_minimum_required(VERSION 3.23...4.3)
 
 
 # ============================================================================
@@ -40,9 +41,9 @@ set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 # ============================================================================
 # Project Definition
 # ============================================================================
-project(TRexLearning
-    VERSION 0.1
-    DESCRIPTION "C++ Prototype for TRex Selector"
+project(TRexSelector
+    VERSION 0.1.0
+    DESCRIPTION "C++ Implementation of the T-Rex Selector"
     LANGUAGES CXX
 )
 
@@ -65,6 +66,16 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 # ============================================================================
 
 # OpenMP (required)
+# Pin libomp to the stable Homebrew symlink — survives future `brew upgrade llvm`
+if(APPLE)
+    if(NOT DEFINED HOMEBREW_LLVM_PREFIX)
+        set(HOMEBREW_LLVM_PREFIX "/opt/homebrew/opt/llvm")
+    endif()
+    set(OpenMP_CXX_FLAGS       "-fopenmp=libomp -I${HOMEBREW_LLVM_PREFIX}/include")
+    set(OpenMP_CXX_LIB_NAMES   "libomp")
+    set(OpenMP_libomp_LIBRARY  "${HOMEBREW_LLVM_PREFIX}/lib/libomp.dylib"
+        CACHE FILEPATH "libomp path - pinned to stable Homebrew symlink" FORCE)
+endif()
 find_package(OpenMP REQUIRED)
 
 # Eigen3 (required)
@@ -197,3 +208,47 @@ endif()
 # Add subdirectories with build targets (.cpp files)
 # ============================================================================
 add_subdirectory(src)
+
+
+# ============================================================================
+# Package Configuration  (enables find_package(TRexSelector))
+# ============================================================================
+include(CMakePackageConfigHelpers)
+include(GNUInstallDirs)   # gives portable CMAKE_INSTALL_LIBDIR / INCLUDEDIR
+
+# 1. Generate TRexSelectorConfig.cmake from the .in template
+configure_package_config_file(
+    cmake/TRexSelectorConfig.cmake.in                           # source template
+    ${CMAKE_CURRENT_BINARY_DIR}/TRexSelectorConfig.cmake        # output in build/
+    INSTALL_DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/TRexSelector
+)
+
+# 2. Generate TRexSelectorConfigVersion.cmake
+write_basic_package_version_file(
+    ${CMAKE_CURRENT_BINARY_DIR}/TRexSelectorConfigVersion.cmake
+    VERSION         ${PROJECT_VERSION}
+    COMPATIBILITY   SameMajorVersion
+)
+
+# 3. Install both config files
+install(FILES
+    ${CMAKE_CURRENT_BINARY_DIR}/TRexSelectorConfig.cmake
+    ${CMAKE_CURRENT_BINARY_DIR}/TRexSelectorConfigVersion.cmake
+    DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/TRexSelector
+)
+
+# 4. Install the exported target manifest
+install(EXPORT TRexSelectorTargets
+    FILE        TRexSelectorTargets.cmake
+    NAMESPACE   TRexSelector::
+    DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/TRexSelector
+)
+
+# 5. Install public headers (preserves subfolder structure)
+install(DIRECTORY ${CMAKE_SOURCE_DIR}/include/
+    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
+)
+install(DIRECTORY ${CMAKE_SOURCE_DIR}/src/
+    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
+    FILES_MATCHING PATTERN "*.hpp"      # only headers, no .cpp
+)

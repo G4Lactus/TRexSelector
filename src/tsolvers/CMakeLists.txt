@@ -1,40 +1,56 @@
 # src/tsolvers/CMakeLists.txt
 # ==============================================================================
-# CMake configuration for T-Rex solver library (T-LARS family algorithms)
+# CMake configuration for T-Rex solver library (T-LARS family algorithms).
 #
-# This library provides terminating variable selection algorithms for use with
-# the T-Rex Selector framework.
+# This library provides algorithms for the terminating variable selection
+# framework used within the T-Rex Selector.
+#
 # The following solvers are implemented:
 #
 #   LARS (Least Angle Regression) path based solvers:
-#   - TLARS:     Terminating Least Angle Regression Solver (LARS)
-#   - TLASSO:    T-LARS with L1 penalty and variable removal (LASSO)
-#   - TSTEPWISE: Terminating Forward Stepwise Regression Solver (LARS based)
-#   - TENET:     Terminating Elastic Net Solver (L1 + L2 penalty, Pathwise algorithm, LARS-EN)
+#   - TLARS:      Terminating Least Angle Regression Solver (LARS).
+#   - TLASSO:     T-LARS with L1 penalty and variable removal (LASSO).
+#   - TSTEPWISE:  Terminating Forward Stepwise Regression Solver (LARS based FS).
+#   - TSTAGEWISE: Terminating Forward Stagewise Regression Solver (LARS based Stagewise).
+#   - TENET:      Terminating Elastic Net Solver (L1 + L2 penalty, Pathwise algorithm, LARS-EN).
+#   - TIENET:     Terminating Informed Elastic Net Solver (L1 + L2 penalty, Pathwise algorithm,
+#                 LARS-IEN).
+#
 #
 #   OMP (Orthogonal Matching Pursuit) based solvers:
-#   - TOMP:      Terminating Orthogonal Matching Pursuit Solver (OMP)
-#   - TGP:       Terminating Gradient Pursuit Solver (GP)
-#   - TACGP:     Terminating Approximate Conjugate Gradient Pursuit Solver (ACGP)
+#   - TOMP:      Terminating Orthogonal Matching Pursuit Solver (OMP).
+#   - TGP:       Terminating Gradient Pursuit Solver (GP).
+#   - TACGP:     Terminating Approximate Conjugate Gradient Pursuit Solver (ACGP).
+#   - TMP:       Terminating Matching Pursuit Solver (MP).
 #
+#
+#   AFS (Adaptive Forward Selection) based solvers:
+#   - TAFS:      Terminating Adaptive Forward Selection Solver (AFS).
+#
+#
+# Organization:
+# -------------
+# src/tsolvers/
+# |-- linear_model/
+#     |-- lars_based/
+#     |-- omp_based/
+#     |-- afs_based/
+# |
+# |-- logistic_model/
+# |
+# |-- poisson_model/
+# |
+# |-- cox_model/
+# |
+# |-- etc.
 # ==============================================================================
 
 
 # ==============================================================================
-# Library Target
+# 1. Library Target
 # ==============================================================================
-add_library(trex_tsolvers STATIC
-    # Core LARS-based solvers
-    TLARS_Solver.cpp
-    TLASSO_Solver.cpp
-    TSTEPWISE_Solver.cpp
-    TENET_Solver.cpp
-
-    # OMP-based solvers
-    TOMP_Solver.cpp
-    TGP_Solver.cpp
-    TACGP_Solver.cpp
-)
+# Create a static library for tsolvers (sources are appended by subdirs)
+add_library(trex_tsolvers STATIC "tsolver_base.cpp")
 
 # Set target alias for consistent naming
 add_library(trex::tsolvers ALIAS trex_tsolvers)
@@ -42,40 +58,44 @@ add_library(trex::tsolvers ALIAS trex_tsolvers)
 
 
 # ==============================================================================
-# Include Directories for hierarchical includes (Generator Expressions)
+# 2. Include Directories
 # ==============================================================================
 target_include_directories(trex_tsolvers PUBLIC
-    # Build-tree
+    # Build-tree (dev)
     $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include>      # Public API headers
     $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/src>          # Internal headers
-    # Install-tree
+
+    # Install-tree (user)
     $<INSTALL_INTERFACE:include>                        # Installed headers
+    $<INSTALL_INTERFACE:src>                            # Append to mirror build-tree structure
 )
 # ==============================================================================
 
 
 # ==============================================================================
-# Link Dependencies
+# 3. Link Dependencies
 # ==============================================================================
-# Create a static library for the tsolvers module
 target_link_libraries(trex_tsolvers
     PUBLIC
+        # Unified Utils Library (provides memmap, datagen, serialization, etc.)
+        trex::utils
+
+        # Explicit Redundancy
         Eigen3::Eigen                   # Core linear algebra
-        OpenMP::OpenMP_CXX              # Parallel computing
         cereal::cereal                  # Serialization
-        trex::utils::serialization      # Used in .hpp files
+        OpenMP::OpenMP_CXX              # Parallel computing
 
     PRIVATE
-        ${BLAS_LIBRARIES}           # BLAS backend
-        ${LAPACK_LIBRARIES}         # LAPACK backend
-        trex::utils::datagen        # Data generation utilities
-        trex::utils::memmap         # Memory-mapped file support
+        ${BLAS_LIBRARIES}               # BLAS backend
+        ${LAPACK_LIBRARIES}             # LAPACK backend
 )
+# ==============================================================================
 
 
 # ==============================================================================
-# Compiler Settings
+# 4. Compiler Settings
 # ==============================================================================
+# Require at least C++20 strictly for this module
 target_compile_features(trex_tsolvers PUBLIC cxx_std_20)
 
 target_compile_definitions(trex_tsolvers PUBLIC
@@ -87,20 +107,52 @@ target_compile_options(trex_tsolvers PRIVATE
     $<$<CONFIG:Debug>:-g -O0 -Wall -Wextra>
     $<$<CONFIG:Release>:-O3 -DNDEBUG -march=native -ffast-math -funroll-loops>
 )
+# ==============================================================================
 
 
 # ==============================================================================
-# Installation (Optional)
+# 5. Include Subdirectories
 # ==============================================================================
-# install(TARGETS trex_tsolvers
-#     EXPORT trex_tsolvers-targets
-#     LIBRARY DESTINATION lib
-#     ARCHIVE DESTINATION lib
-#     RUNTIME DESTINATION bin
-#     INCLUDES DESTINATION include
-# )
-#
-# install(FILES ${TSOLVER_HEADERS}
-#     DESTINATION include/tsolvers
-# )
-#
+# Sources and headers from subfolders are appended to target
+add_subdirectory(linear_model)
+add_subdirectory(logistic_model)
+add_subdirectory(solver_utils)
+# Future expansion: ...
+# ==============================================================================
+
+
+# ==============================================================================
+# 6. Install Rules
+# ==============================================================================
+
+# Install compiled library and export the target
+install(TARGETS trex_tsolvers
+    EXPORT   TRexSelectorTargets
+    ARCHIVE  DESTINATION ${CMAKE_INSTALL_LIBDIR}          # static .a
+    LIBRARY  DESTINATION ${CMAKE_INSTALL_LIBDIR}          # shared .so (future)
+    RUNTIME  DESTINATION ${CMAKE_INSTALL_BINDIR}          # executables
+    FILE_SET HEADERS                                      # installs all FILE_SET headers
+             DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}      # preserves subfolder structure
+)
+
+# Install umbrella headers
+install(FILES
+    tsolver_base.hpp
+    linear_model.hpp
+    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/tsolvers
+)
+
+install(FILES
+    linear_model/lars_based.hpp
+    linear_model/omp_based.hpp
+    linear_model/afs_based.hpp
+    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/tsolvers/linear_model
+)
+
+# Export the targets so find_package(TRexSelector) works
+install(EXPORT TRexSelectorTargets
+    FILE        TRexSelectorTargets.cmake
+    NAMESPACE   TRexSelector::
+    DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/TRexSelector
+)
+# ==============================================================================

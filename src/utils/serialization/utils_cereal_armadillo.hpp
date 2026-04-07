@@ -1,24 +1,22 @@
 // ===================================================================================
 // utils_cereal_armadillo.hpp
 // ===================================================================================
+#ifndef UTILS_CEREAL_ARMA_SERIALIZATION_HPP
+#define UTILS_CEREAL_ARMA_SERIALIZATION_HPP
+// ===================================================================================
 /**
  * @file utils_cereal_armadillo.hpp
  *
  * @brief CEREAL serialization support for Armadillo matrices and vectors by augmenting
- *        the prime arma namespace.
+ * the prime arma namespace.
  *
  */
 // ===================================================================================
 
-#ifndef TREX_UTILS_CEREAL_ARMA_SERIALIZATION_HPP
-#define TREX_UTILS_CEREAL_ARMA_SERIALIZATION_HPP
-
-// ===================================================================================
-
-#include <string>
-
+// std includes
 #include <armadillo>
 
+// CEREAL includes
 #include <cereal/archives/binary.hpp>
 #include <cereal/archives/portable_binary.hpp>
 #include <cereal/types/string.hpp>
@@ -32,20 +30,14 @@ namespace arma {
 
 // ===================================================================================
 
-
-/** @brief Augment arma namespace for CEREAL serialization support  */
-
-
-/** @brief Dense Matrix/Vector support */
+// Dense Matrix/Vector support
+// -----------------------------------------------------------------------------
 
 /**
- * @brief Save an Armadillo matrix to a CEREAL archive
+ * @brief Save an Armadillo matrix to a CEREAL archive.
  *
- * @tparam Archive Serial CEREAL archive type
- * @tparam eT Element type of the Armadillo matrix
- *
- * @param ar CEREAL archive
- * @param m Armadillo matrix to be saved
+ * @tparam Archive Serial CEREAL archive type.
+ * @tparam eT Element type of the Armadillo matrix.
  */
 template <class Archive, class eT>
 void save(Archive &ar, const arma::Mat<eT>& m) {
@@ -60,13 +52,10 @@ void save(Archive &ar, const arma::Mat<eT>& m) {
 
 
 /**
- * @brief Load an Armadillo matrix from a CEREAL archive
+ * @brief Load an Armadillo matrix from a CEREAL archive.
  *
- * @tparam Archive Serial CEREAL archive type
- * @tparam eT Element type of the Armadillo matrix
- *
- * @param ar CEREAL archive
- * @param m Armadillo matrix to be loaded
+ * @tparam Archive Serial CEREAL archive type.
+ * @tparam eT Element type of the Armadillo matrix.
  */
 template<class Archive, class eT>
 void load(Archive &ar, arma::Mat<eT>& m) {
@@ -79,16 +68,11 @@ void load(Archive &ar, arma::Mat<eT>& m) {
 }
 
 
-/** @brief Save/load for column vectors */
-
 /**
- * @brief Save an Armadillo column vector to a CEREAL archive
+ * @brief Save an Armadillo column vector to a CEREAL archive.
  *
- * @tparam Archive Serial CEREAL archive type
- * @tparam eT Element type of the Armadillo column vector
- *
- * @param ar CEREAL archive
- * @param v Armadillo column vector to be saved
+ * @tparam Archive Serial CEREAL archive type.
+ * @tparam eT Element type of the Armadillo column vector.
  */
 template <class Archive, class eT>
 void save(Archive &ar, const arma::Col<eT>& v) {
@@ -97,13 +81,13 @@ void save(Archive &ar, const arma::Col<eT>& v) {
 
 
 /**
- * @brief Load an Armadillo column vector from a CEREAL archive
+ * @brief Load an Armadillo column vector from a CEREAL archive.
  *
- * @tparam Archive Serial CEREAL archive type
- * @tparam eT Element type of the Armadillo column vector
+ * @tparam Archive Serial CEREAL archive type.
+ * @tparam eT Element type of the Armadillo column vector.
  *
- * @param ar CEREAL archive
- * @param v Armadillo column vector to be loaded
+ * @param ar CEREAL archive to load from.
+ * @param v Armadillo column vector to load into.
  */
 template<class Archive, class eT>
 void load(Archive &ar, arma::Col<eT> &v) {
@@ -111,13 +95,14 @@ void load(Archive &ar, arma::Col<eT> &v) {
 }
 
 
-/** @brief Save/load for row vectors */
-
 /**
- * @brief Save an Armadillo row vector to a CEREAL archive
+ * @brief Save an Armadillo row vector to a CEREAL archive.
  *
- * @param ar CEREAL archive
- * @param v Armadillo row vector to be saved
+ * @tparam Archive Serial CEREAL archive type.
+ * @tparam eT Element type of the Armadillo row vector.
+ *
+ * @param ar CEREAL archive to save to.
+ * @param v Armadillo row vector to save.
  */
 template<class Archive, class eT>
 void save(Archive &ar, const arma::Row<eT> &v) {
@@ -126,10 +111,13 @@ void save(Archive &ar, const arma::Row<eT> &v) {
 
 
 /**
- * @brief Load an Armadillo row vector from a CEREAL archive
+ * @brief Load an Armadillo row vector from a CEREAL archive.
  *
- * @param ar CEREAL archive
- * @param v Armadillo row vector to be loaded
+ * @tparam Archive Serial CEREAL archive type.
+ * @tparam eT Element type of the Armadillo row vector.
+ *
+ * @param ar CEREAL archive to load from.
+ * @param v Armadillo row vector to load into.
  */
 template<class Archive, class eT>
 void load(Archive &ar, arma::Row<eT> &v) {
@@ -137,16 +125,20 @@ void load(Archive &ar, arma::Row<eT> &v) {
 }
 
 
-/** @brief Sparse Matrix Support for (de-)serialization */
+// Sparse Matrix Support for (de-)serialization
+// -----------------------------------------------------------------------------
 
 /**
- * @brief Save an Armadillo sparse matrix to a CEREAL archive
+ * @brief Save an Armadillo sparse matrix to a CEREAL archive.
  *
- * @param ar CEREAL archive
- * @param sm Armadillo sparse matrix to be saved
+ * @tparam Archive Serial CEREAL archive type.
+ * @tparam eT Element type of the Armadillo sparse matrix.
+ *
+ * @param ar CEREAL archive to save to.
+ * @param sm Armadillo sparse matrix to save.
  */
-template<class Archive>
-void save(Archive &ar, const arma::sp_mat &sm) {
+template<class Archive, class eT>
+void save(Archive &ar, const arma::SpMat<eT> &sm) {
     ar(sm.n_rows, sm.n_cols, sm.n_nonzero);
     for(auto it = sm.begin(); it != sm.end(); ++it)
         ar(it.row(), it.col(), *it);
@@ -154,26 +146,28 @@ void save(Archive &ar, const arma::sp_mat &sm) {
 
 
 /**
- * @brief Load an Armadillo sparse matrix from a CEREAL archive
+ * @brief Load an Armadillo sparse matrix from a CEREAL archive.
  *
- * @param ar CEREAL archive
- * @param sm Armadillo sparse matrix to be loaded
+ * @tparam Archive Serial CEREAL archive type.
+ * @tparam eT Element type of the Armadillo sparse matrix.
+ *
+ * @param ar CEREAL archive to load from.
+ * @param sm Armadillo sparse matrix to load into.
  */
-template<class Archive>
-void load(Archive &ar, arma::sp_mat &sm) {
+template<class Archive, class eT>
+void load(Archive &ar, arma::SpMat<eT> &sm) {
     arma::uword n_rows, n_cols, n_nonzero;
     ar(n_rows, n_cols, n_nonzero);
     sm.zeros(n_rows, n_cols);
     for(arma::uword i = 0; i < n_nonzero; ++i) {
         arma::uword row, col;
-        double val;
+        eT val; // Automatically matches precision
         ar(row, col, val);
         sm(row, col) = val;
     }
 }
-
 // ===================================================================================
 
 } /* End of namespace arma */
 
-#endif /* End of TREX_UTILS_CEREAL_ARMA_SERIALIZATION_HPP */
+#endif /* UTILS_CEREAL_ARMA_SERIALIZATION_HPP */

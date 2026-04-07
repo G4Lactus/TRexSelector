@@ -1,6 +1,9 @@
 // ===================================================================================
 // utils_cdiagnostics.hpp
 // ===================================================================================
+#ifndef UTILS_EVAL_CDIAGNOSTICS_HPP
+#define UTILS_EVAL_CDIAGNOSTICS_HPP
+// ===================================================================================
 /**
  * @file utils_cdiagnostics.hpp
  *
@@ -10,16 +13,13 @@
  */
 // ===================================================================================
 
-#ifndef TREX_UTILS_EVAL_CDIAGNOSTICS_HPP
-#define TREX_UTILS_EVAL_CDIAGNOSTICS_HPP
-
-// ===================================================================================
-
+// std includes
 #include <algorithm>
 #include <iostream>
 #include <iomanip>
 #include <vector>
 
+// utils includes
 #include "utils/eval_metrics/utils_eval_counts.hpp"
 #include "utils/eval_metrics/utils_eval_rates.hpp"
 #include "utils/eval_metrics/utils_eval_composites.hpp"
@@ -27,10 +27,8 @@
 
 // ===================================================================================
 
-namespace trex {
-namespace utils {
-namespace eval {
-namespace cdiagnostics {
+// Embedded into namespace trex::utils::eval::cdiagnostics
+namespace trex::utils::eval::cdiagnostics {
 
 // ===================================================================================
 // Set up namespace aliases
@@ -47,10 +45,9 @@ namespace eval_cdiagnostics = trex::utils::eval::cdiagnostics;
 // Print demo title on console
 // ===========================================================
 /**
- * @brief Print section header
+ * @brief Get the mutable pointer to the default output stream.
  *
- * @param title String with algorithm or section name
- * @param os Output stream (default: std::cout)
+ * @return Reference to the static pointer to the current default output stream.
  */
 inline std::ostream*& get_default_stream_ptr() {
     static std::ostream *default_stream = &std::cout;
@@ -86,9 +83,9 @@ inline void set_default_stream(std::ostream &stream) {
  */
 inline void print_section_header(const std::string &title,
                                  std::ostream &os = get_default_stream()) {
-    os << "\n" << std::string(70, '=') << "\n";
+    os << "\n" << std::string(60, '=') << "\n";
     os << title << "\n";
-    os << std::string(70, '=') << "\n";
+    os << std::string(60, '=') << "\n";
 }
 // ===========================================================
 
@@ -97,6 +94,8 @@ inline void print_section_header(const std::string &title,
 // ==========================================================
 /**
  * @brief Print vector in comma-separated format: {1, 2, 3}
+ *
+ * @tparam T Element type of the vector.
  *
  * @param vec Vector to print.
  * @param max_show Maximum number of elements to show (default: all).
@@ -124,9 +123,11 @@ inline void print_vector(
 
 
 /**
- * @brief Print a compact actions log
+ * @brief Print a compact actions log.
  *
- * Each step prints a line with all additions (+k) or drops (-k) performed.
+ * @details Each step prints a line with all additions (+k) or drops (-k) performed.
+ *
+ * @param actions Vector of per-step action lists (positive = add, negative = drop).
  */
 void print_actions_log(const std::vector<std::vector<int>> &actions)
 {
@@ -196,6 +197,9 @@ inline void print_talgo_demo_config(
 /**
  * @brief Print selected variables and dummies from fitted solver's solution path
  *        with color coding.
+ *
+ * @tparam SolverType Concrete solver type exposing getActivePredictorIndices(),
+ *                    getActiveDummyIndices(), getActions(), and getDummyStartIndex().
  *
  * @param solver Fitted solver instance.
  * @param true_support Indices of true non-zero coefficients.
@@ -269,7 +273,9 @@ inline void print_selection(
 /**
  * @brief Prints the quality metrics of the variable selection.
  *
- * @param solver The TLARS solver instance.
+ * @tparam TSolver Concrete solver type exposing getActivePredictorIndices().
+ *
+ * @param solver The solver instance after fitting.
  * @param true_support The indices of the true support variables.
  */
 template <typename TSolver>
@@ -316,14 +322,10 @@ void print_selection_quality(
     std::cout << "  Recall:          " << recall << "\n";
     std::cout << "  F1 Score:        " << f1_score << "\n";
 }
-// ==========================================================
 
 
 // ===================================================================================
 
-} /* End of namespace cdiagnostics */
-} /* End of namespace eval */
-} /* End of namespace utils */
-} /* End of namespace trex */
+} /* End of namespace trex::utils::eval::cdiagnostics */
 
-#endif /* End of TREX_UTILS_EVAL_CDIAGNOSTICS_HPP */
+#endif /* UTILS_EVAL_CDIAGNOSTICS_HPP */

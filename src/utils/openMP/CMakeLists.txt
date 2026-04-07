@@ -1,36 +1,17 @@
-# src/utils/openMP/CMakeLists.txt
+# src/utils/openmp/CMakeLists.txt
 # ==================================================================================
-# CMake configuration for the utils/openMP module
+# CMake configuration for the utils/openmp module.
+#
+# This module provides safe threading wrappers and OpenMP utilities.
 # ==================================================================================
 
 # ==================================================================================
-# Create an INTERFACE library (no compiled code, header-only)
+# 1. Append Header Files (.hpp - public)
 # ==================================================================================
-add_library(trex_utils_openmp INTERFACE)
-
-# Add alias for consistent naming
-add_library(trex::utils::openmp ALIAS trex_utils_openmp)
-
-# ==================================================================================
-# Inlcude Directories for hierarchical includes (Generator Expressions)
-# ==================================================================================
-target_include_directories(trex_utils_openmp INTERFACE
-    # Build-tree
-    $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include>    # Public API headers
-    $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/src>        # Internal headers
-    # Install-tree
-    $<INSTALL_INTERFACE:include>
-    $<INSTALL_INTERFACE:src>
+target_sources(trex_utils PUBLIC
+    FILE_SET HEADERS
+    BASE_DIRS ${CMAKE_SOURCE_DIR}/src
+    FILES
+        ${CMAKE_CURRENT_LIST_DIR}/utils_openmp.hpp
 )
-
 # ==================================================================================
-# Link Dependencies
-# ==================================================================================
-target_link_libraries(trex_utils_openmp INTERFACE
-    OpenMP::OpenMP_CXX
-)
-
-# ==================================================================================
-# Compile Features and Definitions
-# ==================================================================================
-target_compile_features(trex_utils_openmp INTERFACE cxx_std_20)

@@ -1,26 +1,22 @@
 // ===================================================================================
 // utils_cereal_eigen.hpp
 // ===================================================================================
+#ifndef UTILS_CEREAL_EIGEN_SERIALIZATION_HPP
+#define UTILS_CEREAL_EIGEN_SERIALIZATION_HPP
+// ===================================================================================
 /**
  * @file utils_cereal_eigen.hpp
  *
- * @brief CEREAL serialization support for Eigen matrices and sparse matrices by
- *        augmenting the prime Eigen namespace.
- *
+ * @brief Augment Eigen namespace for CEREAL serialization support for dense and
+ * sparse matrices.
  */
-
 // ===================================================================================
 
-#ifndef TREX_UTILS_CEREAL_EIGEN_SERIALIZATION_HPP
-#define TREX_UTILS_CEREAL_EIGEN_SERIALIZATION_HPP
-
-// ===================================================================================
-
-#include <string>
-
+// Eigen includes
 #include <Eigen/Dense>
 #include <Eigen/Sparse>
 
+// CEREAL includes
 #include <cereal/archives/binary.hpp>
 #include <cereal/archives/portable_binary.hpp>
 #include <cereal/types/list.hpp>
@@ -34,23 +30,21 @@ namespace Eigen {
 
 // ===================================================================================
 
-/** @brief Augment Eigen namespace for CEREAL serialization support */
-
-/** @brief Dense Matrix/Vector support */
+// Dense Matrix/Vector support
+// -----------------------------------------------------------------------------
 
 /**
- * @brief Save an Eigen dense matrix to a CEREAL archive
+ * @brief Save an Eigen dense matrix to a CEREAL archive.
  *
- * @tparam Archive Serial CEREAL archive type
- * @tparam Scalar Element type of the Eigen matrix
- * @tparam Rows Number of rows in the Eigen matrix
- * @tparam Cols Number of columns in the Eigen matrix
+ * @tparam Archive Serial CEREAL archive type.
+ * @tparam Derived Eigen matrix derived type (captures RowMajor/ColMajor/Sizes).
  *
- * @param ar CEREAL archive
- * @param m Eigen matrix to be saved
+ * @param ar CEREAL archive.
+ * @param m Eigen matrix to be saved.
  */
-template <class Archive, class Scalar, int Rows, int Cols>
-void save(Archive &ar, const Eigen::Matrix<Scalar, Rows, Cols> &m) {
+template <class Archive, class Derived>
+void save(Archive &ar, const Eigen::PlainObjectBase<Derived>& m) {
+    using Scalar = typename Derived::Scalar;
     static_assert(std::is_arithmetic<Scalar>::value,
                  "Scalar must be an arithmetic type");
     std::size_t rows = m.rows();
@@ -61,18 +55,17 @@ void save(Archive &ar, const Eigen::Matrix<Scalar, Rows, Cols> &m) {
 
 
 /**
- * @brief Load an Eigen dense matrix from a CEREAL archive
+ * @brief Load an Eigen dense matrix/vector from a CEREAL archive.
  *
- * @tparam Archive Serial CEREAL archive type
- * @tparam Scalar Element type of the Eigen matrix
- * @tparam Rows Number of rows in the Eigen matrix
- * @tparam Cols Number of columns in the Eigen matrix
+ * @tparam Archive Serial CEREAL archive type.
+ * @tparam Derived Eigen matrix derived type (captures RowMajor/ColMajor/Sizes).
  *
- * @param ar CEREAL archive
- * @param m Eigen matrix to be loaded
+ * @param ar CEREAL archive.
+ * @param m Eigen matrix to be loaded.
  */
-template <class Archive, class Scalar, int Rows, int Cols>
-void load(Archive &ar, Eigen::Matrix<Scalar, Rows, Cols> &m) {
+template <class Archive, class Derived>
+void load(Archive &ar, Eigen::PlainObjectBase<Derived>& m) {
+    using Scalar = typename Derived::Scalar;
     static_assert(std::is_arithmetic<Scalar>::value,
                  "Scalar must be an arithmetic type");
     std::size_t rows, cols;
@@ -82,7 +75,8 @@ void load(Archive &ar, Eigen::Matrix<Scalar, Rows, Cols> &m) {
 }
 
 
-/** @brief Sparse Matrix support */
+// Sparse Matrix/Vector support
+// -----------------------------------------------------------------------------
 
 /**
  * @brief Save an Eigen sparse matrix to a CEREAL archive
@@ -140,4 +134,4 @@ void load(Archive &ar, Eigen::SparseMatrix<Scalar> &sm) {
 
 } /* End of namespace Eigen */
 
-#endif /* End of TREX_UTILS_CEREAL_EIGEN_SERIALIZATION_HPP */
+#endif /* UTILS_CEREAL_EIGEN_SERIALIZATION_HPP */

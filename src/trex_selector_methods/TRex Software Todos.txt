@@ -1,0 +1,88 @@
+// -------------------------------------------------------------------------
+// FIRST PHASE
+// -------------------------------------------------------------------------
+- Dummy permutation strategies
+- SKIP: arbitrary number of dummies
+- Solver files same documentation structure
+- Unified naming: Gaussian vs. Normal -> Gaussian -> offer location and scale parameter for Gaussian
+- Namespaces for TRex and Solvers
+- Check the start of the T-loop: T_stop = 1 vs. T_stop = 2
+
+- Screen T-Rex + Biobank Screen T-Rex with memory-mapping
+- Data pre-processing: bgen, bgenics, UKB data to Memory Mapped Matrix.
+- For greedy solvers set stagnation detection as standard
+- robust randomized file names for solver instances. A very rare event loaded the same instances
+
+- **Configuration Recommendation:**
+For any Greedy Solver (`TSTEPWISE`, `TOMP`, `TGP`), `tloop_stagnation_stop` must be enabled.
+```cpp
+// Recommended Default Configuration Logic in C++
+if (ctrl.solver_type == SolverTypeForTRex::TSTEPWISE ||
+    ctrl.solver_type == SolverTypeForTRex::TOMP) {
+
+    // Enforce Stagnation Stop for Greedy Solvers
+    if (!ctrl.tloop_stagnation_stop) {
+        std::cout << "[Info] Enabling Stagnation Stop for Greedy Solver "
+                  << "(Required for convergence)." << std::endl;
+        ctrl.tloop_stagnation_stop = true;
+        ctrl.tloop_max_stagnant_steps = 3;
+    }
+}
+```
+
+- Stagnation rule: == -> <= (Lasso or active set shrinkign selectors)
+
+- setup demos as console executable programs
+./build/release/bin/demo_08_trex --config=params1
+./build/release/bin/demo_08_trex --config=params2  # Wait for first to finish
+Monitor memory before running second instance:
+# Check available memory
+vm_stat | grep "Pages free"
+Write intermediate results to disk more frequently
+
+SNR = 1.9
+libc++abi: terminating due to uncaught exception of type std::runtime_error: TLASSO::load:
+Reconnection failed - TLASSO::reconnect: Column dimension mismatch.
+  Expected: 3000 columns (from saved beta_)
+  Got: 2000 columns
+  Hint: Ensure X is the same design matrix used during save()
+zsh: abort      ./build/release/bin/demo_08_trex
+
+
+
+- deeply study what happens with the dummies in other solvers
+- FDP & TPP based ROC curves for solvers
+- FDP TPP curves for T-Rex selector
+
+- Extension to complex: think about templating the T-Rex class - double and std::complex<double>
+
+- In total there are already three different implementations of centering and l2-normalization
+  methods included in the package.
+  - ml_methods/ standardization
+  - tsolvers/ as part of solver_utils
+  - trex_methods/ trex_data_normalizer.hpp
+
+  - double check if solver serialization is really necessary or whether we should offer two modes:
+    - in-memory data: use persistent in-memory solvers
+    - memory mapped: solvers use serialization with save and load
+
+
+Simulations:
+- Monte Carlo Simulation for memory-mapped data T-Rex
+- Sparse X matrix
+- Hapnest data from the cluster, in .dat file format
+
+// -------------------------------------------------------------------------
+// SECOND PHASE
+// -------------------------------------------------------------------------
+- GVS-TRex:
+    - Ridge regression
+    - ICs: generalized CV, CV, EBIC
+    - Selector: development of TIENET
+- DA-TRex
+
+
+// -------------------------------------------------------------------------
+// THIRD PHASE
+// -------------------------------------------------------------------------
+- Sparse PCA TRex

@@ -1,34 +1,31 @@
 // ===================================================================================
 // utils_fdr_control.hpp
 // ===================================================================================
+#ifndef UTILS_EVAL_RATES_HPP
+#define UTILS_EVAL_RATES_HPP
+// ===================================================================================
 /**
- * @brief Functions to compute false discovery proportion (FDP) and
- *        true positive proportion (TPP).
+ * @brief Functions to compute false discovery proportion (FDP) and true positive
+ * proportion (TPP).
  */
 // ===================================================================================
 
-#ifndef TREX_UTILS_EVAL_RATES_HPP
-#define TREX_UTILS_EVAL_RATES_HPP
-
-// ===================================================================================
-
-#include <algorithm>
-#include <iostream>
-#include <iomanip>
+// std includes
 #include <limits>
 #include <vector>
 #include <unordered_set>
 
+// Eigen includes
 #include <Eigen/Core>
 #include <Eigen/Dense>
 
+// utils includes
+#include <utils/eval_metrics/utils_eval_counts.hpp>
 
 // ===================================================================================
 
-namespace trex {
-namespace utils {
-namespace eval {
-namespace rates {
+// Embedded into namespace trex::utils::eval::rates
+namespace trex::utils::eval::rates {
 
 // ===================================================================================
 // Set up namespace aliases
@@ -243,14 +240,8 @@ inline double compute_recall(
            static_cast<double>(true_support.size());
 }
 
-
-
-
 // ===================================================================================
 
-} /* End of namespace rates */
-} /* End of namespace eval */
-} /* End of namespace utils */
-} /* End of namespace trex */
+} /* End of namespace trex::utils::eval::rates */
 
-#endif /* End of TREX_UTILS_EVAL_RATES_HPP */
+#endif /* UTILS_EVAL_RATES_HPP */

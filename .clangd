@@ -1,0 +1,25 @@
+CompileFlags:
+  # Drops the macOS-specific OpenMP flag from the background linter
+  # so it stops complaining about 'libomp', but keeps OpenMP support.
+  Remove: [-fopenmp=libomp]
+
+Diagnostics:
+  ClangTidy:
+    Remove:
+      # --- Bugprone Checks ---
+      - bugprone-easily-swappable-parameters
+
+      # --- Math & ML Naming Allowances ---
+      - readability-identifier-length
+      - readability-magic-numbers
+      - cppcoreguidelines-avoid-magic-numbers
+      - performance-enum-size
+      - cppcoreguidelines-pro-type-const-cast
+
+      # --- Stop the Strike-throughs! ---
+      # Stop forcing trailing return types (auto f() -> int)
+      - modernize-use-trailing-return-type
+      # Stop forcing combined namespaces (namespace a::b::c)
+      - modernize-concat-nested-namespaces
+      # Stop complaining about returning const references
+      - readability-const-return-type

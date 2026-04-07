@@ -1,6 +1,9 @@
 // ===================================================================================
 // utils_eval_composite.hpp
 // ===================================================================================
+#ifndef UTILS_EVAL_COMPOSITE_HPP
+#define UTILS_EVAL_COMPOSITE_HPP
+// ===================================================================================
 /**
  * @file utils_eval_composite.hpp
  *
@@ -9,22 +12,8 @@
  */
 // ===================================================================================
 
-#ifndef TREX_UTILS_EVAL_COMPOSITE_HPP
-#define TREX_UTILS_EVAL_COMPOSITE_HPP
-
-// ===================================================================================
-
-
-// ===================================================================================
-namespace trex {
-namespace utils {
-namespace eval {
-namespace composites {
-
-// ===================================================================================
-// Set up namespace aliases
-// ===================================================================================
-// none
+// Embedded into namespace trex::utils::eval::composites
+namespace trex::utils::eval::composites {
 
 // ===================================================================================
 
@@ -50,9 +39,6 @@ double f1_score(
 
 // ===================================================================================
 
-} /* End of namespace composites */
-} /* End of namespace eval */
-} /* End of namespace utils */
-} /* End of namespace trex */
+} /* End of namespace trex::utils::eval::composites */
 
-#endif /* End of TREX_UTILS_EVAL_COMPOSITE_HPP */
+#endif /* UTILS_EVAL_COMPOSITE_HPP */

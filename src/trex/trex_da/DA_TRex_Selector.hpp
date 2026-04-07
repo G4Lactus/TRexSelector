@@ -1,7 +1,0 @@
-#ifndef DA_TREX_SELECTOR_HPP
-#define DA_TREX_SELECTOR_HPP
-
-
-
-
-#endif /* End of DA_TREX_SELECTOR_HPP */

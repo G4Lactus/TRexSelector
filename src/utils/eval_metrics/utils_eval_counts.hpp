@@ -1,6 +1,9 @@
 // ===================================================================================
 // utils_eval_counts.hpp
 // ===================================================================================
+#ifndef UTILS_EVAL_METRICS_COUNTS_HPP
+#define UTILS_EVAL_METRICS_COUNTS_HPP
+// ===================================================================================
 /**
  * @file utils_eval_counts.hpp
  *
@@ -10,26 +13,16 @@
  */
 // ===================================================================================
 
-#ifndef TREX_UTILS_EVAL_METRICS_COUNTS_HPP
-#define TREX_UTILS_EVAL_METRICS_COUNTS_HPP
-
-// ===================================================================================
-
-#include <algorithm>
-#include <iostream>
+// std includes
 #include <vector>
 #include <unordered_set>
 
-
 // ===================================================================================
 
-namespace trex {
-namespace utils {
-namespace eval {
-namespace counts {
+// Embedded into namespace trex::utils::eval::counts
+namespace trex::utils::eval::counts {
 
 // ===================================================================================
-
 
 /**
  * @brief Count for the number of true positives in a vector of selected indices.
@@ -47,7 +40,7 @@ std::size_t true_positives_count(
         return 0;
     }
 
-    // Convert selected to set for O(log n) lookup
+    // Convert selected to set for O(1) lookup
     std::unordered_set<std::size_t> selected_set(
         selected_indices.begin(),
         selected_indices.end()
@@ -134,9 +127,6 @@ std::size_t false_negatives_count(
 
 // ===================================================================================
 
-} /* End of namespace counts */
-} /* End of namespace eval */
-} /* End of namespace utils */
-} /* End of namespace trex */
+} /* End of namespace trex::utils::eval::counts */
 
-#endif /* End of TREX_UTILS_EVAL_METRICS_COUNTS_HPP */
+#endif /* UTILS_EVAL_METRICS_COUNTS_HPP */

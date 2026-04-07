@@ -1,91 +1,50 @@
 // ===================================================================================
 // utils_openmp.hpp
 // ===================================================================================
+#ifndef UTILS_OPENMP_HPP
+#define UTILS_OPENMP_HPP
+// ===================================================================================
 /**
  * @file utils_openmp.hpp
+ *
  * @brief OpenMP Compatibility Layer
  *
+ * @details
+ * The primary reason for this file is to act as a compilation safeguard.
+ * If the T-Rex framework is compiled on a system or compiler without OpenMP support
+ * (e.g., standard macOS Clang without Homebrew), directly including <omp.h> or calling
+ * OpenMP functions would cause fatal compilation errors.
+ *
+ * This header intercepts those calls and provides graceful single-threaded stubs
+ * (e.g., forcing max_threads to 1). This guarantees that the entire codebase can
+ * compile flawlessly and execute sequentially on any machine, regardless of its
+ * OpenMP capabilities.
+ *
+ * Usage: rather than including raw <omp.h>, include this header in your source files:
+ * #include <utils/openmp/utils_openmp.hpp>
+ *
+ * Compiler flags:
+ * - GCC/Clang: -fopenmp
+ * - MSVC: /openmp
+ * - Disable fallback warning: -DDISABLE_OPENMP_WARNING
  */
 // ===================================================================================
 
-#ifndef TREX_UTILS_OPENMP_HPP
-#define TREX_UTILS_OPENMP_HPP
+#include <chrono>
+#include <iostream>
 
 // ===================================================================================
-
-#include <algorithm>
-#include <functional>
-#include <iostream>
-#include <vector>
-
-// ============================================================================
-// OpenMP Compatibility Layer
-// ============================================================================
-// This header provides a unified interface for OpenMP functionality, with
-// graceful fallback to single-threaded stubs when OpenMP is not available.
-//
-// Usage:
-//   #include "utils_openmp.hpp"
-//
-// Compiler flags:
-//   - GCC/Clang: -fopenmp
-//   - MSVC: /openmp
-//   - Disable warning: -DDISABLE_OPENMP_WARNING
-// ============================================================================
 
 #if defined(_OPENMP)
 // OpenMP is available - use native implementation
 #include <omp.h>
-
 #define HAS_OPENMP 1
-
-// Introduce Custom OpenMP Reduction for OpenMP 4.0+
-// =======================================================
-#if _OPENMP >= 201307
-
-/**
-         * @brief Custom reduction for std::vector<T> element-wise sum
-         *
-         * @details Enables parallel accumulation without atomic operations.
-         * Each thread maintains a private vector
-         * initialized to zeros, then all copies are reduced via element-wise
-         * addition.
-         *
-         * @tparam T The data type of the vector elements.
-         *
-         * @example
-         * @code {.cpp}
-         *  std::vector<double> result(n, 0.0);
-         *  #pragma omp parallel for reduction(vec_plus: results)
-         *  for (std::size_t i = 0; i < iterations; ++i) {
-         *      // accumulate into result
-         *  }
-         * @endcode
-         */
-// Note: OpenMP declare reduction for std::vector is not fully portable
-// Commented out to avoid compilation issues on some compilers
-// template <typename T>
-// #pragma omp declare reduction(vec_plus : std::vector<T> :
-//     std::transform(omp_in.begin(), omp_in.end(), omp_out.begin(),
-//                    omp_out.begin(), std::plus<>()))
-//     initializer(omp_priv = std::vector<T>(omp_orig.size(), T{}))
-#endif // OpenMP 4.0+
-
 #else
-// OpenMP not available - provide single-threaded stubs
+// OpenMP is not available - provide single-threaded stubs
 #define HAS_OPENMP 0
 
-// Emit compile-time warning (can be disabled with -DDISABLE_OPENMP_WARNING)
-#ifndef DISABLE_OPENMP_WARNING
-#if defined(__GNUC__) || defined(__clang__)
-#warning "OpenMP not detected. Compiling in single-threaded mode. Use -fopenmp to enable parallelism."
-#elif defined(_MSC_VER)
-#pragma message("Warning: OpenMP not detected. Compiling in single-threaded mode. Use /openmp to enable parallelism.")
-#endif
-#endif
-
-
-// Stub implementations for OpenMP API
+// Stub implementations for OpenMP API if omp.h is not available
+// ----------------------------------------------------------------
 
 /** @brief Get the thread number (always 0 in single-threaded mode) */
 inline int omp_get_thread_num() {
@@ -119,17 +78,50 @@ inline int omp_get_dynamic() { return 0; }
 /** @brief Check if currently in parallel region (always 0 in single-threaded mode) */
 inline int omp_in_parallel() { return 0; }
 
+/**
+ * @brief Wall-clock timer stub using std::chrono (seconds since first call).
+ * @return Elapsed seconds as a double.
+ */
+inline double omp_get_wtime() {
+    static const auto epoch = std::chrono::steady_clock::now();
+    return std::chrono::duration<double>(
+        std::chrono::steady_clock::now() - epoch).count();
+}
+
+/** @brief Timer precision stub (returns 1 ns as a conservative estimate). */
+inline double omp_get_wtick() {
+    return 1e-9;
+}
+
+/** @brief Schedule kind enum stub matching OpenMP ABI values. */
+typedef enum omp_sched_t {
+    omp_sched_static  = 1,
+    omp_sched_dynamic = 2,
+    omp_sched_guided  = 3,
+    omp_sched_auto    = 4
+} omp_sched_t;
+
+/** @brief Set loop schedule (no-op in single-threaded mode). */
+inline void omp_set_schedule(omp_sched_t /* kind */, int /* chunk_size */) {}
+
+/** @brief Get loop schedule (returns static/0 in single-threaded mode). */
+inline void omp_get_schedule(omp_sched_t* kind, int* chunk_size) {
+    if (kind)       *kind       = omp_sched_static;
+    if (chunk_size) *chunk_size = 0;
+}
+
 #endif
+
 
 // ============================================================================
 // Utility Functions
 // ============================================================================
 
-namespace trex {
-namespace utils {
-namespace openmp {
+// Embedded into namespace trex::utils::openmp
+namespace trex::utils::openmp {
 
 // ============================================================================
+
 
 /**
  * @brief Check if OpenMP is available at compile-time
@@ -219,10 +211,23 @@ inline void print_info() {
 #endif
 }
 
+/** @brief Set the number of threads for OpenMP */
+inline void set_num_threads(int num_threads) {
+    #if HAS_OPENMP
+        omp_set_num_threads(num_threads);
+    #endif
+}
+
+/** @brief Get the maximum number of threads available for OpenMP */
+inline int get_max_threads() {
+    #if HAS_OPENMP
+        return omp_get_max_threads();
+    #else
+        return 1;
+    #endif
+}
+
 // ===================================================================================
-
-} /* End of namespace openmp */
-} /* End of namespace utils */
-} /* End of namespace trex */
-
-#endif /* TREX_UTILS_OPENMP_HPP */
+} /* End of namespace trex::utils::openmp */
+// ===================================================================================
+#endif /* UTILS_OPENMP_HPP */
