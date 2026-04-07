@@ -21,14 +21,14 @@
  */
 // ==============================================================================
 
-#include <algorithm>
+// std includes
 #include <cmath>
+#include <cstddef>
 #include <fstream>
 #include <functional>
 #include <iomanip>
 #include <iostream>
 #include <map>
-#include <numeric>
 #include <random>
 #include <sstream>
 #include <string>
@@ -127,19 +127,20 @@ inline DGPData dgp_block_toeplitz(int n, int p, int G, int g,
 
     // Generate X block-wise: X_block = Z_block * L^T
     Eigen::MatrixXd X(n, p);
-    for (int b = 0; b < num_blocks; ++b) {
+    for (Eigen::Index b = 0; b < num_blocks; ++b) {
         Eigen::MatrixXd Z(n, g);
         for (int i = 0; i < n; ++i)
             for (int j = 0; j < g; ++j)
                 Z(i, j) = norm(rng);
-        X.block(0, b * g, n, g).noalias() = Z * L.transpose();
+        X.block(0, b * g, n, g).noalias() =
+            Z * L.transpose();
     }
 
     // Sparse beta: one active per active block
     Eigen::VectorXd beta = Eigen::VectorXd::Zero(p);
     std::vector<std::size_t> support;
     support.reserve(static_cast<std::size_t>(G));
-    for (int b = 0; b < G; ++b) {
+    for (Eigen::Index b = 0; b < G; ++b) {
         beta(b * g) = 1.0;
         support.push_back(static_cast<std::size_t>(b * g));
     }
@@ -188,17 +189,17 @@ inline DGPData dgp_block_toeplitz_heavy(int n, int p, int G, int g,
     Eigen::MatrixXd L = Eigen::LLT<Eigen::MatrixXd>(T).matrixL();
 
     Eigen::MatrixXd X(n, p);
-    for (int b = 0; b < num_blocks; ++b) {
+    for (Eigen::Index b = 0; b < num_blocks; ++b) {
         Eigen::MatrixXd Z(n, g);
-        for (int i = 0; i < n; ++i)
-            for (int j = 0; j < g; ++j)
+        for (Eigen::Index i = 0; i < n; ++i)
+            for (Eigen::Index j = 0; j < g; ++j)
                 Z(i, j) = norm(rng);
 
         Eigen::MatrixXd block = Z * L.transpose();
 
         if (heavy_X) {
             // Scale each row to produce multivariate t(df)
-            for (int i = 0; i < n; ++i) {
+            for (Eigen::Index i = 0; i < n; ++i) {
                 double u = chi2(rng);
                 double scale = std::sqrt(df / u);
                 block.row(i) *= scale;
@@ -212,7 +213,7 @@ inline DGPData dgp_block_toeplitz_heavy(int n, int p, int G, int g,
     Eigen::VectorXd beta = Eigen::VectorXd::Zero(p);
     std::vector<std::size_t> support;
     support.reserve(static_cast<std::size_t>(G));
-    for (int b = 0; b < G; ++b) {
+    for (Eigen::Index b = 0; b < G; ++b) {
         beta(b * g) = 1.0;
         support.push_back(static_cast<std::size_t>(b * g));
     }
@@ -226,11 +227,11 @@ inline DGPData dgp_block_toeplitz_heavy(int n, int p, int G, int g,
     if (heavy_noise) {
         double t_var = df / (df - 2.0);
         double scale = std::sqrt(target_noise_var / t_var);
-        for (int i = 0; i < n; ++i)
+        for (Eigen::Index i = 0; i < n; ++i)
             y(i) += t_dist(rng) * scale;
     } else {
         double noise_sigma = std::sqrt(target_noise_var);
-        for (int i = 0; i < n; ++i)
+        for (Eigen::Index i = 0; i < n; ++i)
             y(i) += norm(rng) * noise_sigma;
     }
 
