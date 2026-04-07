@@ -206,10 +206,10 @@ private:
         initialized_ = false;
     }
 
-// -------------------------------------------------------------------------
+// =========================================================================
 }; /* End of class WarmStartManager */
 
 // ===================================================================================
 } /* End of namespace trex::trex_selector_methods::utils::warm_start_manager */
 // ===================================================================================
-#endif /* TREX_SELECTOR_METHODS_UTILS_WARM_START_MANAGER_HPP */
+#endif /* End of TREX_SELECTOR_METHODS_UTILS_WARM_START_MANAGER_HPP */

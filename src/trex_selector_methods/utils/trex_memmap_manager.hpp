@@ -179,8 +179,10 @@ private:
         temp_dir_.clear();
         initialized_ = false;
     }
+// =========================================================================
 };
 
+// =========================================================================
 } /* End of namespace trex::trex_selector_methods::utils::memmap_manager */
 // =========================================================================
-#endif /* TREX_SELECTOR_METHODS_UTILS_MEMMAP_MANAGER_HPP */
+#endif /* End of TREX_SELECTOR_METHODS_UTILS_MEMMAP_MANAGER_HPP */

@@ -651,4 +651,4 @@ private:
 // ===================================================================================
 } /* End of namespace trex::trex_selector_methods::utils::dummy_generator */
 // ===================================================================================
-#endif /* TREX_SELECTOR_METHODS_UTILS_TREX_DUMMY_GENERATOR_HPP */
+#endif /* End of TREX_SELECTOR_METHODS_UTILS_TREX_DUMMY_GENERATOR_HPP */

@@ -285,4 +285,4 @@ inline Eigen::MatrixXd dispatchByType(SolverTypeForTRex solver_type, const Solve
 // ===================================================================================
 } /* End of namespace trex::trex_selector_methods::utils::solver_dispatch */
 // ===================================================================================
-#endif /* TREX_SELECTOR_METHODS_UTILS_SOLVER_DISPATCH_HPP */
+#endif /* End of TREX_SELECTOR_METHODS_UTILS_SOLVER_DISPATCH_HPP */
