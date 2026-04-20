@@ -402,14 +402,19 @@ select_var_fun_DA_BT <- function(p, tFDR, T_stop,
 #' @param type            'lar' (default) or 'lasso'.
 #'
 #' @param groups          Prior group knowledge: a list of L integer vectors
-#'                        of length p (one per hierarchy level, fine to
-#'                        coarse). When supplied, method, hc_dist, and
-#'                        hc_grid_length are ignored. Full 3D calibration
+#'                        of length p, ordered \strong{coarse to fine}
+#'                        (groups[[1]] = fewest/largest clusters,
+#'                        groups[[L]] = most/smallest clusters).
+#'                        This matches the internal rho_grid orientation
+#'                        of the BT and NN routes (x = 1 is coarsest,
+#'                        x = L is finest). When supplied, method, hc_dist,
+#'                        and hc_grid_length are ignored. Full 3D calibration
 #'                        is preserved across all L levels.
 #'                        Default NULL (auto-compute from X).
 #' @param rho_grid_labels Optional numeric vector of length L: semantic
-#'                        labels for each level (e.g. correlation thresholds
-#'                        used to build the groups). Defaults to
+#'                        labels for each level, in the same coarse-to-fine
+#'                        order as groups (e.g. increasing correlation
+#'                        thresholds: c(0.2, 0.5, 0.8)). Defaults to
 #'                        seq_along(groups). Only used when groups != NULL.
 #'
 #' @param cor_coef        AR(1) or equicorrelation coefficient.
@@ -448,10 +453,13 @@ select_var_fun_DA_BT <- function(p, tFDR, T_stop,
 #' # Auto-computed BT dendrogram
 #' res <- trex_da(X = X, y = y, method = "trex+DA+BT", K = 20)
 #'
-#' # Prior group knowledge (3 levels, p = 6)
-#' grps <- list(c(1,1,2,2,3,3), c(1,1,1,1,2,2), c(1,1,1,1,1,1))
+#' # Prior group knowledge (3 levels, p = 6, coarse to fine)
+#' # Level 1: 2 groups of 3  (coarsest, low rho threshold)
+#' # Level 2: 3 groups of 2  (medium)
+#' # Level 3: 6 singletons   (finest, high rho threshold)
+#' grps <- list(c(1,1,1,2,2,2), c(1,1,2,3,4,4), c(1,2,3,4,5,6))
 #' res2 <- trex_da(X = X[, 1:6], y = y, groups = grps,
-#'                 rho_grid_labels = c(0.9, 0.6, 0.3), K = 20)
+#'                 rho_grid_labels = c(0.2, 0.5, 0.9), K = 20)
 trex_da <- function(X,
                     y,
                     tFDR               = 0.2,

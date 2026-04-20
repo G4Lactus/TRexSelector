@@ -46,7 +46,10 @@ enum class ScreenTRexMethod {
     TREX_DA_AR1,
 
     /** @brief Dependency-Aware T-Rex (Equi-Correlated) */
-    TREX_DA_EQUI
+    TREX_DA_EQUI,
+
+    /** @brief Dependency-Aware T-Rex (Block-Equi-Correlated) */
+    TREX_DA_BLOCK_EQUI
 };
 
 
@@ -68,9 +71,12 @@ struct ScreenTRexControlParameter {
     double rho_thr_DA = 0.02;
 
     /** @brief Manually specified correlation coefficient.
-     *  NaN triggers automatic estimation.
+     *  AUTO_ESTIMATE_CORRELATION (−2.0) triggers automatic estimation.
      */
-    double cor_coef = std::numeric_limits<double>::quiet_NaN();
+    double cor_coef = tc::AUTO_ESTIMATE_CORRELATION;
+
+    /** @brief Number of blocks for block-equicorrelated DA variant (default: 5). */
+    std::size_t n_blocks = 5;
 };
 
 
@@ -212,6 +218,25 @@ public:
     const ScreenTRexSelectionResult& getScreenResult() const;
 
 
+    /**
+     * @brief Apply bootstrap screening to an existing ordinary Screen-TRex result.
+     *
+     * @details Reuses Phi, beta_mat, and dummy_betas from a prior ordinary
+     *          select() call to derive the confidence-based Screen-TRex result
+     *          without re-running the K experiments.  This is used by the biobank
+     *          orchestrator (Algorithm 1) to obtain both α̂ and α̂_C from a single
+     *          set of K experiments.
+     *
+     * @param ordinary_result  Result from a prior ordinary select() call.
+     *                         Must contain non-empty dummy_betas and beta_mat.
+     *
+     * @return ScreenTRexSelectionResult with bootstrap-based selection.
+     */
+    ScreenTRexSelectionResult applyBootstrapToOrdinaryResult(
+        const ScreenTRexSelectionResult& ordinary_result
+    );
+
+
 protected:
     // =========================================================================
     // Core Screen-TRex Operations
@@ -266,15 +291,20 @@ protected:
 
 
     /**
-     * @brief Calculate a normal bootstrap confidence interval.
+     * @brief Calculate a bias-corrected normal bootstrap confidence interval.
      *
-     * @param means_dist       Bootstrap distribution of means.
+     * @details Matches R's boot::boot.ci(type = "norm"):
+     *          center = 2·t₀ − mean(t*),  CI = center ± z·se(t*).
+     *
+     * @param boot_means       Bootstrap distribution of means (t*).
+     * @param t0               Original statistic computed on the full sample.
      * @param confidence_level Confidence level in (0, 1).
      *
      * @return Pair {lower_bound, upper_bound}.
      */
     std::pair<double, double> calculateBootstrapCI(
-        const std::vector<double>& means_dist,
+        const std::vector<double>& boot_means,
+        double t0,
         double confidence_level
     ) const;
 
@@ -345,6 +375,29 @@ protected:
      * @return DA_delta adjustment vector (p × 1).
      */
     Eigen::VectorXd computeDA_EQUI_Delta(
+        const Eigen::VectorXd& Phi, double rho) const;
+
+    /**
+     * @brief Estimate within-block equi-correlation from X.
+     *
+     * @details Averages the equi-correlation estimate over each block.
+     *
+     * @return Average within-block correlation.
+     */
+    double estimateBlockEquiCorrelation() const;
+
+    /**
+     * @brief Compute DA adjustment deltas for block-equi-correlation strategy.
+     *
+     * @details Within-block neighbors only: for each j, finds
+     *          min_{k ∈ block(j), k≠j} |Phi[j] − Phi[k]|.
+     *
+     * @param Phi Relative occurrences (p × 1).
+     * @param rho Block equi-correlation estimate.
+     *
+     * @return DA_delta adjustment vector (p × 1).
+     */
+    Eigen::VectorXd computeDA_BLOCK_EQUI_Delta(
         const Eigen::VectorXd& Phi, double rho) const;
 
 

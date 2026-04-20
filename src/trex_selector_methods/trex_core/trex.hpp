@@ -49,6 +49,19 @@ namespace er = trex::trex_selector_methods::utils::experiment_runner;
 namespace dummygen = trex::utils::datageneration::dummygen;
 
 // ===================================================================================
+// Constants
+// ===================================================================================
+
+/**
+ * @brief Sentinel value for "auto-estimate this correlation coefficient from X".
+ *
+ * @details Any value outside [−1, 1] works. We use −2.0 because it is safe under
+ *          -ffast-math (unlike quiet_NaN, which breaks std::isnan under
+ *          -ffinite-math-only).
+ */
+inline constexpr double AUTO_ESTIMATE_CORRELATION = -2.0;
+
+// ===================================================================================
 // Enums & Control Structures
 // ===================================================================================
 

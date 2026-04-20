@@ -16,10 +16,15 @@
 // tsolvers includes
 #include <tsolvers/linear_model/lars_based/tenet_solver.hpp>
 
+// utils includes
+#include <utils/fp_classify/fp_classify.hpp>
+
 // ============================================================================
 
 // Embedded into namespace trex::tsolvers::linear_model::lars_based
 namespace trex::tsolvers::linear_model::lars_based {
+
+namespace fpc = trex::utils::fp_classify;
 
 // ============================================================================
 // Constructors
@@ -459,7 +464,7 @@ std::vector<double> TENET_Solver::getCp() const {
     double rss_final = RSS_.back();
     double p_total = static_cast<double>(p_original_ + num_dummies_);
 
-    if (!std::isfinite(rss_final) || rss_final <= 0) {
+    if (!fpc::isfinite(rss_final) || rss_final <= 0) {
         cp_out.assign(RSS_.size(), std::numeric_limits<double>::quiet_NaN());
         return cp_out;
     }
@@ -468,7 +473,7 @@ std::vector<double> TENET_Solver::getCp() const {
     for (std::size_t k = 0; k < RSS_.size(); ++k) {
         double dof = static_cast<double>(DoF_[k]);
 
-        if (DoF_[k] < n && RSS_[k] > 0 && std::isfinite(RSS_[k])) {
+        if (DoF_[k] < n && RSS_[k] > 0 && fpc::isfinite(RSS_[k])) {
             // MATCHES R CODE: ((n - m - 1) * RSS) / RSS_final - n + 2 * df
             // Note: first term uses p_total (m), second term uses dof (df)
             double cp_val = ((static_cast<double>(n) - p_total - 1.0) * RSS_[k]) / rss_final

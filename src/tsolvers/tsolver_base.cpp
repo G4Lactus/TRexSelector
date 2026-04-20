@@ -22,6 +22,7 @@
 
 // utils includes
 #include <utils/openmp/utils_openmp.hpp>
+#include <utils/fp_classify/fp_classify.hpp>
 
 // ===================================================================================
 
@@ -30,7 +31,9 @@ namespace trex::tsolvers {
 
 // ===================================================================================
 
+// Alias namespaces
 namespace su_preproc = trex::tsolvers::solver_utils::preprocessing;
+namespace fpc = trex::utils::fp_classify;
 
 // ===================================================================================
 
@@ -444,7 +447,7 @@ std::vector<double> TSolver_Base::getCp() const {
         }
     }
 
-    if (!std::isfinite(resvar)) return std::vector<double>(
+    if (!fpc::isfinite(resvar)) return std::vector<double>(
         RSS_.size(), std::numeric_limits<double>::quiet_NaN());
 
     for (std::size_t k = 0; k < RSS_.size(); ++k) {
@@ -460,7 +463,7 @@ std::vector<double> TSolver_Base::getCp(double sigma_hat_sq) const {
     std::vector<double> cp_out;
     cp_out.reserve(RSS_.size());
     std::size_t n = X_->rows();
-    bool valid = std::isfinite(sigma_hat_sq) && sigma_hat_sq > 0;
+    bool valid = fpc::isfinite(sigma_hat_sq) && sigma_hat_sq > 0;
     for (std::size_t k = 0; k < RSS_.size(); ++k) {
         cp_out.push_back((DoF_[k] < n && valid) ? (RSS_[k] / sigma_hat_sq -
             static_cast<double>(n) + 2.0 * static_cast<double>(DoF_[k])) :

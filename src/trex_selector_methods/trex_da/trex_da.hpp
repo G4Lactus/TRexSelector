@@ -28,7 +28,6 @@
 
 // std includes
 #include <cstddef>
-#include <limits>
 #include <vector>
 
 // Eigen includes
@@ -79,8 +78,8 @@ struct TRexDAControlParameter {
     /** @brief Dependency-aware method (default: BT). Ignored when prior_groups is non-empty. */
     DAMethod method = DAMethod::BT;
 
-    /** @brief Correlation coefficient for AR1/EQUI. NaN = auto-estimate from X. */
-    double cor_coef = std::numeric_limits<double>::quiet_NaN();
+    /** @brief Correlation coefficient for AR1/EQUI. AUTO_ESTIMATE_CORRELATION = auto-estimate from X. */
+    double cor_coef = tc::AUTO_ESTIMATE_CORRELATION;
 
     /** @brief Threshold below which equi-correlation correction is skipped (default: 0.02). */
     double rho_thr_DA = 0.02;
@@ -129,7 +128,7 @@ struct DASetupResult {
     std::size_t opt_point_BT = 0;
 
     /** @brief Estimated or user-supplied correlation coefficient. */
-    double cor_coef = std::numeric_limits<double>::quiet_NaN();
+    double cor_coef = tc::AUTO_ESTIMATE_CORRELATION;
 
     /** @brief AR(1) window half-width (0 unless AR1). */
     std::size_t kap = 0;
@@ -187,8 +186,8 @@ public:
      * @brief Extended result for DA-TRex, adding rho_grid diagnostics.
      */
     struct DASelectionResult : public SelectionResult {
-        /** @brief Selected rho threshold (NaN for AR1/EQUI). */
-        double rho_thresh = std::numeric_limits<double>::quiet_NaN();
+        /** @brief Selected rho threshold (AUTO_ESTIMATE_CORRELATION for AR1/EQUI). */
+        double rho_thresh = tc::AUTO_ESTIMATE_CORRELATION;
 
         /** @brief Correlation-level grid used (empty for AR1/EQUI). */
         Eigen::VectorXd rho_grid;
@@ -197,7 +196,7 @@ public:
         DAMethod method = DAMethod::BT;
 
         /** @brief Estimated or supplied correlation coefficient. */
-        double cor_coef = std::numeric_limits<double>::quiet_NaN();
+        double cor_coef = tc::AUTO_ESTIMATE_CORRELATION;
 
         /** @brief BT-style: FDP estimates per rho level.
          * FDP_hat_array_BT[rho] = (T_stop x V_len).

@@ -65,6 +65,7 @@ target_compile_definitions(trex_utils PUBLIC
     EIGEN_USE_BLAS
 )
 
+# NOTE: -ffast-math breaks std::isnan — see trex_selector_methods/CMakeLists.txt.
 target_compile_options(trex_utils PRIVATE
     -Wno-deprecated-declarations
     $<$<CONFIG:Debug>:-g -O0 -Wall -Wextra>

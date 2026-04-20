@@ -91,6 +91,8 @@ tc::TRexSelector::SelectionResult ScreenTRexSelector::select() {
             variant = "DA-AR1";
         } else if (screen_ctrl_.trex_method == ScreenTRexMethod::TREX_DA_EQUI) {
             variant = "DA-EQUI";
+        } else if (screen_ctrl_.trex_method == ScreenTRexMethod::TREX_DA_BLOCK_EQUI) {
+            variant = "DA-BLOCK-EQUI";
         }
         printProgress("Starting Screen-TRex [" + mode + ", " + variant
                       + "] (T=1, L=p=" + std::to_string(p_) + ")...");
@@ -121,6 +123,13 @@ tc::TRexSelector::SelectionResult ScreenTRexSelector::select() {
 
     // 6. Estimated FDR = 1 / max(1, R)
     computeEstimatedFDR(screen_result_);
+
+    // 6b. Always store collected dummy betas in result (needed by biobank bootstrap reuse)
+    if (!collected_dummy_betas_.empty()) {
+        screen_result_.dummy_betas = Eigen::Map<Eigen::VectorXd>(
+            collected_dummy_betas_.data(),
+            static_cast<Eigen::Index>(collected_dummy_betas_.size()));
+    }
 
     // 7. Populate SelectionResult fields
     screen_result_.T_stop         = 1;
@@ -181,6 +190,40 @@ tc::TRexSelector::SelectionResult ScreenTRexSelector::select() {
 
 const ScreenTRexSelectionResult& ScreenTRexSelector::getScreenResult() const {
     return screen_result_;
+}
+
+
+ScreenTRexSelectionResult ScreenTRexSelector::applyBootstrapToOrdinaryResult(
+    const ScreenTRexSelectionResult& ordinary_result
+) {
+    // Restore collected_dummy_betas_ from the ordinary result
+    const Eigen::VectorXd& db = ordinary_result.dummy_betas;
+    collected_dummy_betas_.assign(db.data(), db.data() + db.size());
+
+    // Extract Phi (1 × p row → p × 1 column) and beta_means from ordinary result
+    const Eigen::VectorXd Phi        = ordinary_result.Phi_mat.row(0).transpose();
+    const Eigen::VectorXd& beta_means = ordinary_result.beta_mat;
+
+    // Perform bootstrap selection using the shared experiment data
+    ScreenTRexSelectionResult bootstrap_result;
+    performBootstrapSelection(Phi, beta_means, bootstrap_result);
+    computeEstimatedFDR(bootstrap_result);
+
+    // Copy structural fields from the ordinary result
+    bootstrap_result.T_stop         = ordinary_result.T_stop;
+    bootstrap_result.num_dummies    = ordinary_result.num_dummies;
+    bootstrap_result.dummy_factor_L = ordinary_result.dummy_factor_L;
+    bootstrap_result.v_thresh       = ordinary_result.v_thresh;
+    bootstrap_result.beta_mat       = ordinary_result.beta_mat;
+    bootstrap_result.Phi_mat        = ordinary_result.Phi_mat;
+    bootstrap_result.Phi_prime      = ordinary_result.Phi_prime;
+    bootstrap_result.R_mat          = Eigen::MatrixXd::Ones(1, 1)
+        * static_cast<double>(bootstrap_result.selected_var.sum());
+    bootstrap_result.FDP_hat_mat    = Eigen::MatrixXd::Zero(1, 1);
+    bootstrap_result.voting_grid    = ordinary_result.voting_grid;
+    bootstrap_result.estimated_correlation = ordinary_result.estimated_correlation;
+
+    return bootstrap_result;
 }
 
 
@@ -299,6 +342,11 @@ void ScreenTRexSelector::performBootstrapSelection(
         return;
     }
 
+    // Original statistic t0 = mean of active dummy betas (for bias correction)
+    const double t0 = std::accumulate(
+        collected_dummy_betas_.begin(), collected_dummy_betas_.end(), 0.0)
+        / static_cast<double>(n_dummies);
+
     // Bootstrap resampling of non-zero dummy betas
     std::vector<double> boot_means;
     boot_means.reserve(screen_ctrl_.R_boot);
@@ -324,7 +372,8 @@ void ScreenTRexSelector::performBootstrapSelection(
 
     for (double gamma = 0.0; gamma < 1.0; gamma += screen_ctrl_.ci_grid_step) {
 
-        const auto ci        = calculateBootstrapCI(boot_means, gamma);
+        const auto ci = calculateBootstrapCI(
+            boot_means, t0, gamma);
         const double lower   = ci.first;
         const double upper   = ci.second;
 
@@ -361,25 +410,34 @@ void ScreenTRexSelector::performBootstrapSelection(
 
 
 std::pair<double, double> ScreenTRexSelector::calculateBootstrapCI(
-    const std::vector<double>& means_distribution,
+    const std::vector<double>& boot_means,
+    double t0,
     double confidence_level
 ) const {
-    const double n    = static_cast<double>(means_distribution.size());
-    const double sum  = std::accumulate(
-        means_distribution.begin(), means_distribution.end(), 0.0);
-    const double mean = sum / n;
+    /*
+        Bias-corrected normal CI (matches R's boot::boot.ci type="norm"):
+            center = 2·t₀ − mean(t*)
+            CI     = center ± z · se(t*)
+    */
+    const double n   = static_cast<double>(boot_means.size());
+    const double sum = std::accumulate(
+        boot_means.begin(), boot_means.end(), 0.0);
+    const double boot_mean = sum / n;
 
     double sq_sum = 0.0;
-    for (const double v : means_distribution) {
-        const double d = v - mean;
+    for (const double v : boot_means) {
+        const double d = v - boot_mean;
         sq_sum += d * d;
     }
     const double sd = std::sqrt(sq_sum / (n - 1.0));
 
+    // Bias-corrected center: 2·t₀ − mean(t*)
+    const double center = 2.0 * t0 - boot_mean;
+
     const double alpha = (1.0 - confidence_level) / 2.0;
     const double z     = probit(1.0 - alpha);
 
-    return {mean - z * sd, mean + z * sd};
+    return {center - z * sd, center + z * sd};
 }
 
 
@@ -391,13 +449,16 @@ void ScreenTRexSelector::applyDependencyAwareAdjustment(Eigen::VectorXd& Phi) {
 
     // Use supplied correlation or estimate it
     double rho = screen_ctrl_.cor_coef;
-    if (std::isnan(rho)) {
+    if (rho == tc::AUTO_ESTIMATE_CORRELATION) {
         switch (screen_ctrl_.trex_method) {
             case ScreenTRexMethod::TREX_DA_AR1:
                 rho = estimateAR1Correlation();
                 break;
             case ScreenTRexMethod::TREX_DA_EQUI:
                 rho = estimateEquiCorrelation();
+                break;
+            case ScreenTRexMethod::TREX_DA_BLOCK_EQUI:
+                rho = estimateBlockEquiCorrelation();
                 break;
             default:
                 throw std::runtime_error(
@@ -417,6 +478,8 @@ void ScreenTRexSelector::applyDependencyAwareAdjustment(Eigen::VectorXd& Phi) {
                 return computeDA_AR1_Delta(Phi, rho);
             case ScreenTRexMethod::TREX_DA_EQUI:
                 return computeDA_EQUI_Delta(Phi, rho);
+            case ScreenTRexMethod::TREX_DA_BLOCK_EQUI:
+                return computeDA_BLOCK_EQUI_Delta(Phi, rho);
             default:
                 throw std::runtime_error(
                     "ScreenTRexSelector: unreachable DA variant.");
@@ -441,29 +504,24 @@ double ScreenTRexSelector::estimateAR1Correlation() const {
         AR(1) Yule-Walker estimator per row, averaged over n rows:
             ρ̂ = Σ(x_t · x_{t-1}) / Σ(x_t²)
         Returns |mean ρ̂|.
+
+        No row-mean centering: matches the R reference which fits
+        arima(row, order=c(1,0,0), include.mean=FALSE) on column-
+        centered (but not row-centered) data.
     */
     double total_rho = 0.0;
 
     for (std::size_t i = 0; i < n_; ++i) {
-        // First pass: row mean
-        double row_sum = 0.0;
-        for (std::size_t j = 0; j < p_; ++j) {
-            row_sum += (*X_)(static_cast<Eigen::Index>(i),
-                             static_cast<Eigen::Index>(j));
-        }
-        const double row_mean = row_sum / static_cast<double>(p_);
-
-        // Second pass: Yule-Walker numerator / denominator
         double numerator   = 0.0;
         double denominator = 0.0;
 
-        double x_prev = (*X_)(static_cast<Eigen::Index>(i), 0) - row_mean;
+        double x_prev = (*X_)(static_cast<Eigen::Index>(i), 0);
         denominator  += x_prev * x_prev;
 
         for (std::size_t j = 1; j < p_; ++j) {
             const double x_curr =
                 (*X_)(static_cast<Eigen::Index>(i),
-                      static_cast<Eigen::Index>(j)) - row_mean;
+                      static_cast<Eigen::Index>(j));
             denominator += x_curr * x_curr;
             numerator   += x_curr * x_prev;
             x_prev       = x_curr;
@@ -586,6 +644,108 @@ Eigen::VectorXd ScreenTRexSelector::computeDA_EQUI_Delta(
 
     return DA_delta;
 }
+
+// ===================================================================================
+// Block-Equicorrelation Estimation and Delta
+// ===================================================================================
+
+double ScreenTRexSelector::estimateBlockEquiCorrelation() const {
+    /*
+        Average within-block equi-correlation.
+        Partition p columns into n_blocks contiguous blocks.
+        For each block k of size b_k, compute:
+            row_sums_k = sum of X columns in block k
+            rho_k = (||row_sums_k||^2 - b_k) / (b_k * (b_k - 1))
+        Return weighted average: sum(b_k * rho_k) / p.
+    */
+    const std::size_t n_blocks = screen_ctrl_.n_blocks;
+    const std::size_t base_size = p_ / n_blocks;
+    const std::size_t remainder = p_ % n_blocks;
+
+    double weighted_rho = 0.0;
+    std::size_t col_start = 0;
+
+    for (std::size_t k = 0; k < n_blocks; ++k) {
+        const std::size_t bk = base_size + (k < remainder ? 1 : 0);
+        if (bk < 2) {
+            col_start += bk;
+            continue;
+        }
+
+        Eigen::VectorXd row_sums =
+            Eigen::VectorXd::Zero(static_cast<Eigen::Index>(n_));
+        for (std::size_t j = col_start; j < col_start + bk; ++j) {
+            row_sums.noalias() += X_->col(static_cast<Eigen::Index>(j));
+        }
+
+        const double sum_sq = row_sums.squaredNorm();
+        const double bk_d   = static_cast<double>(bk);
+        const double denom  = bk_d * (bk_d - 1.0);
+        const double rho_k  = (sum_sq - bk_d) / denom;
+
+        weighted_rho += bk_d * rho_k;
+        col_start += bk;
+    }
+
+    return weighted_rho / static_cast<double>(p_);
+}
+
+
+Eigen::VectorXd ScreenTRexSelector::computeDA_BLOCK_EQUI_Delta(
+    const Eigen::VectorXd& Phi,
+    double rho
+) const {
+    /*
+        Within-block neighbors only.  For each variable j in block k:
+            DA_delta[j] = 2 - min_{m in block(k), m != j} |Phi[j] - Phi[m]|
+        Skipped when |rho| <= rho_thr_DA.
+    */
+    Eigen::VectorXd DA_delta =
+        Eigen::VectorXd::Ones(static_cast<Eigen::Index>(p_));
+
+    if (std::abs(rho) <= screen_ctrl_.rho_thr_DA) {
+        if (verbose_) {
+            printProgress("DA-BLOCK-EQUI: skipped (|rho| = "
+                + std::to_string(std::abs(rho)) + " <= rho_thr_DA = "
+                + std::to_string(screen_ctrl_.rho_thr_DA) + ").");
+        }
+        return DA_delta;
+    }
+
+    const std::size_t n_blocks = screen_ctrl_.n_blocks;
+    const std::size_t base_size = p_ / n_blocks;
+    const std::size_t remainder = p_ % n_blocks;
+
+    if (verbose_) {
+        printProgress("DA-BLOCK-EQUI: computing within-block adjustment ("
+            + std::to_string(n_blocks) + " blocks).");
+    }
+
+    std::size_t col_start = 0;
+    for (std::size_t k = 0; k < n_blocks; ++k) {
+        const std::size_t bk = base_size + (k < remainder ? 1 : 0);
+
+        for (std::size_t j = col_start; j < col_start + bk; ++j) {
+            double min_diff = 2.0;
+            const auto j_idx = static_cast<Eigen::Index>(j);
+
+            for (std::size_t m = col_start; m < col_start + bk; ++m) {
+                if (m != j) {
+                    const double diff = std::abs(
+                        Phi(j_idx) - Phi(static_cast<Eigen::Index>(m)));
+                    min_diff = std::min(min_diff, diff);
+                }
+            }
+
+            DA_delta(j_idx) = 2.0 - (min_diff > 1.5 ? 0.0 : min_diff);
+        }
+
+        col_start += bk;
+    }
+
+    return DA_delta;
+}
+
 
 // ===================================================================================
 } /* End of namespace trex::trex_selector_methods::trex_screening */

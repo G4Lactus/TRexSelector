@@ -22,6 +22,7 @@
 // utils includes
 #include <utils/serialization//utils_cereal_eigen.hpp>
 #include <utils/openmp/utils_openmp.hpp>
+#include <utils/fp_classify/fp_classify.hpp>
 
 // ============================================================================
 
@@ -32,6 +33,7 @@ namespace trex::tsolvers::linear_model::lars_based {
 
 // Use namespace alias for solver_utils::preprocessing
 namespace solv_preproc = trex::tsolvers::solver_utils::preprocessing;
+namespace fpc = trex::utils::fp_classify;
 
 
 // ============================================================================
@@ -300,10 +302,10 @@ std::pair<double, Eigen::VectorXd> TLARS_Solver::computeStepSize(
             double g2 = (Cmax + c_j) / (A_A_ + a_j);
 
             // local gamma update
-            if (g1 > eps_ && std::isfinite(g1) && g1 < local_gamma) {
+            if (g1 > eps_ && fpc::isfinite(g1) && g1 < local_gamma) {
                 local_gamma = g1;
             }
-            if (g2 > eps_ && std::isfinite(g2) && g2 < local_gamma) {
+            if (g2 > eps_ && fpc::isfinite(g2) && g2 < local_gamma) {
                 local_gamma = g2;
             }
         }

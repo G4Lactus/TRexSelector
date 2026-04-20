@@ -216,12 +216,13 @@ inline void save_and_print_results(
     const std::map<std::string, Eigen::VectorXd>&  fdr_results_map,
     const std::map<std::string, Eigen::VectorXd>&  tpr_results_map,
     const std::map<std::string, Eigen::VectorXd>&  avg_L_results_map,
-    const std::map<std::string, Eigen::VectorXd>&  avg_T_results_map)
+    const std::map<std::string, Eigen::VectorXd>&  avg_T_results_map,
+    const std::string&                             file_prefix = "")
 {
     // 1. Setup File Output
     // -----------------------------------
-    std::string folder = "simulations/";
-    std::string filename = "trex_results_n" + std::to_string(n) + "_p" +
+    std::string folder = "simulations/demos/trex/";
+    std::string filename = file_prefix + "trex_results_n" + std::to_string(n) + "_p" +
                            std::to_string(p) + "_stagnation_window_" +
                            std::to_string(stagnation_window) + ".txt";
 
@@ -375,7 +376,7 @@ inline void save_and_print_mc_results(
     const std::map<std::string, Eigen::VectorXd>&  avg_L_results_map,
     const std::map<std::string, Eigen::VectorXd>&  avg_T_results_map)
 {
-    const std::string folder = "simulations/";
+    const std::string folder = "simulations/demos/trex/";
 
     // 1. Open text file (dual output)
     std::ofstream out_file(folder + file_stem + ".txt");

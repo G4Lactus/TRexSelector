@@ -20,6 +20,9 @@
 // T-Rex header
 #include <trex_selector_methods/trex_core/trex.hpp>
 
+// utils includes
+#include <utils/fp_classify/fp_classify.hpp>
+
 // ===================================================================================
 
 // Embedded into namespace trex::trex_selector_methods::trex_core
@@ -28,6 +31,7 @@ namespace trex::trex_selector_methods::trex_core {
 // Namespace aliases
 namespace dn = trex::trex_selector_methods::utils::data_normalizer;
 namespace dg = trex::trex_selector_methods::utils::dummy_generator;
+namespace fpc = trex::utils::fp_classify;
 namespace wsm = trex::trex_selector_methods::utils::warm_start_manager;
 namespace mm = trex::trex_selector_methods::utils::memmap_manager;
 namespace sd = trex::trex_selector_methods::utils::solver_dispatch;
@@ -157,7 +161,7 @@ void TRexSelector::validateTRexParameters() const {
             ", X.rows() = " + std::to_string(n_));
     }
 
-    if (!y_.allFinite()) {
+    if (!fpc::allFinite(y_)) {
         throw std::invalid_argument("Response vector y contains NaN or Inf values.");
     }
 
@@ -439,6 +443,10 @@ TRexSelector::SelectionResult TRexSelector::selectedVariables(
         return result;
     }
 
+    // Drop the last T-row (the stopping-criterion boundary step) when T > 1.
+    // Matches R reference: FDP_hat_mat[-T_stop, , drop = FALSE]
+    if (safe_T > 1) { --safe_T; }
+
     Eigen::MatrixXd FDP_use = FDP_hat_mat.topRows(safe_T);
     Eigen::MatrixXd Phi_use = Phi_mat.topRows(safe_T);
     const std::size_t n_rows = FDP_use.rows();
@@ -471,7 +479,7 @@ TRexSelector::SelectionResult TRexSelector::selectedVariables(
         }
     }
 
-    if (std::isinf(val_max) || val_max < 0) {
+    if (fpc::isinf(val_max) || val_max < 0) {
         SelectionResult result;
         result.selected_var = Eigen::VectorXi::Zero(static_cast<Eigen::Index>(p_));
         result.v_thresh = 1.0;

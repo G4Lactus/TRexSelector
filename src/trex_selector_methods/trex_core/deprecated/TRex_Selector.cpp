@@ -21,6 +21,9 @@
 
 // T-Rex Selector includes
 #include <trex_methods/trex_core/TRex_Selector.hpp>
+#include <utils/fp_classify/fp_classify.hpp>
+
+namespace fpc = trex::utils::fp_classify;
 
 // ===================================================================================
 // Debug mode only Macro
@@ -127,7 +130,7 @@ void TRexSelector::validateTRexParameters() const {
     }
 
     // Check for NaN/Inf in y
-    if (!y_.allFinite()) {
+    if (!fpc::allFinite(y_)) {
         throw std::invalid_argument(
             "Response vector y contains NaN or Inf values."
         );
@@ -646,7 +649,7 @@ TRexSelector::SelectionResult TRexSelector::selectedVariables(
     }
 
     // Valid outcome: no variables selected under FDR control
-    if (std::isinf(val_max) || val_max < 0) {
+    if (fpc::isinf(val_max) || val_max < 0) {
         SelectionResult result;
         result.selected_var = Eigen::VectorXi::Zero(p_);
         result.v_thresh = 1.0;  // conservative fallback no selection

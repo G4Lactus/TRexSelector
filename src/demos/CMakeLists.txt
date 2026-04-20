@@ -100,6 +100,7 @@ macro(add_demo_target target_name demo_file library_set)
     )
 
     # Compile options (Executables need their own optimization flags)
+    # NOTE: -ffast-math breaks std::isnan — see trex_selector_methods/CMakeLists.txt.
     target_compile_options(${target_name} PRIVATE
         -Wno-deprecated-declarations
         $<$<CONFIG:Debug>:-g -O0 -Wall -Wextra>
@@ -263,55 +264,65 @@ add_demo_target(demo_trx_scr_02_screen_trex_mmap
     T_REX_SELECTOR_LIBS
 )
 
-# --- trex_biobank_screening/ subfolder --- (Biobank Screen-TRex) -----------------
-
-## Demo scr_bb_01: Biobank Screen-TRex Selector
-add_demo_target(demo_trx_scr_bb_01_biobank_screen_trex
-    trex_selector_methods/trex_biobank_screening/demo_trx_scr_bb_01_biobank_screen_trex.cpp
+## Demo scr_03: Screen-TRex DA on correlated data (AR1 + equi DGPs)
+add_demo_target(demo_trx_scr_03_screen_trex_correlated
+    trex_selector_methods/trex_screening/demo_trx_scr_03_screen_trex_correlated.cpp
     T_REX_SELECTOR_LIBS
 )
 
-## Demo scr_bb_02: Biobank Screen-TRex Selector — in-memory
-add_demo_target(demo_trx_scr_bb_02_biobank_screen_trex_inmem
-    trex_selector_methods/trex_biobank_screening/demo_trx_scr_bb_02_biobank_screen_trex_inmem.cpp
+## Demo scr_04: Biobank Screen-TRex Selector (Algorithm 1) — in-memory D files
+add_demo_target(demo_trx_scr_04_biobank_screen_trex_inmem
+    trex_selector_methods/trex_screening/demo_trx_scr_04_biobank_screen_trex_inmem.cpp
     T_REX_SELECTOR_LIBS
 )
 
-## Demo scr_bb_03: Biobank Screen-TRex Selector — memory-mapped D files
-add_demo_target(demo_trx_scr_bb_03_biobank_screen_trex_mmap
-    trex_selector_methods/trex_biobank_screening/demo_trx_scr_bb_03_biobank_screen_trex_mmap.cpp
+## Demo scr_05: Biobank Screen-TRex Selector (Algorithm 1) — memory-mapped D files
+add_demo_target(demo_trx_scr_05_biobank_screen_trex_mmap
+    trex_selector_methods/trex_screening/demo_trx_scr_05_biobank_screen_trex_mmap.cpp
+    T_REX_SELECTOR_LIBS
+)
+
+## Demo scr_06: Screen-TRex solver comparison (TLARS / TAFS-0.3 / TOMP)
+add_demo_target(demo_trx_scr_06_screen_trex_solvers
+    trex_selector_methods/trex_screening/demo_trx_scr_06_screen_trex_solvers.cpp
     T_REX_SELECTOR_LIBS
 )
 
 # --- trex_da/ subfolder --- (DA-TRex) -------------------------------------------
 
-## Demo da_01: Dependency-Aware T-Rex Selector — all 5 DA methods
-add_demo_target(demo_trx_da_01_da_trex
-    trex_selector_methods/trex_da/demo_trx_da_01_da_trex.cpp
+## Demo da_01: AR(1) Toeplitz — single-run + MC SNR sweep
+add_demo_target(demo_trx_da_01_ar1
+    trex_selector_methods/trex_da/demo_trx_da_01_ar1.cpp
     T_REX_SELECTOR_LIBS
 )
 
-## Demo da_02: DA-TRex Monte Carlo simulation — SNR sweep, 3 solvers × 5 scenarios
-add_demo_target(demo_trx_da_02_da_trex_mc_sim
-    trex_selector_methods/trex_da/demo_trx_da_02_da_trex_mc_sim.cpp
+## Demo da_02: Equicorrelation — single-run + MC SNR sweep
+add_demo_target(demo_trx_da_02_equi_and_block_equi
+    trex_selector_methods/trex_da/demo_trx_da_02_equi_and_block_equi.cpp
     T_REX_SELECTOR_LIBS
 )
 
-## Demo da_03: DA-TRex block-Toeplitz MC — 4 ceteris paribus parameter sweeps
-add_demo_target(demo_trx_da_03_da_block_mc_sim
-    trex_selector_methods/trex_da/demo_trx_da_03_da_block_mc_sim.cpp
+## Demo da_03: Nearest Neighbours (MA(kappa)) — single-run + MC SNR sweep
+add_demo_target(demo_trx_da_03_nn
+    trex_selector_methods/trex_da/demo_trx_da_03_nn.cpp
     T_REX_SELECTOR_LIBS
 )
 
-## Demo da_04: DA-TRex tFDR sweep — FDP/TPR vs target FDR for multiple rho values
-add_demo_target(demo_trx_da_04_da_fdr_mc_sim
-    trex_selector_methods/trex_da/demo_trx_da_04_da_fdr_mc_sim.cpp
+## Demo da_04: Binary Tree — single-run + MC SNR sweep
+add_demo_target(demo_trx_da_04_bt_ar1_block
+    trex_selector_methods/trex_da/demo_trx_da_04_bt_ar1_block.cpp
     T_REX_SELECTOR_LIBS
 )
 
-## Demo da_05: DA-TRex heavy-tailed variants — 4 combos of heavy X / heavy noise
-add_demo_target(demo_trx_da_05_da_heavy_mc_sim
-    trex_selector_methods/trex_da/demo_trx_da_05_da_heavy_mc_sim.cpp
+## Demo da_05: Prior Groups — single-run + MC SNR sweep
+add_demo_target(demo_trx_da_05_groups
+    trex_selector_methods/trex_da/demo_trx_da_05_groups.cpp
+    T_REX_SELECTOR_LIBS
+)
+
+## Demo da_06: Block-Equicorrelated — single-run + MC SNR sweep
+add_demo_target(demo_trx_da_02_block_equi
+    trex_selector_methods/trex_da/demo_trx_da_02_block_equi.cpp
     T_REX_SELECTOR_LIBS
 )
 

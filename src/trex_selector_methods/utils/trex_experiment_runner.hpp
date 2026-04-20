@@ -553,7 +553,7 @@ private:
     /**
      * @brief Compute phi_T_mat from K beta paths.
      *
-     * @details For each experiment k and each T from 1..T_stop:
+     * @details For each experiment k and each T from 1...T_stop:
      *          Find the first step where exactly T dummies are active,
      *          then count which original predictors (j < p) have nonzero
      *          coefficients at that step.
@@ -600,7 +600,7 @@ private:
 
             // For each T from 1 to T_stop
             for (std::size_t t = 1; t <= T_stop; ++t) {
-                // Find first step where exactly t dummies are included
+                // Note: R uses strict equality (== t), we use >= t for robustness
                 std::size_t step_idx = num_steps - 1;
                 bool found = false;
                 for (std::size_t s = 0; s < num_steps; ++s) {

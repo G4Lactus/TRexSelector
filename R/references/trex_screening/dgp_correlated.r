@@ -246,7 +246,7 @@ dgp_equi <- function(n,
   W  <- matrix(stats::rnorm(n * p), nrow = n)        # idiosyncratic noise
 
   X  <- sqrt(rho) * matrix(z, nrow = n, ncol = p, byrow = FALSE) +
-        sqrt(1 - rho) * W
+    sqrt(1 - rho) * W
 
   # Standardise columns
   X <- scale(X)
@@ -277,9 +277,114 @@ dgp_equi <- function(n,
   )
 }
 
+# =============================================================================
+# 3. Block equicorrelation DGP
+# =============================================================================
+
+#' Generate block-equicorrelated regression data
+#'
+#' Produces a regression data set whose predictor matrix has a block
+#' equicorrelation structure. The `p` variables are divided into `n_blocks`
+#' independent blocks. Within each block, pairs of distinct columns share the
+#' same correlation `rho`. Between blocks, columns are strictly uncorrelated.
+#'
+#' The columns of X are generated via a block-specific factor model:
+#' x_j = sqrt(rho) * z_{0k} + sqrt(1-rho) * w_j,  for j in block k
+#' where z_{0k} ~ N(0, I_n) is the block's common factor, and w_j are
+#' idiosyncratic noise columns.
+#'
+#' @param n Number of observations.
+#' @param p Number of candidate variables.
+#' @param p1 Number of active (non-zero) variables (default 10).
+#' @param rho Equicorrelation parameter within blocks in [0, 1) (default 0.7).
+#' @param n_blocks Number of independent blocks (default 5).
+#' @param snr Signal-to-noise ratio (default 5).
+#' @param betaval Common value of the non-zero regression coefficients (default 3).
+#' @param seed Integer RNG seed for reproducibility (default NULL).
+#'
+#' @return A named list with components similar to `dgp_equi` and `dgp_ar1`,
+#'         along with the additional `n_blocks` integer.
+#' @importFrom stats rnorm
+#' @export
+dgp_block_equi <- function(n, p, p1 = 10, rho = 0.7, n_blocks = 5, snr = 5, betaval = 3, seed = NULL) {
+
+  # --- Input validation ------------------------------------------------------
+  stopifnot(
+    is.numeric(n) && length(n) == 1L && n >= 2L,
+    is.numeric(p) && length(p) == 1L && p >= 2L,
+    is.numeric(p1) && length(p1) == 1L && p1 >= 1L && p1 <= p,
+    is.numeric(rho) && length(rho) == 1L && rho >= 0 && rho < 1,
+    is.numeric(n_blocks) && length(n_blocks) == 1L && n_blocks >= 1L && n_blocks <= p,
+    is.numeric(snr) && length(snr) == 1L && snr > 0
+  )
+  if (!is.null(seed)) {
+    set.seed(seed)
+  }
+
+  # --- Block structure -------------------------------------------------------
+  # Determine block sizes (handling cases where p is not perfectly divisible)
+  base_size <- p %/% n_blocks
+  remainder <- p %% n_blocks
+  block_sizes <- rep(base_size, n_blocks)
+  if (remainder > 0) {
+    block_sizes[1:remainder] <- block_sizes[1:remainder] + 1
+  }
+
+  # --- Predictor Matrix Generation -------------------------------------------
+  X <- matrix(NA_real_, nrow = n, ncol = p)
+
+  col_idx <- 1
+  for (k in seq_len(n_blocks)) {
+    bk_size <- block_sizes[k]
+
+    # Shared common factor for the k-th block z_{0k}
+    z_k <- stats::rnorm(n)
+
+    # Idiosyncratic noise for the variables in the k-th block
+    W_k <- matrix(stats::rnorm(n * bk_size), nrow = n, ncol = bk_size)
+
+    # Generate block columns: xj = sqrt(rho)*z_k + sqrt(1-rho)*w_j
+    X_k <- sqrt(rho) * matrix(z_k, nrow = n, ncol = bk_size, byrow = FALSE) + sqrt(1 - rho) * W_k
+
+    # Assign to main matrix
+    idx_range <- col_idx:(col_idx + bk_size - 1)
+    X[, idx_range] <- X_k
+    col_idx <- col_idx + bk_size
+  }
+
+  # Standardise columns to unit variance (preserves the correlation structure)
+  X <- scale(X)
+
+  # --- Sparse regression coefficients ---------------------------------------
+  bp <- .make_beta(p, p1, betaval)
+  beta <- bp$beta
+  support <- bp$support
+
+  # --- Response --------------------------------------------------------------
+  yp <- .make_y(X, beta, snr)
+  y <- yp$y
+  sigma <- yp$sigma
+
+  # --- Return ----------------------------------------------------------------
+  list(
+    X = X,
+    y = y,
+    beta = beta,
+    support = support,
+    activeset = which(support == 1L),
+    sigma = sigma,
+    rho = rho,
+    n_blocks = n_blocks,
+    n = n,
+    p = p,
+    p1 = p1,
+    snr = snr
+  )
+}
+
 
 # =============================================================================
-# 3. Diagnostics
+# 4. Diagnostics
 # =============================================================================
 
 #' Empirical correlation diagnostics for a DGP object
@@ -287,8 +392,8 @@ dgp_equi <- function(n,
 #' Computes a small set of scalar summaries to verify that the generated
 #' design matrix has the intended correlation structure.
 #'
-#' @param dgp  Output of \code{dgp_ar1()} or \code{dgp_equi()}.
-#' @param type \code{"ar1"} or \code{"equi"}.
+#' @param dgp  Output of \code{dgp_ar1()}, \code{dgp_equi()}, or \code{dgp_block_equi()}.
+#' @param type \code{"ar1"}, \code{"equi"}, or \code{"block_equi"}.
 #' @param max_col Maximum number of columns used for the full correlation
 #'                matrix (guards against large p); default 50.
 #'
@@ -303,7 +408,7 @@ dgp_equi <- function(n,
 #'   \item{\code{expected_lag2}}{(AR1 only) Theoretical lag-2 = rho^2.}
 #' }
 #' @export
-dgp_diagnostics <- function(dgp, type = c("ar1", "equi"), max_col = 50L) {
+dgp_diagnostics <- function(dgp, type = c("ar1", "equi", "block_equi"), max_col = 50L) {
   type <- match.arg(type)
   X    <- dgp$X[, seq_len(min(ncol(dgp$X), max_col)), drop = FALSE]
   Cor  <- stats::cor(X)

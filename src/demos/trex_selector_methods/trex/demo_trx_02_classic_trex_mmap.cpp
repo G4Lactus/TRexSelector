@@ -123,8 +123,8 @@ void demo_TRexSelector_d_mmap_solver_serial(bool high_dim, bool rnd_coef) {
     const auto cfg = make_mmap_demo_config(high_dim, rnd_coef);
 
     // Setup dual output (console + file)
-    const std::string folder = "simulations/";
-    const std::string stem   = "trex_mmap_demo_a_n" + std::to_string(cfg.n) +
+    const std::string folder = "simulations/demos/trex/";
+    const std::string stem   = "d02_trex_mmap_demo_a_n" + std::to_string(cfg.n) +
                                "_p" + std::to_string(cfg.p);
     std::ofstream out_file(folder + stem + ".txt");
     PrintFn print_dual = [&](const std::string& s) {
@@ -195,8 +195,8 @@ void demo_TRexSelector_full_mmap(bool high_dim, bool rnd_coef) {
     const auto cfg = make_mmap_demo_config(high_dim, rnd_coef);
 
     // Setup dual output (console + file)
-    const std::string folder = "simulations/";
-    const std::string stem   = "trex_mmap_demo_b_n" + std::to_string(cfg.n) +
+    const std::string folder = "simulations/demos/trex/";
+    const std::string stem   = "d02_trex_mmap_demo_b_n" + std::to_string(cfg.n) +
                                "_p" + std::to_string(cfg.p);
     std::ofstream out_file(folder + stem + ".txt");
     PrintFn print_dual = [&](const std::string& s) {
@@ -287,17 +287,17 @@ int main() {
     // ============================================================
     // Demo A: single run — in-memory X + solver serialization + D mmap
     // ============================================================
-    if (false)
+    if (true)
         demo_TRexSelector_d_mmap_solver_serial(/*high_dim=*/false, /*rnd_coef=*/false);
-    if (false)
+    if (true)
         demo_TRexSelector_d_mmap_solver_serial(/*high_dim=*/true,  /*rnd_coef=*/false);
 
     // ============================================================
     // Demo B: single run — fully memory-mapped pipeline (X + D + solver serialization)
     // ============================================================
-    if (false)
+    if (true)
         demo_TRexSelector_full_mmap(/*high_dim=*/false, /*rnd_coef=*/false);
-    if (false)
+    if (true)
         demo_TRexSelector_full_mmap(/*high_dim=*/true,  /*rnd_coef=*/false);
 
     return 0;

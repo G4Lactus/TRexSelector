@@ -73,8 +73,8 @@ void demo_TRexSelector(bool high_dim, bool rnd_coef) {
     const double tFDR = 0.1;
 
     // Setup dual output (console + file)
-    const std::string folder = "simulations/";
-    const std::string filename = "trex_basic_n" + std::to_string(n) +
+    const std::string folder = "simulations/demos/trex/";
+    const std::string filename = "d01_trex_basic_n" + std::to_string(n) +
                                  "_p" + std::to_string(p) + ".txt";
     std::ofstream out_file(folder + filename);
     auto print_dual = [&](const std::string& text) {
@@ -330,11 +330,12 @@ void demo_TRexSelector_MonteCarlo(std::size_t num_MC, bool high_dim, bool rnd_co
             for (std::size_t mc = 0; mc < num_MC; ++mc) {
 
                 // Progress
-                std::cout << "  Progress: [" << std::setw(3) << (mc + 1)
+                std::cout << "  SNR " << std::fixed << std::setprecision(2) << snr
+                          << " \u2014 Progress: [" << std::setw(3) << (mc + 1)
                           << "/" << num_MC << "] "
                           << std::fixed << std::setprecision(1)
                           << (100.0 * static_cast<double>(mc + 1) / static_cast<double>(num_MC))
-                          << "%\r";
+                          << "%\r" << std::flush;
 
                 // Generate data
                 datagen::SyntheticData data(
@@ -388,9 +389,8 @@ void demo_TRexSelector_MonteCarlo(std::size_t num_MC, bool high_dim, bool rnd_co
             tpr_results_map[current_solver.solver_name](static_cast<Eigen::Index>(snr_idx)) =
                 total_tpp / static_cast<double>(num_MC);
 
-            // Clear progress line
-            std::cout << std::string(50, ' ') << "\r";
-            std::cout << "  Completed: " << num_MC << " runs\n\n";
+            std::cout << "  SNR " << std::fixed << std::setprecision(2) << snr
+                      << " \u2014 Completed " << num_MC << " runs.      \n";
         }
 
         std::cout << "\n";
@@ -409,7 +409,8 @@ void demo_TRexSelector_MonteCarlo(std::size_t num_MC, bool high_dim, bool rnd_co
         fdr_results_map,
         tpr_results_map,
         {}, // average_L_results_map not computed in this demo
-        {}  // average_T_results_map not computed in this demo
+        {}, // average_T_results_map not computed in this demo
+        "d01_"
     );
 
     std::cout << "\n\n";
@@ -501,11 +502,12 @@ void demo_TRexSelector_varMonteCarlo(std::size_t num_MC, bool high_dim, bool rnd
             for (std::size_t mc = 0; mc < num_MC; ++mc) {
 
                 // Progress indicator
-                std::cout << "  Progress: [" << std::setw(3) << (mc + 1)
+                std::cout << "  SNR " << std::fixed << std::setprecision(2) << snr
+                          << " \u2014 Progress: [" << std::setw(3) << (mc + 1)
                           << "/" << num_MC << "] "
                           << std::fixed << std::setprecision(1)
                           << (100.0 * static_cast<double>(mc + 1) / static_cast<double>(num_MC))
-                          << "%\r";
+                          << "%\r" << std::flush;
 
                 // Generate unique support indices for this MC run
                 std::unordered_set<std::size_t> support_set;
@@ -596,9 +598,8 @@ void demo_TRexSelector_varMonteCarlo(std::size_t num_MC, bool high_dim, bool rnd
             average_T_results_map[current_solver.solver_name](
                 static_cast<Eigen::Index>(snr_idx)) = total_T / static_cast<double>(num_MC);
 
-            // Clear progress line
-            std::cout << std::string(50, ' ') << "\r";
-            std::cout << "  Completed: " << num_MC << " runs\n\n";
+            std::cout << "  SNR " << std::fixed << std::setprecision(2) << snr
+                      << " \u2014 Completed " << num_MC << " runs.      \n";
         }
 
         std::cout << "\n";
@@ -617,7 +618,8 @@ void demo_TRexSelector_varMonteCarlo(std::size_t num_MC, bool high_dim, bool rnd
         fdr_results_map,
         tpr_results_map,
         average_L_results_map,
-        average_T_results_map
+        average_T_results_map,
+        "d01_"
     );
     std::cout << "\n\n";
 }
@@ -642,11 +644,11 @@ int main() {
     // --------------------------------------------------------------------------------------
     // high-dimensional setting
     if (true)
-        demo_TRexSelector_MonteCarlo(/*num_MC=*/100, /*high_dim=*/true, /*rnd_coef=*/false);
+        demo_TRexSelector_MonteCarlo(/*num_MC=*/500, /*high_dim=*/true, /*rnd_coef=*/false);
 
     // low-dimensional setting
     if (true)
-        demo_TRexSelector_MonteCarlo(/*num_MC=*/100, /*high_dim=*/false, /*rnd_coef=*/false);
+        demo_TRexSelector_MonteCarlo(/*num_MC=*/500, /*high_dim=*/false, /*rnd_coef=*/false);
 
 
     // STANDARD SIMULATION
@@ -655,7 +657,7 @@ int main() {
     // --------------------------------------------------------------------------------------
     // high-dimensional setting
     if (true)
-        demo_TRexSelector_varMonteCarlo(/*num_MC=*/100, /*high_dim=*/true, /*rnd_coef=*/false);
+        demo_TRexSelector_varMonteCarlo(/*num_MC=*/500, /*high_dim=*/true, /*rnd_coef=*/false);
 
     return 0;
 }

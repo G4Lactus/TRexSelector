@@ -144,41 +144,19 @@ BiobankScreenTRexResult BiobankScreenTRex::screenSinglePhenotype(
     );
 
     // =========================================================
-    // 2.1a: Run bootstrap-CI Screen-TRex
+    // 2.1: Run Screen-TRex ONCE (ordinary mode) and derive
+    //      both α̂ (ordinary) and α̂_C (bootstrap) from the
+    //      same K experiments (Algorithm 1, Step 2.1).
     // =========================================================
 
     if (verbose_) {
-        printProgressMessage("  Running bootstrap-CI Screen-TRex...");
+        printProgressMessage("  Running Screen-TRex (K experiments)...");
     }
 
-    // Temporarily enable bootstrap CI
-    biosctrex_ctrl_.screen_ctrl.use_bootstrap_CI = true;
-
-    ts::ScreenTRexSelector sctrex_bootstrap(
-        *X_,
-        y_map,
-        biosctrex_ctrl_.screen_ctrl,
-        biosctrex_ctrl_.trex_ctrl,
-        seed_,
-        false
-    );
-
-    sctrex_bootstrap.select();
-    auto result_sct_bootstrap = sctrex_bootstrap.getScreenResult();
-
-
-    // =========================================================
-    // 2.1b: Run ordinary Screen-TRex (T = 1, L = p, v = 0.5)
-    // =========================================================
-
-    if (verbose_) {
-        printProgressMessage("  Running ordinary Screen-TRex...");
-    }
-
-    // Temporalily disable boostrap CI
+    // Run ordinary Screen-TRex (collects Phi, beta_mat, dummy_betas)
     biosctrex_ctrl_.screen_ctrl.use_bootstrap_CI = false;
 
-    ts::ScreenTRexSelector sctrex_ordinary(
+    ts::ScreenTRexSelector sctrex(
         *X_,
         y_map,
         biosctrex_ctrl_.screen_ctrl,
@@ -187,8 +165,16 @@ BiobankScreenTRexResult BiobankScreenTRex::screenSinglePhenotype(
         false
     );
 
-    sctrex_ordinary.select();
-    auto result_sct_ordinary = sctrex_ordinary.getScreenResult();
+    sctrex.select();
+    auto result_sct_ordinary = sctrex.getScreenResult();
+
+    // Derive bootstrap result from the SAME experiment data
+    if (verbose_) {
+        printProgressMessage("  Applying bootstrap screening to shared data...");
+    }
+
+    auto result_sct_bootstrap =
+        sctrex.applyBootstrapToOrdinaryResult(result_sct_ordinary);
 
 
     // =========================================================

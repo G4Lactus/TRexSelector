@@ -15,8 +15,6 @@
 #include <cstddef>
 #include <iomanip>
 #include <iostream>
-#include <limits>
-#include <numeric>
 #include <sstream>
 #include <stdexcept>
 #include <string>
@@ -50,7 +48,7 @@ TRexDASelector::TRexDASelector(
     int seed,
     bool verbose
 ) :
-    TRexSelector(X, y, tFDR, std::move(trex_control), seed, verbose),
+    TRexSelector(X, y, tFDR, trex_control, seed, verbose),
     da_ctrl_(std::move(da_control))
 {
     // Resolve hc_grid_length default
@@ -131,11 +129,11 @@ TRexDASelector::SelectionResult TRexDASelector::select() {
     if (verbose_) {
         std::string method_str;
         switch (da_ctrl_.method) {
-            case DAMethod::AR1:          method_str = "AR1";          break;
-            case DAMethod::EQUI:         method_str = "EQUI";        break;
-            case DAMethod::BT:           method_str = "BT";          break;
-            case DAMethod::NN:           method_str = "NN";          break;
-            case DAMethod::PRIOR_GROUPS: method_str = "PRIOR_GROUPS"; break;
+            case DAMethod::AR1:          method_str = "AR1";            break;
+            case DAMethod::EQUI:         method_str = "EQUI";           break;
+            case DAMethod::BT:           method_str = "BT";             break;
+            case DAMethod::NN:           method_str = "NN";             break;
+            case DAMethod::PRIOR_GROUPS: method_str = "PRIOR_GROUPS";   break;
         }
         printProgress("DA: Method = " + method_str +
                       (use_BT ? " (BT-style, rho_grid_len = " +
@@ -175,19 +173,25 @@ TRexDASelector::SelectionResult TRexDASelector::select() {
                 break;
         }
 
-        auto cfg = buildRunnerConfig(num_dummies_cur, T_stop_cur, use_warm_start,
-                                     exp_strategy, dummy_multiplier_LL_);
+        auto cfg = buildRunnerConfig(
+            num_dummies_cur,
+            T_stop_cur,
+            use_warm_start,
+            exp_strategy,
+            dummy_multiplier_LL_);
         StepResult step;
         step.exp_results = experiment_runner_->run(cfg);
 
         // DA correction
         step.da_corr = daCorrect(step.exp_results.phi_T_mat,
-                                  step.exp_results.Phi,
-                                  T_stop_cur);
+                                 step.exp_results.Phi,
+                                 T_stop_cur);
 
         // FDP computation
         if (use_BT) {
-            auto [phi_prime_bt, fdp_hat_bt] = computeFDP_BT(step.da_corr, num_dummies_cur);
+            auto [phi_prime_bt,
+                  fdp_hat_bt] = computeFDP_BT(
+                    step.da_corr, num_dummies_cur);
             step.Phi_prime_BT = std::move(phi_prime_bt);
             step.FDP_hat_BT_mat = std::move(fdp_hat_bt);
         } else {
@@ -244,17 +248,20 @@ TRexDASelector::SelectionResult TRexDASelector::select() {
                 warm_start_mgr_.invalidate();
             }
         } else {
-            dummy_gen_.generateAndStore(trex_ctrl_.K, num_dummies_, dummy_multiplier_LL_);
+            dummy_gen_.generateAndStore(trex_ctrl_.K,
+                                        num_dummies_,
+                                        dummy_multiplier_LL_);
             warm_start_mgr_.invalidate();
         }
 
-        step = runStep(T_stop_, num_dummies_, /*use_warm_start=*/false);
+        step = runStep(T_stop_,
+                       num_dummies_,
+                       /*use_warm_start=*/false);
         first_pass = false;
 
         if (verbose_) {
             printProgress("  Appended dummies: " + std::to_string(num_dummies_));
         }
-
         ++dummy_multiplier_LL_;
     }
 
@@ -402,7 +409,7 @@ TRexDASelector::SelectionResult TRexDASelector::select() {
         da_result_.selected_var = base_result.selected_var;
         da_result_.v_thresh = base_result.v_thresh;
         da_result_.R_mat = base_result.R_mat;
-        da_result_.rho_thresh = std::numeric_limits<double>::quiet_NaN();
+        da_result_.rho_thresh = tc::AUTO_ESTIMATE_CORRELATION;
     }
 
     // Fill common fields
@@ -492,8 +499,13 @@ void TRexDASelector::setupDA_PriorGroups() {
 
     da_setup_.use_BT_style = true;
     da_setup_.rho_grid_len = rho_grid_len;
-    da_setup_.opt_point_BT = static_cast<std::size_t>(
-        std::round(0.75 * static_cast<double>(rho_grid_len)));
+    // R (1-indexed): round(0.75 * L) -> element L*0.75.
+    // C++ (0-indexed): subtract 1 to match.
+    {
+        std::size_t raw = static_cast<std::size_t>(
+            std::round(0.75 * static_cast<double>(rho_grid_len)));
+        da_setup_.opt_point_BT = (raw > 0) ? raw - 1 : 0;
+    }
     // Clamp to valid range
     if (da_setup_.opt_point_BT >= rho_grid_len) {
         da_setup_.opt_point_BT = rho_grid_len - 1;
@@ -564,8 +576,13 @@ void TRexDASelector::setupDA_BT() {
 
     da_setup_.use_BT_style = true;
     da_setup_.rho_grid_len = grid_len;
-    da_setup_.opt_point_BT = static_cast<std::size_t>(
-        std::round(0.75 * static_cast<double>(grid_len)));
+    // R (1-indexed): round(0.75 * L) -> element L*0.75.
+    // C++ (0-indexed): subtract 1 to match.
+    {
+        std::size_t raw = static_cast<std::size_t>(
+            std::round(0.75 * static_cast<double>(grid_len)));
+        da_setup_.opt_point_BT = (raw > 0) ? raw - 1 : 0;
+    }
     if (da_setup_.opt_point_BT >= grid_len) {
         da_setup_.opt_point_BT = grid_len - 1;
     }
@@ -621,8 +638,13 @@ void TRexDASelector::setupDA_NN() {
 
     da_setup_.use_BT_style = true;
     da_setup_.rho_grid_len = grid_len;
-    da_setup_.opt_point_BT = static_cast<std::size_t>(
-        std::round(0.75 * static_cast<double>(grid_len)));
+    // R (1-indexed): round(0.75 * L) -> element L*0.75.
+    // C++ (0-indexed): subtract 1 to match.
+    {
+        std::size_t raw = static_cast<std::size_t>(
+            std::round(0.75 * static_cast<double>(grid_len)));
+        da_setup_.opt_point_BT = (raw > 0) ? raw - 1 : 0;
+    }
     if (da_setup_.opt_point_BT >= grid_len) {
         da_setup_.opt_point_BT = grid_len - 1;
     }
@@ -660,7 +682,7 @@ void TRexDASelector::setupDA_AR1() {
     da_setup_.kap = 0;
 
     // Estimate AR(1) coefficient if not supplied
-    if (std::isnan(da_ctrl_.cor_coef)) {
+    if (da_ctrl_.cor_coef == tc::AUTO_ESTIMATE_CORRELATION) {
         da_setup_.cor_coef = estimateAR1Correlation();
     } else {
         da_setup_.cor_coef = da_ctrl_.cor_coef;
@@ -691,7 +713,7 @@ void TRexDASelector::setupDA_EQUI() {
     da_setup_.kap = 0;
 
     // Estimate equicorrelation if not supplied
-    if (std::isnan(da_ctrl_.cor_coef)) {
+    if (da_ctrl_.cor_coef == tc::AUTO_ESTIMATE_CORRELATION) {
         da_setup_.cor_coef = estimateEquiCorrelation();
     } else {
         da_setup_.cor_coef = da_ctrl_.cor_coef;
@@ -811,11 +833,13 @@ DACorrectionResult TRexDASelector::daCorrect(
             for (Eigen::Index j = 0; j < p; ++j) {
                 double min_diff = 2.0;
                 // Window: [j-kap, j+kap] excluding j
-                Eigen::Index lo = std::max(static_cast<Eigen::Index>(0), j - static_cast<Eigen::Index>(kap));
+                Eigen::Index lo = std::max(static_cast<Eigen::Index>(0),
+                                           j - static_cast<Eigen::Index>(kap));
                 Eigen::Index hi = std::min(p - 1, j + static_cast<Eigen::Index>(kap));
                 for (Eigen::Index k = lo; k <= hi; ++k) {
                     if (k != j) {
-                        double diff = std::abs(result.phi_T_mat(j, t) - result.phi_T_mat(k, t));
+                        double diff = std::abs(result.phi_T_mat(j, t) -
+                                                  result.phi_T_mat(k, t));
                         if (diff < min_diff) { min_diff = diff; }
                     }
                 }
@@ -848,7 +872,8 @@ DACorrectionResult TRexDASelector::daCorrect(
                 double min_diff = 2.0;
                 for (Eigen::Index k = 0; k < p; ++k) {
                     if (k != j) {
-                        double diff = std::abs(result.phi_T_mat(j, t) - result.phi_T_mat(k, t));
+                        double diff = std::abs(result.phi_T_mat(j, t) -
+                                        result.phi_T_mat(k, t));
                         if (diff < min_diff) { min_diff = diff; }
                     }
                 }
@@ -1008,7 +1033,7 @@ TRexDASelector::DASelectionResult TRexDASelector::selectVariables_BT(
                 if (fdp <= tFDR_) {
                     double r_count = R_array[r](TT, VV);
                     if (r_count > val_max ||
-                        (r_count == val_max && VV > best_VV)) {
+                        (r_count == val_max && VV >= best_VV)) {
                         val_max = r_count;
                         best_TT = TT;
                         best_VV = VV;
@@ -1026,7 +1051,7 @@ TRexDASelector::DASelectionResult TRexDASelector::selectVariables_BT(
         // No valid selection found
         result.selected_var = Eigen::VectorXi::Zero(p);
         result.v_thresh = 1.0;
-        result.rho_thresh = std::numeric_limits<double>::quiet_NaN();
+        result.rho_thresh = tc::AUTO_ESTIMATE_CORRELATION;
         return result;
     }
 

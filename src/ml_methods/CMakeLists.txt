@@ -64,6 +64,7 @@ target_compile_definitions(trex_ml_methods PUBLIC
     EIGEN_USE_BLAS               # Use BLAS backend in Eigen
 )
 
+# NOTE: -ffast-math breaks std::isnan — see trex_selector_methods/CMakeLists.txt.
 target_compile_options(trex_ml_methods PRIVATE
     -Wno-deprecated-declarations
     $<$<CONFIG:Debug>:-g -O0 -Wall -Wextra>

@@ -361,21 +361,30 @@ dgp_bt <- function(n, p, n_blocks,
 #' DGP for the prior-groups scenario (groups != NULL in trex_da)
 #'
 #' Multi-level latent factor model.  The user supplies a list of L group
-#' assignments (fine to coarse) and a decreasing vector of L correlation
-#' levels.  Each level x contributes a set of group-specific latent factors:
+#' assignments ordered \strong{coarse to fine} and an \strong{increasing}
+#' vector of L correlation levels.  This matches the internal rho_grid
+#' orientation of the BT and NN routes (x = 1 is coarsest, x = L finest).
 #'
-#'   X[i, j] = sum_{x=1}^{L} sqrt(rho[x] - rho[x+1]) * f_{g_x(j)}[i]
-#'           + sqrt(1 - rho[1]) * eta[i, j]
+#' Each level x contributes a set of group-specific latent factors:
 #'
-#' with rho[L+1] = 0 by convention. This is the exact DGP whose ground-truth
-#' neighbourhood structure matches the `groups` argument of trex_da().
+#'   X[i, j] = sum_{x=1}^{L} sqrt(rho[x] - rho[x-1]) * f_{g_x(j)}[i]
+#'           + sqrt(1 - rho[L]) * eta[i, j]
+#'
+#' with rho[0] = 0 by convention, so the loading at level x is
+#' sqrt(rho_levels[x] - rho_levels[x-1]).
 #'
 #' @param n          Number of observations.
 #' @param p          Number of predictors.
-#' @param groups     List of L integer vectors of length p (group labels,
-#'                   fine to coarse). Must be strictly nested.
-#' @param rho_levels Decreasing numeric vector of length L: correlation at
-#'                   each level.  All values in (0, 1), strictly decreasing.
+#' @param groups     List of L integer vectors of length p (group labels),
+#'                   ordered \strong{coarse to fine}: groups[[1]] has the
+#'                   fewest / largest clusters; groups[[L]] has the most /
+#'                   smallest clusters.  Must satisfy the nesting property:
+#'                   if j and k share a group at level x they must also share
+#'                   a group at all coarser levels x' < x.
+#' @param rho_levels \strong{Increasing} numeric vector of length L:
+#'                   correlation at each level (coarse to fine).
+#'                   All values in (0, 1), strictly increasing.
+#'                   rho_levels[L] is the within-finest-group correlation.
 #' @param s          Number of active predictors.
 #' @param amplitude  Active coefficient magnitude. Default 3.
 #' @param sigma      Noise standard deviation. Default 1.
@@ -385,16 +394,17 @@ dgp_bt <- function(n, p, n_blocks,
 #' @return List: X, y, beta, Sigma, n, p, s, snr, groups, rho_levels.
 #'
 #' @examples
+#' # Coarse to fine: level 1 = 2 big groups, level 3 = 8 singletons
 #' groups <- list(
-#'   c(1,1,2,2,3,3,4,4),   # level 1: fine   (rho ~ 0.9)
-#'   c(1,1,1,1,2,2,2,2),   # level 2: medium (rho ~ 0.6)
-#'   c(1,1,1,1,1,1,1,1)    # level 3: coarse (rho ~ 0.3)
+#'   c(1,1,1,1,2,2,2,2),   # level 1: coarse (rho ~ 0.2)
+#'   c(1,1,2,2,3,3,4,4),   # level 2: medium (rho ~ 0.6)
+#'   c(1,2,3,4,5,6,7,8)    # level 3: fine   (rho ~ 0.9)
 #' )
 #' dat <- dgp_groups(n = 100, p = 8, groups = groups,
-#'                   rho_levels = c(0.9, 0.6, 0.3), s = 2)
+#'                   rho_levels = c(0.2, 0.6, 0.9), s = 2)
 #' res <- trex_da(dat$X, dat$y,
 #'                groups          = groups,
-#'                rho_grid_labels = c(0.9, 0.6, 0.3))
+#'                rho_grid_labels = c(0.2, 0.6, 0.9))
 dgp_groups <- function(n, p, groups, rho_levels,
                        s              = 5,
                        amplitude      = 3,
@@ -408,36 +418,39 @@ dgp_groups <- function(n, p, groups, rho_levels,
     stop("length(rho_levels) must equal length(groups).")
   if (!all(lengths(groups) == p))
     stop("Each element of groups must be a vector of length p.")
-  if (any(diff(rho_levels) >= 0))
-    stop("rho_levels must be strictly decreasing.")
+  if (any(diff(rho_levels) <= 0))
+    stop("rho_levels must be strictly increasing (coarse to fine).")
   if (any(rho_levels <= 0) || any(rho_levels >= 1))
     stop("All rho_levels must be in (0, 1).")
 
-  rho_ext <- c(rho_levels, 0)   # rho[L+1] = 0
+  # rho_ext[1] = 0 (below coarsest), rho_ext[x+1] = rho_levels[x]
+  # loading at level x = sqrt(rho_levels[x] - rho_levels[x-1])
+  rho_ext <- c(0, rho_levels)
 
   X <- matrix(0, nrow = n, ncol = p)
 
   for (x in seq(1, L)) {
-    loading   <- sqrt(rho_ext[x] - rho_ext[x + 1])
+    loading   <- sqrt(rho_ext[x + 1] - rho_ext[x])   # positive since rho increasing
     group_ids <- unique(groups[[x]])
 
     for (gid in group_ids) {
-      members   <- which(groups[[x]] == gid)
-      f_x_g     <- stats::rnorm(n)          # factor for group gid at level x
+      members      <- which(groups[[x]] == gid)
+      f_x_g        <- stats::rnorm(n)
       X[, members] <- X[, members] + loading * f_x_g
     }
   }
 
-  # Idiosyncratic noise
-  X <- X + sqrt(1 - rho_levels[1]) * matrix(stats::rnorm(n * p), n, p)
+  # Idiosyncratic noise uses finest-level variance: sqrt(1 - rho_levels[L])
+  X <- X + sqrt(1 - rho_levels[L]) * matrix(stats::rnorm(n * p), n, p)
 
-  # Analytic covariance via the multi-level formula
+  # Analytic covariance: Sigma[j,k] = rho_levels[x*]
+  # where x* = max level at which j and k share a group.
+  # Scan from finest (x = L) down to coarsest (x = 1) and break on first match.
   Sigma <- matrix(0, nrow = p, ncol = p)
   for (j in seq(1, p)) {
     for (k in seq(j, p)) {
-      # Find the finest level at which j and k share a group
       shared_level <- 0
-      for (x in seq(1, L)) {
+      for (x in seq(L, 1, by = -1)) {      # fine to coarse: first match = finest
         if (groups[[x]][j] == groups[[x]][k]) {
           shared_level <- x
           break

@@ -220,23 +220,28 @@ ev_bt <- .print_result("Scenario 4 -- BT  [method = trex+DA+BT,  hc_dist = avera
 
 # ── Scenario 5: Prior Groups ──────────────────────────────────────────────────
 #
-# Three-level hierarchy for p = 500 predictors:
+# Three-level hierarchy for p = 500 predictors, ordered coarse to fine
+# (matching the internal rho_grid orientation of BT and NN: x=1 coarsest):
 #
-#   Level 1 (fine):   50 groups of 10   -- rho = 0.80
-#   Level 2 (medium): 10 groups of 50   -- rho = 0.50
-#   Level 3 (coarse):  2 groups of 250  -- rho = 0.20
+#   Level 1 (coarse):  2 groups of 250  -- rho = 0.20
+#   Level 2 (medium): 10 groups of  50  -- rho = 0.50
+#   Level 3 (fine):   50 groups of  10  -- rho = 0.80
 #
 # The group structure is passed directly to both the DGP (dgp_groups) and
 # the selector (trex_da), bypassing all dendrogram computation.
 
-cat("\n[5/5] Generating prior-groups data  (3 levels: 50/10/2 groups) ...\n")
+cat("\n[5/5] Generating prior-groups data  (3 levels: 2/10/50 groups, coarse to fine) ...\n")
 
+# Coarse to fine: groups[[1]] = coarsest (fewest, largest clusters),
+#                 groups[[3]] = finest   (most,   smallest clusters).
+# This matches the internal rho_grid orientation used by BT and NN
+# (x = 1 is coarsest, x = L is finest).
 groups_demo <- list(
-  rep(seq(1,  50), each = 10),   # level 1: 50 groups of 10
-  rep(seq(1,  10), each = 50),   # level 2: 10 groups of 50
-  rep(seq(1,   2), each = 250)   # level 3:  2 groups of 250
+  rep(seq(1,   2), each = 250),  # level 1: coarsest --  2 groups of 250
+  rep(seq(1,  10), each =  50),  # level 2: medium   -- 10 groups of  50
+  rep(seq(1,  50), each =  10)   # level 3: finest   -- 50 groups of  10
 )
-rho_levels_demo <- c(0.80, 0.50, 0.20)
+rho_levels_demo <- c(0.20, 0.50, 0.80)   # increasing: coarse -> fine
 
 dat_grp <- dgp_groups(
   n          = PARAMS$n,

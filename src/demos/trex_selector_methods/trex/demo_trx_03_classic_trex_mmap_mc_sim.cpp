@@ -165,15 +165,15 @@ void demo_TRexSelector_d_mmap_MonteCarlo(std::size_t num_MC, bool high_dim, bool
             double total_fdp = 0.0, total_tpp = 0.0;
             double total_L   = 0.0, total_T   = 0.0;
             const double snr = snr_values[snr_idx];
-            std::cout << "SNR = " << std::fixed << std::setprecision(1) << snr << "\n";
 
             for (std::size_t mc = 0; mc < num_MC; ++mc) {
 
-                std::cout << "  Progress: [" << std::setw(3) << (mc + 1)
+                std::cout << "  SNR " << std::fixed << std::setprecision(2) << snr
+                          << " \u2014 Progress: [" << std::setw(3) << (mc + 1)
                           << "/" << num_MC << "] "
                           << std::fixed << std::setprecision(1)
                           << (100.0 * static_cast<double>(mc + 1) / static_cast<double>(num_MC))
-                          << "%\r";
+                          << "%\r" << std::flush;
 
                 datagen::SyntheticData data(
                     n, p, true_support, true_coefs, snr,
@@ -207,13 +207,13 @@ void demo_TRexSelector_d_mmap_MonteCarlo(std::size_t num_MC, bool high_dim, bool
             avg_L_results_map[solver_name](ei) = total_L   / static_cast<double>(num_MC);
             avg_T_results_map[solver_name](ei) = total_T   / static_cast<double>(num_MC);
 
-            std::cout << std::string(50, ' ') << "\r";
-            std::cout << "  Completed: " << num_MC << " runs\n\n";
+            std::cout << "  SNR " << std::fixed << std::setprecision(2) << snr
+                      << " \u2014 Completed " << num_MC << " runs.      \n";
         }
         std::cout << "\n";
     }
 
-    const std::string stem = "trex_mmap_demo_c_n" + std::to_string(n) +
+    const std::string stem = "d03_trex_mmap_demo_c_n" + std::to_string(n) +
                              "_p" + std::to_string(p) +
                              "_sw" + std::to_string(trex_ctrl.tloop_max_stagnant_steps);
     save_and_print_mc_results(num_MC, stem, snr_values, solver_names,
@@ -304,15 +304,15 @@ void demo_TRexSelector_full_mmap_MonteCarlo(std::size_t num_MC, bool high_dim, b
             double total_fdp = 0.0, total_tpp = 0.0;
             double total_L   = 0.0, total_T   = 0.0;
             const double snr = snr_values[snr_idx];
-            std::cout << "SNR = " << std::fixed << std::setprecision(1) << snr << "\n";
 
             for (std::size_t mc = 0; mc < num_MC; ++mc) {
 
-                std::cout << "  Progress: [" << std::setw(3) << (mc + 1)
+                std::cout << "  SNR " << std::fixed << std::setprecision(2) << snr
+                          << " \u2014 Progress: [" << std::setw(3) << (mc + 1)
                           << "/" << num_MC << "] "
                           << std::fixed << std::setprecision(1)
                           << (100.0 * static_cast<double>(mc + 1) / static_cast<double>(num_MC))
-                          << "%\r";
+                          << "%\r" << std::flush;
 
                 // Guard declared BEFORE data: LIFO destruction order:
                 // (1) data dtor closes mmap handles,
@@ -351,13 +351,13 @@ void demo_TRexSelector_full_mmap_MonteCarlo(std::size_t num_MC, bool high_dim, b
             avg_L_results_map[solver_name](ei) = total_L   / static_cast<double>(num_MC);
             avg_T_results_map[solver_name](ei) = total_T   / static_cast<double>(num_MC);
 
-            std::cout << std::string(50, ' ') << "\r";
-            std::cout << "  Completed: " << num_MC << " runs\n\n";
+            std::cout << "  SNR " << std::fixed << std::setprecision(2) << snr
+                      << " \u2014 Completed " << num_MC << " runs.      \n";
         }
         std::cout << "\n";
     }
 
-    const std::string stem = "trex_mmap_demo_d_n" + std::to_string(n) +
+    const std::string stem = "d03_trex_mmap_demo_d_n" + std::to_string(n) +
                              "_p" + std::to_string(p) +
                              "_sw" + std::to_string(trex_ctrl.tloop_max_stagnant_steps);
     save_and_print_mc_results(num_MC, stem, snr_values, solver_names,
@@ -380,9 +380,9 @@ int main() {
     // ============================================================
     // Demo C: MC — in-memory X + solver serialization + D mmap
     // ============================================================
-    if (false)
+    if (true)
         demo_TRexSelector_d_mmap_MonteCarlo(
-            50,
+            500,
             true,
             false
         );
@@ -390,9 +390,9 @@ int main() {
     // ============================================================
     // Demo D: MC — fully memory-mapped pipeline (X + D + solver serialization)
     // ============================================================
-    if (false)
+    if (true)
         demo_TRexSelector_full_mmap_MonteCarlo(
-            50,
+            500,
             true,
             false
         );
