@@ -45,10 +45,10 @@
 # ==============================================================================
 
 .check_trex_gvs <- function(X, y, tFDR, K, max_num_dummies,
-                              groups, group_labels,
-                              corr_max, hc_method, lambda_2_lars,
-                              parallel_process, parallel_max_cores,
-                              eps) {
+                            groups, group_labels,
+                            corr_max, hc_method, lambda_2_lars,
+                            parallel_process, parallel_max_cores,
+                            eps) {
 
   if (!is.matrix(X))        stop("'X' must be a matrix.")
   if (!is.numeric(X))       stop("'X' only allows numerical values.")
@@ -64,8 +64,8 @@
   if (length(K) != 1 || K < 2 || K %% 1 != 0)
     stop("'K' must be an integer >= 2.")
   if (length(max_num_dummies) != 1 ||
-      max_num_dummies < 1 ||
-      max_num_dummies %% 1 != 0)
+        max_num_dummies < 1 ||
+        max_num_dummies %% 1 != 0)
     stop("'max_num_dummies' must be an integer >= 1.")
 
   p <- ncol(X)
@@ -102,8 +102,8 @@
 
   if (parallel_process) {
     if (length(parallel_max_cores) != 1 ||
-        parallel_max_cores %% 1 != 0 ||
-        parallel_max_cores < 2)
+          parallel_max_cores %% 1 != 0 ||
+          parallel_max_cores < 2)
       stop("'parallel_max_cores' must be an integer >= 2.")
   }
 
@@ -396,17 +396,17 @@
 #'
 #' @return Object of class tlars_cpp.
 .lm_dummy_gvs <- function(X,
-                            y,
-                            model_tlars,
-                            T_stop,
-                            num_dummies,
-                            GVS_type,
-                            type,
-                            gvs_setup,
-                            lambda_2_lars,
-                            early_stop  = TRUE,
-                            intercept   = FALSE,
-                            standardize = TRUE) {
+                          y,
+                          model_tlars,
+                          T_stop,
+                          num_dummies,
+                          GVS_type,
+                          type,
+                          gvs_setup,
+                          lambda_2_lars,
+                          early_stop  = TRUE,
+                          intercept   = FALSE,
+                          standardize = TRUE) {
 
   # ── Cold-start ────────────────────────────────────────────────────────────────
   if (T_stop == 1L || missing(model_tlars) || is.null(model_tlars)) {
@@ -461,24 +461,24 @@
 #'
 #' @return Named list: phi_T_mat, Phi, lars_state_list, dummy_last_betas.
 .random_exp_gvs <- function(X,
-                              y,
-                              K,
-                              T_stop,
-                              num_dummies,
-                              GVS_type,
-                              type,
-                              gvs_setup,
-                              lambda_2_lars,
-                              early_stop         = TRUE,
-                              lars_state_list    = NULL,
-                              verbose            = TRUE,
-                              intercept          = FALSE,
-                              standardize        = TRUE,
-                              dummy_coef         = FALSE,
-                              parallel_process   = FALSE,
-                              parallel_max_cores = 1L,
-                              seed               = NULL,
-                              eps                = .Machine$double.eps) {
+                            y,
+                            K,
+                            T_stop,
+                            num_dummies,
+                            GVS_type,
+                            type,
+                            gvs_setup,
+                            lambda_2_lars,
+                            early_stop         = TRUE,
+                            lars_state_list    = NULL,
+                            verbose            = TRUE,
+                            intercept          = FALSE,
+                            standardize        = TRUE,
+                            dummy_coef         = FALSE,
+                            parallel_process   = FALSE,
+                            parallel_max_cores = 1L,
+                            seed               = NULL,
+                            eps                = .Machine$double.eps) {
 
   p <- ncol(X)
 
@@ -696,8 +696,7 @@ trex_GVS <- function(X,
                      hc_method           = "single",
                      lambda_2_lars       = NULL,
                      parallel_process    = FALSE,
-                     parallel_max_cores  = min(K, max(1L,
-                       parallel::detectCores(logical = FALSE))),
+                     parallel_max_cores  = min(K, max(1L, parallel::detectCores(logical = FALSE))),
                      seed                = NULL,
                      eps                 = .Machine$double.eps,
                      verbose             = TRUE) {
@@ -706,14 +705,14 @@ trex_GVS <- function(X,
   GVS_type <- match.arg(GVS_type, c("IEN", "EN"))
   type     <- match.arg(type,     c("lar", "lasso"))
   hc_method <- match.arg(hc_method,
-                          c("single", "complete", "average", "mcquitty"))
+                         c("single", "complete", "average", "mcquitty"))
 
 
   # ── Input validation ─────────────────────────────────────────────────────────
   .check_trex_gvs(X, y, tFDR, K, max_num_dummies,
-                   groups, group_labels,
-                   corr_max, hc_method, lambda_2_lars,
-                   parallel_process, parallel_max_cores, eps)
+                  groups, group_labels,
+                  corr_max, hc_method, lambda_2_lars,
+                  parallel_process, parallel_max_cores, eps)
 
   # Silently clamp parallel_max_cores to physical limit
   if (parallel_process) {
@@ -725,7 +724,8 @@ trex_GVS <- function(X,
   }
 
   # ── Dimensions and preprocessing ─────────────────────────────────────────────
-  n <- nrow(X); p <- ncol(X)
+  n <- nrow(X)
+  p <- ncol(X)
   if (p > 1e4) warning("Feature space > 10,000 variables. RAM issues may occur.")
 
   X <- scale(X)
@@ -737,8 +737,8 @@ trex_GVS <- function(X,
   # ── lambda_2: computed ONCE ───────────────────────────────────────────────────
   if (is.null(lambda_2_lars))
     lambda_2_lars <- .compute_lambda2(X, y,
-                                       intercept   = FALSE,
-                                       standardize = TRUE)
+                                      intercept   = FALSE,
+                                      standardize = TRUE)
 
   # ── Voting grid ───────────────────────────────────────────────────────────────
   V         <- seq(0.5, 1 - eps, by = 1 / K)

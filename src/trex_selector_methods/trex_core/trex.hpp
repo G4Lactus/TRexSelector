@@ -13,6 +13,7 @@
 
 // std includes
 #include <cstddef>
+#include <functional>
 #include <limits>
 #include <string>
 #include <vector>
@@ -319,24 +320,34 @@ public:
 
     /** @brief Result from variable selection. */
     struct SelectionResult {
+
         /** @brief Binary support vector (0/1, length p). */
         Eigen::VectorXi selected_var;
+
         /** @brief Voting threshold applied to Phi to obtain the selection. */
         double v_thresh;
+
         /** @brief Selection frequency matrix (T_stop × v_len). */
         Eigen::MatrixXd R_mat;
+
         /** @brief Calibrated stopping time T_stop. */
         std::size_t T_stop;
+
         /** @brief Total number of dummy variables used. */
         std::size_t num_dummies;
+
         /** @brief Dummy multiplier L determined by the L-loop. */
         std::size_t dummy_factor_L;
+
         /** @brief Estimated FDP matrix (T_stop × v_len). */
         Eigen::MatrixXd FDP_hat_mat;
+
         /** @brief Relative occurrence matrix Phi_T (T_stop × p). */
         Eigen::MatrixXd Phi_mat;
+
         /** @brief Adjusted relative occurrences Phi' (p × 1). */
         Eigen::VectorXd Phi_prime;
+
         /** @brief Voting grid V = [0.5, 0.5+1/K, ..., 1-eps]. */
         Eigen::VectorXd voting_grid;
 
@@ -388,7 +399,8 @@ public:
     /**
      * @brief Run T-Rex selection algorithm.
      *
-     * @return SelectionResult containing selected variables and diagnostics.
+     * @return SelectionResult containing selected variables and
+     *         diagnostics.
      */
     virtual SelectionResult select();
 
@@ -529,6 +541,102 @@ protected:
 
 
     // ============================================================
+    // Per-Iteration Step + Accumulator Hooks (overridable)
+    // ============================================================
+
+    /**
+     * @brief Bundle of per-step outputs shared by the L-loop and T-loop drivers.
+     *
+     * @details
+     *  Subclasses (e.g. dependency-aware variants) override `evaluateStep` to
+     *  inject extra processing — typically a deflation step — between the
+     *  experiment runner and the FDP computation.
+     *  They populate `FDP_hat` with the canonical 1D channel that the base
+     *  drivers rely on for the L-loop reference-point guard, the T-loop
+     *  edge guard, and stagnation tracking. Side data (e.g. per-rho 2D matrices)
+     *  is stashed in subclass-private member state.
+     */
+    struct StepView {
+        /** @brief Raw experiment-runner output (Phi, phi_T_mat, etc.). */
+        er::ExperimentResults exp_results;
+
+        /** @brief Canonical FDP estimates for the voting grid (length v_len). */
+        Eigen::VectorXd FDP_hat;
+
+        /** @brief Canonical Phi vector (length p). For DA-BT variants this is
+         *  the deflated Phi at the calibration rho-level. */
+        Eigen::VectorXd Phi;
+
+        /** @brief Canonical Phi_prime vector (length p). */
+        Eigen::VectorXd Phi_prime;
+    };
+
+    /**
+     * @brief Run one experiment step and produce the canonical FDP/Phi view.
+     *
+     * @details
+     *  Default base implementation: runs the experiment runner, computes
+     *  `Phi_prime = computePhiPrime(...)` and `FDP_hat = computeFDPHat(...)`.
+     *  Subclasses may override to insert a deflation step.
+     *
+     *  Subclasses MUST populate `view.FDP_hat`, `view.Phi`, and
+     *  `view.Phi_prime` with vectors that the L-loop reference-point guard,
+     *  the T-loop edge guard, and the base accumulator append logic can use.
+     *
+     * @param num_dummies        Number of dummies for this step.
+     * @param T_stop             Stopping time for this step.
+     * @param use_warm_start     Pass-through to the experiment runner.
+     * @param strategy           Experiment strategy.
+     * @param seed_factor        Seed factor for the runner config.
+     * @param existing_on_disk   `existing_cols_on_disk` for HCONCAT memmap.
+     * @return Populated StepView.
+     */
+    virtual StepView evaluateStep(
+        std::size_t num_dummies,
+        std::size_t T_stop,
+        bool use_warm_start,
+        er::ExperimentStrategy strategy,
+        std::size_t seed_factor,
+        std::size_t existing_on_disk);
+
+    /**
+     * @brief Initialise T-loop accumulators with the given capacity.
+     *
+     * @details
+     *  Default base: zero-initialises `Phi_mat_` (capacity x p) and
+     *  `FDP_hat_mat_` (capacity x v_len). Subclasses may extend to allocate
+     *  their own per-rho accumulators.
+     */
+    virtual void initTAccumulators(std::size_t capacity, std::size_t v_len);
+
+    /**
+     * @brief Grow T-loop accumulators to a larger capacity (capacity-doubling).
+     *
+     * @details
+     *  Default base: `conservativeResize` on `Phi_mat_` / `FDP_hat_mat_` and
+     *  zero the newly added bottom rows.
+     */
+    virtual void growTAccumulators(std::size_t old_capacity,
+                                   std::size_t new_capacity);
+
+    /**
+     * @brief Append the current step's row at the given index.
+     *
+     * @details
+     *  Default base: writes `view.Phi` and `view.FDP_hat` into row `row_idx`
+     *  of `Phi_mat_` and `FDP_hat_mat_`.
+     */
+    virtual void appendTRow(Eigen::Index row_idx, const StepView& view);
+
+    /**
+     * @brief Trim T-loop accumulators to the actually populated rows.
+     *
+     * @details Default base: `conservativeResize` to `n_rows` rows.
+     */
+    virtual void trimTAccumulators(Eigen::Index n_rows);
+
+
+    // ============================================================
     // L-Loop Calibration Strategies
     // ============================================================
 
@@ -539,6 +647,63 @@ protected:
      * @param exp_results Current experiment results (updated in-place).
      */
     void runLLoop(Eigen::VectorXd& FDP_hat, er::ExperimentResults& exp_results);
+
+    /**
+     * @brief Per-iteration policy context for the unified L-loop driver.
+     *
+     * Bundles the strategy enum, a flag telling the driver whether to forward
+     * the current `dummy_multiplier_LL_` as `seed_factor` (vs. fixed 0), and
+     * the strategy-specific dummy-generation callable.
+     */
+    struct LLoopPolicyContext {
+        /** Experiment strategy to forward to ExperimentRunnerConfig. */
+        er::ExperimentStrategy strategy;
+        /** If true, pass `dummy_multiplier_LL_` as `seed_factor`; else 0. */
+        bool seed_factor_uses_LL;
+        /**
+         * @brief Strategy-specific per-iteration dummy work.
+         * @param LL Current value of `dummy_multiplier_LL_` (1-based).
+         * @param num_dummies `LL * p_` for this iteration.
+         * @param existing_on_disk_out Output: columns already on memmap disk
+         *        (used by HCONCAT for the runner config); set to 0 if N/A.
+         *
+         * Contract: the callable must perform any required calls on
+         * `dummy_gen_` (e.g. `generateAndStore`, `expandStored`,
+         * `storeBaseDummies`) and invoke `warm_start_mgr_.invalidate()`
+         * whenever it mutates dummy data that previously cached solvers
+         * depend on.
+         */
+        std::function<void(std::size_t LL,
+                           std::size_t num_dummies,
+                           std::size_t& existing_on_disk_out)> policy;
+    };
+
+    /**
+     * @brief Unified L-loop calibration driver shared by the four looping
+     *        strategies (STANDARD, HCONCAT, PERMUTATION, DIRECT).
+     *
+     * Implements the common while-loop skeleton:
+     *   - guard `dummy_multiplier_LL_ <= max_dummy_multiplier &&
+     *           (FDP_hat empty || FDP_hat(opt_point_) > tFDR_)`,
+     *   - compute `num_dummies_ = dummy_multiplier_LL_ * p_`,
+     *   - delegate strategy-specific dummy work to `ctx.policy`,
+     *   - build runner config + run experiments,
+     *   - update `Phi_prime` and `FDP_hat` via `computePhiPrime` /
+     *     `computeFDPHat`,
+     *   - increment `dummy_multiplier_LL_`.
+     *
+     * @note SKIPL is intentionally NOT routed through this driver: it has no
+     *       loop, performs a single shot with `num_dummies_ =
+     *       max_dummy_multiplier * p_`, and never increments
+     *       `dummy_multiplier_LL_`.
+     *
+     * @param ctx Strategy policy context.
+     * @param FDP_hat Current FDP estimates (updated in-place).
+     * @param exp_results Current experiment results (updated in-place).
+     */
+    void runLLoopCalibration(const LLoopPolicyContext& ctx,
+                             Eigen::VectorXd& FDP_hat,
+                             er::ExperimentResults& exp_results);
 
     /**
      * @brief Run L-loop calibration using the SKIPL strategy.

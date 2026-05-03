@@ -8,7 +8,8 @@
 #   y = X * beta + sigma_eps * epsilon,   epsilon ~ N(0, I_n)
 #
 # where X in R^{n x p} has a block-group covariance structure that the GVS
-# selector is designed to exploit.  DGPs differ in:
+# selector is designed to exploit.
+# DGPs differ in:
 #   - the within-group correlation structure of X,
 #   - the between-group correlation (null case vs. stress test),
 #   - the distribution of group sizes, and

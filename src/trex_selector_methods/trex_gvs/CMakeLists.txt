@@ -10,7 +10,7 @@
 # 1. Append Source Files (.cpp - private)
 # ==================================================================================
 target_sources(trex_selector_methods PRIVATE
-#    ${CMAKE_CURRENT_LIST_DIR}/trex_gvs.cpp
+    ${CMAKE_CURRENT_LIST_DIR}/trex_gvs.cpp
 )
 # ==================================================================================
 
@@ -22,6 +22,6 @@ target_sources(trex_selector_methods PUBLIC
     FILE_SET HEADERS
     BASE_DIRS ${CMAKE_SOURCE_DIR}/src
     FILES
-#        ${CMAKE_CURRENT_LIST_DIR}/trex_gvs.hpp
+        ${CMAKE_CURRENT_LIST_DIR}/trex_gvs.hpp
 )
 # ==================================================================================

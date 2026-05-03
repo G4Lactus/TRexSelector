@@ -353,7 +353,11 @@ Eigen::VectorXd TRexSelector::computeFDPHat(
         const double sum_deflated =
             selected_mask.select(one_minus_phi_prime.array(), 0.0).sum();
 
-        fdp_hat(i) = std::min(1.0, sum_deflated / static_cast<double>(num_sel_var));
+        fdp_hat(i) = std::max(
+            0.0,
+            std::min(1.0, sum_deflated / static_cast<double>(num_sel_var))
+        );
+
     }
 
     return fdp_hat;
@@ -407,7 +411,7 @@ Eigen::VectorXd TRexSelector::computePhiPrime(
         }
     }
 
-    return phi_T_mat_mod * phi_scale;
+    return (phi_T_mat_mod * phi_scale).cwiseMax(0.0).cwiseMin(1.0);
 }
 
 
@@ -504,6 +508,65 @@ TRexSelector::SelectionResult TRexSelector::selectedVariables(
 
 
 // ===================================================================================
+// Per-Iteration Step + Accumulator Hooks (overridable)
+// ===================================================================================
+
+TRexSelector::StepView TRexSelector::evaluateStep(
+    std::size_t num_dummies,
+    std::size_t T_stop,
+    bool use_warm_start,
+    er::ExperimentStrategy strategy,
+    std::size_t seed_factor,
+    std::size_t existing_on_disk)
+{
+    auto cfg = buildRunnerConfig(
+        num_dummies, T_stop, use_warm_start, strategy,
+        seed_factor, existing_on_disk);
+
+    StepView view;
+    view.exp_results = experiment_runner_->run(cfg);
+    view.Phi         = view.exp_results.Phi;
+    view.Phi_prime   = computePhiPrime(view.exp_results.phi_T_mat,
+                                       view.exp_results.Phi,
+                                       num_dummies);
+    view.FDP_hat     = computeFDPHat(voting_grid_, view.Phi, view.Phi_prime);
+    return view;
+}
+
+
+void TRexSelector::initTAccumulators(std::size_t capacity, std::size_t v_len) {
+    Phi_mat_     = Eigen::MatrixXd::Zero(static_cast<Eigen::Index>(capacity),
+                                         static_cast<Eigen::Index>(p_));
+    FDP_hat_mat_ = Eigen::MatrixXd::Zero(static_cast<Eigen::Index>(capacity),
+                                         static_cast<Eigen::Index>(v_len));
+}
+
+
+void TRexSelector::growTAccumulators(std::size_t old_capacity,
+                                     std::size_t new_capacity)
+{
+    const auto old_cap = static_cast<Eigen::Index>(old_capacity);
+    const auto new_cap = static_cast<Eigen::Index>(new_capacity);
+    Phi_mat_.conservativeResize(new_cap, Eigen::NoChange);
+    FDP_hat_mat_.conservativeResize(new_cap, Eigen::NoChange);
+    Phi_mat_.bottomRows(new_cap - old_cap).setZero();
+    FDP_hat_mat_.bottomRows(new_cap - old_cap).setZero();
+}
+
+
+void TRexSelector::appendTRow(Eigen::Index row_idx, const StepView& view) {
+    Phi_mat_.row(row_idx)     = view.Phi;
+    FDP_hat_mat_.row(row_idx) = view.FDP_hat;
+}
+
+
+void TRexSelector::trimTAccumulators(Eigen::Index n_rows) {
+    Phi_mat_.conservativeResize(n_rows, Eigen::NoChange);
+    FDP_hat_mat_.conservativeResize(n_rows, Eigen::NoChange);
+}
+
+
+// ===================================================================================
 // L-Loop Strategy Dispatcher
 // ===================================================================================
 
@@ -559,16 +622,52 @@ void TRexSelector::runLLoopCalibration_SKIPL(
     // Generate K dummy matrices
     dummy_gen_.generateAndStore(trex_ctrl_.K, num_dummies_, /*seed_factor=*/0);
 
-    // Run experiments
-    auto cfg = buildRunnerConfig(num_dummies_,
-        T_stop_, false, er::ExperimentStrategy::Standard,
-        /*seed_factor=*/0, /*existing_cols_on_disk=*/0);
-    exp_results = experiment_runner_->run(cfg);
+    // Per-step body via virtual hook (subclasses may inject deflation).
+    StepView view = evaluateStep(num_dummies_, T_stop_, /*use_warm_start=*/false,
+                                 er::ExperimentStrategy::Standard,
+                                 /*seed_factor=*/0,
+                                 /*existing_on_disk=*/0);
+    exp_results = std::move(view.exp_results);
+    FDP_hat     = std::move(view.FDP_hat);
+}
 
-    // FDP
-    Eigen::VectorXd Phi_prime = computePhiPrime(
-        exp_results.phi_T_mat, exp_results.Phi, num_dummies_);
-    FDP_hat = computeFDPHat(voting_grid_, exp_results.Phi, Phi_prime);
+
+// ===================================================================================
+// L-Loop: Unified driver
+// ===================================================================================
+
+void TRexSelector::runLLoopCalibration(
+    const LLoopPolicyContext& ctx,
+    Eigen::VectorXd& FDP_hat,
+    er::ExperimentResults& exp_results)
+{
+    while (dummy_multiplier_LL_ <= trex_ctrl_.max_dummy_multiplier &&
+          (FDP_hat.size() == 0 ||
+           FDP_hat(static_cast<Eigen::Index>(opt_point_)) > tFDR_)) {
+
+        num_dummies_ = dummy_multiplier_LL_ * p_;
+
+        std::size_t existing_on_disk = 0;
+        ctx.policy(dummy_multiplier_LL_, num_dummies_, existing_on_disk);
+
+        const std::size_t seed_factor =
+            ctx.seed_factor_uses_LL ? dummy_multiplier_LL_ : 0;
+
+        // Per-step body via virtual hook (subclasses may inject deflation).
+        StepView view = evaluateStep(num_dummies_, T_stop_, /*use_warm_start=*/false,
+                                     ctx.strategy, seed_factor, existing_on_disk);
+        exp_results = std::move(view.exp_results);
+        FDP_hat     = std::move(view.FDP_hat);
+
+        if (verbose_) {
+            printProgress("Appended dummies: " + std::to_string(num_dummies_));
+        }
+
+        ++dummy_multiplier_LL_;
+    }
+
+    dummy_multiplier_LL_ =
+        (dummy_multiplier_LL_ > 1) ? (dummy_multiplier_LL_ - 1) : 1;
 }
 
 
@@ -585,44 +684,19 @@ void TRexSelector::runLLoopCalibration_Standard(
     dummy_multiplier_LL_ = 1;
     FDP_hat.resize(0);
 
-    while (dummy_multiplier_LL_ <= trex_ctrl_.max_dummy_multiplier &&
-          (FDP_hat.size() == 0 || FDP_hat(static_cast<Eigen::Index>(opt_point_)) > tFDR_)) {
-
-        num_dummies_ = dummy_multiplier_LL_ * p_;
-
+    LLoopPolicyContext ctx;
+    ctx.strategy            = er::ExperimentStrategy::Standard;
+    ctx.seed_factor_uses_LL = true;
+    ctx.policy = [this](std::size_t LL,
+                        std::size_t num_dummies,
+                        std::size_t& existing_on_disk_out) {
         // Fresh dummies each iteration → invalidate warm-start
-        dummy_gen_.generateAndStore(
-            trex_ctrl_.K,
-            num_dummies_,
-            dummy_multiplier_LL_
-        );
+        dummy_gen_.generateAndStore(trex_ctrl_.K, num_dummies, LL);
         warm_start_mgr_.invalidate();
+        existing_on_disk_out = 0;
+    };
 
-        auto cfg = buildRunnerConfig(
-            num_dummies_,
-            T_stop_,
-            false,
-            er::ExperimentStrategy::Standard,
-            /*seed_factor=*/dummy_multiplier_LL_,
-            /*existing_cols_on_disk=*/0
-        );
-        exp_results = experiment_runner_->run(cfg);
-
-        Eigen::VectorXd Phi_prime = computePhiPrime(
-            exp_results.phi_T_mat,
-            exp_results.Phi,
-            num_dummies_
-        );
-        FDP_hat = computeFDPHat(voting_grid_, exp_results.Phi, Phi_prime);
-
-        if (verbose_) printProgress("Appended dummies: " +
-            std::to_string(num_dummies_));
-
-        ++dummy_multiplier_LL_;
-    }
-
-
-    dummy_multiplier_LL_ = (dummy_multiplier_LL_ > 1) ? (dummy_multiplier_LL_ - 1) : 1;
+    runLLoopCalibration(ctx, FDP_hat, exp_results);
 }
 
 
@@ -642,44 +716,28 @@ void TRexSelector::runLLoopCalibration_HCONCAT(
     // L=1: Generate initial K dummy matrices, each n x p
     dummy_gen_.generateAndStore(trex_ctrl_.K, p_, /*seed_factor=*/0);
 
-    while (dummy_multiplier_LL_ <= trex_ctrl_.max_dummy_multiplier &&
-          (FDP_hat.size() == 0 || FDP_hat(static_cast<Eigen::Index>(opt_point_)) > tFDR_)) {
-
-        const std::size_t prev_dummies = num_dummies_;  // columns from prior L
-        num_dummies_ = dummy_multiplier_LL_ * p_;
-
+    LLoopPolicyContext ctx;
+    ctx.strategy            = er::ExperimentStrategy::Standard;
+    ctx.seed_factor_uses_LL = true;
+    // Tracks num_dummies_ from the previous iteration so HCONCAT can report
+    // how many columns are already persisted on disk (for memmap path).
+    ctx.policy = [this, prev_dummies = std::size_t{0}](
+                     std::size_t LL,
+                     std::size_t num_dummies,
+                     std::size_t& existing_on_disk_out) mutable {
         // L > 1: Horizontally expand each D_k by p new columns
         // [D_k_old | D_k_new] — preserves previously generated columns
-        if (dummy_multiplier_LL_ > 1) {
-            dummy_gen_.expandStored(p_, dummy_multiplier_LL_);
+        if (LL > 1) {
+            dummy_gen_.expandStored(p_, LL);
             warm_start_mgr_.invalidate();
+            existing_on_disk_out = prev_dummies;
+        } else {
+            existing_on_disk_out = 0;
         }
+        prev_dummies = num_dummies;
+    };
 
-        // For memory-mapped HCONCAT: prev_dummies columns already on disk
-        const std::size_t existing_on_disk =
-            (dummy_multiplier_LL_ > 1) ? prev_dummies : 0;
-
-        auto cfg = buildRunnerConfig(
-            num_dummies_,
-            T_stop_,
-            false,
-            er::ExperimentStrategy::Standard,
-            dummy_multiplier_LL_,
-            existing_on_disk);
-        exp_results = experiment_runner_->run(cfg);
-
-        Eigen::VectorXd Phi_prime = computePhiPrime(
-            exp_results.phi_T_mat, exp_results.Phi, num_dummies_);
-        FDP_hat = computeFDPHat(voting_grid_, exp_results.Phi, Phi_prime);
-
-        if (verbose_) {
-            printProgress("Appended dummies: " + std::to_string(num_dummies_));
-        }
-
-        ++dummy_multiplier_LL_;
-    }
-
-    dummy_multiplier_LL_ = (dummy_multiplier_LL_ > 1) ? (dummy_multiplier_LL_ - 1) : 1;
+    runLLoopCalibration(ctx, FDP_hat, exp_results);
 }
 
 
@@ -700,56 +758,37 @@ void TRexSelector::runLLoopCalibration_Permutation(
     unsigned int base_seed = (seed_ >= 0) ? static_cast<unsigned int>(seed_)
                                           : std::random_device{}();
 
-    while (dummy_multiplier_LL_ <= trex_ctrl_.max_dummy_multiplier &&
-          (FDP_hat.size() == 0 || FDP_hat(static_cast<Eigen::Index>(opt_point_)) > tFDR_)) {
-
-        num_dummies_ = dummy_multiplier_LL_ * p_;
-
+    LLoopPolicyContext ctx;
+    ctx.strategy            = er::ExperimentStrategy::Permutation;
+    ctx.seed_factor_uses_LL = false;
+    ctx.policy = [this, base_seed](std::size_t LL,
+                                   std::size_t num_dummies,
+                                   std::size_t& existing_on_disk_out) {
         // Generate or expand base dummy matrix
-        if (dummy_multiplier_LL_ == 1) {
+        if (LL == 1) {
             Eigen::MatrixXd base = dummy_gen_.generate(p_, base_seed);
             dummy_gen_.storeBaseDummies(std::move(base), base_seed);
-
         } else {
             // Expand: generate p new columns, append to existing base
-            unsigned int expansion_seed = dummygen::mix_seed(
-                base_seed, dummy_multiplier_LL_);
+            unsigned int expansion_seed = dummygen::mix_seed(base_seed, LL);
             Eigen::MatrixXd new_cols = dummy_gen_.generate(
                 p_, expansion_seed);
 
             // Retrieve current base, expand, re-store
             // Note: getPermuted(0, ...) returns the base as-is
-            Eigen::MatrixXd expanded = dummy_gen_.getPermuted(0, num_dummies_ - p_);
+            Eigen::MatrixXd expanded =
+                dummy_gen_.getPermuted(0, num_dummies - p_);
             expanded.conservativeResize(
-                Eigen::NoChange, static_cast<Eigen::Index>(num_dummies_));
+                Eigen::NoChange, static_cast<Eigen::Index>(num_dummies));
             expanded.rightCols(p_) = new_cols;
             dummy_gen_.storeBaseDummies(std::move(expanded), base_seed);
         }
 
         warm_start_mgr_.invalidate();
+        existing_on_disk_out = 0;
+    };
 
-        auto cfg = buildRunnerConfig(
-            num_dummies_,
-            T_stop_,
-            false,
-            er::ExperimentStrategy::Permutation,
-            /*seed_factor=*/0,
-            /*existing_cols_on_disk=*/0
-        );
-        exp_results = experiment_runner_->run(cfg);
-
-        Eigen::VectorXd Phi_prime = computePhiPrime(
-            exp_results.phi_T_mat, exp_results.Phi, num_dummies_);
-        FDP_hat = computeFDPHat(voting_grid_, exp_results.Phi, Phi_prime);
-
-        if (verbose_) {
-            printProgress("Appended dummies: " + std::to_string(num_dummies_));
-        }
-
-        ++dummy_multiplier_LL_;
-    }
-
-    dummy_multiplier_LL_ = (dummy_multiplier_LL_ > 1) ? (dummy_multiplier_LL_ - 1) : 1;
+    runLLoopCalibration(ctx, FDP_hat, exp_results);
 
     if (verbose_) {
         printProgress("L-loop converged: " + std::to_string(num_dummies_)
@@ -770,35 +809,17 @@ void TRexSelector::runLLoopCalibration_Direct(
     dummy_multiplier_LL_ = 1;
     FDP_hat.resize(0);
 
-    while (dummy_multiplier_LL_ <= trex_ctrl_.max_dummy_multiplier &&
-          (FDP_hat.size() == 0 || FDP_hat(static_cast<Eigen::Index>(opt_point_)) > tFDR_)) {
-
-        num_dummies_ = dummy_multiplier_LL_ * p_;
-
+    LLoopPolicyContext ctx;
+    ctx.strategy            = er::ExperimentStrategy::Direct;
+    ctx.seed_factor_uses_LL = false;
+    ctx.policy = [this](std::size_t /*LL*/,
+                        std::size_t /*num_dummies*/,
+                        std::size_t& existing_on_disk_out) {
         warm_start_mgr_.invalidate();
+        existing_on_disk_out = 0;
+    };
 
-        auto cfg = buildRunnerConfig(
-            num_dummies_,
-            T_stop_,
-            false,
-            er::ExperimentStrategy::Direct,
-            /*seed_factor=*/0,
-            /*existing_cols_on_disk=*/0
-        );
-        exp_results = experiment_runner_->run(cfg);
-
-        Eigen::VectorXd Phi_prime = computePhiPrime(
-            exp_results.phi_T_mat, exp_results.Phi, num_dummies_);
-        FDP_hat = computeFDPHat(voting_grid_, exp_results.Phi, Phi_prime);
-
-        if (verbose_) printProgress(
-            "Appended dummies: " + std::to_string(num_dummies_)
-        );
-
-        ++dummy_multiplier_LL_;
-    }
-
-    dummy_multiplier_LL_ = (dummy_multiplier_LL_ > 1) ? (dummy_multiplier_LL_ - 1) : 1;
+    runLLoopCalibration(ctx, FDP_hat, exp_results);
 
     if (verbose_) {
         printProgress("L-loop converged: " + std::to_string(num_dummies_)
@@ -829,11 +850,10 @@ void TRexSelector::runTLoop(
           )
         : num_dummies_;
 
-    // Capacity-doubling accumulators
-    const std::size_t initial_capacity = std::min<std::size_t>(20, max_T);
-    Eigen::Index capacity = static_cast<Eigen::Index>(initial_capacity);
-    Phi_mat_ = Eigen::MatrixXd::Zero(capacity, static_cast<Eigen::Index>(p_));
-    FDP_hat_mat_ = Eigen::MatrixXd::Zero(capacity, v_len);
+    // Capacity-doubling accumulators (delegated to virtual hooks so subclasses
+    // can grow side accumulators in lock-step).
+    std::size_t capacity = std::min<std::size_t>(20, max_T);
+    initTAccumulators(capacity, static_cast<std::size_t>(v_len));
 
     std::size_t prev_num_selected = 0;
     std::size_t stagnant_iterations = 0;
@@ -853,26 +873,43 @@ void TRexSelector::runTLoop(
             break;
     }
 
-    Eigen::Index row_idx = 0;
+    // Seed row 0 with the L-loop result (T = 1) to mirror R's
+    // `acc <- list(FDP = matrix(FDP_hat, nrow=1), Phi = matrix(step$Phi, nrow=1))`
+    // before the T-loop. This avoids re-running the (expensive) T = 1
+    // experiment as the first T-loop iteration and guarantees a valid row
+    // exists even when the while-guard rejects the first check.
+    StepView seed;
+    seed.exp_results = exp_results;
+    seed.Phi         = exp_results.Phi;
+    seed.FDP_hat     = FDP_hat;
+    appendTRow(0, seed);
+    Eigen::Index row_idx = 1;
+
+    // Initialise stagnation baseline from the seed row so the first body
+    // iteration's comparison matches the pre-refactor behaviour.
+    {
+        Eigen::Index v_star_idx = 0;
+        for (Eigen::Index i = 0; i < v_len; ++i) {
+            if (FDP_hat(i) <= tFDR_) v_star_idx = i;
+        }
+        const double v_star = (v_star_idx < v_len) ? voting_grid_(v_star_idx) : 0.0;
+        if (v_star > eps_) {
+            prev_num_selected =
+                static_cast<std::size_t>((exp_results.Phi.array() > v_star).count());
+        }
+    }
+
     while (FDP_hat(v_len - 1) <= tFDR_ && T_stop_ < max_T) {
 
-        // Run with warm start
-        auto cfg = buildRunnerConfig(
-            num_dummies_,
-            T_stop_,
-            true,
-            exp_strategy,
-            /*seed_factor=*/dummy_multiplier_LL_,
-            /*existing_cols_on_disk=*/0
-        );
-        exp_results = experiment_runner_->run(cfg);
+        ++T_stop_;
 
-        Eigen::VectorXd Phi_prime = computePhiPrime(
-            exp_results.phi_T_mat,
-            exp_results.Phi,
-            num_dummies_
-        );
-        FDP_hat = computeFDPHat(voting_grid_, exp_results.Phi, Phi_prime);
+        // Per-step body via virtual hook (subclasses may inject deflation).
+        StepView view = evaluateStep(num_dummies_, T_stop_, /*use_warm_start=*/true,
+                                     exp_strategy,
+                                     /*seed_factor=*/dummy_multiplier_LL_,
+                                     /*existing_on_disk=*/0);
+        exp_results = view.exp_results;
+        FDP_hat     = view.FDP_hat;
 
         // Find optimal v* at current T
         Eigen::Index v_star_idx = 0;
@@ -883,7 +920,7 @@ void TRexSelector::runTLoop(
 
         std::size_t num_selected = 0;
         if (v_star > eps_) {
-            num_selected = (exp_results.Phi.array() > v_star).count();
+            num_selected = (view.Phi.array() > v_star).count();
         }
 
         // Stagnation check
@@ -916,35 +953,19 @@ void TRexSelector::runTLoop(
         }
 
         // Dynamic capacity growth
-        if (row_idx >= capacity) {
-            std::size_t new_capacity = std::min(
-                static_cast<std::size_t>(capacity * 2),
-                max_T
-            );
-            Phi_mat_.conservativeResize(
-                static_cast<Eigen::Index>(new_capacity),
-                Eigen::NoChange
-            );
-            FDP_hat_mat_.conservativeResize(
-                static_cast<Eigen::Index>(new_capacity),
-                Eigen::NoChange
-            );
-            Phi_mat_.bottomRows(
-                static_cast<Eigen::Index>(new_capacity - capacity)).setZero();
-            FDP_hat_mat_.bottomRows(
-                static_cast<Eigen::Index>(new_capacity - capacity)).setZero();
-            capacity = static_cast<Eigen::Index>(new_capacity);
+        if (static_cast<std::size_t>(row_idx) >= capacity) {
+            const std::size_t new_capacity =
+                std::min(capacity * 2, max_T);
+            growTAccumulators(capacity, new_capacity);
+            capacity = new_capacity;
         }
 
-        Phi_mat_.row(static_cast<Eigen::Index>(row_idx)) = exp_results.Phi;
-        FDP_hat_mat_.row(static_cast<Eigen::Index>(row_idx)) = FDP_hat;
+        appendTRow(row_idx, view);
         ++row_idx;
-        ++T_stop_;
     }
 
     // Trim
-    Phi_mat_.conservativeResize(static_cast<Eigen::Index>(row_idx), Eigen::NoChange);
-    FDP_hat_mat_.conservativeResize(static_cast<Eigen::Index>(row_idx), Eigen::NoChange);
+    trimTAccumulators(row_idx);
 
     if (verbose_) {
         std::string reason;

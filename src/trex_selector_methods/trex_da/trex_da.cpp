@@ -13,9 +13,6 @@
 #include <cassert>
 #include <cmath>
 #include <cstddef>
-#include <iomanip>
-#include <iostream>
-#include <sstream>
 #include <stdexcept>
 #include <string>
 #include <utility>
@@ -71,11 +68,21 @@ TRexDASelector::TRexDASelector(
 
 void TRexDASelector::validateDAParameters() const {
 
+    // SKIPL has unverified semantics under DA deflation. Block until a
+    // concrete use case appears.
+    if (trex_ctrl_.lloop_strategy == tc::LLoopStrategy::SKIPL) {
+        throw std::invalid_argument(
+            "DA-TRex does not currently support LLoopStrategy::SKIPL. "
+            "Use STANDARD, HCONCAT, PERMUTATION, DIRECT, or "
+            "PERMUTATION_DIRECT.");
+    }
+
     if (!da_ctrl_.prior_groups.empty()) {
         for (const auto& level : da_ctrl_.prior_groups) {
             if (level.size() != p_) {
                 throw std::invalid_argument(
-                    "Each prior_groups level must have length p = " + std::to_string(p_) +
+                    "Each prior_groups level must have length p = " +
+                    std::to_string(p_) +
                     ". Got: " + std::to_string(level.size()));
             }
         }
@@ -88,7 +95,8 @@ void TRexDASelector::validateDAParameters() const {
 
     if (da_ctrl_.rho_thr_DA < 0.0 || da_ctrl_.rho_thr_DA > 1.0) {
         throw std::invalid_argument(
-            "rho_thr_DA must be in [0, 1]. Got: " + std::to_string(da_ctrl_.rho_thr_DA));
+            "rho_thr_DA must be in [0, 1]. Got: " +
+            std::to_string(da_ctrl_.rho_thr_DA));
     }
 
     // Check linkage method is one of the supported ones
@@ -113,323 +121,221 @@ void TRexDASelector::validateDAParameters() const {
 TRexDASelector::SelectionResult TRexDASelector::select() {
 
     // 1. Voting grid and optimization point
-    // -----------------------------------------------------------------
     voting_grid_ = createVotingGrid();
     const std::size_t v_len = voting_grid_.size();
     setPercentOptPoint(v_len, trex_ctrl_.opt_threshold);
 
     // 2. Build neighbourhood / correlation structure
-    // -----------------------------------------------------------------
     if (verbose_) { printProgress("DA: Building dependency structure..."); }
     setupDA();
-
-    const bool use_BT = da_setup_.use_BT_style;
-    const std::size_t rho_grid_len = da_setup_.rho_grid_len;
 
     if (verbose_) {
         std::string method_str;
         switch (da_ctrl_.method) {
-            case DAMethod::AR1:          method_str = "AR1";            break;
-            case DAMethod::EQUI:         method_str = "EQUI";           break;
-            case DAMethod::BT:           method_str = "BT";             break;
-            case DAMethod::NN:           method_str = "NN";             break;
-            case DAMethod::PRIOR_GROUPS: method_str = "PRIOR_GROUPS";   break;
+            case DAMethod::AR1:          method_str = "AR1";          break;
+            case DAMethod::EQUI:         method_str = "EQUI";         break;
+            case DAMethod::BT:           method_str = "BT";           break;
+            case DAMethod::NN:           method_str = "NN";           break;
+            case DAMethod::PRIOR_GROUPS: method_str = "PRIOR_GROUPS"; break;
         }
         printProgress("DA: Method = " + method_str +
-                      (use_BT ? " (BT-style, rho_grid_len = " +
-                       std::to_string(rho_grid_len) + ")" : ""));
+                      (da_setup_.use_BT_style
+                          ? " (BT-style, rho_grid_len = " +
+                            std::to_string(da_setup_.rho_grid_len) + ")"
+                          : ""));
     }
 
-    // 3. Helper lambda: run one experiment step with DA correction + FDP
-    // -----------------------------------------------------------------
-    // Returns: (FDP_hat_vec, FDP_hat_BT_mat, da_corr, exp_results)
-    // For non-BT: FDP_hat_vec has size v_len
-    // For BT: FDP_hat_BT_mat has size (v_len x rho_grid_len)
-
-    struct StepResult {
-        Eigen::VectorXd FDP_hat_vec;       // non-BT (v_len)
-        Eigen::MatrixXd FDP_hat_BT_mat;    // BT (v_len x rho_grid_len)
-        DACorrectionResult da_corr;
-        er::ExperimentResults exp_results;
-        Eigen::VectorXd Phi_prime;         // non-BT
-        Eigen::MatrixXd Phi_prime_BT;      // BT (p x rho_grid_len)
-    };
-
-    auto runStep = [&](std::size_t T_stop_cur, std::size_t num_dummies_cur,
-                       bool use_warm_start) -> StepResult
-    {
-        // Determine experiment strategy based on L-loop config
-        er::ExperimentStrategy exp_strategy;
-        switch (trex_ctrl_.lloop_strategy) {
-            case tc::LLoopStrategy::PERMUTATION:
-            case tc::LLoopStrategy::PERMUTATION_DIRECT:
-                exp_strategy = er::ExperimentStrategy::Permutation;
-                break;
-            case tc::LLoopStrategy::DIRECT:
-                exp_strategy = er::ExperimentStrategy::Direct;
-                break;
-            default:
-                exp_strategy = er::ExperimentStrategy::Standard;
-                break;
-        }
-
-        auto cfg = buildRunnerConfig(
-            num_dummies_cur,
-            T_stop_cur,
-            use_warm_start,
-            exp_strategy,
-            dummy_multiplier_LL_);
-        StepResult step;
-        step.exp_results = experiment_runner_->run(cfg);
-
-        // DA correction
-        step.da_corr = daCorrect(step.exp_results.phi_T_mat,
-                                 step.exp_results.Phi,
-                                 T_stop_cur);
-
-        // FDP computation
-        if (use_BT) {
-            auto [phi_prime_bt,
-                  fdp_hat_bt] = computeFDP_BT(
-                    step.da_corr, num_dummies_cur);
-            step.Phi_prime_BT = std::move(phi_prime_bt);
-            step.FDP_hat_BT_mat = std::move(fdp_hat_bt);
-        } else {
-            step.Phi_prime = computePhiPrime(step.da_corr.phi_T_mat,
-                                              step.da_corr.Phi,
-                                              num_dummies_cur);
-            step.FDP_hat_vec = computeFDPHat(voting_grid_,
-                                              step.da_corr.Phi,
-                                              step.Phi_prime);
-        }
-
-        return step;
-    };
-
-    // FDP reference-point accessors
-    auto fdpRef = [&](const StepResult& step) -> double {
-        if (use_BT) {
-            return step.FDP_hat_BT_mat(
-                static_cast<Eigen::Index>(opt_point_),
-                static_cast<Eigen::Index>(da_setup_.opt_point_BT));
-        }
-        return step.FDP_hat_vec(static_cast<Eigen::Index>(opt_point_));
-    };
-
-    auto fdpEdge = [&](const StepResult& step) -> double {
-        if (use_BT) {
-            return step.FDP_hat_BT_mat(
-                static_cast<Eigen::Index>(v_len - 1),
-                static_cast<Eigen::Index>(da_setup_.opt_point_BT));
-        }
-        return step.FDP_hat_vec(static_cast<Eigen::Index>(v_len - 1));
-    };
-
-    // 4. L-Loop: calibrate num_dummies with T_stop = 1
-    // -----------------------------------------------------------------
-    if (verbose_) { printProgress("DA L-loop: Calibrating number of dummies..."); }
-
-    T_stop_ = 1;
-    dummy_multiplier_LL_ = 1;
-    StepResult step;
-    bool first_pass = true;
-
-    while (dummy_multiplier_LL_ <= trex_ctrl_.max_dummy_multiplier &&
-           (first_pass || fdpRef(step) > tFDR_)) {
-
-        num_dummies_ = dummy_multiplier_LL_ * p_;
-
-        // Dummy generation (matching base HCONCAT / STANDARD pattern)
-        if (trex_ctrl_.lloop_strategy == tc::LLoopStrategy::HCONCAT) {
-            if (dummy_multiplier_LL_ == 1) {
-                dummy_gen_.generateAndStore(trex_ctrl_.K, p_, /*seed_factor=*/0);
-            } else {
-                dummy_gen_.expandStored(p_, dummy_multiplier_LL_);
-                warm_start_mgr_.invalidate();
-            }
-        } else {
-            dummy_gen_.generateAndStore(trex_ctrl_.K,
-                                        num_dummies_,
-                                        dummy_multiplier_LL_);
-            warm_start_mgr_.invalidate();
-        }
-
-        step = runStep(T_stop_,
-                       num_dummies_,
-                       /*use_warm_start=*/false);
-        first_pass = false;
-
-        if (verbose_) {
-            printProgress("  Appended dummies: " + std::to_string(num_dummies_));
-        }
-        ++dummy_multiplier_LL_;
-    }
-
-    dummy_multiplier_LL_ = (dummy_multiplier_LL_ > 1) ? (dummy_multiplier_LL_ - 1) : 1;
+    // 3. L-loop calibration (base driver, DA's evaluateStep override)
+    if (verbose_) { printProgress("L-loop: Calibrating number of dummies..."); }
+    Eigen::VectorXd FDP_hat;
+    er::ExperimentResults exp_results;
+    runLLoop(FDP_hat, exp_results);
 
     if (verbose_) {
-        printProgress("DA L-loop: converged with " +
+        printProgress("L-loop: converged with " +
                       std::to_string(num_dummies_) + " dummies.\n");
     }
 
-    // 5. T-Loop: extend T_stop while FDP at edge is below target
-    // -----------------------------------------------------------------
-    if (verbose_) {
-        printProgress("DA T-loop: Calibrating stopping threshold (T_stop)...");
+    // 4. T-loop calibration (base driver, DA's evaluateStep + accumulator
+    //    overrides; capacity-doubling, BT side state, parallel experiments,
+    //    memory mapping all inherited from base).
+    runTLoop(FDP_hat, exp_results);
+
+    // 5. Assemble results, cleanup, denormalise, return base slice.
+    return assembleDAResult();
+}
+
+
+// ===================================================================================
+// Hook override: evaluateStep — experiment + DA deflation + FDP
+// ===================================================================================
+
+TRexDASelector::StepView TRexDASelector::evaluateStep(
+    std::size_t num_dummies,
+    std::size_t T_stop,
+    bool use_warm_start,
+    er::ExperimentStrategy strategy,
+    std::size_t seed_factor,
+    std::size_t existing_on_disk)
+{
+    auto cfg = buildRunnerConfig(num_dummies, T_stop, use_warm_start,
+                                 strategy, seed_factor, existing_on_disk);
+
+    StepView view;
+    view.exp_results = experiment_runner_->run(cfg);
+
+    // DA deflation
+    DACorrectionResult da_corr = daCorrect(view.exp_results.phi_T_mat,
+                                           view.exp_results.Phi,
+                                           T_stop);
+
+    if (da_setup_.use_BT_style) {
+        auto [phi_prime_bt,
+              fdp_hat_bt] = computeFDP_BT(da_corr, num_dummies);
+
+        Phi_BT_last_       = std::move(da_corr.Phi_BT);
+        Phi_prime_BT_last_ = std::move(phi_prime_bt);
+        FDP_hat_BT_last_   = std::move(fdp_hat_bt);
+
+        const auto opt_BT = static_cast<Eigen::Index>(da_setup_.opt_point_BT);
+        view.Phi       = Phi_BT_last_.col(opt_BT);
+        view.Phi_prime = Phi_prime_BT_last_.col(opt_BT);
+        view.FDP_hat   = FDP_hat_BT_last_.col(opt_BT);
+    } else {
+        view.Phi       = da_corr.Phi;
+        view.Phi_prime = computePhiPrime(da_corr.phi_T_mat,
+                                         da_corr.Phi,
+                                         num_dummies);
+        view.FDP_hat   = computeFDPHat(voting_grid_,
+                                       view.Phi,
+                                       view.Phi_prime);
     }
 
-    std::size_t max_T = trex_ctrl_.use_max_T_stop
-        ? std::min(num_dummies_,
-                   static_cast<std::size_t>(std::ceil(static_cast<double>(n_) / 2.0)))
-        : num_dummies_;
+    Phi_prime_last_ = view.Phi_prime;
+    return view;
+}
 
-    // Accumulators
-    // Non-BT: Phi_mat_ (T x p), FDP_hat_mat_ (T x V_len)
-    // BT: Phi_acc_BT[rho] (T x p), FDP_acc_BT[rho] (T x V_len)
-    std::vector<Eigen::MatrixXd> Phi_acc_BT;
-    std::vector<Eigen::MatrixXd> FDP_acc_BT;
+
+// ===================================================================================
+// Overrides: T-loop accumulators (extend base with BT side accumulators)
+// ===================================================================================
+
+void TRexDASelector::initTAccumulators(std::size_t capacity, std::size_t v_len) {
+    TRexSelector::initTAccumulators(capacity, v_len);
+
+    if (da_setup_.use_BT_style) {
+        const auto cap_idx = static_cast<Eigen::Index>(capacity);
+        const auto p_idx   = static_cast<Eigen::Index>(p_);
+        const auto v_idx   = static_cast<Eigen::Index>(v_len);
+
+        phi_acc_bt_.assign(da_setup_.rho_grid_len,
+                           Eigen::MatrixXd::Zero(cap_idx, p_idx));
+        fdp_acc_bt_.assign(da_setup_.rho_grid_len,
+                           Eigen::MatrixXd::Zero(cap_idx, v_idx));
+    } else {
+        phi_acc_bt_.clear();
+        fdp_acc_bt_.clear();
+    }
+}
+
+
+void TRexDASelector::growTAccumulators(std::size_t old_capacity,
+                                       std::size_t new_capacity) {
+    TRexSelector::growTAccumulators(old_capacity, new_capacity);
+
+    if (!da_setup_.use_BT_style) return;
+
+    const auto old_cap = static_cast<Eigen::Index>(old_capacity);
+    const auto new_cap = static_cast<Eigen::Index>(new_capacity);
+    for (std::size_t r = 0; r < da_setup_.rho_grid_len; ++r) {
+        phi_acc_bt_[r].conservativeResize(new_cap, Eigen::NoChange);
+        fdp_acc_bt_[r].conservativeResize(new_cap, Eigen::NoChange);
+        phi_acc_bt_[r].bottomRows(new_cap - old_cap).setZero();
+        fdp_acc_bt_[r].bottomRows(new_cap - old_cap).setZero();
+    }
+}
+
+
+void TRexDASelector::appendTRow(Eigen::Index row_idx, const StepView& view) {
+    TRexSelector::appendTRow(row_idx, view);
+
+    if (!da_setup_.use_BT_style) return;
+
+    for (std::size_t r = 0; r < da_setup_.rho_grid_len; ++r) {
+        const auto rc = static_cast<Eigen::Index>(r);
+        phi_acc_bt_[r].row(row_idx) = Phi_BT_last_.col(rc).transpose();
+        fdp_acc_bt_[r].row(row_idx) = FDP_hat_BT_last_.col(rc).transpose();
+    }
+}
+
+
+void TRexDASelector::trimTAccumulators(Eigen::Index n_rows) {
+    TRexSelector::trimTAccumulators(n_rows);
+
+    if (!da_setup_.use_BT_style) return;
+
+    for (std::size_t r = 0; r < da_setup_.rho_grid_len; ++r) {
+        phi_acc_bt_[r].conservativeResize(n_rows, Eigen::NoChange);
+        fdp_acc_bt_[r].conservativeResize(n_rows, Eigen::NoChange);
+    }
+}
+
+
+// ===================================================================================
+// Result assembly: populate da_result_, cleanup, denormalise
+// ===================================================================================
+
+TRexDASelector::SelectionResult TRexDASelector::assembleDAResult() {
+
+    const bool use_BT = da_setup_.use_BT_style;
+
+    // 1. Final Phi_prime
     if (use_BT) {
-        Phi_acc_BT.resize(rho_grid_len);
-        FDP_acc_BT.resize(rho_grid_len);
-    }
-
-    // Store first T=1 result
-    auto appendResult = [&](const StepResult& s, std::size_t row_idx) {
-        if (use_BT) {
-            for (std::size_t r = 0; r < rho_grid_len; ++r) {
-                auto ri = static_cast<Eigen::Index>(row_idx);
-                auto p_idx = static_cast<Eigen::Index>(p_);
-                auto v_idx = static_cast<Eigen::Index>(v_len);
-
-                if (row_idx == 0) {
-                    Phi_acc_BT[r].resize(1, p_idx);
-                    FDP_acc_BT[r].resize(1, v_idx);
-                } else {
-                    Phi_acc_BT[r].conservativeResize(ri + 1, Eigen::NoChange);
-                    FDP_acc_BT[r].conservativeResize(ri + 1, Eigen::NoChange);
-                }
-
-                Phi_acc_BT[r].row(ri) = s.da_corr.Phi_BT.col(static_cast<Eigen::Index>(r)).transpose();
-                FDP_acc_BT[r].row(ri) = s.FDP_hat_BT_mat.col(static_cast<Eigen::Index>(r)).transpose();
-            }
-        } else {
-            auto ri = static_cast<Eigen::Index>(row_idx);
-            auto p_idx = static_cast<Eigen::Index>(p_);
-            auto v_idx = static_cast<Eigen::Index>(v_len);
-
-            if (row_idx == 0) {
-                Phi_mat_.resize(1, p_idx);
-                FDP_hat_mat_.resize(1, v_idx);
-            } else {
-                Phi_mat_.conservativeResize(ri + 1, Eigen::NoChange);
-                FDP_hat_mat_.conservativeResize(ri + 1, Eigen::NoChange);
-            }
-
-            Phi_mat_.row(ri) = s.da_corr.Phi.transpose();
-            FDP_hat_mat_.row(ri) = s.FDP_hat_vec.transpose();
-        }
-    };
-
-    std::size_t row_idx = 0;
-    appendResult(step, row_idx);
-    ++row_idx;
-
-    // Stagnation tracking
-    std::size_t prev_num_selected = 0;
-    std::size_t stagnant_iterations = 0;
-
-    while (fdpEdge(step) <= tFDR_ && T_stop_ < max_T) {
-        ++T_stop_;
-        step = runStep(T_stop_, num_dummies_, /*use_warm_start=*/true);
-
-        // Stagnation check (using the base Phi for simplicity)
-        if (trex_ctrl_.tloop_stagnation_stop && T_stop_ > 1) {
-            // Quick check: how many selected at default operating point?
-            double v_star = voting_grid_(static_cast<Eigen::Index>(opt_point_));
-            const Eigen::VectorXd& check_phi = use_BT
-                ? step.da_corr.Phi_BT.col(static_cast<Eigen::Index>(da_setup_.opt_point_BT))
-                : step.da_corr.Phi;
-            std::size_t num_selected = (check_phi.array() > v_star).count();
-
-            if (num_selected <= prev_num_selected) {
-                ++stagnant_iterations;
-                if (stagnant_iterations >= trex_ctrl_.tloop_max_stagnant_steps) {
-                    if (verbose_) {
-                        printProgress("DA T-loop EARLY STOP: Stagnation detected");
-                    }
-                    break;
-                }
-            } else {
-                stagnant_iterations = 0;
-            }
-            prev_num_selected = num_selected;
-        }
-
-        appendResult(step, row_idx);
-        ++row_idx;
-
-        if (verbose_) {
-            std::ostringstream oss;
-            oss << "T = " << std::setw(3) << T_stop_;
-            if (use_BT) {
-                oss << " | FDP_BT[edge] = " << fdpEdge(step);
-            } else {
-                oss << " | FDP in [" << step.FDP_hat_vec.minCoeff()
-                    << ", " << step.FDP_hat_vec.maxCoeff() << "]";
-            }
-            if (stagnant_iterations > 0) {
-                oss << " (stagnant: " << stagnant_iterations << ")";
-            }
-            printProgress(oss.str());
-        }
-    }
-
-    if (verbose_) {
-        printProgress("DA T-loop converged at T_stop = " +
-                      std::to_string(T_stop_) + "\n");
-    }
-
-    // 6. Final Phi_prime
-    // -----------------------------------------------------------------
-    if (use_BT) {
-        Phi_prime_ = step.Phi_prime_BT.col(
+        Phi_prime_ = Phi_prime_BT_last_.col(
             static_cast<Eigen::Index>(da_setup_.opt_point_BT));
     } else {
-        Phi_prime_ = step.Phi_prime;
+        Phi_prime_ = Phi_prime_last_;
     }
 
-    // 7. Variable selection
-    // -----------------------------------------------------------------
+    // 2. Variable selection
     if (use_BT) {
         da_result_ = selectVariables_BT(
-            FDP_acc_BT, Phi_acc_BT, voting_grid_, da_setup_.rho_grid, T_stop_);
+            fdp_acc_bt_,
+            phi_acc_bt_,
+            voting_grid_,
+            da_setup_.rho_grid,
+            T_stop_);
     } else {
-        // Use base class selection
-        auto base_result = selectedVariables(FDP_hat_mat_, Phi_mat_, voting_grid_, T_stop_);
+        auto base_result =
+            selectedVariables(FDP_hat_mat_,
+                              Phi_mat_,
+                              voting_grid_,
+                              T_stop_);
+
         da_result_.selected_var = base_result.selected_var;
-        da_result_.v_thresh = base_result.v_thresh;
-        da_result_.R_mat = base_result.R_mat;
-        da_result_.rho_thresh = tc::AUTO_ESTIMATE_CORRELATION;
+        da_result_.v_thresh     = base_result.v_thresh;
+        da_result_.R_mat        = base_result.R_mat;
+        da_result_.rho_thresh   = tc::AUTO_ESTIMATE_CORRELATION;
     }
 
-    // Fill common fields
-    da_result_.T_stop = T_stop_;
-    da_result_.num_dummies = num_dummies_;
+    // 3. Common fields
+    da_result_.T_stop         = T_stop_;
+    da_result_.num_dummies    = num_dummies_;
     da_result_.dummy_factor_L = dummy_multiplier_LL_;
-    da_result_.Phi_prime = Phi_prime_;
-    da_result_.voting_grid = voting_grid_;
-    da_result_.method = da_ctrl_.method;
-    da_result_.cor_coef = da_setup_.cor_coef;
-    da_result_.rho_grid = da_setup_.rho_grid;
+    da_result_.Phi_prime      = Phi_prime_;
+    da_result_.voting_grid    = voting_grid_;
+    da_result_.method         = da_ctrl_.method;
+    da_result_.cor_coef       = da_setup_.cor_coef;
+    da_result_.rho_grid       = da_setup_.rho_grid;
 
     if (use_BT) {
-        da_result_.FDP_hat_mat = Eigen::MatrixXd();  // Not used for BT
-        da_result_.Phi_mat = Eigen::MatrixXd();
-        da_result_.FDP_hat_array_BT = FDP_acc_BT;
-        da_result_.Phi_array_BT = Phi_acc_BT;
+        da_result_.FDP_hat_mat      = Eigen::MatrixXd();  // Not used for BT
+        da_result_.Phi_mat          = Eigen::MatrixXd();
+        da_result_.FDP_hat_array_BT = fdp_acc_bt_;
+        da_result_.Phi_array_BT     = phi_acc_bt_;
     } else {
         da_result_.FDP_hat_mat = FDP_hat_mat_;
-        da_result_.Phi_mat = Phi_mat_;
+        da_result_.Phi_mat     = Phi_mat_;
     }
 
     storeResults(da_result_);
@@ -439,8 +345,7 @@ TRexDASelector::SelectionResult TRexDASelector::select() {
                       std::to_string(getNumSelected()) + " variables.");
     }
 
-    // 8. Cleanup
-    // -----------------------------------------------------------------
+    // 4. Cleanup
     warm_start_mgr_.cleanup();
     if (memmap_mgr_) { memmap_mgr_->cleanup(); }
 
@@ -450,22 +355,21 @@ TRexDASelector::SelectionResult TRexDASelector::select() {
         X_is_normalized_ = false;
     }
 
-    // 9. Return base-sliced result
-    // -----------------------------------------------------------------
+    // 5. Return base-sliced result
     SelectionResult base_result;
-    base_result.selected_var = da_result_.selected_var;
-    base_result.v_thresh = da_result_.v_thresh;
-    base_result.R_mat = da_result_.R_mat;
-    base_result.T_stop = da_result_.T_stop;
-    base_result.num_dummies = da_result_.num_dummies;
+    base_result.selected_var   = da_result_.selected_var;
+    base_result.v_thresh       = da_result_.v_thresh;
+    base_result.R_mat          = da_result_.R_mat;
+    base_result.T_stop         = da_result_.T_stop;
+    base_result.num_dummies    = da_result_.num_dummies;
     base_result.dummy_factor_L = da_result_.dummy_factor_L;
-    base_result.FDP_hat_mat = da_result_.FDP_hat_mat;
-    base_result.Phi_mat = da_result_.Phi_mat;
-    base_result.Phi_prime = da_result_.Phi_prime;
-    base_result.voting_grid = da_result_.voting_grid;
-
+    base_result.FDP_hat_mat    = da_result_.FDP_hat_mat;
+    base_result.Phi_mat        = da_result_.Phi_mat;
+    base_result.Phi_prime      = da_result_.Phi_prime;
+    base_result.voting_grid    = da_result_.voting_grid;
     return base_result;
 }
+
 
 
 // ===================================================================================
@@ -489,7 +393,7 @@ void TRexDASelector::setupDA() {
 
 
 // ===================================================================================
-// DA Setup — Route 1: Prior Groups
+// DA Setup 1: Prior Groups
 // ===================================================================================
 
 void TRexDASelector::setupDA_PriorGroups() {
@@ -542,7 +446,7 @@ void TRexDASelector::setupDA_PriorGroups() {
 
 
 // ===================================================================================
-// DA Setup — Route 2: BT (dendrogram-based)
+// DA Setup 2: BT (dendrogram-based)
 // ===================================================================================
 
 void TRexDASelector::setupDA_BT() {
@@ -564,14 +468,20 @@ void TRexDASelector::setupDA_BT() {
     rho_grid_full.push_back(1.0);
     // rho_grid_full now has p elements, sorted ascending
 
-    // Subsample to grid_len evenly spaced indices
+    // Subsample to grid_len evenly spaced indices.
+    // Guard against grid_len == 1 (would divide by zero below): use the
+    // highest-correlation point as a single-element grid.
     da_setup_.rho_grid.resize(static_cast<Eigen::Index>(grid_len));
-    for (std::size_t i = 0; i < grid_len; ++i) {
-        double frac = static_cast<double>(i) * static_cast<double>(p_ - 1)
-                    / static_cast<double>(grid_len - 1);
-        std::size_t idx = static_cast<std::size_t>(std::round(frac));
-        if (idx >= rho_grid_full.size()) idx = rho_grid_full.size() - 1;
-        da_setup_.rho_grid(static_cast<Eigen::Index>(i)) = rho_grid_full[idx];
+    if (grid_len == 1) {
+        da_setup_.rho_grid(0) = rho_grid_full.back();
+    } else {
+        for (std::size_t i = 0; i < grid_len; ++i) {
+            double frac = static_cast<double>(i) * static_cast<double>(p_ - 1)
+                        / static_cast<double>(grid_len - 1);
+            std::size_t idx = static_cast<std::size_t>(std::round(frac));
+            if (idx >= rho_grid_full.size()) idx = rho_grid_full.size() - 1;
+            da_setup_.rho_grid(static_cast<Eigen::Index>(i)) = rho_grid_full[idx];
+        }
     }
 
     da_setup_.use_BT_style = true;
@@ -597,7 +507,8 @@ void TRexDASelector::setupDA_BT() {
 
     for (std::size_t r = 0; r < grid_len; ++r) {
         double cut_height = 1.0 - da_setup_.rho_grid(static_cast<Eigen::Index>(r));
-        auto labels = hac::DendrogramUtils::cut_tree_by_height(merges, p, cut_height);
+        auto labels = hac::DendrogramUtils::cut_tree_by_height(
+            merges, p, cut_height);
         auto groups = hac::DendrogramUtils::group_indices_by_label(labels);
 
         for (Eigen::Index j = 0; j < p; ++j) {
@@ -622,15 +533,12 @@ void TRexDASelector::setupDA_BT() {
 
 
 // ===================================================================================
-// DA Setup — Route 3: NN (nearest-neighbour threshold sweep)
+// DA Setup 3: NN (nearest-neighbour threshold sweep)
 // ===================================================================================
 
 void TRexDASelector::setupDA_NN() {
     const auto p = static_cast<Eigen::Index>(p_);
     const std::size_t grid_len = da_ctrl_.hc_grid_length;
-
-    // Compute correlation matrix (X is centered + L2-normalized)
-    Eigen::MatrixXd cor_mat = X_->transpose() * (*X_);
 
     // Build rho_grid = linspace(0, 1, grid_len)
     da_setup_.rho_grid = Eigen::VectorXd::LinSpaced(
@@ -651,29 +559,41 @@ void TRexDASelector::setupDA_NN() {
     da_setup_.cor_coef = da_ctrl_.cor_coef;
     da_setup_.kap = 0;
 
-    // Build gr_j_list: for each j and rho level, collect neighbours with |cor| >= rho
-    da_setup_.gr_j_list.resize(p_);
+    // Build gr_j_list pair-wise: for each ordered pair (j, k) with j < k,
+    // compute the correlation as X.col(j).dot(X.col(k)) (X is L2-normalised),
+    // then for every rho level r where |cor| >= rho_grid(r) record the
+    // symmetric neighbour relation.
+    //
+    // This avoids materialising the full p x p correlation matrix
+    // (X^T * X), which would dominate memory at large p.
+    da_setup_.gr_j_list.assign(
+        p_, std::vector<std::vector<Eigen::Index>>(grid_len));
+
     for (Eigen::Index j = 0; j < p; ++j) {
-        da_setup_.gr_j_list[j].resize(grid_len);
-        for (std::size_t r = 0; r < grid_len; ++r) {
-            double rho_threshold = da_setup_.rho_grid(static_cast<Eigen::Index>(r));
-            for (Eigen::Index k = 0; k < p; ++k) {
-                if (k != j && std::abs(cor_mat(j, k)) >= rho_threshold) {
+        for (Eigen::Index k = j + 1; k < p; ++k) {
+            const double abs_cor = std::abs(X_->col(j).dot(X_->col(k)));
+            for (std::size_t r = 0; r < grid_len; ++r) {
+                const double rho_threshold =
+                    da_setup_.rho_grid(static_cast<Eigen::Index>(r));
+                if (abs_cor >= rho_threshold) {
                     da_setup_.gr_j_list[j][r].push_back(k);
+                    da_setup_.gr_j_list[k][r].push_back(j);
                 }
             }
         }
     }
 
     if (verbose_) {
-        printProgress("DA-NN: Correlation matrix computed. Grid length = " +
-                      std::to_string(grid_len));
+        printProgress(
+            "DA-NN: Pairwise correlations computed. Grid length = " +
+            std::to_string(grid_len)
+        );
     }
 }
 
 
 // ===================================================================================
-// DA Setup — Route 4: AR(1)
+// DA Setup 4: AR(1)
 // ===================================================================================
 
 void TRexDASelector::setupDA_AR1() {
@@ -697,14 +617,16 @@ void TRexDASelector::setupDA_AR1() {
     }
 
     if (verbose_) {
-        printProgress("DA-AR1: cor_coef = " + std::to_string(da_setup_.cor_coef) +
-                      ", kap = " + std::to_string(da_setup_.kap));
+        printProgress(
+            "DA-AR1: cor_coef = " + std::to_string(da_setup_.cor_coef) +
+            ", kap = " + std::to_string(da_setup_.kap)
+        );
     }
 }
 
 
 // ===================================================================================
-// DA Setup — Route 5: Equicorrelation
+// DA Setup 5: Equicorrelation
 // ===================================================================================
 
 void TRexDASelector::setupDA_EQUI() {
@@ -720,8 +642,10 @@ void TRexDASelector::setupDA_EQUI() {
     }
 
     if (verbose_) {
-        printProgress("DA-EQUI: cor_coef = " + std::to_string(da_setup_.cor_coef) +
-                      " (threshold = " + std::to_string(da_ctrl_.rho_thr_DA) + ")");
+        printProgress(
+            "DA-EQUI: cor_coef = " + std::to_string(da_setup_.cor_coef) +
+            " (threshold = " + std::to_string(da_ctrl_.rho_thr_DA) + ")"
+        );
     }
 }
 
@@ -731,8 +655,11 @@ void TRexDASelector::setupDA_EQUI() {
 // ===================================================================================
 
 double TRexDASelector::estimateAR1Correlation() const {
-    // Row-wise Yule-Walker: ρ̂_i = Σ_{t=0}^{p-2} x_{i,t} * x_{i,t+1} / Σ_{t=0}^{p-1} x_{i,t}²
+    // Row-wise Yule-Walker:
+    // --------------------
+    // ρ̂_i = Σ_{t=0}^{p-2} x_{i, t} * x_{i, t + 1} / Σ_{t=0}^{p-1} x_{i, t}^2
     // (X is already centered)
+
     const auto n = static_cast<Eigen::Index>(n_);
     const auto p = static_cast<Eigen::Index>(p_);
 
@@ -764,6 +691,7 @@ double TRexDASelector::estimateEquiCorrelation() const {
     // Mean of off-diagonal correlation matrix elements.
     // Since X is centered and L2-normalized: cor_mat = X^T * X
     // Efficient computation via row sums: Σ_all = ||row_sums||²
+
     const auto p = static_cast<Eigen::Index>(p_);
 
     // Compute row sums of X
@@ -1011,34 +939,34 @@ TRexDASelector::DASelectionResult TRexDASelector::selectVariables_BT(
         n_T = std::min(n_T, static_cast<std::size_t>(FDP_hat_array_BT[0].rows()));
     }
 
-    // Build R_array and apply FDP constraint
-    // R_array[rho] = (n_T × V_len): count of variables with Phi > V
+    // Build R_array (counts of variables with Phi > V) and find the FDP-
+    // feasible argmax. Tie-breaking matches the base-class
+    // selectedVariables(): iterate VV outer, TT inner, with an unconditional
+    // `>=` update so the largest VV (then TT, then r) wins on ties.
     std::vector<Eigen::MatrixXd> R_array(rho_grid_len);
-    double val_max = -1.0;
-    Eigen::Index best_TT = 0, best_VV = 0;
-    std::size_t best_RR = 0;
-
     for (std::size_t r = 0; r < rho_grid_len; ++r) {
         R_array[r] = Eigen::MatrixXd::Zero(
             static_cast<Eigen::Index>(n_T), v_len);
-
         for (Eigen::Index TT = 0; TT < static_cast<Eigen::Index>(n_T); ++TT) {
             for (Eigen::Index VV = 0; VV < v_len; ++VV) {
-                double threshold = voting_grid(VV);
                 R_array[r](TT, VV) = static_cast<double>(
-                    (Phi_array_BT[r].row(TT).array() > threshold).count());
+                    (Phi_array_BT[r].row(TT).array() > voting_grid(VV)).count());
+            }
+        }
+    }
 
-                // Check if this is a valid candidate (FDP <= tFDR)
-                double fdp = FDP_hat_array_BT[r](TT, VV);
-                if (fdp <= tFDR_) {
-                    double r_count = R_array[r](TT, VV);
-                    if (r_count > val_max ||
-                        (r_count == val_max && VV >= best_VV)) {
-                        val_max = r_count;
-                        best_TT = TT;
-                        best_VV = VV;
-                        best_RR = r;
-                    }
+    double val_max = -1.0;
+    Eigen::Index best_TT = 0, best_VV = 0;
+    std::size_t best_RR = 0;
+    for (Eigen::Index VV = 0; VV < v_len; ++VV) {
+        for (Eigen::Index TT = 0; TT < static_cast<Eigen::Index>(n_T); ++TT) {
+            for (std::size_t r = 0; r < rho_grid_len; ++r) {
+                if (FDP_hat_array_BT[r](TT, VV) <= tFDR_ &&
+                    R_array[r](TT, VV) >= val_max) {
+                    val_max = R_array[r](TT, VV);
+                    best_TT = TT;
+                    best_VV = VV;
+                    best_RR = r;
                 }
             }
         }

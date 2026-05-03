@@ -11,18 +11,20 @@
  *
  * @details
  *  Extends the base class TRexSelector with dependency-aware deflation that accounts
- *  for the correlation structure among predictors.
+ *  in special cases for the correlation structure among predictors.
  *
- *  Five methods are supported:
+ *  Supported methods:
+ *  -------------------
  *  - AR1:          AR(1) windowed deflation (ordered predictors).
  *  - EQUI:         Global equicorrelation deflation.
  *  - BT:           Binary-tree dendrogram from hierarchical clustering.
  *  - NN:           Nearest-neighbour threshold sweep on the correlation matrix.
  *  - PRIOR_GROUPS: User-supplied group structure at multiple hierarchy levels.
  *
- *  BT, NN, and PRIOR_GROUPS ("BT-style") perform 3D calibration over
- *  (T_stop, V, rho_grid);
- *  AR1 and EQUI stay on the 2D (T_stop, V) grid of the base class.
+ * Calibration Paths:
+ *  - BT, NN, and PRIOR_GROUPS ("BT-style") perform 3D calibration over
+ *    (T_stop, V, rho_grid);
+ *  - AR1 and EQUI stay on the 2D (T_stop, V) grid of the base class.
  */
 // ===================================================================================
 
@@ -59,11 +61,16 @@ namespace hac = trex::ml_methods::clustering::hierarchical::agglomerative;
  * @brief Dependency-aware correction methods.
  */
 enum class DAMethod {
-    AR1,           ///< AR(1) windowed correction for ordered predictors.
-    EQUI,          ///< Equicorrelation correction (all-vs-all).
-    BT,            ///< Binary-tree dendrogram-based clustering.
-    NN,            ///< Nearest-neighbour correlation threshold sweep.
-    PRIOR_GROUPS   ///< User-supplied group labels at multiple hierarchy levels.
+    /** @brief AR(1) windowed correction for ordered predictors. */
+    AR1,
+    /** @brief Equicorrelation correction (all-vs-all). */
+    EQUI,
+    /** @brief Binary-tree dendrogram-based clustering. */
+    BT,
+    /** @brief Nearest-neighbour correlation threshold sweep. */
+    NN,
+    /** @brief User-supplied group labels at multiple hierarchy levels. */
+    PRIOR_GROUPS
 };
 
 // ===================================================================================
@@ -78,7 +85,9 @@ struct TRexDAControlParameter {
     /** @brief Dependency-aware method (default: BT). Ignored when prior_groups is non-empty. */
     DAMethod method = DAMethod::BT;
 
-    /** @brief Correlation coefficient for AR1/EQUI. AUTO_ESTIMATE_CORRELATION = auto-estimate from X. */
+    /** @brief Correlation coefficient for AR1/EQUI.
+     * AUTO_ESTIMATE_CORRELATION = auto-estimate from X.
+     */
     double cor_coef = tc::AUTO_ESTIMATE_CORRELATION;
 
     /** @brief Threshold below which equi-correlation correction is skipped (default: 0.02). */
@@ -89,7 +98,9 @@ struct TRexDAControlParameter {
      */
     hac::LinkageMethod hc_linkage = hac::LinkageMethod::Single;
 
-    /** @brief Number of dendrogram / NN grid points (default: 0 = min(20, p)). */
+    /** @brief Number of dendrogram / NN grid points.
+     *  Initialized as 0 and in constructor defaulted to min(20, p).
+     */
     std::size_t hc_grid_length = 0;
 
     /** @brief Prior group labels: L vectors of length p, one per hierarchy level (fine to coarse).
@@ -171,7 +182,7 @@ struct DACorrectionResult {
  *  Inherits from TRexSelector. The select() method is overridden to insert a
  *  dependency-aware deflation step between the random-experiment aggregation and
  *  the FDP estimation.
- *. For BT-style methods the calibration is performed over a 3D grid (T_stop x V x rho_grid);
+ *  For BT-style methods the calibration is performed over a 3D grid (T_stop x V x rho_grid);
  *  for AR1/EQUI the standard 2D grid is used with modified phi_T / Phi values.
  */
 class TRexDASelector : public tc::TRexSelector {
@@ -264,7 +275,7 @@ public:
     /**
      * @brief Run DA-TRex selection.
      *
-     * @return SelectionResult (sliced to base type).
+     * @return SelectionResult.
      *         Use getDAResult() for the full DA diagnostics.
      */
     SelectionResult select() override;
@@ -286,11 +297,104 @@ protected:
     /** @brief DA-specific control parameters. */
     TRexDAControlParameter da_ctrl_;
 
-    /** @brief Precomputed neighbourhood / correlation structure. */
+    /** @brief Precomputed neighborhood / correlation structure. */
     DASetupResult da_setup_;
 
     /** @brief Full DA result from the last select() call. */
     DASelectionResult da_result_;
+
+
+    // ============================================================
+    // Per-step side state (populated by evaluateStep override)
+    // ============================================================
+
+    /** @brief BT-style snapshot from the most recent evaluateStep call:
+     *  deflated Phi per rho level (p x rho_grid_len). Empty for non-BT.
+     */
+    Eigen::MatrixXd Phi_BT_last_;
+
+    /** @brief BT-style snapshot from the most recent evaluateStep call:
+     *  Phi_prime per rho level (p x rho_grid_len). Empty for non-BT.
+     */
+    Eigen::MatrixXd Phi_prime_BT_last_;
+
+    /** @brief BT-style snapshot from the most recent evaluateStep call:
+     *  FDP estimates per rho level (v_len x rho_grid_len). Empty for non-BT.
+     */
+    Eigen::MatrixXd FDP_hat_BT_last_;
+
+    /** @brief Canonical Phi_prime from the most recent evaluateStep call.
+     *  For BT-style this is the column at opt_point_BT; for non-BT this is
+     *  the standard 1D Phi_prime computed on the deflated phi_T_mat.
+     */
+    Eigen::VectorXd Phi_prime_last_;
+
+    // ============================================================
+    // BT-style T-loop accumulators (rho_grid_len matrices each)
+    // ============================================================
+
+    /** @brief BT-style accumulator: phi_acc_bt_[r] = (capacity x p) of
+     *  deflated Phi rows over the T-loop. Allocated only when use_BT_style.
+     */
+    std::vector<Eigen::MatrixXd> phi_acc_bt_;
+
+    /** @brief BT-style accumulator: fdp_acc_bt_[r] = (capacity x v_len) of
+     *  FDP rows over the T-loop. Allocated only when use_BT_style.
+     */
+    std::vector<Eigen::MatrixXd> fdp_acc_bt_;
+
+
+    // ============================================================
+    // Hook overrides — per-step body and accumulator management
+    // ============================================================
+
+    /**
+     * @brief Override: run experiment, apply DA deflation, compute FDP.
+     *
+     * @details
+     *  BT-style: stashes full 2D matrices (Phi_BT_last_,
+     *  Phi_prime_BT_last_, FDP_hat_BT_last_) and writes the column at
+     *  `opt_point_BT` into the canonical view (Phi, Phi_prime, FDP_hat).
+     *  Non-BT: writes deflated 1D channel into the view.
+     *
+     *  Always caches `Phi_prime_last_` for later result assembly.
+     */
+    StepView evaluateStep(std::size_t num_dummies,
+                          std::size_t T_stop,
+                          bool use_warm_start,
+                          er::ExperimentStrategy strategy,
+                          std::size_t seed_factor,
+                          std::size_t existing_on_disk) override;
+
+    /** @brief Override: also allocate BT accumulators when use_BT_style. */
+    void initTAccumulators(std::size_t capacity, std::size_t v_len) override;
+
+    /** @brief Override: also grow BT accumulators in lock-step. */
+    void growTAccumulators(std::size_t old_capacity,
+                           std::size_t new_capacity) override;
+
+    /** @brief Override: also append BT rows from Phi_BT_last_ /
+     *  FDP_hat_BT_last_ for every rho level. */
+    void appendTRow(Eigen::Index row_idx, const StepView& view) override;
+
+    /** @brief Override: also trim BT accumulators. */
+    void trimTAccumulators(Eigen::Index n_rows) override;
+
+
+    // ============================================================
+    // select() helper
+    // ============================================================
+
+    /**
+     * @brief Assemble da_result_, run cleanup + denormalisation, and return
+     *        the base-sliced SelectionResult.
+     *
+     * @details
+     *  Reads BT accumulators (`phi_acc_bt_`, `fdp_acc_bt_`) and last-step
+     *  side state (`Phi_prime_BT_last_`, `Phi_prime_last_`) from member
+     *  state populated during the L/T loops.
+     */
+    SelectionResult assembleDAResult();
 
 
     // ============================================================
@@ -309,19 +413,19 @@ protected:
      */
     void setupDA();
 
-    /** @brief Route 1: prior group labels supplied by the user. */
+    /** @brief DA-Setup 1: prior group labels supplied by the user. */
     void setupDA_PriorGroups();
 
-    /** @brief Route 2: dendrogram-based clustering on |cor(X)|. */
+    /** @brief DA-Setup 2: dendrogram-based clustering on |cor(X)|. */
     void setupDA_BT();
 
-    /** @brief Route 3: nearest-neighbour correlation threshold sweep. */
+    /** @brief DA-Setup 3: nearest-neighbour correlation threshold sweep. */
     void setupDA_NN();
 
-    /** @brief Route 4: AR(1) model — estimate ρ and compute window κ. */
+    /** @brief DA-Setup 4: AR(1) model — estimate ρ and compute window κ. */
     void setupDA_AR1();
 
-    /** @brief Route 5: equicorrelation — estimate ρ̄. */
+    /** @brief DA-Setup 5: equicorrelation — estimate ρ̄. */
     void setupDA_EQUI();
 
 

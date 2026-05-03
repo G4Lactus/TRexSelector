@@ -9,9 +9,8 @@ $$
 \rho_{j,j'} = \rho^{|j - j'|}, \quad 0 < \rho < 1.
 $$
 
-This is fundamentally different from the paper's block design, because now
-**every pair is correlated**, with correlation decaying geometrically with distance.
 The full covariance is a Toeplitz matrix with no block separation.
+**Every pair is correlated**, with correlation decaying geometrically with distance.
 
 ## Closed-Form Group Definition and Verification
 

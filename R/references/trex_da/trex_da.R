@@ -240,13 +240,15 @@
 #' @return List: phi_T_mat, Phi, phi_T_array_BT (NULL for AR1/equi),
 #'               Phi_BT (NULL for AR1/equi).
 .da_correct <- function(method, phi_T_mat, Phi, T_stop, p,
-                         cor_coef, rho_thr_DA, kap,
-                         gr_j_list, rho_grid_len, use_BT_style) {
+                        cor_coef, rho_thr_DA, kap,
+                        gr_j_list, rho_grid_len, use_BT_style) {
+
   phi_T_array_BT <- NULL
   Phi_BT         <- NULL
 
   # AR1 -----------------------------------------------------------------------
   if (method == "trex+DA+AR1") {
+
     DA_delta_mat <- matrix(NA, nrow = p, ncol = T_stop)
     for (t in seq(T_stop)) {
       for (j in seq(1, p)) {
@@ -256,12 +258,14 @@
         DA_delta_mat[j, t] <- 2 - min(abs(phi_T_mat[j, t] - phi_T_mat[sw, t]))
       }
     }
+
     phi_T_mat <- phi_T_mat / DA_delta_mat
-    Phi       <- Phi       / DA_delta_mat[, T_stop]
+    Phi       <- Phi / DA_delta_mat[, T_stop]
   }
 
   # equi ----------------------------------------------------------------------
   if (method == "trex+DA+equi" && abs(cor_coef) > rho_thr_DA) {
+
     DA_delta_mat <- matrix(NA, nrow = p, ncol = T_stop)
     for (t in seq(T_stop)) {
       for (j in seq(1, p)) {
@@ -269,12 +273,14 @@
         DA_delta_mat[j, t] <- 2 - min(abs(phi_T_mat[j, t] - phi_T_mat[sw, t]))
       }
     }
+
     phi_T_mat <- phi_T_mat / DA_delta_mat
     Phi       <- Phi       / DA_delta_mat[, T_stop]
   }
 
   # BT / NN / prior-groups ----------------------------------------------------
   if (use_BT_style) {
+
     DA_delta_mat_BT <- matrix(NA, nrow = p, ncol = rho_grid_len)
     for (j in seq(1, p)) {
       DA_delta_mat_BT[j, ] <- sapply(gr_j_list[[j]], function(x) {
@@ -282,8 +288,10 @@
         else 2 - min(abs(phi_T_mat[j, T_stop] - phi_T_mat[x, T_stop]))
       })
     }
+
     phi_T_array_BT <- array(apply(DA_delta_mat_BT, 2, function(x) phi_T_mat / x),
-                             dim = c(p, T_stop, rho_grid_len))
+                            dim = c(p, T_stop, rho_grid_len))
+
     Phi_BT <- Phi / DA_delta_mat_BT
   }
 
@@ -346,13 +354,13 @@
 #'
 #' @return List: selected_var, v_thresh, rho_thresh, R_array.
 select_var_fun_DA_BT <- function(p, tFDR, T_stop,
-                                  FDP_hat_array_BT, Phi_array_BT,
-                                  V, rho_grid) {
+                                 FDP_hat_array_BT, Phi_array_BT,
+                                 V, rho_grid) {
   if (T_stop > 1) {
     FDP_hat_array_BT <- array(FDP_hat_array_BT[-T_stop, , ],
-                               dim = dim(FDP_hat_array_BT) - c(1, 0, 0))
+                              dim = dim(FDP_hat_array_BT) - c(1, 0, 0))
     Phi_array_BT     <- array(Phi_array_BT[-T_stop, , ],
-                               dim = dim(Phi_array_BT)     - c(1, 0, 0))
+                              dim = dim(Phi_array_BT)     - c(1, 0, 0))
   }
 
   R_array <- array(NA, dim = dim(FDP_hat_array_BT))

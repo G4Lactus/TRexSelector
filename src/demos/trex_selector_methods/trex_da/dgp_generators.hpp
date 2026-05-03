@@ -21,7 +21,7 @@
  *     - dgp_groups()         — Multi-level latent factor model
  *     - dgp_ar1_block()      — Block-diagonal AR(1)
  *     - dgp_ar1_block_white()— Block-diagonal AR(1) + white-noise block
- *     - dgp_block_toeplitz() — Block-diagonal Toeplitz (Cholesky, heavy tails)
+ *     - dgp_block_toeplitz_hvt() — Block-diagonal Toeplitz (Cholesky, heavy tails)
  *     - dgp_block_equi()     — Block-equicorrelated (Gaussian)
  *   - block_random_support() — helper for block-based support
  */
@@ -166,17 +166,17 @@ inline Eigen::VectorXd make_snr_response(const Eigen::MatrixXd& X,
  *
  * @return DGPData with (X, y, true_support)
  */
-inline DGPData dgp_block_toeplitz(int n,
-                                  int p,
-                                  int G,
-                                  int g,
-                                  double rho,
-                                  double snr,
-                                  unsigned seed,
-                                  bool heavy_X,
-                                  bool heavy_noise,
-                                  double df = 3.0,
-                                  bool random_support = false) {
+inline DGPData dgp_block_toeplitz_hvt(int n,
+                                      int p,
+                                      int G,
+                                      int g,
+                                      double rho,
+                                      double snr,
+                                      unsigned seed,
+                                      bool heavy_X,
+                                      bool heavy_noise,
+                                      double df = 3.0,
+                                      bool random_support = false) {
     std::mt19937 rng(seed);
     std::normal_distribution<double>      norm(0.0, 1.0);
     std::chi_squared_distribution<double> chi2(df);
@@ -725,14 +725,14 @@ inline DGPData dgp_ar1_block(int n,
  * @return DGPData with (X, y, true_support); X has p_ar + p_white columns.
  */
 inline DGPData dgp_ar1_block_white(int n,
-                                    int p_ar,
-                                    int p_white,
-                                    const std::vector<std::size_t>& support,
-                                    double amplitude,
-                                    int n_blocks,
-                                    double rho,
-                                    double snr,
-                                    unsigned seed)
+                                   int p_ar,
+                                   int p_white,
+                                   const std::vector<std::size_t>& support,
+                                   double amplitude,
+                                   int n_blocks,
+                                   double rho,
+                                   double snr,
+                                   unsigned seed)
 {
     std::mt19937 rng(seed);
     std::normal_distribution<double> norm(0.0, 1.0);
@@ -768,6 +768,121 @@ inline DGPData dgp_ar1_block_white(int n,
 
     auto beta = make_beta_at(p, support, amplitude);
     auto y    = make_snr_response(X, beta, snr, rng);
+    return {std::move(X), std::move(y), support};
+}
+
+
+// ==============================================================================
+// Block-diagonal heavy-tailed AR(1) + white-noise block DGP
+// ==============================================================================
+
+/**
+ * @brief Heavy-tailed AR(1)-block + white-noise DGP.
+ *
+ * Constructs p_ar predictors in n_blocks AR(1)-Toeplitz multivariate Student-t
+ * blocks (X is always heavy-tailed), then appends p_white i.i.d. Student-t(nu)
+ * white-noise columns.  Active predictors are restricted to the AR part
+ * (indices 0..p_ar-1).  Total dimension: p_ar + p_white.
+ *
+ * Noise is Gaussian when heavy_noise=false, or t(nu)-scaled when heavy_noise=true.
+ *
+ * @param n           Number of observations.
+ * @param p_ar        Number of heavy-tailed AR-block predictors (divisible by n_blocks).
+ * @param p_white     Number of i.i.d. Student-t white-noise predictors.
+ * @param support     Indices of active predictors (must be < p_ar).
+ * @param amplitude   Signal coefficient for active predictors.
+ * @param n_blocks    Number of AR(1) blocks.
+ * @param rho         AR(1) within-block correlation parameter (|rho| < 1).
+ * @param snr         Signal-to-noise ratio.
+ * @param seed        Random seed.
+ * @param heavy_noise If true, noise is t(nu)-distributed; otherwise Gaussian.
+ * @param nu          Degrees of freedom for Student-t distributions (default 3.0).
+ *
+ * @return DGPData with (X, y, true_support); X has p_ar + p_white columns.
+ */
+inline DGPData dgp_ht_block_white(int n,
+                                   int p_ar,
+                                   int p_white,
+                                   const std::vector<std::size_t>& support,
+                                   double amplitude,
+                                   int n_blocks,
+                                   double rho,
+                                   double snr,
+                                   unsigned seed,
+                                   bool heavy_noise = false,
+                                   double nu = 3.0)
+{
+    std::mt19937 rng(seed);
+    std::normal_distribution<double>      norm(0.0, 1.0);
+    std::chi_squared_distribution<double> chi2(nu);
+    std::student_t_distribution<double>   t_dist(nu);
+
+    const int p = p_ar + p_white;
+    const Eigen::Index block_size = static_cast<Eigen::Index>(p_ar) / n_blocks;
+
+    // Build AR(1) Toeplitz covariance for one block
+    Eigen::MatrixXd Sigma(block_size, block_size);
+    for (Eigen::Index i = 0; i < block_size; ++i) {
+        for (Eigen::Index j = 0; j < block_size; ++j) {
+            Sigma(i, j) = std::pow(rho, std::abs(i - j));
+        }
+    }
+    Eigen::LLT<Eigen::MatrixXd> llt(Sigma);
+    Eigen::MatrixXd L = llt.matrixL();
+
+    Eigen::MatrixXd X(n, p);
+
+    // Heavy-tailed AR(1) blocks (multivariate t(nu))
+    for (int m = 0; m < n_blocks; ++m) {
+        const Eigen::Index col_start = static_cast<Eigen::Index>(m) * block_size;
+
+        Eigen::MatrixXd Z(n, block_size);
+        for (Eigen::Index i = 0; i < n; ++i) {
+            for (Eigen::Index j = 0; j < block_size; ++j) {
+                Z(i, j) = norm(rng);
+            }
+        }
+
+        X.block(0, col_start, n, block_size).noalias() = Z * L.transpose();
+
+        // Scale each row by sqrt(nu / chi2(nu)) for multivariate t(nu)
+        for (Eigen::Index i = 0; i < n; ++i) {
+            double u = chi2(rng);
+            X.block(i, col_start, 1, block_size) *= std::sqrt(nu / u);
+        }
+    }
+
+    // White-noise block: i.i.d. t(nu) columns
+    for (Eigen::Index j = static_cast<Eigen::Index>(p_ar); j < p; ++j) {
+        for (Eigen::Index i = 0; i < n; ++i) {
+            X(i, j) = t_dist(rng);
+        }
+    }
+
+    auto beta = make_beta_at(p, support, amplitude);
+
+    // SNR-calibrated response
+    Eigen::VectorXd signal = X * beta;
+    const double n_d = static_cast<double>(n);
+    double mean_sig = signal.mean();
+    double var_sig  = (signal.array() - mean_sig).square().sum() / (n_d - 1.0);
+    double target_noise_var = var_sig / snr;
+
+    Eigen::VectorXd y = signal;
+    if (heavy_noise) {
+        // t(nu) noise: Var[t(nu)] = nu/(nu-2); rescale to match target variance
+        double t_var = nu / (nu - 2.0);
+        double scale = std::sqrt(target_noise_var / t_var);
+        for (Eigen::Index i = 0; i < static_cast<Eigen::Index>(n); ++i) {
+            y(i) += t_dist(rng) * scale;
+        }
+    } else {
+        double noise_sigma = std::sqrt(target_noise_var);
+        for (Eigen::Index i = 0; i < static_cast<Eigen::Index>(n); ++i) {
+            y(i) += norm(rng) * noise_sigma;
+        }
+    }
+
     return {std::move(X), std::move(y), support};
 }
 

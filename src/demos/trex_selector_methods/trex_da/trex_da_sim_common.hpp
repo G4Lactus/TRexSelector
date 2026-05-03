@@ -12,7 +12,7 @@
  * Provides:
  *   - BlockSimConfig / SimConfig    — simulation parameter structs
  *   - SolverInfo                    — solver descriptor
- *   - Support policies              — Random, CappedSpread, Clustered
+ *   - Support policies              — Random, CappedSpread, Clustered, OnePerBlock
  *   - make_support()                — support generator factory
  *   - make_trex_control()           — default TRexControlParameter
  *   - make_da_bt_control()          — default DA binary tree (BT) control
@@ -40,6 +40,9 @@
 
 // Eigen includes
 #include <Eigen/Dense>
+
+// OpenMP
+#include <utils/openmp/utils_openmp.hpp>
 
 // T-Rex includes
 #include <trex_selector_methods/trex_da/trex_da.hpp>
@@ -79,29 +82,29 @@ using trex::trex_selector_methods::utils::solver_dispatch::SolverHyperparameters
 
 // Base simulation parameters
 struct BlockSimConfig {
-    int  n         = 150;     // observations
-    int  p         = 500;     // predictors
-    int  G         = 5;       // active groups (blocks with an active variable)
-    int  g         = 5;       // group (block) size
-    double rho     = 0.7;     // within-block correlation
-    double snr     = 2.0;     // signal-to-noise ratio
-    double tFDR    = 0.2;     // target FDR
-    std::size_t K  = 20;      // random experiments per selector run
+    int  n             = 150;     // observations
+    int  p             = 500;     // predictors
+    int  G             = 5;       // active groups (blocks with an active variable)
+    int  g             = 5;       // group (block) size
+    double rho         = 0.7;     // within-block correlation
+    double snr         = 2.0;     // signal-to-noise ratio
+    double tFDR        = 0.2;     // target FDR
+    std::size_t K      = 20;      // random experiments per selector run
     std::size_t num_MC = 200; // Monte Carlo trials
-    int base_seed  = 2026;    // base RNG seed
+    int base_seed      = 2026;    // base RNG seed
 };
 
 // General simulation parameters
 struct SimConfig {
-    int  n           = 300;     // observations
-    int  p           = 1000;    // predictors
-    int  s           = 10;      // number of active predictors
-    double amplitude = 3.0;     // signal coefficient
-    double snr       = 2.0;     // signal-to-noise ratio
-    double tFDR      = 0.2;     // target FDR
-    std::size_t K    = 20;      // random experiments per selector run
+    int  n             = 300;     // observations
+    int  p             = 1000;    // predictors
+    int  s             = 10;      // number of active predictors
+    double amplitude   = 3.0;     // signal coefficient
+    double snr         = 2.0;     // signal-to-noise ratio
+    double tFDR        = 0.2;     // target FDR
+    std::size_t K      = 20;      // random experiments per selector run
     std::size_t num_MC = 200;   // Monte Carlo trials
-    int base_seed    = 2026;    // base RNG seed
+    int base_seed      = 2026;    // base RNG seed
 };
 
 // Solver descriptor
@@ -142,8 +145,8 @@ inline std::vector<std::size_t> random_support(int s, int p, std::mt19937& rng) 
  * @brief Parameterized cluster support.
  *
  * Distributes s active predictors into num_clusters clusters, each of random
- * size in [1, max_cluster_size].  Cluster anchors are placed at random
- * positions within evenly-spaced zones across [0, p).  Produces a natural
+ * size in [1, max_cluster_size]. Cluster anchors are placed at random
+ * positions within evenly-spaced zones across [0, p). Produces a natural
  * mixture of singletons and small groups.
  *
  * @param s                Number of active predictors.
@@ -239,13 +242,48 @@ inline std::vector<std::size_t> capped_spread_support(int s,
 }
 
 
+/**
+ * @brief One-per-block support: exactly one active variable per block.
+ *
+ * Places s active predictors with exactly one active per block of size block_size.
+ * Block k starts at index k*block_size. If block_size <= 0, auto-compute as p/s.
+ * Total active variables returned: min(s, ceil(p/block_size)).
+ *
+ * Example: s=5, p=1000, block_size=100 (blocks 0–9) → {0, 100, 200, 300, 400}.
+ *
+ * @param s          Number of desired active predictors.
+ * @param p          Total number of predictors.
+ * @param block_size Size of each block (0 = auto: p/s).
+ */
+inline std::vector<std::size_t> one_per_block_support(int s,
+                                                      int p,
+                                                      int block_size = 0)
+{
+    if (s <= 0 || p <= 0) return {};
+
+    int g = (block_size > 0) ? block_size : (p / s);
+    g = std::max(1, g);
+
+    const int max_blocks = p / g;
+    const int active_blocks = std::min(s, max_blocks);
+
+    std::vector<std::size_t> sup;
+    sup.reserve(static_cast<std::size_t>(active_blocks));
+
+    for (int b = 0; b < active_blocks; ++b) {
+        sup.push_back(static_cast<std::size_t>(b * g));
+    }
+
+    return sup;
+}
+
+
 // ==============================================================================
 // Support policy enum + factory
 // ==============================================================================
 
-/** @brief Configurable support-placement strategy for MC simulations.
- */
-enum class SupportPolicy { CappedSpread, Random, Clustered };
+/** @brief Configurable support-placement strategy for MC simulations. */
+enum class SupportPolicy { CappedSpread, Random, Clustered, OnePerBlock };
 
 /**
  * @brief Human-readable label for a SupportPolicy.
@@ -256,6 +294,7 @@ inline std::string support_policy_label(SupportPolicy pol) {
     switch (pol) {
         // Deterministic policies
         case SupportPolicy::CappedSpread: return "CappedSpread";
+        case SupportPolicy::OnePerBlock:  return "OnePerBlock";
         // Stochastic policies
         case SupportPolicy::Random:       return "Random";
         case SupportPolicy::Clustered:    return "Clustered";
@@ -269,6 +308,7 @@ inline std::string support_policy_label(SupportPolicy pol) {
  *
  * Deterministic policies (ignore seed):
  * - CappedSpread: evenly spaced with capped gap.
+ * - OnePerBlock: one active per block of given size.
  *
  * Stochastic policies (use seed + 500000 for RNG isolation from DGP noise seed):
  * - Random: uniform random support indices.
@@ -277,10 +317,11 @@ inline std::string support_policy_label(SupportPolicy pol) {
  * @param policy            Support placement strategy.
  * @param s                 Number of active predictors.
  * @param p                 Total number of predictors.
- * @param max_gap           Maximum gap for CappedSpread policy.
+ * @param max_gap           Maximum gap for CappedSpread policy (unused for OnePerBlock).
  * @param seed              Trial seed (used only by stochastic policies).
  * @param num_clusters      Number of clusters for Clustered policy (0 = auto).
  * @param max_cluster_size  Maximum cluster size for Clustered policy.
+ * @param block_size        Block size for OnePerBlock policy (0 = auto: p/s).
  */
 inline std::vector<std::size_t> make_support(SupportPolicy policy,
                                              int s,
@@ -288,11 +329,16 @@ inline std::vector<std::size_t> make_support(SupportPolicy policy,
                                              int max_gap,
                                              unsigned seed,
                                              int num_clusters = 0,
-                                             int max_cluster_size = 3) {
+                                             int max_cluster_size = 3,
+                                             int block_size = 0) {
     switch (policy) {
         // Deterministic policies
         case SupportPolicy::CappedSpread: {
             return capped_spread_support(s, p, max_gap);
+        }
+
+        case SupportPolicy::OnePerBlock: {
+            return one_per_block_support(s, p, block_size);
         }
 
         // Stochastic policies
@@ -352,18 +398,20 @@ struct MCTrialResult {
     double T   = 0.0;
 };
 
-/** @brief Aggregate (FDR, TPR, avg L, avg T) for each grid point. */
+/** @brief Aggregate (FDR, TPR, avg L, avg T, sd FDR, sd TPR) for each grid point. */
 struct GridPointResult {
     double avg_fdr = 0.0;
     double avg_tpr = 0.0;
     double avg_L   = 0.0;
     double avg_T   = 0.0;
+    double sd_fdr  = 0.0;
+    double sd_tpr  = 0.0;
 };
 
 using DGPFactory = std::function<DGPData(unsigned seed)>;
 
 /**
- * @brief Run num_MC sequential trials, printing progress on one line.
+ * @brief Run num_MC parallel trials, printing a start and done line.
  *
  * @param num_MC            Number of Monte Carlo trials.
  * @param progress_label    Label printed in the progress line.
@@ -373,7 +421,7 @@ using DGPFactory = std::function<DGPData(unsigned seed)>;
  * @param da_ctrl           TRexDAControlParameter for the selector.
  * @param base_seed_offset  Base offset for RNG seeds (each trial uses base_seed_offset + mc).
  *
- * @return GridPointResult with average FDR, TPR, L, and T across trials.
+ * @return GridPointResult with average FDR, TPR, L, T, and sd FDR, TPR across trials.
  */
 inline GridPointResult run_mc_trials(
     std::size_t num_MC,
@@ -384,25 +432,24 @@ inline GridPointResult run_mc_trials(
     const TRexDAControlParameter& da_ctrl,
     unsigned base_seed_offset)
 {
-    double total_fdp = 0.0;
-    double total_tpp = 0.0;
-    double total_L = 0.0;
-    double total_T = 0.0;
+    const int iMC = static_cast<int>(num_MC);
 
-    for (std::size_t mc = 0; mc < num_MC; ++mc) {
+    std::vector<double> fdp_vec(num_MC, 0.0);
+    std::vector<double> tpp_vec(num_MC, 0.0);
+    std::vector<double> L_vec(num_MC, 0.0);
+    std::vector<double> T_vec(num_MC, 0.0);
 
-        std::cout << "  " << progress_label << " \u2014 Progress: ["
-                  << std::setw(3) << (mc + 1) << "/" << num_MC << "] "
-                  << std::fixed << std::setprecision(1)
-                  << (100.0 * static_cast<double>(mc + 1)
-                            / static_cast<double>(num_MC))
-                  << "%\r" << std::flush;
+    std::cout << "  " << progress_label
+              << " \u2014 Running " << num_MC << " MC trials ...\n" << std::flush;
 
+    #pragma omp parallel for schedule(dynamic)
+    for (int mc = 0; mc < iMC; ++mc) {
         unsigned trial_seed = base_seed_offset + static_cast<unsigned>(mc);
         auto dat = make_data(trial_seed);
 
-        Eigen::Map<Eigen::MatrixXd> X_map(dat.X.data(), dat.X.rows(),
-                                          dat.X.cols());
+        Eigen::Map<Eigen::MatrixXd> X_map(dat.X.data(),
+                                             dat.X.rows(),
+                                             dat.X.cols());
         Eigen::Map<Eigen::VectorXd> y_map(dat.y.data(), dat.y.rows());
 
         TRexDASelector selector(X_map,
@@ -415,23 +462,42 @@ inline GridPointResult run_mc_trials(
         selector.select();
 
         auto sel_idx = selector.getSelectedIndices();
-        total_fdp += rates::compute_fdp(sel_idx, dat.true_support);
-        total_tpp += rates::compute_tpp(sel_idx, dat.true_support);
-        total_L   += static_cast<double>(selector.getDummyMultiplierL());
-        total_T   += static_cast<double>(selector.getStoppingTimeT());
+        fdp_vec[mc] = rates::compute_fdp(sel_idx, dat.true_support);
+        tpp_vec[mc] = rates::compute_tpp(sel_idx, dat.true_support);
+        L_vec[mc]   = static_cast<double>(selector.getDummyMultiplierL());
+        T_vec[mc]   = static_cast<double>(selector.getStoppingTimeT());
     }
 
-    std::cout << "\r" << std::string(100, ' ') << "\r"
-              << "  " << progress_label
-              << " \u2014 Completed " << num_MC << " runs.\n";
-
+    // Compute mean
     const double dMC = static_cast<double>(num_MC);
-    return {
-        total_fdp / dMC,
-        total_tpp / dMC,
-        total_L / dMC,
-        total_T / dMC
-    };
+    double avg_fdr = 0.0, avg_tpr = 0.0, avg_L = 0.0, avg_T = 0.0;
+    for (int mc = 0; mc < iMC; ++mc) {
+        avg_fdr += fdp_vec[mc];
+        avg_tpr += tpp_vec[mc];
+        avg_L   += L_vec[mc];
+        avg_T   += T_vec[mc];
+    }
+    avg_fdr /= dMC;  avg_tpr /= dMC;  avg_L /= dMC;  avg_T /= dMC;
+
+    // Compute Bessel-corrected sd (sd = 0 if num_MC <= 1)
+    double sd_fdr = 0.0, sd_tpr = 0.0;
+    if (num_MC > 1) {
+        double sum_sq_fdr = 0.0, sum_sq_tpr = 0.0;
+        for (int mc = 0; mc < iMC; ++mc) {
+            sum_sq_fdr += (fdp_vec[mc] - avg_fdr) * (fdp_vec[mc] - avg_fdr);
+            sum_sq_tpr += (tpp_vec[mc] - avg_tpr) * (tpp_vec[mc] - avg_tpr);
+        }
+        sd_fdr = std::sqrt(sum_sq_fdr / (dMC - 1.0));
+        sd_tpr = std::sqrt(sum_sq_tpr / (dMC - 1.0));
+    }
+
+    std::cout << "  " << progress_label
+              << " \u2014 done. TPP=" << std::fixed << std::setprecision(3) << avg_tpr
+              << "  FDP=" << avg_fdr << "\n\n" << std::flush;
+
+    return {avg_fdr, avg_tpr,
+            avg_L, avg_T,
+            sd_fdr, sd_tpr};
 }
 
 
@@ -440,7 +506,7 @@ inline GridPointResult run_mc_trials(
 // ==============================================================================
 
 /**
- * @brief Run num_MC sequential trials using base TRexSelector (no DA).
+ * @brief Run num_MC parallel trials using base TRexSelector (no DA).
  *
  * Provides a baseline comparison against DA-TRex.
  *
@@ -451,7 +517,7 @@ inline GridPointResult run_mc_trials(
  * @param trex_ctrl         TRexControlParameter for the selector.
  * @param base_seed_offset  Base offset for RNG seeds.
  *
- * @return GridPointResult with average FDR, TPR, L, and T across trials.
+ * @return GridPointResult with average FDR, TPR, L, T, and sd FDR, TPR across trials.
  */
 inline GridPointResult run_mc_trials_base(
     std::size_t num_MC,
@@ -461,53 +527,71 @@ inline GridPointResult run_mc_trials_base(
     const TRexControlParameter& trex_ctrl,
     unsigned base_seed_offset)
 {
-    double total_fdp = 0.0;
-    double total_tpp = 0.0;
-    double total_L = 0.0;
-    double total_T = 0.0;
+    const int iMC = static_cast<int>(num_MC);
 
-    for (std::size_t mc = 0; mc < num_MC; ++mc) {
+    std::vector<double> fdp_vec(num_MC, 0.0);
+    std::vector<double> tpp_vec(num_MC, 0.0);
+    std::vector<double> L_vec(num_MC, 0.0);
+    std::vector<double> T_vec(num_MC, 0.0);
 
-        std::cout << "  " << progress_label << " \u2014 Progress: ["
-                  << std::setw(3) << (mc + 1) << "/" << num_MC << "] "
-                  << std::fixed << std::setprecision(1)
-                  << (100.0 * static_cast<double>(mc + 1)
-                            / static_cast<double>(num_MC))
-                  << "%\r" << std::flush;
+    std::cout << "  " << progress_label
+              << " \u2014 Running " << num_MC << " MC trials ...\n" << std::flush;
 
+    #pragma omp parallel for schedule(dynamic)
+    for (int mc = 0; mc < iMC; ++mc) {
         unsigned trial_seed = base_seed_offset + static_cast<unsigned>(mc);
         auto dat = make_data(trial_seed);
 
-        Eigen::Map<Eigen::MatrixXd> X_map(dat.X.data(), dat.X.rows(),
-                                          dat.X.cols());
+        Eigen::Map<Eigen::MatrixXd> X_map(dat.X.data(),
+                                             dat.X.rows(),
+                                             dat.X.cols());
         Eigen::Map<Eigen::VectorXd> y_map(dat.y.data(), dat.y.rows());
 
         TRexSelector selector(X_map,
-                               y_map,
-                               tFDR,
-                               trex_ctrl,
-                               -1,
-                               false);
+                                y_map,
+                                tFDR,
+                                trex_ctrl,
+                                -1,
+                                false);
         selector.select();
 
         auto sel_idx = selector.getSelectedIndices();
-        total_fdp += rates::compute_fdp(sel_idx, dat.true_support);
-        total_tpp += rates::compute_tpp(sel_idx, dat.true_support);
-        total_L   += static_cast<double>(selector.getDummyMultiplierL());
-        total_T   += static_cast<double>(selector.getStoppingTimeT());
+        fdp_vec[mc] = rates::compute_fdp(sel_idx, dat.true_support);
+        tpp_vec[mc] = rates::compute_tpp(sel_idx, dat.true_support);
+        L_vec[mc]   = static_cast<double>(selector.getDummyMultiplierL());
+        T_vec[mc]   = static_cast<double>(selector.getStoppingTimeT());
     }
 
-    std::cout << "\r" << std::string(100, ' ') << "\r"
-              << "  " << progress_label
-              << " \u2014 Completed " << num_MC << " runs.\n";
-
+    // Compute mean
     const double dMC = static_cast<double>(num_MC);
-    return {
-        total_fdp / dMC,
-        total_tpp / dMC,
-        total_L / dMC,
-        total_T / dMC
-    };
+    double avg_fdr = 0.0, avg_tpr = 0.0, avg_L = 0.0, avg_T = 0.0;
+    for (int mc = 0; mc < iMC; ++mc) {
+        avg_fdr += fdp_vec[mc];
+        avg_tpr += tpp_vec[mc];
+        avg_L   += L_vec[mc];
+        avg_T   += T_vec[mc];
+    }
+    avg_fdr /= dMC;  avg_tpr /= dMC;  avg_L /= dMC;  avg_T /= dMC;
+
+    // Compute Bessel-corrected sd (sd = 0 if num_MC <= 1)
+    double sd_fdr = 0.0, sd_tpr = 0.0;
+    if (num_MC > 1) {
+        double sum_sq_fdr = 0.0, sum_sq_tpr = 0.0;
+        for (int mc = 0; mc < iMC; ++mc) {
+            sum_sq_fdr += (fdp_vec[mc] - avg_fdr) * (fdp_vec[mc] - avg_fdr);
+            sum_sq_tpr += (tpp_vec[mc] - avg_tpr) * (tpp_vec[mc] - avg_tpr);
+        }
+        sd_fdr = std::sqrt(sum_sq_fdr / (dMC - 1.0));
+        sd_tpr = std::sqrt(sum_sq_tpr / (dMC - 1.0));
+    }
+
+    std::cout << "  " << progress_label
+              << " \u2014 done. TPP=" << std::fixed << std::setprecision(3) << avg_tpr
+              << "  FDP=" << avg_fdr << "\n\n" << std::flush;
+
+    return {avg_fdr, avg_tpr,
+            avg_L, avg_T,
+            sd_fdr, sd_tpr};
 }
 
 
@@ -524,6 +608,8 @@ inline GridPointResult run_mc_trials_base(
  * @param solvers        Solver list.
  * @param fdr_map        fdr_map[solver_name](grid_idx).
  * @param tpr_map        tpr_map[solver_name](grid_idx).
+ * @param sd_fdr_map     sd_fdr_map[solver_name](grid_idx).
+ * @param sd_tpr_map     sd_tpr_map[solver_name](grid_idx).
  * @param avg_L_map      Average L results (optional, may be empty).
  * @param avg_T_map      Average T results (optional, may be empty).
  * @param header_extra   Extra info line printed after the main header.
@@ -537,6 +623,8 @@ inline void save_and_print_grid_results(
     const std::vector<SolverInfo>& solvers,
     const std::map<std::string, Eigen::VectorXd>& fdr_map,
     const std::map<std::string, Eigen::VectorXd>& tpr_map,
+    const std::map<std::string, Eigen::VectorXd>& sd_fdr_map,
+    const std::map<std::string, Eigen::VectorXd>& sd_tpr_map,
     const std::map<std::string, Eigen::VectorXd>& avg_L_map,
     const std::map<std::string, Eigen::VectorXd>& avg_T_map,
     const std::string& header_extra = "",
@@ -594,8 +682,10 @@ inline void save_and_print_grid_results(
 
     for (const auto& sv : solvers) {
         const auto& nm = sv.name;
-        print_row(nm, "FDR", fdr_map.at(nm), true);
-        print_row(nm, "TPR", tpr_map.at(nm), false);
+        print_row(nm, "FDR",    fdr_map.at(nm),    true);
+        print_row(nm, "sd_FDR", sd_fdr_map.at(nm), false);
+        print_row(nm, "TPR",    tpr_map.at(nm),     false);
+        print_row(nm, "sd_TPR", sd_tpr_map.at(nm),  false);
         if (avg_L_map.count(nm)) {
             print_row(nm, "Avg L", avg_L_map.at(nm), false);
         }
@@ -712,12 +802,16 @@ void run_param_sweep(
     cdianostics::print_section_header("MC: " + scenario_tag);
 
     const auto ngrid = static_cast<Eigen::Index>(grid_values.size());
-    std::map<std::string, Eigen::VectorXd> fdr_map, tpr_map, avg_L_map, avg_T_map;
+    std::map<std::string, Eigen::VectorXd> fdr_map, tpr_map,
+                                           sd_fdr_map, sd_tpr_map,
+                                           avg_L_map, avg_T_map;
     for (const auto& sv : solvers) {
-        fdr_map[sv.name]   = Eigen::VectorXd::Zero(ngrid);
-        tpr_map[sv.name]   = Eigen::VectorXd::Zero(ngrid);
-        avg_L_map[sv.name] = Eigen::VectorXd::Zero(ngrid);
-        avg_T_map[sv.name] = Eigen::VectorXd::Zero(ngrid);
+        fdr_map[sv.name]    = Eigen::VectorXd::Zero(ngrid);
+        tpr_map[sv.name]    = Eigen::VectorXd::Zero(ngrid);
+        sd_fdr_map[sv.name] = Eigen::VectorXd::Zero(ngrid);
+        sd_tpr_map[sv.name] = Eigen::VectorXd::Zero(ngrid);
+        avg_L_map[sv.name]  = Eigen::VectorXd::Zero(ngrid);
+        avg_T_map[sv.name]  = Eigen::VectorXd::Zero(ngrid);
     }
 
     auto trex_ctrl = trex_ctrl_base;
@@ -747,10 +841,12 @@ void run_param_sweep(
                 tFDR, trex_ctrl, da_ctrl, base_offset);
 
             auto idx = static_cast<Eigen::Index>(gi);
-            fdr_map[sv.name](idx)   = res.avg_fdr;
-            tpr_map[sv.name](idx)   = res.avg_tpr;
-            avg_L_map[sv.name](idx) = res.avg_L;
-            avg_T_map[sv.name](idx) = res.avg_T;
+            fdr_map[sv.name](idx)    = res.avg_fdr;
+            tpr_map[sv.name](idx)    = res.avg_tpr;
+            sd_fdr_map[sv.name](idx) = res.sd_fdr;
+            sd_tpr_map[sv.name](idx) = res.sd_tpr;
+            avg_L_map[sv.name](idx)  = res.avg_L;
+            avg_T_map[sv.name](idx)  = res.avg_T;
         }
     }
 
@@ -771,10 +867,12 @@ void run_param_sweep(
             all_solvers.push_back({sv.type, base_name, sv.rho_afs,
                                       sv.use_stagnation});
 
-            fdr_map[base_name]   = Eigen::VectorXd::Zero(ngrid);
-            tpr_map[base_name]   = Eigen::VectorXd::Zero(ngrid);
-            avg_L_map[base_name] = Eigen::VectorXd::Zero(ngrid);
-            avg_T_map[base_name] = Eigen::VectorXd::Zero(ngrid);
+            fdr_map[base_name]    = Eigen::VectorXd::Zero(ngrid);
+            tpr_map[base_name]    = Eigen::VectorXd::Zero(ngrid);
+            sd_fdr_map[base_name] = Eigen::VectorXd::Zero(ngrid);
+            sd_tpr_map[base_name] = Eigen::VectorXd::Zero(ngrid);
+            avg_L_map[base_name]  = Eigen::VectorXd::Zero(ngrid);
+            avg_T_map[base_name]  = Eigen::VectorXd::Zero(ngrid);
 
             auto base_ctrl = trex_ctrl_base;
             base_ctrl.solver_type           = sv.type;
@@ -800,17 +898,20 @@ void run_param_sweep(
                     tFDR, base_ctrl, base_offset);
 
                 auto idx = static_cast<Eigen::Index>(gi);
-                fdr_map[base_name](idx)   = res.avg_fdr;
-                tpr_map[base_name](idx)   = res.avg_tpr;
-                avg_L_map[base_name](idx) = res.avg_L;
-                avg_T_map[base_name](idx) = res.avg_T;
+                fdr_map[base_name](idx)    = res.avg_fdr;
+                tpr_map[base_name](idx)    = res.avg_tpr;
+                sd_fdr_map[base_name](idx) = res.sd_fdr;
+                sd_tpr_map[base_name](idx) = res.sd_tpr;
+                avg_L_map[base_name](idx)  = res.avg_L;
+                avg_T_map[base_name](idx)  = res.avg_T;
             }
         }
     }
 
     save_and_print_grid_results(
         scenario_tag, param_label, grid_values, num_MC,
-        all_solvers, fdr_map, tpr_map, avg_L_map, avg_T_map, header_extra);
+        all_solvers, fdr_map, tpr_map, sd_fdr_map, sd_tpr_map,
+        avg_L_map, avg_T_map, header_extra);
 }
 
 
