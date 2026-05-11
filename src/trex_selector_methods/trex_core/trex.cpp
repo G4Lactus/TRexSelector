@@ -189,6 +189,27 @@ void TRexSelector::validateTRexParameters() const {
             "max_dummy_multiplier must be >= 1. Got: "
             + std::to_string(trex_ctrl_.max_dummy_multiplier));
     }
+
+    // Warn when stagnation detection is disabled for greedy solvers.
+    // Greedy solvers do not guarantee convergence without it.
+    if (!trex_ctrl_.tloop_stagnation_stop) {
+        const sd::SolverTypeForTRex st = trex_ctrl_.solver_type;
+        const bool is_greedy =
+            st == sd::SolverTypeForTRex::TSTEPWISE ||
+            st == sd::SolverTypeForTRex::TOMP      ||
+            st == sd::SolverTypeForTRex::TGP        ||
+            st == sd::SolverTypeForTRex::TACGP      ||
+            st == sd::SolverTypeForTRex::TMP        ||
+            st == sd::SolverTypeForTRex::TNCGMP     ||
+            st == sd::SolverTypeForTRex::TOOLS      ||
+            st == sd::SolverTypeForTRex::TAFS;
+        if (is_greedy) {
+            std::cerr << "[TRexSelector Warning] tloop_stagnation_stop is disabled "
+                         "for a greedy solver. Greedy solvers do not guarantee "
+                         "convergence without stagnation detection. Consider "
+                         "re-enabling it.\n";
+        }
+    }
 }
 
 
