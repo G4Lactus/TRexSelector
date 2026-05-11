@@ -64,7 +64,8 @@ void plot_results_pdf(
     std::string dir = "./simulations/";
     std::string win = "_w_" + std::to_string(window_size);
 
-    std::vector<std::string> markers = {"o", "s", "^", "d", "v", "x", "*", "h"};
+    std::vector<std::string> markers = {
+        "o", "s", "^", "d", "v", "x", "*", "h"};
 
     // Custom Colors (R, G, B)
     std::vector<std::vector<double>> custom_colors = {

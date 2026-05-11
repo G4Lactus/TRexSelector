@@ -296,6 +296,7 @@ int main() {
     if (true)
         demo_TRexSelector_d_mmap_solver_serial(/*high_dim=*/true,  /*rnd_coef=*/false);
 
+
     // ============================================================
     // Demo B: single run — fully memory-mapped pipeline (X + D + solver serialization)
     // ============================================================

@@ -295,6 +295,14 @@ protected:
     /** @brief Current dummy multiplier in L-loop. */
     std::size_t dummy_multiplier_LL_{0};
 
+    /** @brief Cached base seed for the PERMUTATION L-loop strategy.
+     *
+     *  Resolved once in the constructor so that `prepareDummiesForLStep`
+     *  observes the same value across every L-iteration regardless of
+     *  whether `seed_ >= 0` (deterministic) or `seed_ < 0` (random_device).
+     */
+    unsigned int permutation_base_seed_{0};
+
     // ============================================================
     // Helper Module Members
     // ============================================================
@@ -543,6 +551,79 @@ protected:
     // ============================================================
     // Per-Iteration Step + Accumulator Hooks (overridable)
     // ============================================================
+
+    /**
+     * @brief Per-L-iteration dummy-preparation context.
+     *
+     * @details
+     *  Passed to `prepareDummiesForLStep()` once per L-loop iteration. The
+     *  hook is expected to populate / refresh whatever per-experiment dummy
+     *  state the subsequent `evaluateStep()` call will consume, and to write
+     *  back `existing_on_disk` for HCONCAT memmap accounting.
+     */
+    struct LStepContext {
+        /** Current dummy multiplier (1-based; equals max_dummy_multiplier
+         *  for the SKIPL one-shot path). */
+        std::size_t L_iter = 1;
+
+        /** Total number of dummy columns this iteration (`L_iter * p_`). */
+        std::size_t num_dummies = 0;
+
+        /** Active L-loop strategy. */
+        LLoopStrategy strategy = LLoopStrategy::STANDARD;
+
+        /** Output: number of dummy columns already persisted on disk.
+         *  Used by the HCONCAT memmap path to skip rewriting prefix
+         *  columns; set to 0 by all other strategies. */
+        std::size_t existing_on_disk = 0;
+    };
+
+    /**
+     * @brief Lifecycle hook fired once at the start of `select()`, after
+     *        voting-grid setup and before the L-loop.
+     *
+     * @details
+     *  Default base implementation: no-op. Subclasses may override to perform
+     *  one-shot setup (e.g. precomputing cluster structure) that the L-loop
+     *  / T-loop drivers depend on.
+     */
+    virtual void onSelectBegin();
+
+    /**
+     * @brief Per-L-iteration dummy-preparation hook.
+     *
+     * @details
+     *  Default base implementation: dispatches on `ctx.strategy` and performs
+     *  the canonical T-Rex dummy work via `dummy_gen_` (and invalidates
+     *  `warm_start_mgr_` when fresh dummy data has been produced). Subclasses
+     *  that bypass `dummy_gen_` (e.g. cluster-aware MVN draws in GVS) may
+     *  override this hook to populate their own per-experiment dummy state
+     *  while still inheriting the L-loop control flow.
+     *
+     *  Subclasses MUST set `ctx.existing_on_disk` to the appropriate value
+     *  (typically 0 unless they explicitly implement an HCONCAT memmap
+     *  variant).
+     *
+     * @param ctx Per-iteration context (input + output).
+     */
+    virtual void prepareDummiesForLStep(LStepContext& ctx);
+
+    /**
+     * @brief Final result post-processing hook.
+     *
+     * @details
+     *  Called from `select()` after `selectedVariables()` and `storeResults()`,
+     *  but before warm-start / memmap cleanup and before X is denormalized.
+     *  Subclasses may override to widen the returned object (e.g. into a
+     *  derived result struct) and to perform variant-specific cleanup of
+     *  any extra resources allocated in `onSelectBegin()` or in the L-loop.
+     *
+     *  Default base implementation: returns `base_result` unchanged.
+     *
+     * @param base_result The base SelectionResult produced by the standard pipeline.
+     * @return The (possibly widened) SelectionResult to return from `select()`.
+     */
+    virtual SelectionResult finalizeSelectionResult(SelectionResult&& base_result);
 
     /**
      * @brief Bundle of per-step outputs shared by the L-loop and T-loop drivers.

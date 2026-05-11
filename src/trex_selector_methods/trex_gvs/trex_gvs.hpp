@@ -13,10 +13,10 @@
  *  Extends the base class TRexSelector with cluster-aware multivariate-normal
  *  dummy generation and one of two augmentation policies:
  *
- *    - GVSType::EN    Ordinary Elastic Net (Zou & Hastie, 2005).
- *                     Cluster-aware MVN dummies are passed to the
- *                     solver. The L2 penalty is handled by the terminating solver
- *                     itself via its `lambda2` hyperparameter.
+ *    - GVSType::EN    Ordinary Elastic Net (Zou & Hastie, 2005) & (Machkour et al., 2022).
+ *                     Cluster-aware MVN dummies are passed to the solver.
+ *                     The L2 penalty is handled by the terminating solver itself via its
+ *                     `lambda2` hyperparameter.
  *                     The required solver is the T-Elastic-Net (TENET).
  *
  *    - GVSType::IEN   Informed Elastic Net (Machkour et al., CAMSAP 2023).
@@ -33,20 +33,33 @@
  *                       y_aug = [ y ; 0_M    ]
  *
  *                     The L2 penalty is fully absorbed into the augmented
- *                     system (Theorem 1 in Machkour et al.).
+ *                     system (Theorem 1 in Machkour et al. 2023).
  *
  *  Design notes:
  *  ------------
  *    - GVS does NOT use the inherited:
- *      DummyGenerator, ExperimentRunner, or MemmapManager.
+ *      DummyGenerator or ExperimentRunner.
  *      It owns a private K-experiment loop, a private per-experiment
  *      dummy-layer cache, and (for IEN) a private warm-start
- *      cache of in-memory T-LASSO solvers.
+ *      cache of in-memory T-LASSO solvers. The inherited
+ *      `MemmapManager` IS reused (re-allocated in `onSelectBegin()` with
+ *      the GVS-specific `n_eff` row count, and torn down by the base
+ *      class at the end of `select()`); see `gvs_use_mmap_`.
  *
- *    - The L-loop honors only LLoopStrategy::STANDARD (redraw all layers
- *      per L-iteration) and LLoopStrategy::HCONCAT (append one new layer
- *      per L-iteration).  Other strategies and memory mapping are rejected
- *      in the constructor.
+ *    - The L-loop honors LLoopStrategy::STANDARD, HCONCAT, SKIPL, and
+ *      DIRECT.
+ *      STANDARD and DIRECT are equivalent inside GVS (the overridden
+ *      evaluateStep` consumes `D_solver_bufs_` rather than streaming dummies from disk).
+ *      SKIPL collapses to a single L-iter with LL = max_dummy_multiplier.
+ *      PERMUTATION and PERMUTATION_DIRECT are rejected because row permutation
+ *      would destroy the per-cluster MVN covariance structure that GVS dummies
+ *      are designed to mirror.
+ *
+ *    - Memory mapping is supported uniformly across all four allowed L-loop strategies.
+ *      When enabled, K independent (non-shared) D files of size
+ *.     `n_eff x (max_dummy_multiplier * p)` are allocated up-front in `onSelectBegin()`
+ *      and the per-K columns consumed by the L-loop are filled in place by
+ *      `writeAssembledDIntoMap`.
  *
  *    - The lambda_2 ridge parameter is either user-supplied
  *      (TRexGVSControlParameter::lambda2_lars > 0) or computed once via the
@@ -121,6 +134,26 @@ enum class GVSType {
 };
 
 
+/**
+ * @brief Selection rule for the ridge regularisation parameter `lambda_2`
+ *        when no user-supplied value is given.
+ *
+ * @details
+ *   - `GCV`     : minimise generalised cross-validation criterion
+ *                 (closed-form via SVD; default, backward compatible).
+ *   - `CV_MIN`  : k-fold cross-validation, lambda minimising mean MSE.
+ *   - `CV_1SE`  : k-fold cross-validation, glmnet-style one-standard-error
+ *                 rule (largest lambda whose CV-MSE is within one SE of
+ *                 the CV-min, biased toward stronger regularisation).
+ */
+enum class LambdaSelectionMethod {
+    GCV,
+    COND_NUM,
+    CV_MIN,
+    CV_1SE
+};
+
+
 // ===================================================================================
 // Control Parameters
 // ===================================================================================
@@ -134,21 +167,54 @@ struct TRexGVSControlParameter {
     GVSType gvs_type = GVSType::EN;
 
     /** @brief Maximum allowed pairwise correlation between variables from
-     *  different clusters (used only when groups are not provided).
+     *  different clusters (only when groups are not provided).
      *  Default: 0.5.
      */
     double corr_max = 0.5;
 
     /** @brief Linkage method for hierarchical clustering.
      *  Supported: Single (default), Complete, Average, WPGMA.
+     *  All other linkage methods are rejected bcauase:
      *  Ward is rejected because the d = 1 - |cor| metric is non-Euclidean.
+     *  Mean and Median centroids are non-reducible.
      */
     hac::LinkageMethod hc_linkage = hac::LinkageMethod::Single;
 
     /** @brief User-supplied lambda_2 in LARS units.
-     *  0.0 (default) means auto-compute once via GCV-optimal ridge scaled by p / 2.
+     *  Default is 0.0, which triggers an auto-computation according to
+     *  `lambda2_method` (see below). The auto-computed glmnet-units lambda
+     *  is then scaled by p / 2 to obtain LARS units (matches R's
+     *  `trex_GVS()` convention).
      */
     double lambda2_lars = 0.0;
+
+    /** @brief Selection rule for auto-computing `lambda_2` when
+     *  `lambda2_lars == 0`. Default: GCV (backward-compatible).
+     */
+    LambdaSelectionMethod lambda2_method = LambdaSelectionMethod::GCV;
+
+    /** @brief Maximum allowed condition number for the Gram matrix X^T X
+     *  when `lambda2_method` is `COND_NUM`. Used to compute the minimal
+     *  ridge penalty required for numerical stability. Default: 10000.0.
+     */
+    double kappa_max = 10000.0;
+
+    /** @brief Number of folds for k-fold cross-validation when
+     *  `lambda2_method` is `CV_MIN` or `CV_1SE`. Default: 10
+     *  (matches R's `cv.glmnet`). Ignored when `lambda2_method == GCV`.
+     */
+    int cv_n_folds = 10;
+
+    /** @brief Number of points on the geometric lambda grid searched by
+     *  the auto-computation. Default: 100. Applies to both GCV and CV
+     *  paths.
+     */
+    Eigen::Index cv_n_lambda = 100;
+
+    /** @brief Seed for the deterministic fold-permutation RNG when
+     *  `lambda2_method` is `CV_MIN` or `CV_1SE`. Default: 0.
+     */
+    unsigned int cv_seed = 0;
 
     /** @brief Optional prior cluster assignment (length p, 0-based, contiguous
      *  IDs in [0, M-1]). Empty (default) triggers Route 2 (auto-cluster).
@@ -191,12 +257,12 @@ struct GVSSetupResult {
     /** @brief Number of clusters M. */
     std::size_t max_clusters = 0;
 
-    /** @brief Group labels carried through from the control parameters (may
-     *  be empty).
+    /** @brief Group labels carried through from the control parameters.
+     *  Allowed to be empty.
      */
     std::vector<std::string> group_labels;
 
-    /** @brief Linkage method actually used; "prior" if Route 1. */
+    /** @brief Linkage method used; "prior" if Route 1. */
     std::string hc_method_used;
 
     /** @brief 0-based cluster assignment per variable, length p. */
@@ -212,11 +278,16 @@ struct GVSSetupResult {
  * @brief Grouped Variable Selection T-Rex Selector.
  *
  * @details
- *  Inherits from TRexSelector. The select() method is overridden in full --
- *  the base implementation is NOT reused because GVS bypasses the inherited
- *  DummyGenerator/ExperimentRunner/MemmapManager pipeline. The base class
- *  is used only for normalization, voting-grid / FDP utilities, and result
- *  bookkeeping.
+ *  Inherits from TRexSelector. The base `select()` orchestration is reused;
+ *  GVS plugs in via the variant hooks:
+ *  `onSelectBegin()`,
+ *  `prepareDummiesForLStep()`, `evaluateStep()`, and
+ *  `finalizeSelectionResult()`.
+ *  The inherited `DummyGenerator` and
+ *  `ExperimentRunner` are bypassed (GVS uses cluster-aware MVN dummy
+ *  generation, an in-memory K-experiment loop, and an in-memory solver
+ *  warm-start cache). The inherited `MemmapManager` IS reused when the
+ *  user requests memory mapping; see `gvs_use_mmap_`.
  */
 class TRexGVSSelector : public tc::TRexSelector {
 
@@ -303,14 +374,11 @@ public:
     // ============================================================
 
     /**
-     * @brief Run T-Rex+GVS selection.
+     * @brief Retrieve the full GVS result from the last `select()` call.
      *
-     * @return SelectionResult. Use getGVSResult() for full GVS diagnostics.
-     */
-    SelectionResult select() override;
-
-    /**
-     * @brief Retrieve the full GVS result from the last select() call.
+     * @details `select()` itself is inherited from `TRexSelector`; this
+     * accessor exposes the widened GVS-specific result populated by
+     * `finalizeSelectionResult()`.
      */
     const GVSSelectionResult& getGVSResult() const noexcept { return gvs_result_; }
 
@@ -365,14 +433,24 @@ protected:
     // ----- Effective data shapes used by the solver -----
 
     /** @brief Number of effective rows seen by the solver (n for EN,
-     *  n + M for IEN).  Set once per select() inside setupGVS().
+     *  n + M for IEN). Set once per select() inside setupGVS().
      */
     std::size_t n_eff_{0};
+
+    /** @brief User-requested memory-mapping flag, captured before passing
+     *  the base control parameter to the parent constructor. The base
+     *  copy is forced to `false` so that the inherited `memmap_mgr_` is
+     *  not auto-allocated with the wrong row count; GVS re-allocates it
+     *  in `onSelectBegin()` with `n_eff_` once it is known.
+     */
+    bool gvs_use_mmap_{false};
 
     // ----- Solver-side buffers + Maps (must outlive any cached solver) -----
 
     /** @brief Per-experiment dummy block D ((n_eff x num_dummies) per k).
-     *  Stable across T-iterations within one L-iter.  Rebuilt per L-iter. */
+     *  In-memory mode: stable across T-iterations within one L-iter,
+     *  rebuilt per L-iter. Memory-mapped mode: empty (storage lives in
+     *  the inherited `memmap_mgr_`). */
     std::vector<Eigen::MatrixXd> D_solver_bufs_;
 
     /** @brief Stable Map over X (EN: *X_, IEN: X_aug_) shared across all k. */
@@ -387,8 +465,9 @@ protected:
     // ----- In-memory warm-start cache for the T-loop -----
 
     /** @brief Owned solver instances, one per experiment k.
-     *  Cleared at the end of every L-iteration.  Within one L-iteration the
-     *  same instance is reused across T-iterations. */
+     *  Cleared at the end of every L-iteration.
+     *  Within one L-iteration the same instance is reused across T-iterations.
+     */
     std::vector<std::unique_ptr<tsolvers::TSolver_Base>> solvers_cache_;
 
     // ============================================================
@@ -424,6 +503,42 @@ protected:
      *  Called once per select() when gvs_type == IEN.
      */
     void buildIENAugmentation();
+
+    /**
+     * @brief Center each column to mean 0 and rescale to unit L2-norm,
+     *        in place.
+     *
+     * @details
+     *  Templated on `Derived` so it accepts both owning `Eigen::MatrixXd`
+     *  buffers and `Eigen::Map<Eigen::MatrixXd>` views over
+     *  memory-mapped storage. Operates over all rows of `M` (i.e., the
+     *  full effective row count, including IEN bottom-block rows).
+     *
+     *  Applied externally to TLASSO / TENET (both solvers receive
+     *  `normalize=false, intercept=false`) so that the augmented system
+     *  handed to LARS conforms to the project-wide unit-L2 + zero-mean
+     *  convention.
+     *
+     * @tparam Derived Any Eigen dense matrix expression.
+     *
+     * @param[in,out] M    Matrix to normalize in place.
+     * @param eps          Numerical zero. A column whose L2 norm after
+     *                     centering falls below `eps` triggers a
+     *                     `std::runtime_error` (degenerate input).
+     */
+    template <typename Derived>
+    static void normalizeAugmentedColumns(Eigen::MatrixBase<Derived>& M, double eps);
+
+    /** @brief Write the assembled (n_eff x num_dummies) D-matrix for
+     *  experiment `k` directly into `dst` (typically an Eigen::Map view
+     *  over a memory-mapped buffer obtained from
+     *  `memmap_mgr_->getDMap`). Layout matches `assembleD()` exactly
+     *  (top n rows = horzcat of `dummy_layers_[k]`, bottom M rows for
+     *  IEN = repeated `ien_bottom_block_p_`). No allocation.
+     */
+    void writeAssembledDIntoMap(std::size_t k,
+                                std::size_t num_dummies,
+                                Eigen::Map<Eigen::MatrixXd>& dst) const;
 
 
     // ============================================================
@@ -502,24 +617,43 @@ protected:
 
 
     // ============================================================
-    // Custom L/T loops (replace inherited runLLoop/runTLoop)
+    // Variant hooks (override base TRexSelector hooks)
     // ============================================================
 
     /**
-     * @brief Override the inherited evaluateStep so that the inherited
-     *        runTLoop driver can call into GVS machinery.
+     * @brief Lifecycle hook: cluster discovery, lambda_2 resolution,
+     *        IEN-augmentation construction, and solver-side Map setup.
+     *
+     * @details Called once at the start of the inherited `select()`,
+     *  immediately after the voting-grid setup. Replaces the
+     *  setup phase of the previous full `select()` override.
+     */
+    void onSelectBegin() override;
+
+    /**
+     * @brief Per-L-iteration dummy preparation for GVS.
      *
      * @details
-     *  We do NOT use the inherited runLLoop because it hard-codes the
-     *  DummyGenerator pipeline.
-     *  Instead we provide a private runGVSLLoop().
-     *  However, the inherited runTLoop is generic enough
-     *  (uses only evaluateStep, initTAccumulators, growTAccumulators,
-     *  appendTRow, trimTAccumulators) that we can reuse it by overriding
-     *  evaluateStep().
+     *  Honors `LLoopStrategy::STANDARD`, `HCONCAT`, `SKIPL`, and `DIRECT`.
+     *  STANDARD / SKIPL / DIRECT redraw all `LL` cluster-MVN dummy layers
+     *  from scratch per L-iteration; HCONCAT appends one fresh layer per
+     *  L-iteration. SKIPL is invoked exactly once per `select()` with
+     *  `LL = max_dummy_multiplier`. PERMUTATION and PERMUTATION_DIRECT are
+     *  rejected in the constructor; reaching them here triggers a defensive
+     *  `std::logic_error`. Also (re)builds `D_solver_bufs_` for the K
+     *  experiments and clears `solvers_cache_` so the next `evaluateStep()`
+     *  call starts with fresh solvers.
+     */
+    void prepareDummiesForLStep(LStepContext& ctx) override;
+
+    /**
+     * @brief Override the inherited `evaluateStep` so that the inherited
+     *        L-loop and T-loop drivers can call into GVS machinery.
      *
-     *  Strategy and seed_factor arguments are ignored -- GVS uses its own
-     *  per-experiment dummy cache.
+     * @details
+     *  `strategy`, `seed_factor`, and `existing_on_disk` are ignored: GVS
+     *  uses its own per-experiment dummy cache populated by
+     *  `prepareDummiesForLStep()`.
      */
     StepView evaluateStep(std::size_t                num_dummies,
                           std::size_t                T_stop,
@@ -529,26 +663,17 @@ protected:
                           std::size_t                existing_on_disk) override;
 
     /**
-     * @brief L-loop calibration that honours STANDARD or HCONCAT and uses
-     *        cluster-aware MVN dummy generation.
+     * @brief Result widening + GVS-specific cleanup.
      *
-     * @param FDP_hat  Output: FDP estimates after the final L-iteration.
-     * @param Phi_out  Output: Phi vector from the final K-experiment pass
-     *                 (used to seed the T-loop accumulator's row 0).
+     * @details
+     *  Populates `gvs_result_` with both the base fields (copied from
+     *  `base_result`) and the GVS-specific diagnostics, then releases the
+     *  per-experiment buffers and solver cache. Returns a base-sliced
+     *  `SelectionResult` so that the inherited `select()` can continue with
+     *  warm-start cleanup and X denormalization.
      */
-    void runGVSLLoop(Eigen::VectorXd& FDP_hat, Eigen::VectorXd& Phi_out);
-
-
-    // ============================================================
-    // Result assembly
-    // ============================================================
-
-    /**
-     * @brief Populate gvs_result_, run cleanup + denormalization, and
-     *        return the base-sliced SelectionResult.
-     */
-    SelectionResult assembleGVSResult(const Eigen::MatrixXd& final_phi_T_mat,
-                                      const Eigen::VectorXd& final_Phi);
+    SelectionResult finalizeSelectionResult(
+        SelectionResult&& base_result) override;
 
 // -----------------------------------------------------------------------
 }; /* End of class TRexGVSSelector */

@@ -1,4 +1,4 @@
-# src/trex/trex_gvs/CMakeLists.txt
+# src/trex_selector_methods/trex_gvs/CMakeLists.txt
 # ==================================================================================
 # CMake configuration for the trex_gvs module.
 #

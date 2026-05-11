@@ -14,6 +14,7 @@
 #include <cstddef>
 #include <iomanip>
 #include <iostream>
+#include <random>
 #include <sstream>
 #include <string>
 
@@ -126,6 +127,13 @@ TRexSelector::TRexSelector(
     Phi_mat_.resize(0, 0);
     R_mat_.resize(0, 0);
     Phi_prime_.resize(0);
+
+    // 6. Resolve cached permutation base seed (used only by the PERMUTATION
+    //    L-loop strategy, but resolved unconditionally for simplicity).
+    // -----------------------------------------------------
+    permutation_base_seed_ = (seed_ >= 0)
+        ? static_cast<unsigned int>(seed_)
+        : std::random_device{}();
 }
 
 
@@ -196,6 +204,10 @@ TRexSelector::SelectionResult TRexSelector::select() {
     const std::size_t v_len = voting_grid_.size();
     setPercentOptPoint(v_len, trex_ctrl_.opt_threshold);
 
+    // 1a. Variant-specific lifecycle hook (default: no-op).
+    // -----------------------------------------------------
+    onSelectBegin();
+
     // 2. L-Loop: calibrate num_dummies_ with T_stop = 1
     // -----------------------------------------------------
     if (verbose_) { printProgress("L-loop: Calibrating number of dummies..."); }
@@ -240,6 +252,12 @@ TRexSelector::SelectionResult TRexSelector::select() {
         printProgress("Selection complete. Selected "
                       + std::to_string(getNumSelected()) + " variables.");
     }
+
+    // 5a. Variant-specific result widening / cleanup hook (default: returns
+    //     `result` unchanged). Fires while X is still normalized so subclasses
+    //     can rely on `*X_` reflecting the operating data.
+    // -----------------------------------------------------
+    result = finalizeSelectionResult(std::move(result));
 
     // 6. Cleanup helpers
     // -----------------------------------------------------
@@ -567,6 +585,102 @@ void TRexSelector::trimTAccumulators(Eigen::Index n_rows) {
 
 
 // ===================================================================================
+// Variant Hooks (default implementations)
+// ===================================================================================
+
+void TRexSelector::onSelectBegin() {
+    // Default: no-op. Subclasses (e.g. GVS) may override to perform one-shot
+    // setup before the L-loop runs.
+}
+
+
+void TRexSelector::prepareDummiesForLStep(LStepContext& ctx) {
+    // Default: dispatch on strategy and perform the canonical T-Rex dummy
+    // work via `dummy_gen_`. Whenever fresh dummy data is produced we
+    // invalidate `warm_start_mgr_` so the experiment runner builds new
+    // solver state for this iteration.
+    ctx.existing_on_disk = 0;
+
+    switch (ctx.strategy) {
+        case LLoopStrategy::SKIPL: {
+            // One-shot: generate K dummy matrices sized L_max * p.
+            dummy_gen_.generateAndStore(trex_ctrl_.K,
+                                        ctx.num_dummies,
+                                        /*seed_factor=*/0);
+            break;
+        }
+        case LLoopStrategy::STANDARD: {
+            // Fresh dummies each iteration → invalidate warm-start.
+            dummy_gen_.generateAndStore(trex_ctrl_.K,
+                                        ctx.num_dummies,
+                                        ctx.L_iter);
+            warm_start_mgr_.invalidate();
+            break;
+        }
+        case LLoopStrategy::HCONCAT: {
+            if (ctx.L_iter == 1) {
+                // Initial dummies: K matrices of size n x p.
+                dummy_gen_.generateAndStore(trex_ctrl_.K,
+                                            p_,
+                                            /*seed_factor=*/0);
+                ctx.existing_on_disk = 0;
+            } else {
+                // Append p new columns to each stored matrix:
+                // [D_k_old | D_k_new].
+                dummy_gen_.expandStored(p_, ctx.L_iter);
+                warm_start_mgr_.invalidate();
+                ctx.existing_on_disk = (ctx.L_iter - 1) * p_;
+            }
+            break;
+        }
+        case LLoopStrategy::PERMUTATION: {
+            if (ctx.L_iter == 1) {
+                Eigen::MatrixXd base = dummy_gen_.generate(p_, permutation_base_seed_);
+                dummy_gen_.storeBaseDummies(std::move(base), permutation_base_seed_);
+            } else {
+                // Expand: generate p new columns and append to existing base.
+                const unsigned int expansion_seed =
+                    dummygen::mix_seed(permutation_base_seed_, ctx.L_iter);
+                Eigen::MatrixXd new_cols = dummy_gen_.generate(p_, expansion_seed);
+
+                // getPermuted(0, ...) returns the base as-is.
+                Eigen::MatrixXd expanded =
+                    dummy_gen_.getPermuted(0, ctx.num_dummies - p_);
+                expanded.conservativeResize(
+                    Eigen::NoChange,
+                    static_cast<Eigen::Index>(ctx.num_dummies));
+                expanded.rightCols(p_) = new_cols;
+                dummy_gen_.storeBaseDummies(std::move(expanded),
+                                            permutation_base_seed_);
+            }
+            warm_start_mgr_.invalidate();
+            break;
+        }
+        case LLoopStrategy::DIRECT:
+        case LLoopStrategy::PERMUTATION_DIRECT: {
+            // Seed-based, on-the-fly: nothing to pre-generate.
+            warm_start_mgr_.invalidate();
+            break;
+        }
+        default: {
+            throw std::invalid_argument(
+                "TRexSelector::prepareDummiesForLStep: unsupported L-loop strategy.");
+        }
+    }
+}
+
+
+TRexSelector::SelectionResult TRexSelector::finalizeSelectionResult(
+    SelectionResult&& base_result)
+{
+    // Default: pass-through. Subclasses (e.g. GVS) may override to widen
+    // into a derived result struct and to release variant-specific
+    // resources allocated in `onSelectBegin()` / the L-loop.
+    return base_result;
+}
+
+
+// ===================================================================================
 // L-Loop Strategy Dispatcher
 // ===================================================================================
 
@@ -619,8 +733,13 @@ void TRexSelector::runLLoopCalibration_SKIPL(
                       + std::to_string(num_dummies_));
     }
 
-    // Generate K dummy matrices
-    dummy_gen_.generateAndStore(trex_ctrl_.K, num_dummies_, /*seed_factor=*/0);
+    // Per-step dummy work via virtual hook (subclasses may override; default
+    // generates K dummy matrices sized num_dummies via dummy_gen_).
+    LStepContext lctx;
+    lctx.L_iter      = trex_ctrl_.max_dummy_multiplier;
+    lctx.num_dummies = num_dummies_;
+    lctx.strategy    = LLoopStrategy::SKIPL;
+    prepareDummiesForLStep(lctx);
 
     // Per-step body via virtual hook (subclasses may inject deflation).
     StepView view = evaluateStep(num_dummies_, T_stop_, /*use_warm_start=*/false,
@@ -690,10 +809,13 @@ void TRexSelector::runLLoopCalibration_Standard(
     ctx.policy = [this](std::size_t LL,
                         std::size_t num_dummies,
                         std::size_t& existing_on_disk_out) {
-        // Fresh dummies each iteration → invalidate warm-start
-        dummy_gen_.generateAndStore(trex_ctrl_.K, num_dummies, LL);
-        warm_start_mgr_.invalidate();
-        existing_on_disk_out = 0;
+        // Per-iteration dummy work via virtual hook (subclasses may override).
+        LStepContext lctx;
+        lctx.L_iter      = LL;
+        lctx.num_dummies = num_dummies;
+        lctx.strategy    = LLoopStrategy::STANDARD;
+        prepareDummiesForLStep(lctx);
+        existing_on_disk_out = lctx.existing_on_disk;
     };
 
     runLLoopCalibration(ctx, FDP_hat, exp_results);
@@ -713,28 +835,21 @@ void TRexSelector::runLLoopCalibration_HCONCAT(
     dummy_multiplier_LL_ = 1;
     FDP_hat.resize(0);
 
-    // L=1: Generate initial K dummy matrices, each n x p
-    dummy_gen_.generateAndStore(trex_ctrl_.K, p_, /*seed_factor=*/0);
-
     LLoopPolicyContext ctx;
     ctx.strategy            = er::ExperimentStrategy::Standard;
     ctx.seed_factor_uses_LL = true;
-    // Tracks num_dummies_ from the previous iteration so HCONCAT can report
-    // how many columns are already persisted on disk (for memmap path).
-    ctx.policy = [this, prev_dummies = std::size_t{0}](
-                     std::size_t LL,
-                     std::size_t num_dummies,
-                     std::size_t& existing_on_disk_out) mutable {
-        // L > 1: Horizontally expand each D_k by p new columns
-        // [D_k_old | D_k_new] — preserves previously generated columns
-        if (LL > 1) {
-            dummy_gen_.expandStored(p_, LL);
-            warm_start_mgr_.invalidate();
-            existing_on_disk_out = prev_dummies;
-        } else {
-            existing_on_disk_out = 0;
-        }
-        prev_dummies = num_dummies;
+    ctx.policy = [this](std::size_t LL,
+                        std::size_t num_dummies,
+                        std::size_t& existing_on_disk_out) {
+        // Per-iteration dummy work via virtual hook (subclasses may override).
+        // The default impl performs the L=1 initial generation and the
+        // L>1 horizontal expansion internally.
+        LStepContext lctx;
+        lctx.L_iter      = LL;
+        lctx.num_dummies = num_dummies;
+        lctx.strategy    = LLoopStrategy::HCONCAT;
+        prepareDummiesForLStep(lctx);
+        existing_on_disk_out = lctx.existing_on_disk;
     };
 
     runLLoopCalibration(ctx, FDP_hat, exp_results);
@@ -754,38 +869,21 @@ void TRexSelector::runLLoopCalibration_Permutation(
     dummy_multiplier_LL_ = 1;
     FDP_hat.resize(0);
 
-    // Base seed for permutations
-    unsigned int base_seed = (seed_ >= 0) ? static_cast<unsigned int>(seed_)
-                                          : std::random_device{}();
-
     LLoopPolicyContext ctx;
     ctx.strategy            = er::ExperimentStrategy::Permutation;
     ctx.seed_factor_uses_LL = false;
-    ctx.policy = [this, base_seed](std::size_t LL,
-                                   std::size_t num_dummies,
-                                   std::size_t& existing_on_disk_out) {
-        // Generate or expand base dummy matrix
-        if (LL == 1) {
-            Eigen::MatrixXd base = dummy_gen_.generate(p_, base_seed);
-            dummy_gen_.storeBaseDummies(std::move(base), base_seed);
-        } else {
-            // Expand: generate p new columns, append to existing base
-            unsigned int expansion_seed = dummygen::mix_seed(base_seed, LL);
-            Eigen::MatrixXd new_cols = dummy_gen_.generate(
-                p_, expansion_seed);
-
-            // Retrieve current base, expand, re-store
-            // Note: getPermuted(0, ...) returns the base as-is
-            Eigen::MatrixXd expanded =
-                dummy_gen_.getPermuted(0, num_dummies - p_);
-            expanded.conservativeResize(
-                Eigen::NoChange, static_cast<Eigen::Index>(num_dummies));
-            expanded.rightCols(p_) = new_cols;
-            dummy_gen_.storeBaseDummies(std::move(expanded), base_seed);
-        }
-
-        warm_start_mgr_.invalidate();
-        existing_on_disk_out = 0;
+    ctx.policy = [this](std::size_t LL,
+                        std::size_t num_dummies,
+                        std::size_t& existing_on_disk_out) {
+        // Per-iteration dummy work via virtual hook (subclasses may override).
+        // The default impl uses `permutation_base_seed_` (resolved in the
+        // constructor) to generate or expand the base dummy matrix.
+        LStepContext lctx;
+        lctx.L_iter      = LL;
+        lctx.num_dummies = num_dummies;
+        lctx.strategy    = LLoopStrategy::PERMUTATION;
+        prepareDummiesForLStep(lctx);
+        existing_on_disk_out = lctx.existing_on_disk;
     };
 
     runLLoopCalibration(ctx, FDP_hat, exp_results);
@@ -809,14 +907,26 @@ void TRexSelector::runLLoopCalibration_Direct(
     dummy_multiplier_LL_ = 1;
     FDP_hat.resize(0);
 
+    // The L-loop dispatcher routes both PERMUTATION_DIRECT and DIRECT to this
+    // method; mirror that disambiguation when forwarding to the hook.
+    const LLoopStrategy hook_strategy =
+        (trex_ctrl_.lloop_strategy == LLoopStrategy::DIRECT)
+            ? LLoopStrategy::DIRECT
+            : LLoopStrategy::PERMUTATION_DIRECT;
+
     LLoopPolicyContext ctx;
     ctx.strategy            = er::ExperimentStrategy::Direct;
     ctx.seed_factor_uses_LL = false;
-    ctx.policy = [this](std::size_t /*LL*/,
-                        std::size_t /*num_dummies*/,
-                        std::size_t& existing_on_disk_out) {
-        warm_start_mgr_.invalidate();
-        existing_on_disk_out = 0;
+    ctx.policy = [this, hook_strategy](std::size_t LL,
+                                       std::size_t num_dummies,
+                                       std::size_t& existing_on_disk_out) {
+        // Per-iteration dummy work via virtual hook (subclasses may override).
+        LStepContext lctx;
+        lctx.L_iter      = LL;
+        lctx.num_dummies = num_dummies;
+        lctx.strategy    = hook_strategy;
+        prepareDummiesForLStep(lctx);
+        existing_on_disk_out = lctx.existing_on_disk;
     };
 
     runLLoopCalibration(ctx, FDP_hat, exp_results);

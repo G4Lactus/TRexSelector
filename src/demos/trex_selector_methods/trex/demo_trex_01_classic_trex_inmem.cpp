@@ -187,7 +187,7 @@ void demo_TRexSelector(bool high_dim, bool rnd_coef) {
 
 
 // ==============================================================================
-// More sophisticated demos
+// Monte Carlo Simulations
 // ==============================================================================
 
 // ==============================================================================
@@ -226,6 +226,7 @@ static TRexControlParameter make_base_trex_control() {
     ctrl.dummy_distribution = dummygen::Distribution::Normal();
     ctrl.lloop_strategy = LLoopStrategy::HCONCAT;
     ctrl.tloop_stagnation_stop = true;
+    ctrl.tloop_max_stagnant_steps = 5;
     return ctrl;
 }
 
@@ -374,7 +375,7 @@ void demo_TRexSelector_MonteCarlo(std::size_t num_MC, bool high_dim, bool rnd_co
         tpr_results_map,
         {}, // average_L_results_map not computed in this demo
         {}, // average_T_results_map not computed in this demo
-        "d01_"
+        "demo_trex_01_p01_"
     );
 
     std::cout << "\n\n";
@@ -402,11 +403,13 @@ void demo_TRexSelector_varMonteCarlo(std::size_t num_MC, bool high_dim, bool rnd
 
     // SNR values: 0.1, 0.2, ..., 2.0, 5.0
     std::vector<double> snr_values(20);
-    std::iota(snr_values.begin(), snr_values.end(), 1);  // 1 .. 20
-    for (auto& x : snr_values) x *= 0.1;                // 0.1 .. 2.0
+    // Setup 1 ... 20
+    std::iota(snr_values.begin(), snr_values.end(), 1);
+    // Change to 0.1 ... 2.0
+    for (auto& x : snr_values) x *= 0.1;
     snr_values.push_back(5.0);
 
-    const std::vector<double> snr_values_final = std::move(snr_values);
+    // Target FDR level
     const double tFDR = 0.1;
 
     // ===================================================================
@@ -459,6 +462,7 @@ void demo_TRexSelector_varMonteCarlo(std::size_t num_MC, bool high_dim, bool rnd
             ctrl.solver_params.lambda2 = current_solver.lambda2;
 
             const auto make_data = [=](unsigned seed) -> trx_sim::TrexDGPData {
+
                 // Isolated RNG for support (offset avoids correlation with data noise seed)
                 std::mt19937 rng_sup(seed + 500000u);
                 std::vector<std::size_t> pool(static_cast<std::size_t>(p));
@@ -527,7 +531,7 @@ void demo_TRexSelector_varMonteCarlo(std::size_t num_MC, bool high_dim, bool rnd
         tpr_results_map,
         average_L_results_map,
         average_T_results_map,
-        "d01_"
+        "demo_trex_01_p02_"
     );
     std::cout << "\n\n";
 }
@@ -564,7 +568,7 @@ int main() {
     // Monte Carlo simulation: Run T-Rex Selector with variable data, support & coefficients
     // --------------------------------------------------------------------------------------
     // high-dimensional setting
-    if (false)
+    if (true)
         demo_TRexSelector_varMonteCarlo(/*num_MC=*/500, /*high_dim=*/true, /*rnd_coef=*/false);
 
     return 0;

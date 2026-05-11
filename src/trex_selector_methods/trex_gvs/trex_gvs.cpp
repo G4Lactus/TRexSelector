@@ -23,12 +23,15 @@
 // Eigen
 #include <Eigen/Cholesky>
 #include <Eigen/Dense>
+#include <Eigen/Eigenvalues>
+
 
 // GVS header
 #include <trex_selector_methods/trex_gvs/trex_gvs.hpp>
 
-// Ridge GCV (header-only, lambda_2 auto-tuning)
-#include <trex_selector_methods/trex_gvs/ridge_gcv.hpp>
+// Ridge lambda-selection (header-only): GCV-optimal and k-fold CV.
+#include <ml_methods/model_selection/ridge_gcv.hpp>
+#include <ml_methods/model_selection/ridge_cv.hpp>
 
 // Data normalization helpers
 #include <trex_selector_methods/utils/trex_data_normalizer.hpp>
@@ -40,6 +43,11 @@
 #include <tsolvers/linear_model/lars_based/tenet_solver.hpp>
 #include <tsolvers/linear_model/lars_based/tlasso_solver.hpp>
 
+// OpenMP (parallel-K loop)
+#ifdef _OPENMP
+#include <omp.h>
+#endif
+
 // ===================================================================================
 
 namespace trex::trex_selector_methods::trex_gvs {
@@ -47,6 +55,20 @@ namespace trex::trex_selector_methods::trex_gvs {
 // Local namespace aliases
 namespace dn   = trex::trex_selector_methods::utils::data_normalizer;
 namespace lars = trex::tsolvers::linear_model::lars_based;
+namespace mm   = trex::trex_selector_methods::utils::memmap_manager;
+
+// Static helper: return a copy of `p` with `use_memory_mapping` forced to
+// false, so the base ctor does not pre-allocate `memmap_mgr_` (which would
+// use the base row count `n_` instead of the GVS effective row count
+// `n_eff_ = n_ + M` required for IEN). GVS re-allocates the manager in
+// `onSelectBegin()` once `n_eff_` is known.
+static tc::TRexControlParameter stripMmapForBase(
+    const tc::TRexControlParameter& p)
+{
+    tc::TRexControlParameter q = p;
+    q.use_memory_mapping = false;
+    return q;
+}
 
 
 // ===================================================================================
@@ -62,8 +84,9 @@ TRexGVSSelector::TRexGVSSelector(
     int                          seed,
     bool                         verbose
 ) :
-    tc::TRexSelector(X, y, tFDR, trex_control, seed, verbose),
-    gvs_ctrl_(std::move(gvs_control))
+    tc::TRexSelector(X, y, tFDR, stripMmapForBase(trex_control), seed, verbose),
+    gvs_ctrl_(std::move(gvs_control)),
+    gvs_use_mmap_(trex_control.use_memory_mapping)
 {
     // ---- Solver-type compatibility checks ---------------------------------
     if (gvs_ctrl_.gvs_type == GVSType::EN) {
@@ -80,18 +103,32 @@ TRexGVSSelector::TRexGVSSelector(
         }
     }
 
-    // ---- Reject memory mapping (GVS uses in-memory buffers only) ----------
-    if (trex_ctrl_.use_memory_mapping) {
-        throw std::invalid_argument(
-            "TRexGVSSelector: memory mapping is not supported."
-        );
-    }
+    // ---- Memory mapping --------------------------------------------------
+    // The user-requested flag is captured in the member-initializer list as
+    // `gvs_use_mmap_` (read from the *original* parameter copy). The flag
+    // passed to the base ctor was stripped via stripMmapForBase() so the
+    // base does not pre-allocate `memmap_mgr_` at the wrong row count.
+    // GVS re-allocates the manager in `onSelectBegin()` once `n_eff_` is
+    // known.
 
-    // ---- Reject unsupported L-loop strategies -----------------------------
-    if (trex_ctrl_.lloop_strategy != tc::LLoopStrategy::STANDARD &&
-        trex_ctrl_.lloop_strategy != tc::LLoopStrategy::HCONCAT) {
+    // ---- L-loop strategy gate ---------------------------------------------
+    // Supported: STANDARD, HCONCAT, SKIPL, DIRECT.
+    //   * STANDARD / SKIPL / DIRECT: redraw all `LL` layers from scratch per
+    //     L-iteration. SKIPL collapses to a single iteration with
+    //     `LL = max_dummy_multiplier`. DIRECT is functionally identical to
+    //     STANDARD inside GVS because the overridden `evaluateStep`
+    //     consumes `D_solver_bufs_` rather than streaming from disk.
+    //   * HCONCAT: append one fresh layer per L-iteration.
+    // Rejected: PERMUTATION, PERMUTATION_DIRECT. Row permutations of the
+    // base dummy matrix would destroy the per-cluster MVN covariance
+    // structure that the GVS dummies are explicitly designed to mirror.
+    if (trex_ctrl_.lloop_strategy == tc::LLoopStrategy::PERMUTATION ||
+        trex_ctrl_.lloop_strategy == tc::LLoopStrategy::PERMUTATION_DIRECT) {
         throw std::invalid_argument(
-            "TRexGVSSelector: only LLoopStrategy::STANDARD and HCONCAT are supported."
+            "TRexGVSSelector: PERMUTATION and PERMUTATION_DIRECT L-loop "
+            "strategies are not supported. Row permutation of the base "
+            "dummy matrix would destroy the per-cluster MVN covariance "
+            "structure that GVS dummies are designed to mirror."
         );
     }
 
@@ -151,7 +188,6 @@ void TRexGVSSelector::validateGVSParameters() const {
         for (auto id : gvs_ctrl_.prior_groups) {
             seen[static_cast<std::size_t>(id)] = true;
         }
-
         for (std::size_t m = 0; m < seen.size(); ++m) {
             if (!seen[m]) {
                 throw std::invalid_argument(
@@ -160,6 +196,7 @@ void TRexGVSSelector::validateGVSParameters() const {
             }
         }
 
+        // check: every label in group_labels (if provided) they must correspond to a cluster ID.
         if (!gvs_ctrl_.group_labels.empty() &&
             gvs_ctrl_.group_labels.size() !=
                 static_cast<std::size_t>(max_id + 1)) {
@@ -335,7 +372,8 @@ void TRexGVSSelector::finalizeSetup() {
 
 
 // ===================================================================================
-// lambda_2 (LARS units) -- user supplied or GCV-optimal
+// lambda_2 (LARS units) -- user supplied or auto-computed via the rule
+// selected in TRexGVSControlParameter::lambda2_method.
 // ===================================================================================
 
 double TRexGVSSelector::computeLambda2() const {
@@ -344,12 +382,91 @@ double TRexGVSSelector::computeLambda2() const {
         return gvs_ctrl_.lambda2_lars;
     }
 
-    // Auto-compute via GCV-optimal ridge:
-    // Convert from glmnet to LARS units by multiplying by p / 2 (as in R's trex_GVS).
-    Eigen::MatrixXd X_dense = *X_; // RidgeGCV::fit takes const MatrixXd&.
-    ridge::RidgeGCV gcv;
-    gcv.fit(X_dense, y_);
-    const double lambda_glmnet = gcv.gcv_optimal();
+    // Auto-compute lambda_2 and convert from glmnet to LARS units: lambda_lars = lambda_glmnet * p / 2
+    // (matches R's trex_GVS(), which uses cv.glmnet(alpha=0)$lambda.1se * p / 2).
+    //
+    // Method notes:
+    //   GCV    — closed-form GCV via SVD; introduced as a large-data shortcut (large n and p make
+    //            K-fold CV prohibitively expensive). Not present in the original R reference.
+    //   CV_MIN — K-fold CV, lambda minimising mean MSE. Matches R's lambda.min.
+    //   CV_1SE — K-fold CV, glmnet-style 1SE rule (largest lambda within 1 SE of the CV minimum).
+    //            Intentionally selects a larger lambda_2 than CV_MIN, making EN more ridge-like:
+    //            correlated variables couple and enter the LARS path together. On high-correlation
+    //            DGPs this produces TPR = 1.0 at controlled FDR — expected behaviour, not a bug.
+    //            Matches R's lambda.1se and is the default in the R reference implementation.
+    //
+    // Both EN and IEN fit on the original (X, y).  Fitting on the IEN augmented reference system
+    // [X; G_ref] was investigated and reverted: for high-correlation DGPs (rho ≈ 0.99) it inflates
+    // lambda_2 by ~3 orders of magnitude, driving all active-group columns (real and dummy) to near-
+    // identical normalised structure (bottom row ≈ 0.97), which collapses T-Rex FDR control in the
+    // same way as small lambda_2 — TPP is unchanged at ≈ 0.02.  The root cause of IEN TPP ≈ 0.02
+    // on the Hastie all-active DGP is not lambda_2 calibration; see assembleD() / drawClusterDummyLayer().
+    namespace ms = trex::ml_methods::model_selection;
+
+    double lambda_glmnet = 0.0;
+    switch (gvs_ctrl_.lambda2_method) {
+        case LambdaSelectionMethod::GCV: {
+            ms::ridge_gcv gcv;
+            gcv.fit(*X_, y_);
+            lambda_glmnet = gcv.gcv_optimal();
+            break;
+        }
+        case LambdaSelectionMethod::COND_NUM: {
+            double eta_max = 0.0;
+            double eta_min = 0.0;
+            const double n_inv = 1.0 / static_cast<double>(n_);
+
+            if (p_ > n_) {
+                // p > n: Rank deficient, min eigenvalue of X^T X is exactly 0.
+                // Max eigenvalue is the max eigenvalue of X X^T.
+                Eigen::MatrixXd XXT = (*X_) * X_->transpose() * n_inv;
+                Eigen::SelfAdjointEigenSolver<Eigen::MatrixXd> eig(XXT, Eigen::EigenvaluesOnly);
+                eta_max = eig.eigenvalues().maxCoeff();
+                eta_min = 0.0;
+            } else {
+                // p <= n: Compute full spectrum of X^T X.
+                Eigen::MatrixXd XTX = X_->transpose() * (*X_) * n_inv;
+                Eigen::SelfAdjointEigenSolver<Eigen::MatrixXd> eig(XTX, Eigen::EigenvaluesOnly);
+                eta_max = eig.eigenvalues().maxCoeff();
+                eta_min = std::max(0.0, eig.eigenvalues().minCoeff()); // Guard against numerical noise
+            }
+
+            double kappa_max = gvs_ctrl_.kappa_max;
+            if (kappa_max <= 1.0) {
+                kappa_max = 1.0 + 1e-6; // Prevent division by zero
+            }
+
+            lambda_glmnet = std::max(0.0, (eta_max - kappa_max * eta_min) / (kappa_max - 1.0));
+            break;
+        }
+        case LambdaSelectionMethod::CV_MIN: {
+            ms::ridge_cv cv;
+            cv.fit(*X_, y_,
+                   gvs_ctrl_.cv_n_folds,
+                   gvs_ctrl_.cv_n_lambda,
+                   /*lambda_ratio=*/1000.0,
+                   gvs_ctrl_.cv_seed);
+            lambda_glmnet = cv.cv_min();
+            break;
+        }
+        case LambdaSelectionMethod::CV_1SE: {
+            // Selects the largest lambda within 1 SE of the CV minimum — more regularised than
+            // CV_MIN. See the block comment above for the expected high-TPR / controlled-FDR
+            // behaviour this induces on high-correlation DGPs.
+            ms::ridge_cv cv;
+            cv.fit(*X_, y_,
+                   gvs_ctrl_.cv_n_folds,
+                   gvs_ctrl_.cv_n_lambda,
+                   /*lambda_ratio=*/1000.0,
+                   gvs_ctrl_.cv_seed);
+            lambda_glmnet = cv.cv_1se();
+            break;
+        }
+        default:
+            throw std::invalid_argument(
+                "TRexGVSSelector::computeLambda2: unknown LambdaSelectionMethod.");
+    }
+
     return lambda_glmnet * static_cast<double>(p_) / 2.0;
 }
 
@@ -378,13 +495,50 @@ void TRexGVSSelector::buildIENAugmentation() {
 
     // ---- X_aug_ : (n + M) x p ------------------------------------------
     X_aug_.resize(n_aug, p);
-    X_aug_.topRows(n)       = *X_;               // copy normalized X
+    X_aug_.topRows(n) =  *X_;                       // copy normalized X
     X_aug_.bottomRows(M) = ien_bottom_block_p_;  // copy bottom block
 
     // ---- y_aug_ : (n + M) x 1, [y; 0_M] ---------------------------------
     y_aug_.resize(n_aug);
     y_aug_.head(n) = y_;
     y_aug_.tail(M).setZero();
+
+    // ---- Per-column centering + unit-L2 normalization over (n + M) rows.
+    // External counterpart of R's scale() step in .lm_dummy_gvs().
+    // This restores within-cluster scale homogeneity (each column's bottom-
+    // block contribution sqrt(lambda2 / p_m) would otherwise inflate the
+    // column L2 by a p_m-dependent factor).
+    // y_aug_ mean is ~0 to floating-point precision; subtract for parity.
+    normalizeAugmentedColumns(X_aug_, eps_);
+    y_aug_.array() -= y_aug_.mean();
+}
+
+
+// ===================================================================================
+// Per-column centering + unit-L2 normalization (in-place)
+// ===================================================================================
+
+template <typename Derived>
+void TRexGVSSelector::normalizeAugmentedColumns(Eigen::MatrixBase<Derived>& M, double eps) {
+    const Eigen::Index n_rows = M.rows();
+    if (n_rows == 0) return;
+    const double inv_n = 1.0 / static_cast<double>(n_rows);
+
+    for (Eigen::Index j = 0; j < M.cols(); ++j) {
+        // Center.
+        const double mean_j = M.col(j).sum() * inv_n;
+        M.col(j).array() -= mean_j;
+
+        // Unit-L2 normalize.
+        const double norm_j = M.col(j).norm();
+        if (norm_j < eps) {
+            throw std::runtime_error(
+                "TRexGVSSelector::normalizeAugmentedColumns: column " +
+                std::to_string(j) +
+                " has L2 norm below eps after centering (degenerate column).");
+        }
+        M.col(j) /= norm_j;
+    }
 }
 
 
@@ -465,6 +619,48 @@ Eigen::MatrixXd TRexGVSSelector::assembleD(std::size_t k,
 
 
 // ===================================================================================
+// Assemble per-experiment dummy matrix directly into a mmap'd buffer
+// ===================================================================================
+
+void TRexGVSSelector::writeAssembledDIntoMap(
+    std::size_t k,
+    std::size_t num_dummies,
+    Eigen::Map<Eigen::MatrixXd>& dst) const
+{
+    const auto n   = static_cast<Eigen::Index>(n_);
+    const auto p   = static_cast<Eigen::Index>(p_);
+    const auto M   = static_cast<Eigen::Index>(gvs_setup_.max_clusters);
+    const bool ien = (gvs_ctrl_.gvs_type == GVSType::IEN);
+
+    if (dst.cols() != static_cast<Eigen::Index>(num_dummies)) {
+        throw std::runtime_error(
+            "TRexGVSSelector::writeAssembledDIntoMap: column-count mismatch.");
+    }
+    if (dst.rows() != (ien ? (n + M) : n)) {
+        throw std::runtime_error(
+            "TRexGVSSelector::writeAssembledDIntoMap: row-count mismatch.");
+    }
+
+    // Top n rows: horzcat of cached dummy layers for experiment k.
+    const auto& layers = dummy_layers_[k];
+    Eigen::Index col = 0;
+    for (const auto& layer : layers) {
+        dst.block(0, col, n, p) = layer;
+        col += p;
+    }
+
+    // Bottom M rows for IEN: replicated bottom block, one per layer.
+    if (ien) {
+        col = 0;
+        for (std::size_t li = 0; li < layers.size(); ++li) {
+            dst.block(n, col, M, p) = ien_bottom_block_p_;
+            col += p;
+        }
+    }
+}
+
+
+// ===================================================================================
 // extractPhiContribFromPath -- accumulate per-experiment phi_T contribution
 // ===================================================================================
 
@@ -535,66 +731,83 @@ TRexGVSSelector::ExpAgg TRexGVSSelector::runKExperiments(
     const auto T_idx     = static_cast<Eigen::Index>(T_stop);
     const bool ien                           = (gvs_ctrl_.gvs_type == GVSType::IEN);
 
-    Eigen::MatrixXd phi_T_acc = Eigen::MatrixXd::Zero(p_idx, T_idx);
+    // Per-experiment phi_T contributions; summed after the parallel section.
+    std::vector<Eigen::MatrixXd> phi_T_per_k(K);
 
-    // If we are starting fresh (no warm-start), wipe any leftover solver
-    // instances.
-    // D_solver_bufs_ is assumed to already be populated by the L-loop driver for this iteration.
+    // If starting fresh (no warm-start), wipe leftover solver instances.
+    // D_solver_bufs_ / D_solver_maps_ are populated by prepareDummiesForLStep.
     if (!use_warm_start) {
         solvers_cache_.clear();
         solvers_cache_.resize(K);
-        D_solver_maps_.clear();
-        D_solver_maps_.resize(K);
     }
 
-    for (std::size_t k = 0; k < K; ++k) {
+    // ---- OpenMP setup (mirror base ExperimentRunner pattern) ------------
+    const bool do_parallel =
+        trex_ctrl_.parallel_rnd_experiments && (trex_ctrl_.max_outer_threads > 1);
+    #ifdef _OPENMP
+    int old_max_levels = omp_get_max_active_levels();
+    if (do_parallel) omp_set_max_active_levels(2);
+    #endif
 
-        // Build the Map for this experiment's D buffer ONLY when constructing
-        // a fresh solver.  On warm-start the existing solver holds a pointer
-        // to the previously created Map (*D_solver_maps_[k]); overwriting
-        // that unique_ptr would invalidate the solver's bound reference.
-        Eigen::MatrixXd beta_path;
+    #pragma omp parallel if(do_parallel)
+    {
+        #ifdef _OPENMP
+        if (do_parallel) omp_set_num_threads(trex_ctrl_.max_inner_threads);
+        #endif
+        Eigen::setNbThreads(trex_ctrl_.max_inner_threads);
 
-        if (use_warm_start && solvers_cache_[k] != nullptr) {
-            // -- Warm-start branch (Map / buffer untouched). --
-            solvers_cache_[k]->executeStep(T_stop, /*early_stop=*/true);
-            beta_path = solvers_cache_[k]->getBetaPath();
+        #pragma omp for schedule(dynamic)
+        for (std::size_t k = 0; k < K; ++k) {
 
-        } else {
-            // -- Fresh construction branch: (re)bind the Map first. --
-            D_solver_maps_[k] = std::make_unique<Eigen::Map<Eigen::MatrixXd>>(
-                D_solver_bufs_[k].data(),
-                D_solver_bufs_[k].rows(),
-                D_solver_bufs_[k].cols());
+            Eigen::MatrixXd beta_path;
 
-            std::unique_ptr<tsolvers::TSolver_Base> solver;
-            if (ien) {
-                solver = std::make_unique<lars::TLASSO_Solver>(
-                    *X_solver_map_,
-                    *D_solver_maps_[k],
-                    *y_solver_map_,
-                    /*normalize=*/false,
-                    /*intercept=*/false,
-                    /*verbose=*/false);
+            if (use_warm_start && solvers_cache_[k] != nullptr) {
+                // -- Warm-start branch: solver already bound to *D_solver_maps_[k]. --
+                solvers_cache_[k]->executeStep(T_stop, /*early_stop=*/true);
+                beta_path = solvers_cache_[k]->getBetaPath();
+
             } else {
-                solver = std::make_unique<lars::TENET_Solver>(
-                    *X_solver_map_,
-                    *D_solver_maps_[k],
-                    *y_solver_map_,
-                    lambda2_,
-                    /*normalize=*/false,
-                    /*intercept=*/false,
-                    /*verbose=*/false);
+                // -- Fresh construction branch: D_solver_maps_[k] was bound by
+                //    prepareDummiesForLStep (in-memory or mmap). --
+                std::unique_ptr<tsolvers::TSolver_Base> solver;
+                if (ien) {
+                    solver = std::make_unique<lars::TLASSO_Solver>(
+                        *X_solver_map_,
+                        *D_solver_maps_[k],
+                        *y_solver_map_,
+                        /*normalize=*/false,
+                        /*intercept=*/false,
+                        /*verbose=*/false);
+                } else {
+                    solver = std::make_unique<lars::TENET_Solver>(
+                        *X_solver_map_,
+                        *D_solver_maps_[k],
+                        *y_solver_map_,
+                        lambda2_,
+                        /*normalize=*/false,
+                        /*intercept=*/false,
+                        /*verbose=*/false);
+                }
+
+                solver->executeStep(T_stop, /*early_stop=*/true);
+                beta_path = solver->getBetaPath();
+                solvers_cache_[k] = std::move(solver);
             }
 
-            solver->executeStep(T_stop, /*early_stop=*/true);
-            beta_path = solver->getBetaPath();
-            solvers_cache_[k] = std::move(solver);
+            // Per-experiment phi_T contribution (independent slot, no race).
+            phi_T_per_k[k] = extractPhiContribFromPath(
+                beta_path, p_, num_dummies, T_stop, eps_, verbose_);
         }
+    }
 
-        // Accumulate per-experiment contribution into phi_T_acc.
-        phi_T_acc += extractPhiContribFromPath(
-            beta_path, p_, num_dummies, T_stop, eps_, verbose_);
+    #ifdef _OPENMP
+    if (do_parallel) omp_set_max_active_levels(old_max_levels);
+    #endif
+
+    // Aggregate per-K contributions.
+    Eigen::MatrixXd phi_T_acc = Eigen::MatrixXd::Zero(p_idx, T_idx);
+    for (std::size_t k = 0; k < K; ++k) {
+        phi_T_acc += phi_T_per_k[k];
     }
 
     // Average over K experiments.
@@ -638,124 +851,140 @@ TRexGVSSelector::StepView TRexGVSSelector::evaluateStep(
 
 
 // ===================================================================================
-// L-loop: cluster-aware dummy generation, STANDARD or HCONCAT
+// L-loop hook: cluster-aware dummy generation.
+// Strategies handled: STANDARD, HCONCAT, SKIPL, DIRECT.
+//   - STANDARD / SKIPL / DIRECT : redraw all LL layers from scratch.
+//   - HCONCAT                   : append one fresh layer per L-iteration.
 // ===================================================================================
 
-void TRexGVSSelector::runGVSLLoop(Eigen::VectorXd& FDP_hat,
-                                  Eigen::VectorXd& Phi_out)
+void TRexGVSSelector::prepareDummiesForLStep(LStepContext& ctx)
 {
     const std::size_t K     = trex_ctrl_.K;
-    const std::size_t L_max = trex_ctrl_.max_dummy_multiplier;
-    const bool standard     = (trex_ctrl_.lloop_strategy == tc::LLoopStrategy::STANDARD);
-    const auto p_idx     = static_cast<Eigen::Index>(p_);
-    const auto M_idx     = static_cast<Eigen::Index>(gvs_setup_.max_clusters);
-    const bool ien                           = (gvs_ctrl_.gvs_type == GVSType::IEN);
-    const auto n_eff_idx = static_cast<Eigen::Index>(n_eff_);
+    const std::size_t LL    = ctx.L_iter;
+    const auto        n_eff_idx = static_cast<Eigen::Index>(n_eff_);
 
-    // Initial state.
-    dummy_multiplier_LL_ = 1;
-    dummy_layers_.assign(K, {});
+    // Three of the four supported strategies follow the redraw-all path.
+    // HCONCAT is the only append-only strategy. PERMUTATION variants are
+    // rejected in the constructor and trigger a defensive throw here.
+    bool redraw_all = false;
+    switch (trex_ctrl_.lloop_strategy) {
+        case tc::LLoopStrategy::STANDARD:
+        case tc::LLoopStrategy::SKIPL:
+        case tc::LLoopStrategy::DIRECT:
+            redraw_all = true;
+            break;
+        case tc::LLoopStrategy::HCONCAT:
+            redraw_all = false;
+            break;
+        case tc::LLoopStrategy::PERMUTATION:
+        case tc::LLoopStrategy::PERMUTATION_DIRECT:
+        default:
+            throw std::logic_error(
+                "TRexGVSSelector::prepareDummiesForLStep: unsupported "
+                "LLoopStrategy reached the dummy-preparation hook "
+                "(should have been rejected by the constructor).");
+    }
 
-    // RNG seeded deterministically from seed_; per-experiment unique streams.
+    // (Re)allocate the per-experiment layer cache on first iteration.
+    // SKIPL only ever calls this hook once with LL = max_dummy_multiplier,
+    // so the LL == 1 trigger generalises to "first call this select()".
+    if (LL == 1 || dummy_layers_.size() != K) {
+        dummy_layers_.assign(K, {});
+    }
+
+    // Deterministic per-(k, LL) RNG stream seeded from `seed_`.
     const std::uint64_t base_seed = (seed_ < 0)
         ? static_cast<std::uint64_t>(std::random_device{}())
         : static_cast<std::uint64_t>(seed_);
 
-    if (verbose_) {
-        printProgress("GVS L-loop: starting (" +
-                      std::string(standard ? "STANDARD" : "HCONCAT") + ")");
-    }
+    // ---- Generate / extend per-experiment dummy layers -------------------
+    for (std::size_t k = 0; k < K; ++k) {
 
-    while (dummy_multiplier_LL_ <= L_max &&
-           (FDP_hat.size() == 0 || FDP_hat(static_cast<Eigen::Index>(opt_point_)) > tFDR_)) {
+        std::mt19937 rng(static_cast<std::uint32_t>(
+            base_seed +
+            static_cast<std::uint64_t>(k) * 1000003ULL +
+            static_cast<std::uint64_t>(LL)));
 
-        const std::size_t LL = dummy_multiplier_LL_;
-        num_dummies_ = LL * p_;
-
-        // ---- Generate / extend per-experiment dummy layers -------------
-        for (std::size_t k = 0; k < K; ++k) {
-
-            std::mt19937 rng(static_cast<std::uint32_t>(
-                base_seed +
-                static_cast<std::uint64_t>(k) * 1000003ULL +
-                static_cast<std::uint64_t>(LL)));
-
-            if (standard) {
-                // Redraw all LL layers from scratch.
-                dummy_layers_[k].clear();
-                dummy_layers_[k].reserve(LL);
-                for (std::size_t li = 0; li < LL; ++li) {
-                    dummy_layers_[k].push_back(drawClusterDummyLayer(rng));
-                }
-            } else {
-                // HCONCAT: append one fresh layer per L-iteration.
-                while (dummy_layers_[k].size() < LL) {
-                    dummy_layers_[k].push_back(drawClusterDummyLayer(rng));
-                }
+        if (redraw_all) {
+            // Redraw all LL layers from scratch.
+            dummy_layers_[k].clear();
+            dummy_layers_[k].reserve(LL);
+            for (std::size_t li = 0; li < LL; ++li) {
+                dummy_layers_[k].push_back(drawClusterDummyLayer(rng));
+            }
+        } else {
+            // HCONCAT: append one fresh layer per L-iteration.
+            while (dummy_layers_[k].size() < LL) {
+                dummy_layers_[k].push_back(drawClusterDummyLayer(rng));
             }
         }
-
-        // ---- (Re)build solver-side D buffers + invalidate solver cache --
-        D_solver_bufs_.assign(K, Eigen::MatrixXd(n_eff_idx,
-                                                 static_cast<Eigen::Index>(num_dummies_)));
-        for (std::size_t k = 0; k < K; ++k) {
-            D_solver_bufs_[k] = assembleD(k, num_dummies_);
-        }
-        // Invalidate solvers (fresh dummy data => fresh solvers at T = 1).
-        solvers_cache_.clear();
-        solvers_cache_.resize(K);
-
-        // ---- Run the K experiments at T = 1 (no warm-start) ------------
-        T_stop_ = 1;
-        auto agg = runKExperiments(/*T_stop=*/1, num_dummies_,
-                                   /*use_warm_start=*/false);
-
-        // Compute Phi_prime, FDP_hat from this iteration's K aggregate.
-        Phi_prime_ = computePhiPrime(agg.phi_T_mat, agg.Phi, num_dummies_);
-        FDP_hat    = computeFDPHat(voting_grid_, agg.Phi, Phi_prime_);
-        Phi_out    = agg.Phi;
-
-        if (verbose_) {
-            std::ostringstream oss;
-            oss << "GVS L = " << std::setw(2) << LL
-                << " | num_dummies = " << num_dummies_
-                << " | FDP@opt = " << FDP_hat(static_cast<Eigen::Index>(opt_point_));
-            printProgress(oss.str());
-        }
-
-        // The exp_results we return through the seed StepView for runTLoop:
-        // not stored explicitly here; runTLoop will call evaluateStep(2, ...)
-        // which will warm-start from solvers_cache_ already populated by the
-        // last runKExperiments call above.
-
-        ++dummy_multiplier_LL_;
-
-        // Suppress unused-variable warning when assertions disabled.
-        (void)p_idx; (void)M_idx; (void)ien;
     }
 
-    // Roll back: dummy_multiplier_LL_ was incremented past the last applied LL.
-    if (dummy_multiplier_LL_ > 1) --dummy_multiplier_LL_;
+    // ---- (Re)build solver-side D buffers + invalidate solver cache -------
+    if (gvs_use_mmap_) {
+        // Memory-mapped path: write directly into the per-K mmap buffers
+        // pre-allocated in onSelectBegin().
+        D_solver_bufs_.clear();
+        D_solver_maps_.clear();
+        D_solver_maps_.resize(K);
+        const auto num_d_idx = static_cast<Eigen::Index>(ctx.num_dummies);
+        for (std::size_t k = 0; k < K; ++k) {
+            // getDMap returns an Eigen::Map view onto the first
+            // `num_dummies` columns of file k (n_eff x num_dummies).
+            auto dmap = memmap_mgr_->getDMap(k, ctx.num_dummies);
+            if (dmap.rows() != n_eff_idx || dmap.cols() != num_d_idx) {
+                throw std::runtime_error(
+                    "TRexGVSSelector::prepareDummiesForLStep: "
+                    "mmap returned unexpected shape.");
+            }
+            writeAssembledDIntoMap(k, ctx.num_dummies, dmap);
+            normalizeAugmentedColumns(dmap, eps_);
+            // Bind the long-lived Map for runKExperiments. The owning
+            // storage is the mmap file managed by memmap_mgr_.
+            D_solver_maps_[k] = std::make_unique<Eigen::Map<Eigen::MatrixXd>>(
+                dmap.data(), dmap.rows(), dmap.cols());
+        }
+    } else {
+        // In-memory path.
+        D_solver_bufs_.assign(K, Eigen::MatrixXd(
+            n_eff_idx, static_cast<Eigen::Index>(ctx.num_dummies)));
+        D_solver_maps_.clear();
+        D_solver_maps_.resize(K);
+        for (std::size_t k = 0; k < K; ++k) {
+            D_solver_bufs_[k] = assembleD(k, ctx.num_dummies);
+            // Per-column centering + unit-L2 normalization over n_eff rows
+            // (external counterpart of R's scale() on the augmented system).
+            // Re-applied every L-iteration regardless of strategy: solver cache
+            // is cleared each L-iteration, so the cost is amortised.
+            normalizeAugmentedColumns(D_solver_bufs_[k], eps_);
+            D_solver_maps_[k] = std::make_unique<Eigen::Map<Eigen::MatrixXd>>(
+                D_solver_bufs_[k].data(),
+                D_solver_bufs_[k].rows(),
+                D_solver_bufs_[k].cols());
+        }
+    }
+    // Fresh dummy data => fresh solvers at T = 1.
+    solvers_cache_.clear();
+    solvers_cache_.resize(K);
+
+    ctx.existing_on_disk = 0;
 
     if (verbose_) {
-        printProgress("GVS L-loop: converged at LL = " +
-                      std::to_string(dummy_multiplier_LL_) + "\n");
+        std::ostringstream oss;
+        oss << "GVS L = " << std::setw(2) << LL
+            << " | num_dummies = " << ctx.num_dummies;
+        printProgress(oss.str());
     }
 }
 
 
 // ===================================================================================
-// select() -- main entry point
+// onSelectBegin -- pre-L-loop variant setup
 // ===================================================================================
 
-TRexGVSSelector::SelectionResult TRexGVSSelector::select() {
+void TRexGVSSelector::onSelectBegin() {
 
-    // 1. Voting grid + opt point.
-    voting_grid_ = createVotingGrid();
-    const std::size_t v_len = voting_grid_.size();
-    setPercentOptPoint(v_len, trex_ctrl_.opt_threshold);
-
-    // 2. Group structure (Sigma_m, L_m, IEN_cl_id_vectors).
+    // 1. Group structure (Sigma_m, L_m, IEN_cl_id_vectors).
     if (verbose_) { printProgress("GVS: Setting up group structure..."); }
     setupGVS();
 
@@ -764,7 +993,7 @@ TRexGVSSelector::SelectionResult TRexGVSSelector::select() {
                       ", M = " + std::to_string(gvs_setup_.max_clusters));
     }
 
-    // 3. lambda_2 (LARS units).
+    // 2. lambda_2 (LARS units).
     lambda2_ = computeLambda2();
     if (verbose_) {
         std::ostringstream oss;
@@ -772,7 +1001,7 @@ TRexGVSSelector::SelectionResult TRexGVSSelector::select() {
         printProgress(oss.str());
     }
 
-    // 4. Build IEN augmentation if needed; set up effective shapes.
+    // 3. Build IEN augmentation if needed; set up effective shapes.
     const bool ien = (gvs_ctrl_.gvs_type == GVSType::IEN);
     if (ien) {
         buildIENAugmentation();
@@ -785,10 +1014,9 @@ TRexGVSSelector::SelectionResult TRexGVSSelector::select() {
         y_solver_map_ = std::make_unique<Eigen::Map<Eigen::VectorXd>>(
             y_aug_.data(), y_aug_.size());
 
-    } else { // EN variant: no augmentation, solver sees original X and y.
+    } else { // EN: no augmentation, solver sees original X and y.
         n_eff_ = n_;
 
-        // Solver-side X and y view directly into the base buffers.
         X_solver_map_ = std::make_unique<Eigen::Map<Eigen::MatrixXd>>(
             X_->data(), X_->rows(), X_->cols());
 
@@ -796,56 +1024,37 @@ TRexGVSSelector::SelectionResult TRexGVSSelector::select() {
             y_.data(), y_.size());
     }
 
-    // 5. L-loop (overrides inherited runLLoop).
-    Eigen::VectorXd FDP_hat;
-    Eigen::VectorXd Phi_seed;
-    runGVSLLoop(FDP_hat, Phi_seed);
-
-    // 6. T-loop -- reuse the inherited driver via overridden evaluateStep.
-    //    Need to seed exp_results so runTLoop can populate row 0.
-    tc::er::ExperimentResults exp_results;
-    exp_results.Phi = Phi_seed;
-    exp_results.phi_T_mat.resize(static_cast<Eigen::Index>(p_), 1);
-    exp_results.phi_T_mat.col(0) = Phi_seed;
-    runTLoop(FDP_hat, exp_results);
-
-    // 7. Variable selection (base helper).
-    auto base_result =
-        selectedVariables(FDP_hat_mat_, Phi_mat_,
-                          voting_grid_, T_stop_);
-
-    // 8. Assemble GVS result + cleanup + denormalize.
-    return assembleGVSResult(Phi_mat_,
-                             base_result.selected_var.cast<double>().eval());
-
-    // (We pass the final phi/Phi via gvs_result_ inside assembleGVSResult below;
-    //  parameters here are placeholders -- see implementation.)
+    // 4. Allocate per-K memory-mapped D files at max size if requested.
+    //    shared=false: GVS draws per-experiment distinct MVN dummies, so
+    //    each k requires its own backing file (also a prerequisite for the
+    //    parallel-K loop in runKExperiments).
+    if (gvs_use_mmap_) {
+        const std::size_t max_dummies = trex_ctrl_.max_dummy_multiplier * p_;
+        memmap_mgr_ = std::make_unique<mm::MemmapManager>(
+            n_eff_, max_dummies, trex_ctrl_.K, /*shared=*/false, verbose_);
+        memmap_mgr_->initialize();
+    }
 }
 
 
 // ===================================================================================
-// Result assembly + cleanup + denormalization
+// finalizeSelectionResult -- widen into GVSSelectionResult + GVS-side cleanup
 // ===================================================================================
 
-TRexGVSSelector::SelectionResult TRexGVSSelector::assembleGVSResult(
-    const Eigen::MatrixXd& /*final_phi_T_mat*/,
-    const Eigen::VectorXd& /*final_Phi*/)
+TRexGVSSelector::SelectionResult TRexGVSSelector::finalizeSelectionResult(
+    SelectionResult&& base_result)
 {
-    // Re-derive base-style selection from the accumulator matrices.
-    auto base = selectedVariables(
-        FDP_hat_mat_, Phi_mat_, voting_grid_, T_stop_);
-
-    // Populate base fields.
-    gvs_result_.selected_var   = base.selected_var;
-    gvs_result_.v_thresh       = base.v_thresh;
-    gvs_result_.R_mat          = base.R_mat;
-    gvs_result_.T_stop         = T_stop_;
-    gvs_result_.num_dummies    = num_dummies_;
+    // Copy base fields into the persistent GVS result.
+    gvs_result_.selected_var   = base_result.selected_var;
+    gvs_result_.v_thresh       = base_result.v_thresh;
+    gvs_result_.R_mat          = base_result.R_mat;
+    gvs_result_.T_stop         = base_result.T_stop;
+    gvs_result_.num_dummies    = base_result.num_dummies;
     gvs_result_.dummy_factor_L = dummy_multiplier_LL_;
-    gvs_result_.Phi_prime      = Phi_prime_;
-    gvs_result_.voting_grid    = voting_grid_;
-    gvs_result_.FDP_hat_mat    = FDP_hat_mat_;
-    gvs_result_.Phi_mat        = Phi_mat_;
+    gvs_result_.Phi_prime      = base_result.Phi_prime;
+    gvs_result_.voting_grid    = base_result.voting_grid;
+    gvs_result_.FDP_hat_mat    = base_result.FDP_hat_mat;
+    gvs_result_.Phi_mat        = base_result.Phi_mat;
 
     // GVS-specific fields.
     gvs_result_.lambda2_used   = lambda2_;
@@ -855,15 +1064,14 @@ TRexGVSSelector::SelectionResult TRexGVSSelector::assembleGVSResult(
     gvs_result_.groups_vec     = gvs_setup_.groups_vec;
     gvs_result_.group_labels   = gvs_setup_.group_labels;
 
-    // Persist into base accessors.
-    storeResults(gvs_result_);
-
     if (verbose_) {
-        printProgress("GVS: Selection complete.  Selected " +
+        printProgress("GVS: Selection complete. Selected " +
                       std::to_string(getNumSelected()) + " variables.\n");
     }
 
-    // Cleanup: drop solver cache + buffers, then denormalize X.
+    // GVS-specific cleanup: solver cache + buffers + augmented system.
+    // Base `select()` will subsequently run warm_start_mgr_/memmap cleanup
+    // and denormalize X.
     solvers_cache_.clear();
     D_solver_bufs_.clear();
     D_solver_maps_.clear();
@@ -873,25 +1081,11 @@ TRexGVSSelector::SelectionResult TRexGVSSelector::assembleGVSResult(
     y_aug_.resize(0);
     dummy_layers_.clear();
 
-    if (X_is_normalized_) {
-        if (verbose_) { printProgress("GVS: Denormalizing X to original scale.\n"); }
-        dn::denormalizeX(*X_, norm_params_);
-        X_is_normalized_ = false;
-    }
-
-    // Return a base-sliced SelectionResult (R API expects it).
-    SelectionResult out;
-    out.selected_var   = gvs_result_.selected_var;
-    out.v_thresh       = gvs_result_.v_thresh;
-    out.R_mat          = gvs_result_.R_mat;
-    out.T_stop         = gvs_result_.T_stop;
-    out.num_dummies    = gvs_result_.num_dummies;
-    out.dummy_factor_L = gvs_result_.dummy_factor_L;
-    out.Phi_prime      = gvs_result_.Phi_prime;
-    out.voting_grid    = gvs_result_.voting_grid;
-    out.FDP_hat_mat    = gvs_result_.FDP_hat_mat;
-    out.Phi_mat        = gvs_result_.Phi_mat;
-    return out;
+    // Return the (also-updated) base-sliced result.  We propagate the
+    // dummy_factor_L the GVS hook has just resolved so any base consumer
+    // that inspects the SelectionResult sees the correct value.
+    base_result.dummy_factor_L = dummy_multiplier_LL_;
+    return base_result;
 }
 
 
