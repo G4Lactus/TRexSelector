@@ -36,7 +36,6 @@ target_include_directories(trex_utils PUBLIC
 
     # Install-tree
     $<INSTALL_INTERFACE:include>
-    $<INSTALL_INTERFACE:src>
 )
 # ==================================================================================
 
@@ -70,6 +69,31 @@ target_compile_options(trex_utils PRIVATE
     -Wno-deprecated-declarations
     $<$<CONFIG:Debug>:-g -O0 -Wall -Wextra>
     $<$<CONFIG:Release>:-O3 -DNDEBUG -march=native -ffast-math -funroll-loops>
+)
+# ==================================================================================
+
+
+# ==================================================================================
+# 4b. Public Header File Set
+# ==================================================================================
+target_sources(trex_utils PUBLIC
+    FILE_SET HEADERS
+    BASE_DIRS
+        $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/src>
+        $<INSTALL_INTERFACE:include>
+    FILES
+        ${CMAKE_CURRENT_SOURCE_DIR}/datageneration/utils_datagen.hpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/datageneration/utils_dummygen.hpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/datageneration/utils_noisegen.hpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/eval_metrics/utils_eval_cdiagnostics.hpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/eval_metrics/utils_eval_composites.hpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/eval_metrics/utils_eval_counts.hpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/eval_metrics/utils_eval_rates.hpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/fp_classify/fp_classify.hpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/memmap/memory_mapped_matrix.hpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/openmp/utils_openmp.hpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/serialization/utils_cereal_armadillo.hpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/serialization/utils_cereal_eigen.hpp
 )
 # ==================================================================================
 

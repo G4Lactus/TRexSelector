@@ -25,9 +25,6 @@ else()
     find_dependency(LAPACK REQUIRED)
 endif()
 
-# ── Optional dependencies ───────────────────────────────────────────────────
-find_dependency(Matplot++ QUIET)
-
 # ── Pull in exported targets ────────────────────────────────────────────────
 include("${CMAKE_CURRENT_LIST_DIR}/TRexSelectorTargets.cmake")
 

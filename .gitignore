@@ -9,6 +9,8 @@
 ################################
 build/
 build-*/
+install/
+vcpkg_installed/
 html/
 simulations/
 notes/

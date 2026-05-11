@@ -1,5 +1,5 @@
 {
-    "version": 3,
+    "version": 6,
     "configurePresets": [
         {
             "name": "debug",
@@ -20,6 +20,69 @@
                 "CMAKE_BUILD_TYPE": "Release",
                 "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
             }
+        },
+        {
+            "name": "release-libs",
+            "displayName": "Release (libraries only, no demos)",
+            "description": "Release build used for packaging and installation — demos excluded",
+            "binaryDir": "${sourceDir}/build/release",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Release",
+                "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
+                "TREX_BUILD_DEMOS": "OFF"
+            }
+        },
+        {
+            "name": "vcpkg-release",
+            "displayName": "Release with vcpkg dependencies",
+            "description": "Release build (no demos) using vcpkg toolchain to auto-install dependencies. Requires VCPKG_ROOT to be set.",
+            "binaryDir": "${sourceDir}/build/vcpkg-release",
+            "toolchainFile": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Release",
+                "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
+                "TREX_BUILD_DEMOS": "OFF"
+            }
+        }
+    ],
+    "buildPresets": [
+        {
+            "name": "debug-build",
+            "displayName": "Debug Build",
+            "configurePreset": "debug"
+        },
+        {
+            "name": "release-build",
+            "displayName": "Release Build",
+            "configurePreset": "release"
+        },
+        {
+            "name": "release-build-libs",
+            "displayName": "Release Build (libraries only, no demos)",
+            "configurePreset": "release-libs"
+        },
+        {
+            "name": "vcpkg-release-build",
+            "displayName": "Release Build (vcpkg)",
+            "configurePreset": "vcpkg-release"
+        }
+    ],
+    "workflowPresets": [
+        {
+            "name": "release-libs",
+            "displayName": "Configure + Build libraries only (no demos)",
+            "steps": [
+                { "type": "configure", "name": "release-libs" },
+                { "type": "build",     "name": "release-build-libs" }
+            ]
+        },
+        {
+            "name": "vcpkg-release",
+            "displayName": "Configure + Build with vcpkg dependencies",
+            "steps": [
+                { "type": "configure", "name": "vcpkg-release" },
+                { "type": "build",     "name": "vcpkg-release-build" }
+            ]
         }
     ]
 }

@@ -28,11 +28,15 @@ The following packages are required:
     apt install libeigen3-dev libcereal-dev libboost-all-dev libopenblas-dev libomp-dev
 ```
 
-**Windows:**
+**Windows (via vcpkg):**
+
+Install [vcpkg](https://github.com/microsoft/vcpkg), set `VCPKG_ROOT`, then:
 
 ```bash
-
+cmake --workflow --preset vcpkg-release
 ```
+
+vcpkg will automatically install Eigen3, Boost, cereal, and all other dependencies.
 
 ## Notes
 

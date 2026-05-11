@@ -35,7 +35,6 @@ target_include_directories(trex_ml_methods PUBLIC
 
     # Install-tree
     $<INSTALL_INTERFACE:include>                       # Installed headers
-    $<INSTALL_INTERFACE:src>                           # Append to mirror build-tree structure
 )
 # ==================================================================================
 
@@ -74,10 +73,51 @@ target_compile_options(trex_ml_methods PRIVATE
 
 
 # ==================================================================================
+# 4b. Public Header File Set
+# ==================================================================================
+target_sources(trex_ml_methods PUBLIC
+    FILE_SET HEADERS
+    BASE_DIRS
+        $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/src>
+        $<INSTALL_INTERFACE:include>
+    FILES
+        ${CMAKE_CURRENT_SOURCE_DIR}/clustering/hierarchical/agglomerative/agglomerative_dispatcher.hpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/clustering/hierarchical/agglomerative/agglomerative_types.hpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/clustering/hierarchical/agglomerative/block_tiled_matrix_policy.hpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/clustering/hierarchical/agglomerative/dendrogram_utils.hpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/clustering/hierarchical/agglomerative/distance_policy.hpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/clustering/hierarchical/agglomerative/generic_linkage_core.hpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/clustering/hierarchical/agglomerative/geometric_update_policy.hpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/clustering/hierarchical/agglomerative/nnchain_core.hpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/clustering/hierarchical/agglomerative/projected_geometric_update_policy.hpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/clustering/hierarchical/agglomerative/slink_core.hpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/model_selection/ridge_cv.hpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/model_selection/ridge_gcv.hpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/standardization/data_transformer.hpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/standardization/lp_norm_scaler.hpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/standardization/z_score_scaler.hpp
+)
+# ==================================================================================
+
+
+# ==================================================================================
 # 5. Include Subdirectories
 # ==================================================================================
 # Sources and headers from subfolders are appended to target
 add_subdirectory(standardization)
 add_subdirectory(clustering)
 add_subdirectory(model_selection)
+# ==================================================================================
+
+
+# ==================================================================================
+# 6. Installation
+# ==================================================================================
+install(TARGETS trex_ml_methods
+    EXPORT   TRexSelectorTargets
+    ARCHIVE  DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    LIBRARY  DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    RUNTIME  DESTINATION ${CMAKE_INSTALL_BINDIR}
+    FILE_SET HEADERS DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
+)
 # ==================================================================================

@@ -45,7 +45,7 @@
 # ==================================================================================
 # Append header-only implementations to the parent library target for IDE visibility.
 # Marked PUBLIC so that CMake tools and IDEs index them correctly.
-target_sources(trex_ml_methods PUBLIC
+target_sources(trex_ml_methods PRIVATE
     # --- Hierarchical Clustering (Agglomerative) ---
     ${CMAKE_CURRENT_LIST_DIR}/hierarchical/agglomerative/agglomerative_types.hpp
     ${CMAKE_CURRENT_LIST_DIR}/hierarchical/agglomerative/agglomerative_dispatcher.hpp

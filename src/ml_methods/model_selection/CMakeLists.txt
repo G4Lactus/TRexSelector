@@ -28,7 +28,7 @@ target_sources(trex_ml_methods PRIVATE
 # ==================================================================================
 # Append header files to parent library target for IDE visibility.
 # Marked PUBLIC so that CMake tools and IDEs index them correctly for developers.
-target_sources(trex_ml_methods PUBLIC
+target_sources(trex_ml_methods PRIVATE
     ${CMAKE_CURRENT_LIST_DIR}/ridge_gcv.hpp
     ${CMAKE_CURRENT_LIST_DIR}/ridge_cv.hpp
 )

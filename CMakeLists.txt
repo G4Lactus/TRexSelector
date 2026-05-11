@@ -52,6 +52,11 @@ if(NOT CMAKE_BUILD_TYPE)
     set(CMAKE_BUILD_TYPE Release CACHE STRING "Build type (Release, Debug, etc.)" FORCE)
 endif()
 
+# ============================================================================
+# User-configurable options
+# ============================================================================
+option(TREX_BUILD_DEMOS "Build demo executables and optional plotting tools" ON)
+
 # C++ Standard
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -103,8 +108,10 @@ if(NOT BLAS_FOUND)
     find_package(LAPACK REQUIRED)
 endif()
 
-# Plotting: Matplot++
-find_package(Matplot++ REQUIRED)
+# Plotting: Matplot++ (only needed for demo executables)
+if(TREX_BUILD_DEMOS)
+    find_package(Matplot++ REQUIRED)
+endif()
 
 
 # ============================================================================
@@ -177,10 +184,14 @@ else()
     message(STATUS "  - LAPACK: NOT FOUND")
 endif()
 #
-if(Matplot++_FOUND)
-    message(STATUS "  - Matplot++: ${Matplot++_VERSION}")
+if(TREX_BUILD_DEMOS)
+    if(Matplot++_FOUND)
+        message(STATUS "  - Matplot++: ${Matplot++_VERSION}")
+    else()
+        message(STATUS "  - Matplot++: NOT FOUND")
+    endif()
 else()
-    message(STATUS "  - Matplot++: NOT FOUND")
+    message(STATUS "  - Matplot++: (skipped — TREX_BUILD_DEMOS=OFF)")
 endif()
 message(STATUS "")
 message(STATUS "Output Directories:")
@@ -244,11 +255,40 @@ install(EXPORT TRexSelectorTargets
     DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/TRexSelector
 )
 
-# 5. Install public headers (preserves subfolder structure)
-install(DIRECTORY ${CMAKE_SOURCE_DIR}/include/
-    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
+
+# ============================================================================
+# CPack (source + binary packaging)
+# ============================================================================
+set(CPACK_PACKAGE_NAME                 "TRexSelector")
+set(CPACK_PACKAGE_VENDOR               "Robust Data Science Group - TU Darmstadt")
+set(CPACK_PACKAGE_DESCRIPTION_SUMMARY  "C++ T-Rex Selector for FDR-controlled variable selection in high-dimensional regression")
+set(CPACK_PACKAGE_VERSION              ${PROJECT_VERSION})
+set(CPACK_PACKAGE_VERSION_MAJOR        ${PROJECT_VERSION_MAJOR})
+set(CPACK_PACKAGE_VERSION_MINOR        ${PROJECT_VERSION_MINOR})
+set(CPACK_PACKAGE_VERSION_PATCH        ${PROJECT_VERSION_PATCH})
+set(CPACK_RESOURCE_FILE_LICENSE        "${CMAKE_SOURCE_DIR}/LICENSE")
+set(CPACK_RESOURCE_FILE_README         "${CMAKE_SOURCE_DIR}/README.md")
+
+# Binary package  (cmake --build <dir> --target package)
+# Produces TRexSelector-<version>-<system>.tar.gz and .zip
+# Contains: compiled libs, headers, CMake package config files
+set(CPACK_GENERATOR "TGZ;ZIP")
+
+# Source package  (cmake --build <dir> --target package_source)
+# Contains: src/, cmake/, CMakeLists.txt, CMakePresets.json, LICENSE, README.md
+# Excludes: build artefacts, simulation outputs, R/Python tooling, notes
+set(CPACK_SOURCE_GENERATOR          "TGZ;ZIP")
+set(CPACK_SOURCE_PACKAGE_FILE_NAME  "${CPACK_PACKAGE_NAME}-${PROJECT_VERSION}-src")
+set(CPACK_SOURCE_IGNORE_FILES
+    "/\\.git/"
+    "/build/"
+    "/install/"
+    "/simulations/"
+    "/R/"
+    "/Python/"
+    "/notes/"
+    "/tests/"
+    "\\.DS_Store"
 )
-install(DIRECTORY ${CMAKE_SOURCE_DIR}/src/
-    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
-    FILES_MATCHING PATTERN "*.hpp"      # only headers, no .cpp
-)
+
+include(CPack)

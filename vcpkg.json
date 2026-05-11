@@ -1,0 +1,22 @@
+{
+    "name": "trex-selector",
+    "version": "0.1.0",
+    "description": "C++ T-Rex Selector for FDR-controlled variable selection in high-dimensional regression",
+    "license": "GPL-3.0-only",
+    "dependencies": [
+        "eigen3",
+        {
+            "name": "boost-headers",
+            "version>=": "1.80.0"
+        },
+        {
+            "name": "boost-iostreams",
+            "version>=": "1.80.0"
+        },
+        "cereal",
+        {
+            "name": "libomp",
+            "platform": "osx"
+        }
+    ]
+}

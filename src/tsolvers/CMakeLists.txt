@@ -67,7 +67,6 @@ target_include_directories(trex_tsolvers PUBLIC
 
     # Install-tree (user)
     $<INSTALL_INTERFACE:include>                        # Installed headers
-    $<INSTALL_INTERFACE:src>                            # Append to mirror build-tree structure
 )
 # ==============================================================================
 
@@ -112,6 +111,42 @@ target_compile_options(trex_tsolvers PRIVATE
 
 
 # ==============================================================================
+# 4b. Public Header File Set
+# ==============================================================================
+target_sources(trex_tsolvers PUBLIC
+    FILE_SET HEADERS
+    BASE_DIRS
+        $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/src>
+        $<INSTALL_INTERFACE:include>
+    FILES
+        ${CMAKE_CURRENT_SOURCE_DIR}/tsolvers.hpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/tsolver_base.hpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/lm_tsolvers.hpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/solver_utils/solver_preprocessing.hpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/linear_model/lars_based.hpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/linear_model/lars_based/tlars_solver.hpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/linear_model/lars_based/tlasso_solver.hpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/linear_model/lars_based/tenet_solver.hpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/linear_model/lars_based/tienet_solver.hpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/linear_model/lars_based/tstagewise_solver.hpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/linear_model/lars_based/tstepwise_solver.hpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/linear_model/omp_based.hpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/linear_model/omp_based/tomp_solver.hpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/linear_model/omp_based/tmp_solver.hpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/linear_model/omp_based/tgp_solver.hpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/linear_model/omp_based/tncgmp_solver.hpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/linear_model/omp_based/tacgp_solver.hpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/linear_model/omp_based/tools_solver.hpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/linear_model/omp_based/norm_corrective_omp/norm_corrective_gmp.hpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/linear_model/omp_based/ools/ools.hpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/linear_model/afs_based.hpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/linear_model/afs_based/tafs_solver.hpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/linear_model/afs_based/afs_based_plain/afs.hpp
+)
+# ==============================================================================
+
+
+# ==============================================================================
 # 5. Include Subdirectories
 # ==============================================================================
 # Sources and headers from subfolders are appended to target
@@ -136,24 +171,4 @@ install(TARGETS trex_tsolvers
              DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}      # preserves subfolder structure
 )
 
-# Install umbrella headers
-install(FILES
-    tsolver_base.hpp
-    linear_model.hpp
-    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/tsolvers
-)
-
-install(FILES
-    linear_model/lars_based.hpp
-    linear_model/omp_based.hpp
-    linear_model/afs_based.hpp
-    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/tsolvers/linear_model
-)
-
-# Export the targets so find_package(TRexSelector) works
-install(EXPORT TRexSelectorTargets
-    FILE        TRexSelectorTargets.cmake
-    NAMESPACE   TRexSelector::
-    DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/TRexSelector
-)
 # ==============================================================================
