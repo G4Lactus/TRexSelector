@@ -4,7 +4,7 @@
 # Normalized and converts to native line endings on checkout.
 *.c text
 *.cc text
-*.cxx
+*.cxx text
 *.cpp text
 *.h text
 *.hxx text
