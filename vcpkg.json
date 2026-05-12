@@ -1,7 +1,7 @@
 {
     "name": "trex-selector",
     "version": "0.1.0",
-    "description": "C++ T-Rex Selector for FDR-controlled variable selection in high-dimensional regression",
+    "description": "T-Rex Selector for FDR-controlled variable selection in high-dimensional regression",
     "license": "GPL-3.0-only",
     "dependencies": [
         "eigen3",

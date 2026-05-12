@@ -191,12 +191,11 @@ void TRexSelector::validateTRexParameters() const {
     }
 
     // Warn when stagnation detection is disabled for greedy solvers.
-    // Greedy solvers do not guarantee convergence without it.
     if (!trex_ctrl_.tloop_stagnation_stop) {
         const sd::SolverTypeForTRex st = trex_ctrl_.solver_type;
         const bool is_greedy =
-            st == sd::SolverTypeForTRex::TSTEPWISE ||
-            st == sd::SolverTypeForTRex::TOMP      ||
+            st == sd::SolverTypeForTRex::TSTEPWISE  ||
+            st == sd::SolverTypeForTRex::TOMP       ||
             st == sd::SolverTypeForTRex::TGP        ||
             st == sd::SolverTypeForTRex::TACGP      ||
             st == sd::SolverTypeForTRex::TMP        ||
@@ -205,8 +204,9 @@ void TRexSelector::validateTRexParameters() const {
             st == sd::SolverTypeForTRex::TAFS;
         if (is_greedy) {
             std::cerr << "[TRexSelector Warning] tloop_stagnation_stop is disabled "
-                         "for a greedy solver. Greedy solvers do not guarantee "
-                         "convergence without stagnation detection. Consider "
+                         "for a greedy solver. Greedy solvers tend to run into a noise trap "
+                         "and select until all allowed dummies are selected. "
+                         "Convergence without stagnation detection is not guaranteed. Consider "
                          "re-enabling it.\n";
         }
     }

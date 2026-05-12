@@ -128,7 +128,7 @@ cmake --install build/ --prefix /usr/local
 │       └── TRexSelectorTargets.cmake
 ```
 
-A consumer then only needs:
+A user then only needs:
 ```
 find_package(TRexSelector 0.1 REQUIRED)
 target_link_libraries(my_app PRIVATE TRexSelector::tsolvers)
