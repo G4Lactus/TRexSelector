@@ -31,8 +31,8 @@ add_library(trex::utils ALIAS trex_utils)
 # ==================================================================================
 target_include_directories(trex_utils PUBLIC
     # Build-tree
-    $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include>
-    $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/src>
+    $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include>
+    $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/src>
 
     # Install-tree
     $<INSTALL_INTERFACE:include>
@@ -79,7 +79,7 @@ target_compile_options(trex_utils PRIVATE
 target_sources(trex_utils PUBLIC
     FILE_SET HEADERS
     BASE_DIRS
-        $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/src>
+        $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/src>
         $<INSTALL_INTERFACE:include>
     FILES
         ${CMAKE_CURRENT_SOURCE_DIR}/datageneration/utils_datagen.hpp

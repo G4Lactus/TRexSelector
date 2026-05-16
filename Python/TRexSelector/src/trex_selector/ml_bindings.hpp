@@ -1,0 +1,233 @@
+// =====================================================================================
+// ml_bindings.hpp - C++ bindings for machine learning utilities used in TRexSelector.
+// =====================================================================================
+#ifndef TREX_PYTHON_ML_BINDINGS_HPP
+#define TREX_PYTHON_ML_BINDINGS_HPP
+// =====================================================================================
+/**
+ * @file ml_bindings.hpp
+ *
+ * @brief Pybind11 bindings for machine learning utilities used in the T-Rex Selector package.
+ *
+ * @details This file defines pybind11 bindings for various machine learning utilities that are
+ *          used across different components of the T-Rex Selector, such as data standardization
+ *          and ridge regression model selection. The bindings are organized into a function
+ *          `bind_ml_methods` that can be called from the main binding module to expose these
+ *          utilities to Python.
+ */
+// =====================================================================================
+
+// pybind11 includes
+#include <pybind11/pybind11.h>
+#include <pybind11/eigen.h>
+
+// ml_methods includes
+#include <ml_methods/standardization/z_score_scaler.hpp>
+#include <ml_methods/standardization/lp_norm_scaler.hpp>
+#include <ml_methods/standardization/data_transformer.hpp>
+#include <ml_methods/model_selection/ridge_cv.hpp>
+#include <ml_methods/model_selection/ridge_gcv.hpp>
+
+// =====================================================================================
+
+namespace py = pybind11;
+
+// =====================================================================================
+
+/**
+ * @brief Bind machine learning methods to a Python module.
+ *
+ * @param m The Python module to which the methods will be bound.
+ */
+inline void bind_ml_methods(py::module& m) {
+
+    // =================================================================================
+    // Data Standardization bindings
+    // =================================================================================
+    using namespace trex::ml_methods::standardization;
+
+    // We can't bind abstract DataTransformer easily without trampoline class,
+    // so we bind the concrete classes directly.
+
+    /**
+     * @brief Standardizes features by removing the mean and scaling to unit variance.
+     *
+     * @details This scaler provides similar functionality to `sklearn.preprocessing.StandardScaler`.
+     *          It computes the mean and standard deviation on a training set so they can be
+     *          later applied to a validation or test set via `transform_inplace`.
+     */
+    py::class_<ZScoreScaler>(m, "ZScoreScaler")
+        .def(py::init<bool, bool>(),
+             py::arg("with_mean") = true, py::arg("with_std") = true)
+        .def("fit",
+            [](ZScoreScaler& self, Eigen::MatrixXd& X, double threshold) {
+            Eigen::Map<Eigen::MatrixXd> X_map(X.data(), X.rows(), X.cols());
+            self.fit(X_map, threshold);
+            return &self;
+        }, py::arg("X"), py::arg("threshold") = 1e-12)
+        .def("transform_inplace",
+            [](ZScoreScaler& self, Eigen::MatrixXd& X) {
+            Eigen::Map<Eigen::MatrixXd> X_map(X.data(), X.rows(), X.cols());
+            self.transform_inplace(X_map);
+            return X; // Return modified matrix for convenience
+        }, py::arg("X"))
+        .def("inverse_transform_inplace",
+            [](const ZScoreScaler& self, Eigen::MatrixXd& X) {
+            Eigen::Map<Eigen::MatrixXd> X_map(X.data(), X.rows(), X.cols());
+            self.inverse_transform_inplace(X_map);
+            return X; // Return modified matrix for convenience
+        }, py::arg("X_scaled"))
+        .def("is_fitted", &ZScoreScaler::is_fitted)
+        .def("get_dropped_indices", &ZScoreScaler::get_dropped_indices)
+        .def("get_means", &ZScoreScaler::get_means)
+        .def("get_scales", &ZScoreScaler::get_scales)
+        .def("get_with_mean", &ZScoreScaler::get_with_mean)
+        .def("get_with_std", &ZScoreScaler::get_with_std)
+        .def("save", &ZScoreScaler::save, py::arg("filename"))
+        .def("load", &ZScoreScaler::load, py::arg("filename"));
+
+    /**
+     * @brief Defines the type of mathematical norm used for Lp-normalization.
+     *
+     * @details Contains L1 (sum of absolute values) and L2 (Euclidean norm) options.
+     */
+    py::enum_<LpNormScaler::NormType>(m, "NormType")
+        .value("L1", LpNormScaler::NormType::L1)
+        .value("L2", LpNormScaler::NormType::L2)
+        .export_values();
+
+    /**
+     * @brief Scales input features to unit norm based on the chosen L1 or L2 formulation.
+     *
+     * @details Depending on the chosen `NormType`, this scaler normalizes the data such that
+     *          the norm of each feature vector is exactly one. Mean centering is optionally
+     *          applied prior to scaling.
+     */
+    py::class_<LpNormScaler>(m, "LpNormScaler")
+        .def(py::init<LpNormScaler::NormType, bool>(),
+             py::arg("norm_type") = LpNormScaler::NormType::L2, py::arg("with_mean") = true)
+        .def("fit", [](LpNormScaler& self, Eigen::MatrixXd& X, double threshold) {
+            Eigen::Map<Eigen::MatrixXd> X_map(X.data(), X.rows(), X.cols());
+            self.fit(X_map, threshold);
+            return &self;
+        }, py::arg("X"), py::arg("threshold") = 1e-12)
+        .def("transform_inplace", [](LpNormScaler& self, Eigen::MatrixXd& X) {
+            Eigen::Map<Eigen::MatrixXd> X_map(X.data(), X.rows(), X.cols());
+            self.transform_inplace(X_map);
+            return X; // Return modified matrix for convenience
+        }, py::arg("X"))
+        .def("inverse_transform_inplace", [](const LpNormScaler& self, Eigen::MatrixXd& X) {
+            Eigen::Map<Eigen::MatrixXd> X_map(X.data(), X.rows(), X.cols());
+            self.inverse_transform_inplace(X_map);
+            return X; // Return modified matrix for convenience
+        }, py::arg("X_normed"))
+        .def("is_fitted", &LpNormScaler::is_fitted)
+        .def("get_dropped_indices", &LpNormScaler::get_dropped_indices)
+        .def("get_means", &LpNormScaler::get_means)
+        .def("get_scales", &LpNormScaler::get_scales)
+        .def("get_with_mean", &LpNormScaler::get_with_mean)
+        .def("get_with_norm", &LpNormScaler::get_with_norm)
+        .def("get_norm_type", &LpNormScaler::get_norm_type)
+        .def("save", &LpNormScaler::save, py::arg("filename"))
+        .def("load", &LpNormScaler::load, py::arg("filename"));
+
+    // =================================================================================
+
+
+    // =========================================================================
+    // Ridge Regression CV bindings
+    // =========================================================================
+
+    using namespace trex::ml_methods::model_selection;
+
+    /**
+     * @brief Stores the comprehensive results of a ridge regression parameter sweep.
+     *
+     * @details A strict data structure holding evaluated lambdas, their corresponding
+     *          regression coefficients, GCV scores, and the effective degrees of freedom.
+     *          `best_index` tracks the index of the theoretically optimal lambda.
+     */
+    py::class_<ridge_path>(m, "RidgePath")
+        .def(py::init<>())
+        .def_readwrite("lambdas", &ridge_path::lambdas)
+        .def_readwrite("coefficients", &ridge_path::coefficients)
+        .def_readwrite("gcv_scores", &ridge_path::gcv_scores)
+        .def_readwrite("df_effective", &ridge_path::df_effective)
+        .def_readwrite("best_index", &ridge_path::best_index);
+
+    /**
+     * @brief Efficiently solves Ridge Regression while computing Generalized Cross-Validation (GCV).
+     *
+     * @details Utilizing an SVD-based backend, this class provides a highly optimized mechanism
+     *          to perform ridge regression across a multitude of lambda penalty values. Instead
+     *          of explicit K-Fold cross-validation, it computes the exact GCV score analytically
+     *          to rapidly identify the optimal L2 penalty.
+     */
+    py::class_<ridge_gcv>(m, "RidgeGCV")
+        .def(py::init<>())
+        .def("fit",[](ridge_gcv& self,
+                               Eigen::Ref<const Eigen::MatrixXd> X, // NOLINT(performance-unnecessary-value-param)
+                               Eigen::Ref<const Eigen::VectorXd> y  // NOLINT(performance-unnecessary-value-param)
+                            ) {
+            self.fit(X, y); // NOLINT(performance-unnecessary-value-param)
+            return &self;
+        })
+        .def("solve", &ridge_gcv::solve, py::arg("lambda_val"))
+        .def("gcv", &ridge_gcv::gcv, py::arg("lambda_val"))
+        .def("predict", [](const ridge_gcv& self,
+                                    Eigen::Ref<const Eigen::MatrixXd> X_new, // NOLINT(performance-unnecessary-value-param)
+                                    double lambda_val) {
+            return self.predict(X_new, lambda_val); // NOLINT(performance-unnecessary-value-param)
+        }, py::arg("X_new"), py::arg("lambda_val"))
+        .def("predict_path", [](const ridge_gcv& self,
+                                    Eigen::Ref<const Eigen::MatrixXd> X_new, // NOLINT(performance-unnecessary-value-param)
+                                    Eigen::Ref<const Eigen::VectorXd> lambdas // NOLINT(performance-unnecessary-value-param)
+                                ) {
+            return self.predict_path(X_new, lambdas); // NOLINT(performance-unnecessary-value-param)
+        }, py::arg("X_new"), py::arg("lambdas"))
+        .def("solve_path", &ridge_gcv::solve_path, py::arg("lambdas"))
+        .def("gcv_optimal", &ridge_gcv::gcv_optimal, py::arg("num_grid") = 200,
+             py::arg("tol") = 1e-8)
+        .def("default_lambda_grid", &ridge_gcv::default_lambda_grid,
+             py::arg("num_lambda") = 100, py::arg("ratio") = 1000.0)
+        .def("n_samples", &ridge_gcv::n_samples)
+        .def("n_features", &ridge_gcv::n_features)
+        .def("rank", &ridge_gcv::rank);
+
+    /**
+     * @brief Performs explicit K-Fold cross-validation for Ridge Regression model selection.
+     *
+     * @details Sweeps through a grid of lambda values, splitting the data into partitions
+     *          to estimate the out-of-sample Mean Squared Error (MSE). Methods such as
+     *          `cv_min()` and `cv_1se()` extract the optimal lambda using standard
+     *          statistical heuristics.
+     */
+    py::class_<ridge_cv>(m, "RidgeCV")
+        .def(py::init<>())
+        .def("fit", [](ridge_cv& self,
+                       Eigen::Ref<const Eigen::MatrixXd> X, // NOLINT(performance-unnecessary-value-param)
+                       Eigen::Ref<const Eigen::VectorXd> y, // NOLINT(performance-unnecessary-value-param)
+                       int num_folds,
+                       Eigen::Index n_lambda = 100,
+                       double lambda_ratio = 1000.0,
+                       unsigned int seed = 0) {
+            self.fit(X, y, num_folds, n_lambda, lambda_ratio, seed); // NOLINT(performance-unnecessary-value-param)
+            return &self;
+        }, py::arg("X"), py::arg("y"),
+           py::arg("num_folds") = 10,
+           py::arg("n_lambda") = 100,
+           py::arg("lambda_ratio") = 1000.0,
+           py::arg("seed") = 0)
+        .def("cv_min", &ridge_cv::cv_min)
+        .def("cv_1se", &ridge_cv::cv_1se)
+        .def("index_min", &ridge_cv::index_min)
+        .def("index_1se", &ridge_cv::index_1se)
+        .def("get_lambdas", &ridge_cv::lambdas)
+        .def("get_cv_errors", &ridge_cv::cv_mse)
+        .def("get_cv_std", &ridge_cv::cv_sem);
+
+
+// =====================================================================================
+}
+// =====================================================================================
+#endif /* End of TREX_PYTHON_ML_BINDINGS_HPP */

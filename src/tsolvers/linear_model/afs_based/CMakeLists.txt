@@ -20,7 +20,7 @@ target_sources(trex_tsolvers PRIVATE
 # ==============================================================================
 target_sources(trex_tsolvers PUBLIC
     FILE_SET HEADERS
-    BASE_DIRS ${CMAKE_SOURCE_DIR}/src          # project root /src
+    BASE_DIRS ${PROJECT_SOURCE_DIR}/src          # project root /src
     FILES
         # AFS based solvers
         # -----------------------------------------------

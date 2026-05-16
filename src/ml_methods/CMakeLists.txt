@@ -30,8 +30,8 @@ add_library(trex::ml_methods ALIAS trex_ml_methods)
 # ==================================================================================
 target_include_directories(trex_ml_methods PUBLIC
     # Build-tree
-    $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include>    # Public API headers
-    $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/src>        # Internal headers
+    $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include>    # Public API headers
+    $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/src>        # Internal headers
 
     # Install-tree
     $<INSTALL_INTERFACE:include>                       # Installed headers
@@ -78,7 +78,7 @@ target_compile_options(trex_ml_methods PRIVATE
 target_sources(trex_ml_methods PUBLIC
     FILE_SET HEADERS
     BASE_DIRS
-        $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/src>
+        $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/src>
         $<INSTALL_INTERFACE:include>
     FILES
         ${CMAKE_CURRENT_SOURCE_DIR}/clustering/hierarchical/agglomerative/agglomerative_dispatcher.hpp
@@ -89,7 +89,7 @@ target_sources(trex_ml_methods PUBLIC
         ${CMAKE_CURRENT_SOURCE_DIR}/clustering/hierarchical/agglomerative/generic_linkage_core.hpp
         ${CMAKE_CURRENT_SOURCE_DIR}/clustering/hierarchical/agglomerative/geometric_update_policy.hpp
         ${CMAKE_CURRENT_SOURCE_DIR}/clustering/hierarchical/agglomerative/nnchain_core.hpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/clustering/hierarchical/agglomerative/projected_geometric_update_policy.hpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/clustering/hierarchical/agglomerative/proj_geom_updates.hpp
         ${CMAKE_CURRENT_SOURCE_DIR}/clustering/hierarchical/agglomerative/slink_core.hpp
         ${CMAKE_CURRENT_SOURCE_DIR}/model_selection/ridge_cv.hpp
         ${CMAKE_CURRENT_SOURCE_DIR}/model_selection/ridge_gcv.hpp

@@ -28,7 +28,6 @@ set(BASE_LIBS
 
     # Core dependencies for safety (redundancy)
     Boost::headers
-    Boost::iostreams
 
     # Linear algebra backends
     ${BLAS_LIBRARIES}
@@ -82,8 +81,8 @@ macro(add_demo_target target_name demo_file library_set)
 
     # Include directories
     target_include_directories(${target_name} PRIVATE
-        ${CMAKE_SOURCE_DIR}/include     # Public headers
-        ${CMAKE_SOURCE_DIR}/src         # Source headers
+        ${PROJECT_SOURCE_DIR}/include     # Public headers
+        ${PROJECT_SOURCE_DIR}/src         # Source headers
         ${ADDITIONAL_INCLUDES}          # Any additional includes
     )
 

@@ -56,6 +56,7 @@ endif()
 # User-configurable options
 # ============================================================================
 option(TREX_BUILD_DEMOS "Build demo executables and optional plotting tools" ON)
+option(TREX_USE_BLAS_LAPACK "Use BLAS/LAPACK backends for Eigen" ON)
 
 # C++ Standard
 set(CMAKE_CXX_STANDARD 20)
@@ -64,6 +65,13 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 # Generate compile_commands.json for IntelliSense
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
+# ============================================================================
+# Python / IDE Include Paths (For VS Code IntelliSense)
+# ============================================================================
+# These are explicitly added to the IDE's compile_commands.json so that
+# VS Code stops reporting pybind11 errors in Python/src/.
+include_directories("/opt/homebrew/Caskroom/miniconda/base/envs/trex-dev/include/python3.12")
+include_directories("/opt/homebrew/Caskroom/miniconda/base/envs/trex-dev/lib/python3.12/site-packages/pybind11/include")
 
 
 # ============================================================================
@@ -93,19 +101,21 @@ find_package(cereal REQUIRED)
 if(POLICY CMP0167)
     cmake_policy(SET CMP0167 NEW)
 endif()
-find_package(Boost 1.80 REQUIRED COMPONENTS headers iostreams)
+find_package(Boost 1.80 REQUIRED COMPONENTS headers)
 
-# BLAS/LAPACK with priority order
-# Priority: Accelerate > OpenBLAS > Reference BLAS
-set(BLA_VENDOR Apple)  # Try Apple Accelerate first (fastest on macOS)
-find_package(BLAS)
-find_package(LAPACK)
+if(TREX_USE_BLAS_LAPACK)
+    # BLAS/LAPACK with priority order
+    # Priority: Accelerate > OpenBLAS > Reference BLAS
+    set(BLA_VENDOR Apple)  # Try Apple Accelerate first (fastest on macOS)
+    find_package(BLAS)
+    find_package(LAPACK)
 
-if(NOT BLAS_FOUND)
-    # Fallback to OpenBLAS
-    set(BLA_VENDOR OpenBLAS)
-    find_package(BLAS REQUIRED)
-    find_package(LAPACK REQUIRED)
+    if(NOT BLAS_FOUND)
+        # Fallback to OpenBLAS
+        set(BLA_VENDOR OpenBLAS)
+        find_package(BLAS REQUIRED)
+        find_package(LAPACK REQUIRED)
+    endif()
 endif()
 
 # Plotting: Matplot++ (only needed for demo executables)
@@ -205,8 +215,8 @@ message(STATUS "==============================================")
 # Include directories for headers (.hpp files)
 # ============================================================================
 include_directories(
-    ${CMAKE_SOURCE_DIR}/include
-    ${CMAKE_SOURCE_DIR}/src
+    ${PROJECT_SOURCE_DIR}/include
+    ${PROJECT_SOURCE_DIR}/src
 )
 
 # Add Cereal include if not found as package
@@ -259,36 +269,54 @@ install(EXPORT TRexSelectorTargets
 # ============================================================================
 # CPack (source + binary packaging)
 # ============================================================================
-set(CPACK_PACKAGE_NAME                 "TRexSelector")
-set(CPACK_PACKAGE_VENDOR               "Robust Data Science Group - TU Darmstadt")
-set(CPACK_PACKAGE_DESCRIPTION_SUMMARY  "C++ T-Rex Selector for FDR-controlled variable selection in high-dimensional regression")
-set(CPACK_PACKAGE_VERSION              ${PROJECT_VERSION})
-set(CPACK_PACKAGE_VERSION_MAJOR        ${PROJECT_VERSION_MAJOR})
-set(CPACK_PACKAGE_VERSION_MINOR        ${PROJECT_VERSION_MINOR})
-set(CPACK_PACKAGE_VERSION_PATCH        ${PROJECT_VERSION_PATCH})
-set(CPACK_RESOURCE_FILE_LICENSE        "${CMAKE_SOURCE_DIR}/LICENSE")
-set(CPACK_RESOURCE_FILE_README         "${CMAKE_SOURCE_DIR}/README.md")
+if(CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)
+    set(CPACK_PACKAGE_NAME                 "TRexSelector")
+    set(CPACK_PACKAGE_VENDOR               "Robust Data Science Group - TU Darmstadt")
+    set(CPACK_PACKAGE_DESCRIPTION_SUMMARY  "C++ T-Rex Selector for FDR-controlled variable selection in high-dimensional regression")
+    set(CPACK_PACKAGE_VERSION              ${PROJECT_VERSION})
+    set(CPACK_PACKAGE_VERSION_MAJOR        ${PROJECT_VERSION_MAJOR})
+    set(CPACK_PACKAGE_VERSION_MINOR        ${PROJECT_VERSION_MINOR})
+    set(CPACK_PACKAGE_VERSION_PATCH        ${PROJECT_VERSION_PATCH})
+    set(CPACK_RESOURCE_FILE_LICENSE        "${PROJECT_SOURCE_DIR}/LICENSE")
+    set(CPACK_RESOURCE_FILE_README         "${PROJECT_SOURCE_DIR}/README.md")
 
-# Binary package  (cmake --build <dir> --target package)
-# Produces TRexSelector-<version>-<system>.tar.gz and .zip
-# Contains: compiled libs, headers, CMake package config files
-set(CPACK_GENERATOR "TGZ;ZIP")
+    # Binary package  (cmake --build <dir> --target package)
+    # Produces TRexSelector-<version>-<system>.tar.gz and .zip
+    # Contains: compiled libs, headers, CMake package config files
+    set(CPACK_GENERATOR "TGZ;ZIP")
 
-# Source package  (cmake --build <dir> --target package_source)
-# Contains: src/, cmake/, CMakeLists.txt, CMakePresets.json, LICENSE, README.md
-# Excludes: build artefacts, simulation outputs, R/Python tooling, notes
-set(CPACK_SOURCE_GENERATOR          "TGZ;ZIP")
-set(CPACK_SOURCE_PACKAGE_FILE_NAME  "${CPACK_PACKAGE_NAME}-${PROJECT_VERSION}-src")
-set(CPACK_SOURCE_IGNORE_FILES
-    "/\\.git/"
-    "/build/"
-    "/install/"
-    "/simulations/"
-    "/R/"
-    "/Python/"
-    "/notes/"
-    "/tests/"
-    "\\.DS_Store"
+    # Source package  (cmake --build <dir> --target package_source)
+    # Contains: src/, cmake/, CMakeLists.txt, CMakePresets.json, LICENSE, README.md
+    # Excludes: build artefacts, simulation outputs, R/Python tooling, notes
+    set(CPACK_SOURCE_GENERATOR          "TGZ;ZIP")
+    set(CPACK_SOURCE_PACKAGE_FILE_NAME  "${CPACK_PACKAGE_NAME}-${PROJECT_VERSION}-src")
+    set(CPACK_SOURCE_IGNORE_FILES
+        "/\\.git/"
+        "/build/"
+        "/install/"
+        "/simulations/"
+        "/R/"
+        "/Python/"
+        "/notes/"
+        "/tests/"
+        "\\.DS_Store"
+    )
+
+    include(CPack)
+endif()
+
+# ============================================================================
+# VS Code / IDE IntelliSense Dummy Target (DO NOT BUILD)
+# ============================================================================
+# This simply forces ms-vscode.cmake-tools to parse and provide IntelliSense for 
+# the R package source files that are otherwise built externally by `R CMD INSTALL`.
+file(GLOB_RECURSE R_BINDINGS_SOURCES "R/TRexSelector/src/*.cpp")
+add_library(r_bindings_ide_only EXCLUDE_FROM_ALL ${R_BINDINGS_SOURCES})
+target_include_directories(r_bindings_ide_only PRIVATE
+    "${CMAKE_CURRENT_SOURCE_DIR}/src"
+    "/Library/Frameworks/R.framework/Resources/include"
+    "/Library/Frameworks/R.framework/Resources/library/Rcpp/include"
+    "/Library/Frameworks/R.framework/Resources/library/RcppEigen/include"
+    "/Library/Frameworks/R.framework/Resources/library/BH/include"
+    "/Library/Frameworks/R.framework/Resources/library/Rcereal/include"
 )
-
-include(CPack)

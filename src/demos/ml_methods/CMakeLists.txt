@@ -16,7 +16,7 @@ add_demo_target(demo_mlm_hac_02_mmap
 )
 
 target_compile_definitions(demo_mlm_hac_02_mmap PRIVATE
-    "TREX_DEMO_MMAP_PATH=\"${CMAKE_SOURCE_DIR}/trex_mlm_demo_02_hac_mmap.bin\""
+    "TREX_DEMO_MMAP_PATH=\"${PROJECT_SOURCE_DIR}/trex_mlm_demo_02_hac_mmap.bin\""
 )
 
 add_demo_target(demo_mlm_ms_01_ridge_gcv
@@ -24,7 +24,7 @@ add_demo_target(demo_mlm_ms_01_ridge_gcv
     DATA_PREPROCESSING_LIBS
 )
 target_compile_definitions(demo_mlm_ms_01_ridge_gcv PRIVATE
-    "TREX_DEMO_MMAP_PATH=\"${CMAKE_SOURCE_DIR}/trex_mlm_demo_ms01_gcv_mmap.bin\""
+    "TREX_DEMO_MMAP_PATH=\"${PROJECT_SOURCE_DIR}/trex_mlm_demo_ms01_gcv_mmap.bin\""
 )
 
 add_demo_target(demo_mlm_ms_02_ridge_cv
@@ -32,5 +32,5 @@ add_demo_target(demo_mlm_ms_02_ridge_cv
     DATA_PREPROCESSING_LIBS
 )
 target_compile_definitions(demo_mlm_ms_02_ridge_cv PRIVATE
-    "TREX_DEMO_MMAP_PATH=\"${CMAKE_SOURCE_DIR}/trex_mlm_demo_ms02_cv_mmap.bin\""
+    "TREX_DEMO_MMAP_PATH=\"${PROJECT_SOURCE_DIR}/trex_mlm_demo_ms02_cv_mmap.bin\""
 )

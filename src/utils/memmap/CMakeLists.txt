@@ -18,7 +18,6 @@
 # Eigen is already linked at the master utils level, so we don't need to repeat it.
 target_link_libraries(trex_utils PUBLIC
     Boost::headers
-    Boost::iostreams
 )
 # ==================================================================================
 
@@ -37,7 +36,7 @@ target_sources(trex_utils PRIVATE
 # ==================================================================================
 target_sources(trex_utils PUBLIC
     FILE_SET HEADERS
-    BASE_DIRS ${CMAKE_SOURCE_DIR}/src
+    BASE_DIRS ${PROJECT_SOURCE_DIR}/src
     FILES
         ${CMAKE_CURRENT_LIST_DIR}/memory_mapped_matrix.hpp
 )

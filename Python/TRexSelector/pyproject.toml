@@ -1,0 +1,16 @@
+[build-system]
+requires = ["scikit-build-core", "pybind11"]
+build-backend = "scikit_build_core.build"
+
+[project]
+name = "trex_selector"
+version = "0.1.2"
+description = "Python API for TRexSelector C++ library"
+requires-python = ">=3.8"
+dependencies = [
+    "numpy",
+]
+
+[tool.scikit-build]
+wheel.packages = ["src/trex_selector"]
+cmake.source-dir = "."
