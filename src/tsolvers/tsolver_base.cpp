@@ -11,7 +11,6 @@
 
 // std includes
 #include <utils/logging/logger.hpp>
-#include <cassert>
 #include <cmath>
 #include <stdexcept>
 #include <iostream>
@@ -22,7 +21,7 @@
 #include <tsolvers/solver_utils/solver_preprocessing.hpp>
 
 // utils includes
-#include <utils/openMP/utils_openmp.hpp>
+#include <utils/openmp/utils_openmp.hpp>
 #include <utils/fp_classify/fp_classify.hpp>
 
 // ===================================================================================
@@ -370,7 +369,7 @@ void TSolver_Base::pruneTiedDummies(std::vector<std::size_t>& new_vars,
     if (!early_stop || T_stop == 0 || new_vars.size() <= 1)  return;
 
     std::size_t budget = T_stop - count_active_dummies_;
-    assert(budget > 0);
+    if (budget <= 0) { throw std::runtime_error("TSolver_Base::pruneTiedDummies: budget must be positive"); }
 
     std::vector<std::size_t> real_vars, dummy_vars;
     for (std::size_t j : new_vars) {

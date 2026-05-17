@@ -1,3 +1,4 @@
+#' @name TRexDASelector
 #' @title Dependency-Aware T-Rex Selector (TRexDA)
 #' @description FDR-controlled variable selection algorithm that handles strong correlations.
 #' @importFrom R6 R6Class
@@ -64,7 +65,7 @@ TRexDASelector <- R6::R6Class("TRexDASelector",
         cor_coef = cor_coef,
         rho_thr_DA = rho_thr_DA,
         hc_linkage = hc_linkage,
-        hc_grid_length = hc_grid_length,
+        hc_grid_length = hc_grid_length
       )
 
       trex_control_list <- list(
@@ -98,11 +99,26 @@ TRexDASelector <- R6::R6Class("TRexDASelector",
     },
     
     #' @description Run the Dependency-Aware TRexSelector algorithm.
-    #' @return A list containing results including diagnostic variables specific to DA.
     select = function() {
-      res <- trex_da_select(private$ptr)
-      res$selected_indices <- trex_da_get_selected_indices(private$ptr)
-      res
+      trex_da_select(private$ptr)
+    },
+    
+    #' @description Get the integer indices (1-based) of the selected variables.
+    #' @return Numeric vector of selected indices.
+    get_selected_indices = function() {
+      trex_da_get_selected_indices(private$ptr)
+    },
+    
+    #' @description Get generic solver results.
+    #' @return A list containing results.
+    get_results = function() {
+      trex_da_get_results(private$ptr)
+    },
+    
+    #' @description Get DA diagnostic matrices.
+    #' @return A list containing structured matrices.
+    get_matrices = function() {
+      trex_da_get_matrices(private$ptr)
     }
   ),
   private = list(

@@ -564,6 +564,280 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// trex_biobank_screening_1d_create
+XPtr<RTRexBiobankScreeningSelector> trex_biobank_screening_1d_create(Eigen::Map<Eigen::MatrixXd> X, Eigen::Map<Eigen::VectorXd> y, Rcpp::List biobank_control_list, Rcpp::List screen_control_list, Rcpp::List trex_control_list, int seed, bool verbose);
+RcppExport SEXP _TRexSelector_trex_biobank_screening_1d_create(SEXP XSEXP, SEXP ySEXP, SEXP biobank_control_listSEXP, SEXP screen_control_listSEXP, SEXP trex_control_listSEXP, SEXP seedSEXP, SEXP verboseSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< Eigen::Map<Eigen::MatrixXd> >::type X(XSEXP);
+    Rcpp::traits::input_parameter< Eigen::Map<Eigen::VectorXd> >::type y(ySEXP);
+    Rcpp::traits::input_parameter< Rcpp::List >::type biobank_control_list(biobank_control_listSEXP);
+    Rcpp::traits::input_parameter< Rcpp::List >::type screen_control_list(screen_control_listSEXP);
+    Rcpp::traits::input_parameter< Rcpp::List >::type trex_control_list(trex_control_listSEXP);
+    Rcpp::traits::input_parameter< int >::type seed(seedSEXP);
+    Rcpp::traits::input_parameter< bool >::type verbose(verboseSEXP);
+    rcpp_result_gen = Rcpp::wrap(trex_biobank_screening_1d_create(X, y, biobank_control_list, screen_control_list, trex_control_list, seed, verbose));
+    return rcpp_result_gen;
+END_RCPP
+}
+// trex_biobank_screening_2d_create
+XPtr<RTRexBiobankScreeningSelector> trex_biobank_screening_2d_create(Eigen::Map<Eigen::MatrixXd> X, Eigen::Map<Eigen::MatrixXd> Y, Rcpp::List biobank_control_list, Rcpp::List screen_control_list, Rcpp::List trex_control_list, int seed, bool verbose);
+RcppExport SEXP _TRexSelector_trex_biobank_screening_2d_create(SEXP XSEXP, SEXP YSEXP, SEXP biobank_control_listSEXP, SEXP screen_control_listSEXP, SEXP trex_control_listSEXP, SEXP seedSEXP, SEXP verboseSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< Eigen::Map<Eigen::MatrixXd> >::type X(XSEXP);
+    Rcpp::traits::input_parameter< Eigen::Map<Eigen::MatrixXd> >::type Y(YSEXP);
+    Rcpp::traits::input_parameter< Rcpp::List >::type biobank_control_list(biobank_control_listSEXP);
+    Rcpp::traits::input_parameter< Rcpp::List >::type screen_control_list(screen_control_listSEXP);
+    Rcpp::traits::input_parameter< Rcpp::List >::type trex_control_list(trex_control_listSEXP);
+    Rcpp::traits::input_parameter< int >::type seed(seedSEXP);
+    Rcpp::traits::input_parameter< bool >::type verbose(verboseSEXP);
+    rcpp_result_gen = Rcpp::wrap(trex_biobank_screening_2d_create(X, Y, biobank_control_list, screen_control_list, trex_control_list, seed, verbose));
+    return rcpp_result_gen;
+END_RCPP
+}
+// trex_biobank_screening_screen_phenotype
+List trex_biobank_screening_screen_phenotype(XPtr<RTRexBiobankScreeningSelector> r_ptr);
+RcppExport SEXP _TRexSelector_trex_biobank_screening_screen_phenotype(SEXP r_ptrSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< XPtr<RTRexBiobankScreeningSelector> >::type r_ptr(r_ptrSEXP);
+    rcpp_result_gen = Rcpp::wrap(trex_biobank_screening_screen_phenotype(r_ptr));
+    return rcpp_result_gen;
+END_RCPP
+}
+// trex_biobank_screening_screen_phenotypes
+List trex_biobank_screening_screen_phenotypes(XPtr<RTRexBiobankScreeningSelector> r_ptr);
+RcppExport SEXP _TRexSelector_trex_biobank_screening_screen_phenotypes(SEXP r_ptrSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< XPtr<RTRexBiobankScreeningSelector> >::type r_ptr(r_ptrSEXP);
+    rcpp_result_gen = Rcpp::wrap(trex_biobank_screening_screen_phenotypes(r_ptr));
+    return rcpp_result_gen;
+END_RCPP
+}
+// trex_da_create
+XPtr<RTRexDASelector> trex_da_create(Eigen::Map<Eigen::MatrixXd> X, Eigen::Map<Eigen::VectorXd> y, double tFDR, Rcpp::List da_control_list, Rcpp::List trex_control_list, int seed, bool verbose);
+RcppExport SEXP _TRexSelector_trex_da_create(SEXP XSEXP, SEXP ySEXP, SEXP tFDRSEXP, SEXP da_control_listSEXP, SEXP trex_control_listSEXP, SEXP seedSEXP, SEXP verboseSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< Eigen::Map<Eigen::MatrixXd> >::type X(XSEXP);
+    Rcpp::traits::input_parameter< Eigen::Map<Eigen::VectorXd> >::type y(ySEXP);
+    Rcpp::traits::input_parameter< double >::type tFDR(tFDRSEXP);
+    Rcpp::traits::input_parameter< Rcpp::List >::type da_control_list(da_control_listSEXP);
+    Rcpp::traits::input_parameter< Rcpp::List >::type trex_control_list(trex_control_listSEXP);
+    Rcpp::traits::input_parameter< int >::type seed(seedSEXP);
+    Rcpp::traits::input_parameter< bool >::type verbose(verboseSEXP);
+    rcpp_result_gen = Rcpp::wrap(trex_da_create(X, y, tFDR, da_control_list, trex_control_list, seed, verbose));
+    return rcpp_result_gen;
+END_RCPP
+}
+// trex_da_mmap_create
+XPtr<RTRexDASelector> trex_da_mmap_create(XPtr<trex::utils::memmap::MemoryMappedMatrix<double>> X_ptr, Eigen::Map<Eigen::VectorXd> y, double tFDR, Rcpp::List da_control_list, Rcpp::List trex_control_list, int seed, bool verbose);
+RcppExport SEXP _TRexSelector_trex_da_mmap_create(SEXP X_ptrSEXP, SEXP ySEXP, SEXP tFDRSEXP, SEXP da_control_listSEXP, SEXP trex_control_listSEXP, SEXP seedSEXP, SEXP verboseSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< XPtr<trex::utils::memmap::MemoryMappedMatrix<double>> >::type X_ptr(X_ptrSEXP);
+    Rcpp::traits::input_parameter< Eigen::Map<Eigen::VectorXd> >::type y(ySEXP);
+    Rcpp::traits::input_parameter< double >::type tFDR(tFDRSEXP);
+    Rcpp::traits::input_parameter< Rcpp::List >::type da_control_list(da_control_listSEXP);
+    Rcpp::traits::input_parameter< Rcpp::List >::type trex_control_list(trex_control_listSEXP);
+    Rcpp::traits::input_parameter< int >::type seed(seedSEXP);
+    Rcpp::traits::input_parameter< bool >::type verbose(verboseSEXP);
+    rcpp_result_gen = Rcpp::wrap(trex_da_mmap_create(X_ptr, y, tFDR, da_control_list, trex_control_list, seed, verbose));
+    return rcpp_result_gen;
+END_RCPP
+}
+// trex_da_select
+void trex_da_select(XPtr<RTRexDASelector> r_ptr);
+RcppExport SEXP _TRexSelector_trex_da_select(SEXP r_ptrSEXP) {
+BEGIN_RCPP
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< XPtr<RTRexDASelector> >::type r_ptr(r_ptrSEXP);
+    trex_da_select(r_ptr);
+    return R_NilValue;
+END_RCPP
+}
+// trex_da_get_results
+List trex_da_get_results(XPtr<RTRexDASelector> r_ptr);
+RcppExport SEXP _TRexSelector_trex_da_get_results(SEXP r_ptrSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< XPtr<RTRexDASelector> >::type r_ptr(r_ptrSEXP);
+    rcpp_result_gen = Rcpp::wrap(trex_da_get_results(r_ptr));
+    return rcpp_result_gen;
+END_RCPP
+}
+// trex_da_get_matrices
+List trex_da_get_matrices(XPtr<RTRexDASelector> r_ptr);
+RcppExport SEXP _TRexSelector_trex_da_get_matrices(SEXP r_ptrSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< XPtr<RTRexDASelector> >::type r_ptr(r_ptrSEXP);
+    rcpp_result_gen = Rcpp::wrap(trex_da_get_matrices(r_ptr));
+    return rcpp_result_gen;
+END_RCPP
+}
+// trex_da_get_selected_indices
+IntegerVector trex_da_get_selected_indices(XPtr<RTRexDASelector> r_ptr);
+RcppExport SEXP _TRexSelector_trex_da_get_selected_indices(SEXP r_ptrSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< XPtr<RTRexDASelector> >::type r_ptr(r_ptrSEXP);
+    rcpp_result_gen = Rcpp::wrap(trex_da_get_selected_indices(r_ptr));
+    return rcpp_result_gen;
+END_RCPP
+}
+// trex_gvs_create
+XPtr<RTRexGVSSelector> trex_gvs_create(Eigen::Map<Eigen::MatrixXd> X, Eigen::Map<Eigen::VectorXd> y, double tFDR, Rcpp::List gvs_control_list, Rcpp::List trex_control_list, int seed, bool verbose);
+RcppExport SEXP _TRexSelector_trex_gvs_create(SEXP XSEXP, SEXP ySEXP, SEXP tFDRSEXP, SEXP gvs_control_listSEXP, SEXP trex_control_listSEXP, SEXP seedSEXP, SEXP verboseSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< Eigen::Map<Eigen::MatrixXd> >::type X(XSEXP);
+    Rcpp::traits::input_parameter< Eigen::Map<Eigen::VectorXd> >::type y(ySEXP);
+    Rcpp::traits::input_parameter< double >::type tFDR(tFDRSEXP);
+    Rcpp::traits::input_parameter< Rcpp::List >::type gvs_control_list(gvs_control_listSEXP);
+    Rcpp::traits::input_parameter< Rcpp::List >::type trex_control_list(trex_control_listSEXP);
+    Rcpp::traits::input_parameter< int >::type seed(seedSEXP);
+    Rcpp::traits::input_parameter< bool >::type verbose(verboseSEXP);
+    rcpp_result_gen = Rcpp::wrap(trex_gvs_create(X, y, tFDR, gvs_control_list, trex_control_list, seed, verbose));
+    return rcpp_result_gen;
+END_RCPP
+}
+// trex_gvs_mmap_create
+XPtr<RTRexGVSSelector> trex_gvs_mmap_create(XPtr<trex::utils::memmap::MemoryMappedMatrix<double>> X_ptr, Eigen::Map<Eigen::VectorXd> y, double tFDR, Rcpp::List gvs_control_list, Rcpp::List trex_control_list, int seed, bool verbose);
+RcppExport SEXP _TRexSelector_trex_gvs_mmap_create(SEXP X_ptrSEXP, SEXP ySEXP, SEXP tFDRSEXP, SEXP gvs_control_listSEXP, SEXP trex_control_listSEXP, SEXP seedSEXP, SEXP verboseSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< XPtr<trex::utils::memmap::MemoryMappedMatrix<double>> >::type X_ptr(X_ptrSEXP);
+    Rcpp::traits::input_parameter< Eigen::Map<Eigen::VectorXd> >::type y(ySEXP);
+    Rcpp::traits::input_parameter< double >::type tFDR(tFDRSEXP);
+    Rcpp::traits::input_parameter< Rcpp::List >::type gvs_control_list(gvs_control_listSEXP);
+    Rcpp::traits::input_parameter< Rcpp::List >::type trex_control_list(trex_control_listSEXP);
+    Rcpp::traits::input_parameter< int >::type seed(seedSEXP);
+    Rcpp::traits::input_parameter< bool >::type verbose(verboseSEXP);
+    rcpp_result_gen = Rcpp::wrap(trex_gvs_mmap_create(X_ptr, y, tFDR, gvs_control_list, trex_control_list, seed, verbose));
+    return rcpp_result_gen;
+END_RCPP
+}
+// trex_gvs_select
+void trex_gvs_select(XPtr<RTRexGVSSelector> r_ptr);
+RcppExport SEXP _TRexSelector_trex_gvs_select(SEXP r_ptrSEXP) {
+BEGIN_RCPP
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< XPtr<RTRexGVSSelector> >::type r_ptr(r_ptrSEXP);
+    trex_gvs_select(r_ptr);
+    return R_NilValue;
+END_RCPP
+}
+// trex_gvs_get_results
+List trex_gvs_get_results(XPtr<RTRexGVSSelector> r_ptr);
+RcppExport SEXP _TRexSelector_trex_gvs_get_results(SEXP r_ptrSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< XPtr<RTRexGVSSelector> >::type r_ptr(r_ptrSEXP);
+    rcpp_result_gen = Rcpp::wrap(trex_gvs_get_results(r_ptr));
+    return rcpp_result_gen;
+END_RCPP
+}
+// trex_gvs_get_selected_indices
+IntegerVector trex_gvs_get_selected_indices(XPtr<RTRexGVSSelector> r_ptr);
+RcppExport SEXP _TRexSelector_trex_gvs_get_selected_indices(SEXP r_ptrSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< XPtr<RTRexGVSSelector> >::type r_ptr(r_ptrSEXP);
+    rcpp_result_gen = Rcpp::wrap(trex_gvs_get_selected_indices(r_ptr));
+    return rcpp_result_gen;
+END_RCPP
+}
+// trex_screening_create
+XPtr<RTRexScreeningSelector> trex_screening_create(Eigen::Map<Eigen::MatrixXd> X, Eigen::Map<Eigen::VectorXd> y, Rcpp::List screen_control_list, Rcpp::List trex_control_list, int seed, bool verbose);
+RcppExport SEXP _TRexSelector_trex_screening_create(SEXP XSEXP, SEXP ySEXP, SEXP screen_control_listSEXP, SEXP trex_control_listSEXP, SEXP seedSEXP, SEXP verboseSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< Eigen::Map<Eigen::MatrixXd> >::type X(XSEXP);
+    Rcpp::traits::input_parameter< Eigen::Map<Eigen::VectorXd> >::type y(ySEXP);
+    Rcpp::traits::input_parameter< Rcpp::List >::type screen_control_list(screen_control_listSEXP);
+    Rcpp::traits::input_parameter< Rcpp::List >::type trex_control_list(trex_control_listSEXP);
+    Rcpp::traits::input_parameter< int >::type seed(seedSEXP);
+    Rcpp::traits::input_parameter< bool >::type verbose(verboseSEXP);
+    rcpp_result_gen = Rcpp::wrap(trex_screening_create(X, y, screen_control_list, trex_control_list, seed, verbose));
+    return rcpp_result_gen;
+END_RCPP
+}
+// trex_screening_mmap_create
+XPtr<RTRexScreeningSelector> trex_screening_mmap_create(XPtr<trex::utils::memmap::MemoryMappedMatrix<double>> X_ptr, Eigen::Map<Eigen::VectorXd> y, Rcpp::List screen_control_list, Rcpp::List trex_control_list, int seed, bool verbose);
+RcppExport SEXP _TRexSelector_trex_screening_mmap_create(SEXP X_ptrSEXP, SEXP ySEXP, SEXP screen_control_listSEXP, SEXP trex_control_listSEXP, SEXP seedSEXP, SEXP verboseSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< XPtr<trex::utils::memmap::MemoryMappedMatrix<double>> >::type X_ptr(X_ptrSEXP);
+    Rcpp::traits::input_parameter< Eigen::Map<Eigen::VectorXd> >::type y(ySEXP);
+    Rcpp::traits::input_parameter< Rcpp::List >::type screen_control_list(screen_control_listSEXP);
+    Rcpp::traits::input_parameter< Rcpp::List >::type trex_control_list(trex_control_listSEXP);
+    Rcpp::traits::input_parameter< int >::type seed(seedSEXP);
+    Rcpp::traits::input_parameter< bool >::type verbose(verboseSEXP);
+    rcpp_result_gen = Rcpp::wrap(trex_screening_mmap_create(X_ptr, y, screen_control_list, trex_control_list, seed, verbose));
+    return rcpp_result_gen;
+END_RCPP
+}
+// trex_screening_select
+void trex_screening_select(XPtr<RTRexScreeningSelector> r_ptr);
+RcppExport SEXP _TRexSelector_trex_screening_select(SEXP r_ptrSEXP) {
+BEGIN_RCPP
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< XPtr<RTRexScreeningSelector> >::type r_ptr(r_ptrSEXP);
+    trex_screening_select(r_ptr);
+    return R_NilValue;
+END_RCPP
+}
+// trex_screening_get_results
+List trex_screening_get_results(XPtr<RTRexScreeningSelector> r_ptr);
+RcppExport SEXP _TRexSelector_trex_screening_get_results(SEXP r_ptrSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< XPtr<RTRexScreeningSelector> >::type r_ptr(r_ptrSEXP);
+    rcpp_result_gen = Rcpp::wrap(trex_screening_get_results(r_ptr));
+    return rcpp_result_gen;
+END_RCPP
+}
+// trex_screening_get_matrices
+List trex_screening_get_matrices(XPtr<RTRexScreeningSelector> r_ptr);
+RcppExport SEXP _TRexSelector_trex_screening_get_matrices(SEXP r_ptrSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< XPtr<RTRexScreeningSelector> >::type r_ptr(r_ptrSEXP);
+    rcpp_result_gen = Rcpp::wrap(trex_screening_get_matrices(r_ptr));
+    return rcpp_result_gen;
+END_RCPP
+}
+// trex_screening_get_selected_indices
+IntegerVector trex_screening_get_selected_indices(XPtr<RTRexScreeningSelector> r_ptr);
+RcppExport SEXP _TRexSelector_trex_screening_get_selected_indices(SEXP r_ptrSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< XPtr<RTRexScreeningSelector> >::type r_ptr(r_ptrSEXP);
+    rcpp_result_gen = Rcpp::wrap(trex_screening_get_selected_indices(r_ptr));
+    return rcpp_result_gen;
+END_RCPP
+}
 // trex_selector_create
 XPtr<RTRexSelector> trex_selector_create(Eigen::Map<Eigen::MatrixXd> X, Eigen::Map<Eigen::VectorXd> y, double tFDR, Rcpp::List control_list, int seed, bool verbose);
 RcppExport SEXP _TRexSelector_trex_selector_create(SEXP XSEXP, SEXP ySEXP, SEXP tFDRSEXP, SEXP control_listSEXP, SEXP seedSEXP, SEXP verboseSEXP) {
@@ -615,62 +889,6 @@ BEGIN_RCPP
     Rcpp::RNGScope rcpp_rngScope_gen;
     Rcpp::traits::input_parameter< XPtr<RTRexSelector> >::type r_ptr(r_ptrSEXP);
     rcpp_result_gen = Rcpp::wrap(trex_selector_get_selected_indices(r_ptr));
-    return rcpp_result_gen;
-END_RCPP
-}
-// trex_da_create
-XPtr<RTRexDASelector> trex_da_create(Eigen::Map<Eigen::MatrixXd> X, Eigen::Map<Eigen::VectorXd> y, double tFDR, Rcpp::List da_control_list, Rcpp::List trex_control_list, int seed, bool verbose);
-RcppExport SEXP _TRexSelector_trex_da_create(SEXP XSEXP, SEXP ySEXP, SEXP tFDRSEXP, SEXP da_control_listSEXP, SEXP trex_control_listSEXP, SEXP seedSEXP, SEXP verboseSEXP) {
-BEGIN_RCPP
-    Rcpp::RObject rcpp_result_gen;
-    Rcpp::RNGScope rcpp_rngScope_gen;
-    Rcpp::traits::input_parameter< Eigen::Map<Eigen::MatrixXd> >::type X(XSEXP);
-    Rcpp::traits::input_parameter< Eigen::Map<Eigen::VectorXd> >::type y(ySEXP);
-    Rcpp::traits::input_parameter< double >::type tFDR(tFDRSEXP);
-    Rcpp::traits::input_parameter< Rcpp::List >::type da_control_list(da_control_listSEXP);
-    Rcpp::traits::input_parameter< Rcpp::List >::type trex_control_list(trex_control_listSEXP);
-    Rcpp::traits::input_parameter< int >::type seed(seedSEXP);
-    Rcpp::traits::input_parameter< bool >::type verbose(verboseSEXP);
-    rcpp_result_gen = Rcpp::wrap(trex_da_create(X, y, tFDR, da_control_list, trex_control_list, seed, verbose));
-    return rcpp_result_gen;
-END_RCPP
-}
-// trex_da_mmap_create
-XPtr<RTRexDASelector> trex_da_mmap_create(XPtr<trex::utils::memmap::MemoryMappedMatrix<double>> X_ptr, Eigen::Map<Eigen::VectorXd> y, double tFDR, Rcpp::List da_control_list, Rcpp::List trex_control_list, int seed, bool verbose);
-RcppExport SEXP _TRexSelector_trex_da_mmap_create(SEXP X_ptrSEXP, SEXP ySEXP, SEXP tFDRSEXP, SEXP da_control_listSEXP, SEXP trex_control_listSEXP, SEXP seedSEXP, SEXP verboseSEXP) {
-BEGIN_RCPP
-    Rcpp::RObject rcpp_result_gen;
-    Rcpp::RNGScope rcpp_rngScope_gen;
-    Rcpp::traits::input_parameter< XPtr<trex::utils::memmap::MemoryMappedMatrix<double>> >::type X_ptr(X_ptrSEXP);
-    Rcpp::traits::input_parameter< Eigen::Map<Eigen::VectorXd> >::type y(ySEXP);
-    Rcpp::traits::input_parameter< double >::type tFDR(tFDRSEXP);
-    Rcpp::traits::input_parameter< Rcpp::List >::type da_control_list(da_control_listSEXP);
-    Rcpp::traits::input_parameter< Rcpp::List >::type trex_control_list(trex_control_listSEXP);
-    Rcpp::traits::input_parameter< int >::type seed(seedSEXP);
-    Rcpp::traits::input_parameter< bool >::type verbose(verboseSEXP);
-    rcpp_result_gen = Rcpp::wrap(trex_da_mmap_create(X_ptr, y, tFDR, da_control_list, trex_control_list, seed, verbose));
-    return rcpp_result_gen;
-END_RCPP
-}
-// trex_da_select
-List trex_da_select(XPtr<RTRexDASelector> r_ptr);
-RcppExport SEXP _TRexSelector_trex_da_select(SEXP r_ptrSEXP) {
-BEGIN_RCPP
-    Rcpp::RObject rcpp_result_gen;
-    Rcpp::RNGScope rcpp_rngScope_gen;
-    Rcpp::traits::input_parameter< XPtr<RTRexDASelector> >::type r_ptr(r_ptrSEXP);
-    rcpp_result_gen = Rcpp::wrap(trex_da_select(r_ptr));
-    return rcpp_result_gen;
-END_RCPP
-}
-// trex_da_get_selected_indices
-IntegerVector trex_da_get_selected_indices(XPtr<RTRexDASelector> r_ptr);
-RcppExport SEXP _TRexSelector_trex_da_get_selected_indices(SEXP r_ptrSEXP) {
-BEGIN_RCPP
-    Rcpp::RObject rcpp_result_gen;
-    Rcpp::RNGScope rcpp_rngScope_gen;
-    Rcpp::traits::input_parameter< XPtr<RTRexDASelector> >::type r_ptr(r_ptrSEXP);
-    rcpp_result_gen = Rcpp::wrap(trex_da_get_selected_indices(r_ptr));
     return rcpp_result_gen;
 END_RCPP
 }
@@ -1058,14 +1276,31 @@ static const R_CallMethodDef CallEntries[] = {
     {"_TRexSelector_ridge_cv_get_lambdas", (DL_FUNC) &_TRexSelector_ridge_cv_get_lambdas, 1},
     {"_TRexSelector_ridge_cv_get_cv_errors", (DL_FUNC) &_TRexSelector_ridge_cv_get_cv_errors, 1},
     {"_TRexSelector_ridge_cv_get_cv_std", (DL_FUNC) &_TRexSelector_ridge_cv_get_cv_std, 1},
+    {"_TRexSelector_trex_biobank_screening_1d_create", (DL_FUNC) &_TRexSelector_trex_biobank_screening_1d_create, 7},
+    {"_TRexSelector_trex_biobank_screening_2d_create", (DL_FUNC) &_TRexSelector_trex_biobank_screening_2d_create, 7},
+    {"_TRexSelector_trex_biobank_screening_screen_phenotype", (DL_FUNC) &_TRexSelector_trex_biobank_screening_screen_phenotype, 1},
+    {"_TRexSelector_trex_biobank_screening_screen_phenotypes", (DL_FUNC) &_TRexSelector_trex_biobank_screening_screen_phenotypes, 1},
+    {"_TRexSelector_trex_da_create", (DL_FUNC) &_TRexSelector_trex_da_create, 7},
+    {"_TRexSelector_trex_da_mmap_create", (DL_FUNC) &_TRexSelector_trex_da_mmap_create, 7},
+    {"_TRexSelector_trex_da_select", (DL_FUNC) &_TRexSelector_trex_da_select, 1},
+    {"_TRexSelector_trex_da_get_results", (DL_FUNC) &_TRexSelector_trex_da_get_results, 1},
+    {"_TRexSelector_trex_da_get_matrices", (DL_FUNC) &_TRexSelector_trex_da_get_matrices, 1},
+    {"_TRexSelector_trex_da_get_selected_indices", (DL_FUNC) &_TRexSelector_trex_da_get_selected_indices, 1},
+    {"_TRexSelector_trex_gvs_create", (DL_FUNC) &_TRexSelector_trex_gvs_create, 7},
+    {"_TRexSelector_trex_gvs_mmap_create", (DL_FUNC) &_TRexSelector_trex_gvs_mmap_create, 7},
+    {"_TRexSelector_trex_gvs_select", (DL_FUNC) &_TRexSelector_trex_gvs_select, 1},
+    {"_TRexSelector_trex_gvs_get_results", (DL_FUNC) &_TRexSelector_trex_gvs_get_results, 1},
+    {"_TRexSelector_trex_gvs_get_selected_indices", (DL_FUNC) &_TRexSelector_trex_gvs_get_selected_indices, 1},
+    {"_TRexSelector_trex_screening_create", (DL_FUNC) &_TRexSelector_trex_screening_create, 6},
+    {"_TRexSelector_trex_screening_mmap_create", (DL_FUNC) &_TRexSelector_trex_screening_mmap_create, 6},
+    {"_TRexSelector_trex_screening_select", (DL_FUNC) &_TRexSelector_trex_screening_select, 1},
+    {"_TRexSelector_trex_screening_get_results", (DL_FUNC) &_TRexSelector_trex_screening_get_results, 1},
+    {"_TRexSelector_trex_screening_get_matrices", (DL_FUNC) &_TRexSelector_trex_screening_get_matrices, 1},
+    {"_TRexSelector_trex_screening_get_selected_indices", (DL_FUNC) &_TRexSelector_trex_screening_get_selected_indices, 1},
     {"_TRexSelector_trex_selector_create", (DL_FUNC) &_TRexSelector_trex_selector_create, 6},
     {"_TRexSelector_trex_selector_mmap_create", (DL_FUNC) &_TRexSelector_trex_selector_mmap_create, 6},
     {"_TRexSelector_trex_selector_select", (DL_FUNC) &_TRexSelector_trex_selector_select, 1},
     {"_TRexSelector_trex_selector_get_selected_indices", (DL_FUNC) &_TRexSelector_trex_selector_get_selected_indices, 1},
-    {"_TRexSelector_trex_da_create", (DL_FUNC) &_TRexSelector_trex_da_create, 7},
-    {"_TRexSelector_trex_da_mmap_create", (DL_FUNC) &_TRexSelector_trex_da_mmap_create, 7},
-    {"_TRexSelector_trex_da_select", (DL_FUNC) &_TRexSelector_trex_da_select, 1},
-    {"_TRexSelector_trex_da_get_selected_indices", (DL_FUNC) &_TRexSelector_trex_da_get_selected_indices, 1},
     {"_TRexSelector_tsolver_lars_create", (DL_FUNC) &_TRexSelector_tsolver_lars_create, 3},
     {"_TRexSelector_tsolver_omp_create", (DL_FUNC) &_TRexSelector_tsolver_omp_create, 3},
     {"_TRexSelector_tsolver_lars_mmap_create", (DL_FUNC) &_TRexSelector_tsolver_lars_mmap_create, 3},
@@ -1099,5 +1334,5 @@ static const R_CallMethodDef CallEntries[] = {
 
 RcppExport void R_init_TRexSelector(DllInfo *dll) {
     R_registerRoutines(dll, NULL, CallEntries, NULL, NULL);
-    R_useDynamicSymbols(dll, (Rboolean)FALSE);
+    R_useDynamicSymbols(dll, FALSE);
 }

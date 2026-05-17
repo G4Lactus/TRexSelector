@@ -35,7 +35,11 @@ using namespace trex::trex_selector_methods::trex_core;
  *          unnecessary deep copies of the data, analogous to the solver wrappers.
  */
 class PyTRexSelector {
-private:
+protected:
+    PyTRexSelector() = default;
+public:
+    virtual ~PyTRexSelector() = default;
+protected:
     /** @brief Map for the original design matrix (X) */
     std::unique_ptr<Eigen::Map<Eigen::MatrixXd>> X_map_;
 
@@ -81,7 +85,7 @@ public:
      * @return SelectionResult Containing all solution structures, selected variables,
      *         and thresholds.
      */
-    TRexSelector::SelectionResult select() {
+    virtual TRexSelector::SelectionResult select() {
         return selector_->select();
     }
 

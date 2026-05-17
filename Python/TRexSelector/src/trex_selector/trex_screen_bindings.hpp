@@ -19,6 +19,7 @@
 
 // trex includes
 #include <trex_selector_methods/trex_screening/trex_screening.hpp>
+#include "trex_core_bindings.hpp"
 
 // =====================================================================================
 namespace py = pybind11;
@@ -30,17 +31,7 @@ using namespace trex::trex_selector_methods::trex_core;
 /**
  * @brief Python wrapper class for ScreenTRexSelector leveraging zero-copy references.
  */
-class PyScreenTRexSelector {
-private:
-    /** @brief Map for the design matrix (X) */
-    std::unique_ptr<Eigen::Map<Eigen::MatrixXd>> X_map_;
-
-    /** @brief Map for the response vector (y) */
-    std::unique_ptr<Eigen::Map<Eigen::VectorXd>> y_map_;
-
-    /** @brief Pointer to the underlying ScreenTRexSelector */
-    std::unique_ptr<ScreenTRexSelector> selector_;
-
+class PyScreenTRexSelector : public PyTRexSelector {
 public:
     /**
      * @brief Zero-copy constructor for the PyScreenTRexSelector wrapper.
@@ -60,29 +51,22 @@ public:
         int seed,
         bool verbose
     ) {
-        X_map_ = std::make_unique<Eigen::Map<Eigen::MatrixXd>>(X.data(),
+        this->X_map_ = std::make_unique<Eigen::Map<Eigen::MatrixXd>>(X.data(),
                                                                   X.rows(),
                                                                   X.cols());
-        y_map_ = std::make_unique<Eigen::Map<Eigen::VectorXd>>(y.data(),
+        this->y_map_ = std::make_unique<Eigen::Map<Eigen::VectorXd>>(y.data(),
                                                                   y.size());
 
-        selector_ = std::make_unique<ScreenTRexSelector>(
-            *X_map_, *y_map_, screen_control, trex_control, seed, verbose
+        this->selector_ = std::make_unique<ScreenTRexSelector>(
+            *(this->X_map_), *(this->y_map_), screen_control, trex_control, seed, verbose
         );
-    }
-
-    /**
-     * @brief Execute the Screening TRex selection algorithm.
-     */
-    TRexSelector::SelectionResult select() {
-        return selector_->select();
     }
 
     /**
      * @brief Get the complete Screening selection result.
      */
     const ScreenTRexSelectionResult& getScreenResult() const {
-        return selector_->getScreenResult();
+        return static_cast<ScreenTRexSelector*>(this->selector_.get())->getScreenResult();
     }
 };
 
@@ -114,14 +98,13 @@ inline void bind_trex_screen(py::module& m) {
         .def_readonly("used_bootstrap", &ScreenTRexSelectionResult::used_bootstrap, "Indicates if bootstrap sampling was engaged.")
         .def_readonly("confidence_level", &ScreenTRexSelectionResult::confidence_level, "Bound evaluation level achieved correctly.");
 
-    py::class_<PyScreenTRexSelector>(m, "ScreenTRexSelector", "TRex Selector with fast variable Screening heuristics.")
+    py::class_<PyScreenTRexSelector, PyTRexSelector>(m, "ScreenTRexSelector", "TRex Selector with fast variable Screening heuristics.")
         .def(py::init<Eigen::Ref<Eigen::MatrixXd>, Eigen::Ref<Eigen::VectorXd>, const ScreenTRexControlParameter&, const TRexControlParameter&, int, bool>(),
              py::arg("X"), py::arg("y"),
              py::arg("screen_control") = ScreenTRexControlParameter(),
              py::arg("trex_control") = TRexControlParameter(),
              py::arg("seed") = -1, py::arg("verbose") = true,
              "Mapping engine directly utilizing Python NumPy states strictly via zero-copy paths.")
-        .def("select", &PyScreenTRexSelector::select, py::call_guard<py::gil_scoped_release>(), "Run the selection algorithm.")
         .def("getScreenResult", &PyScreenTRexSelector::getScreenResult, "Fetch the detailed Screen selection metric results.");
 }
 

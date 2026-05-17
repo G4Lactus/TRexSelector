@@ -10,7 +10,6 @@
 
 // std includes
 #include <utils/logging/logger.hpp>
-#include <cassert>
 #include <cmath>
 #include <cstddef>
 #include <iomanip>

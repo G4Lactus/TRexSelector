@@ -464,6 +464,132 @@ ridge_cv_get_cv_std <- function(ptr) {
     .Call('_TRexSelector_ridge_cv_get_cv_std', PACKAGE = 'TRexSelector', ptr)
 }
 
+#' @title Create RTRexBiobankScreeningSelector 1D
+#' @noRd
+trex_biobank_screening_1d_create <- function(X, y, biobank_control_list, screen_control_list, trex_control_list, seed, verbose) {
+    .Call('_TRexSelector_trex_biobank_screening_1d_create', PACKAGE = 'TRexSelector', X, y, biobank_control_list, screen_control_list, trex_control_list, seed, verbose)
+}
+
+#' @title Create RTRexBiobankScreeningSelector 2D
+#' @noRd
+trex_biobank_screening_2d_create <- function(X, Y, biobank_control_list, screen_control_list, trex_control_list, seed, verbose) {
+    .Call('_TRexSelector_trex_biobank_screening_2d_create', PACKAGE = 'TRexSelector', X, Y, biobank_control_list, screen_control_list, trex_control_list, seed, verbose)
+}
+
+#' @title Screen Single Phenotype
+#' @noRd
+trex_biobank_screening_screen_phenotype <- function(r_ptr) {
+    .Call('_TRexSelector_trex_biobank_screening_screen_phenotype', PACKAGE = 'TRexSelector', r_ptr)
+}
+
+#' @title Screen Multiple Phenotypes
+#' @noRd
+trex_biobank_screening_screen_phenotypes <- function(r_ptr) {
+    .Call('_TRexSelector_trex_biobank_screening_screen_phenotypes', PACKAGE = 'TRexSelector', r_ptr)
+}
+
+#' @title Create TRexDASelector
+#' @noRd
+trex_da_create <- function(X, y, tFDR, da_control_list, trex_control_list, seed, verbose) {
+    .Call('_TRexSelector_trex_da_create', PACKAGE = 'TRexSelector', X, y, tFDR, da_control_list, trex_control_list, seed, verbose)
+}
+
+#' @title Create TRexDASelector from mmap
+#' @noRd
+trex_da_mmap_create <- function(X_ptr, y, tFDR, da_control_list, trex_control_list, seed, verbose) {
+    .Call('_TRexSelector_trex_da_mmap_create', PACKAGE = 'TRexSelector', X_ptr, y, tFDR, da_control_list, trex_control_list, seed, verbose)
+}
+
+#' @title Run TRexDASelector
+#' @noRd
+trex_da_select <- function(r_ptr) {
+    invisible(.Call('_TRexSelector_trex_da_select', PACKAGE = 'TRexSelector', r_ptr))
+}
+
+#' @title Get DA Results
+#' @noRd
+trex_da_get_results <- function(r_ptr) {
+    .Call('_TRexSelector_trex_da_get_results', PACKAGE = 'TRexSelector', r_ptr)
+}
+
+#' @title Get DA Matrices
+#' @noRd
+trex_da_get_matrices <- function(r_ptr) {
+    .Call('_TRexSelector_trex_da_get_matrices', PACKAGE = 'TRexSelector', r_ptr)
+}
+
+#' @title Get DA Selected Indices
+#' @noRd
+trex_da_get_selected_indices <- function(r_ptr) {
+    .Call('_TRexSelector_trex_da_get_selected_indices', PACKAGE = 'TRexSelector', r_ptr)
+}
+
+#' @title Create TRexGVSSelector
+#' @noRd
+trex_gvs_create <- function(X, y, tFDR, gvs_control_list, trex_control_list, seed, verbose) {
+    .Call('_TRexSelector_trex_gvs_create', PACKAGE = 'TRexSelector', X, y, tFDR, gvs_control_list, trex_control_list, seed, verbose)
+}
+
+#' @title Create TRexGVSSelector from MemoryMappedMatrix
+#' @noRd
+trex_gvs_mmap_create <- function(X_ptr, y, tFDR, gvs_control_list, trex_control_list, seed, verbose) {
+    .Call('_TRexSelector_trex_gvs_mmap_create', PACKAGE = 'TRexSelector', X_ptr, y, tFDR, gvs_control_list, trex_control_list, seed, verbose)
+}
+
+#' @title Run TRexGVSSelector
+#' @noRd
+trex_gvs_select <- function(r_ptr) {
+    invisible(.Call('_TRexSelector_trex_gvs_select', PACKAGE = 'TRexSelector', r_ptr))
+}
+
+#' @title Get TRexGVSSelector Result
+#' @noRd
+trex_gvs_get_results <- function(r_ptr) {
+    .Call('_TRexSelector_trex_gvs_get_results', PACKAGE = 'TRexSelector', r_ptr)
+}
+
+#' @title Get Selected Indices
+#' @noRd
+trex_gvs_get_selected_indices <- function(r_ptr) {
+    .Call('_TRexSelector_trex_gvs_get_selected_indices', PACKAGE = 'TRexSelector', r_ptr)
+}
+
+#' @title Create RTRexScreeningSelector
+#' @noRd
+trex_screening_create <- function(X, y, screen_control_list, trex_control_list, seed, verbose) {
+    .Call('_TRexSelector_trex_screening_create', PACKAGE = 'TRexSelector', X, y, screen_control_list, trex_control_list, seed, verbose)
+}
+
+#' @title Create RTRexScreeningSelector from mmap
+#' @noRd
+trex_screening_mmap_create <- function(X_ptr, y, screen_control_list, trex_control_list, seed, verbose) {
+    .Call('_TRexSelector_trex_screening_mmap_create', PACKAGE = 'TRexSelector', X_ptr, y, screen_control_list, trex_control_list, seed, verbose)
+}
+
+#' @title Run RTRexScreeningSelector
+#' @noRd
+trex_screening_select <- function(r_ptr) {
+    invisible(.Call('_TRexSelector_trex_screening_select', PACKAGE = 'TRexSelector', r_ptr))
+}
+
+#' @title Get RTRexScreeningSelector Result
+#' @noRd
+trex_screening_get_results <- function(r_ptr) {
+    .Call('_TRexSelector_trex_screening_get_results', PACKAGE = 'TRexSelector', r_ptr)
+}
+
+#' @title Get RTRexScreeningSelector Matrices
+#' @noRd
+trex_screening_get_matrices <- function(r_ptr) {
+    .Call('_TRexSelector_trex_screening_get_matrices', PACKAGE = 'TRexSelector', r_ptr)
+}
+
+#' @title Get Selected Indices
+#' @noRd
+trex_screening_get_selected_indices <- function(r_ptr) {
+    .Call('_TRexSelector_trex_screening_get_selected_indices', PACKAGE = 'TRexSelector', r_ptr)
+}
+
 #' @title Create TRexSelector
 #' @noRd
 trex_selector_create <- function(X, y, tFDR, control_list, seed, verbose) {
@@ -486,30 +612,6 @@ trex_selector_select <- function(r_ptr) {
 #' @noRd
 trex_selector_get_selected_indices <- function(r_ptr) {
     .Call('_TRexSelector_trex_selector_get_selected_indices', PACKAGE = 'TRexSelector', r_ptr)
-}
-
-#' @title Create TRexDASelector
-#' @noRd
-trex_da_create <- function(X, y, tFDR, da_control_list, trex_control_list, seed, verbose) {
-    .Call('_TRexSelector_trex_da_create', PACKAGE = 'TRexSelector', X, y, tFDR, da_control_list, trex_control_list, seed, verbose)
-}
-
-#' @title Create TRexDASelector from mmap
-#' @noRd
-trex_da_mmap_create <- function(X_ptr, y, tFDR, da_control_list, trex_control_list, seed, verbose) {
-    .Call('_TRexSelector_trex_da_mmap_create', PACKAGE = 'TRexSelector', X_ptr, y, tFDR, da_control_list, trex_control_list, seed, verbose)
-}
-
-#' @title Run TRexDASelector
-#' @noRd
-trex_da_select <- function(r_ptr) {
-    .Call('_TRexSelector_trex_da_select', PACKAGE = 'TRexSelector', r_ptr)
-}
-
-#' @title Get Selected Indices for DA
-#' @noRd
-trex_da_get_selected_indices <- function(r_ptr) {
-    .Call('_TRexSelector_trex_da_get_selected_indices', PACKAGE = 'TRexSelector', r_ptr)
 }
 
 #' @title Create LARS Solver

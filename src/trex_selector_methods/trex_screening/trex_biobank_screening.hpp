@@ -1,8 +1,8 @@
 // ===================================================================================
 // trex_biobank_screening.hpp
 // ===================================================================================
-#ifndef TREX_SELECTOR_METHODS_TREX_SCREENING_TREX_BIOBANK_SCREENING_HPP
-#define TREX_SELECTOR_METHODS_TREX_SCREENING_TREX_BIOBANK_SCREENING_HPP
+#ifndef TREX_SELECTOR_METHODS_TREX_BIOBANK_SCREENING_HPP
+#define TREX_SELECTOR_METHODS_TREX_BIOBANK_SCREENING_HPP
 // ===================================================================================
 /**
  * @file trex_biobank_screening.hpp
@@ -363,4 +363,4 @@ protected:
 // ===================================================================================
 } /* End of namespace trex::trex_selector_methods::trex_biobank_screening */
 // ===================================================================================
-#endif /* TREX_SELECTOR_METHODS_TREX_SCREENING_TREX_BIOBANK_SCREENING_HPP */
+#endif /* End of TREX_SELECTOR_METHODS_TREX_BIOBANK_SCREENING_HPP */

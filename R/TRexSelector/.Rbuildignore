@@ -1,0 +1,3 @@
+^bundle_for_cran\.sh$
+^src/.*\.o$
+^src/.*\.so$

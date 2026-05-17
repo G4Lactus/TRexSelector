@@ -18,6 +18,7 @@
 
 // trex includes
 #include <trex_selector_methods/trex_da/trex_da.hpp>
+#include "trex_core_bindings.hpp"
 
 // =====================================================================================
 
@@ -30,17 +31,7 @@ using namespace trex::trex_selector_methods::trex_core;
 /**
  * @brief Python wrapper class for TRexDASelector leveraging zero-copy references.
  */
-class PyTRexDASelector {
-private:
-    /** @brief Map for the design matrix (X) */
-    std::unique_ptr<Eigen::Map<Eigen::MatrixXd>> X_map_;
-
-    /** @brief Map for the response vector (y) */
-    std::unique_ptr<Eigen::Map<Eigen::VectorXd>> y_map_;
-
-    /** @brief Pointer to the underlying TRexDASelector */
-    std::unique_ptr<TRexDASelector> selector_;
-
+class PyTRexDASelector : public PyTRexSelector {
 public:
     /**
      * @brief Zero-copy constructor for the PyTRexDASelector wrapper.
@@ -62,29 +53,22 @@ public:
         int seed,
         bool verbose
     ) {
-        X_map_ = std::make_unique<Eigen::Map<Eigen::MatrixXd>>(X.data(),
+        this->X_map_ = std::make_unique<Eigen::Map<Eigen::MatrixXd>>(X.data(),
                                                                   X.rows(),
                                                                   X.cols());
-        y_map_ = std::make_unique<Eigen::Map<Eigen::VectorXd>>(y.data(),
+        this->y_map_ = std::make_unique<Eigen::Map<Eigen::VectorXd>>(y.data(),
                                                                   y.size());
 
-        selector_ = std::make_unique<TRexDASelector>(
-            *X_map_, *y_map_, tFDR, da_control, trex_control, seed, verbose
+        this->selector_ = std::make_unique<TRexDASelector>(
+            *(this->X_map_), *(this->y_map_), tFDR, da_control, trex_control, seed, verbose
         );
-    }
-
-    /**
-     * @brief Execute the Data Augmentation selection algorithm.
-     */
-    TRexSelector::SelectionResult select() {
-        return selector_->select();
     }
 
     /**
      * @brief Get the complete DA selection result.
      */
     const TRexDASelector::DASelectionResult& getDAResult() const {
-        return selector_->getDAResult();
+        return static_cast<TRexDASelector*>(this->selector_.get())->getDAResult();
     }
 };
 
@@ -118,14 +102,13 @@ inline void bind_trex_da(py::module& m) {
         .def_readonly("rho_grid", &TRexDASelector::DASelectionResult::rho_grid, "Grid values used for rho.")
         .def_readonly("method", &TRexDASelector::DASelectionResult::method, "The resulting DA method applied.");
 
-    py::class_<PyTRexDASelector>(m, "TRexDASelector", "TRex Selector with Data Augmentation support.")
+    py::class_<PyTRexDASelector, PyTRexSelector>(m, "TRexDASelector", "TRex Selector with Data Augmentation support.")
         .def(py::init<Eigen::Ref<Eigen::MatrixXd>, Eigen::Ref<Eigen::VectorXd>, double, const TRexDAControlParameter&, const TRexControlParameter&, int, bool>(),
              py::arg("X"), py::arg("y"), py::arg("tFDR") = 0.1,
              py::arg("da_control") = TRexDAControlParameter(),
              py::arg("trex_control") = TRexControlParameter(),
              py::arg("seed") = -1, py::arg("verbose") = true,
              "Mapping engine directly utilizing Python NumPy states strictly via zero-copy paths.")
-        .def("select", &PyTRexDASelector::select, py::call_guard<py::gil_scoped_release>(), "Run the selection algorithm.")
         .def("getDAResult", &PyTRexDASelector::getDAResult, "Fetch the detailed DA selection result.");
 }
 // =====================================================================================

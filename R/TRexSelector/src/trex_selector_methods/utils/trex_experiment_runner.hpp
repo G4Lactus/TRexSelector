@@ -39,7 +39,7 @@
 #include <Eigen/Dense>
 
 // utils inclues: OpenMP
-#include <utils/openMP/utils_openmp.hpp>
+#include <utils/openmp/utils_openmp.hpp>
 
 // TRex helper modules
 #include <trex_selector_methods/utils/trex_solver_dispatch.hpp>

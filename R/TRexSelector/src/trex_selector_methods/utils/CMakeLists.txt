@@ -16,7 +16,7 @@ target_sources(trex_selector_methods PRIVATE
 # ==================================================================================
 target_sources(trex_selector_methods PUBLIC
     FILE_SET HEADERS
-    BASE_DIRS ${CMAKE_SOURCE_DIR}/src
+    BASE_DIRS ${PROJECT_SOURCE_DIR}/src
     FILES
         ${CMAKE_CURRENT_LIST_DIR}/trex_data_normalizer.hpp
         ${CMAKE_CURRENT_LIST_DIR}/trex_dummy_generator.hpp

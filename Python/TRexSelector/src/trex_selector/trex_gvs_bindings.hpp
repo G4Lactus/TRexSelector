@@ -18,6 +18,7 @@
 
 // trex includes
 #include <trex_selector_methods/trex_gvs/trex_gvs.hpp>
+#include "trex_core_bindings.hpp"
 
 // =====================================================================================
 
@@ -30,17 +31,7 @@ using namespace trex::trex_selector_methods::trex_core;
 /**
  * @brief Python wrapper class for TRexGVSSelector leveraging zero-copy references.
  */
-class PyTRexGVSSelector {
-private:
-    /** @brief Map for the design matrix (X) */
-    std::unique_ptr<Eigen::Map<Eigen::MatrixXd>> X_map_;
-
-    /** @brief Map for the response vector (y) */
-    std::unique_ptr<Eigen::Map<Eigen::VectorXd>> y_map_;
-
-    /** @brief Pointer to the underlying TRexGVSSelector */
-    std::unique_ptr<TRexGVSSelector> selector_;
-
+class PyTRexGVSSelector : public PyTRexSelector {
 public:
     /**
      * @brief Zero-copy constructor for the PyTRexGVSSelector wrapper.
@@ -62,29 +53,22 @@ public:
         int seed,
         bool verbose
     ) {
-        X_map_ = std::make_unique<Eigen::Map<Eigen::MatrixXd>>(X.data(),
+        this->X_map_ = std::make_unique<Eigen::Map<Eigen::MatrixXd>>(X.data(),
                                                                   X.rows(),
                                                                   X.cols());
-        y_map_ = std::make_unique<Eigen::Map<Eigen::VectorXd>>(y.data(),
+        this->y_map_ = std::make_unique<Eigen::Map<Eigen::VectorXd>>(y.data(),
                                                                   y.size());
 
-        selector_ = std::make_unique<TRexGVSSelector>(
-            *X_map_, *y_map_, tFDR, gvs_control, trex_control, seed, verbose
+        this->selector_ = std::make_unique<TRexGVSSelector>(
+            *(this->X_map_), *(this->y_map_), tFDR, gvs_control, trex_control, seed, verbose
         );
-    }
-
-    /**
-     * @brief Execute the Group Variable Selection algorithms.
-     */
-    TRexSelector::SelectionResult select() {
-        return selector_->select();
     }
 
     /**
      * @brief Get the complete GVS selection result.
      */
     const TRexGVSSelector::GVSSelectionResult& getGVSResult() const {
-        return selector_->getGVSResult();
+        return static_cast<TRexGVSSelector*>(this->selector_.get())->getGVSResult();
     }
 };
 
@@ -113,14 +97,13 @@ inline void bind_trex_gvs(py::module& m) {
         .def_readonly("groups_vec", &TRexGVSSelector::GVSSelectionResult::groups_vec, "Discrete arrays defining explicit groups assignments.")
         .def_readonly("group_labels", &TRexGVSSelector::GVSSelectionResult::group_labels, "Labeling metrics applied over groups.");
 
-    py::class_<PyTRexGVSSelector>(m, "TRexGVSSelector", "TRex Selector with Group Variable Selection support.")
+    py::class_<PyTRexGVSSelector, PyTRexSelector>(m, "TRexGVSSelector", "TRex Selector with Group Variable Selection support.")
         .def(py::init<Eigen::Ref<Eigen::MatrixXd>, Eigen::Ref<Eigen::VectorXd>, double, const TRexGVSControlParameter&, const TRexControlParameter&, int, bool>(),
              py::arg("X"), py::arg("y"), py::arg("tFDR") = 0.1,
              py::arg("gvs_control") = TRexGVSControlParameter(),
              py::arg("trex_control") = TRexControlParameter(),
              py::arg("seed") = -1, py::arg("verbose") = true,
              "Mapping engine directly utilizing Python NumPy states strictly via zero-copy paths.")
-        .def("select", &PyTRexGVSSelector::select, py::call_guard<py::gil_scoped_release>(), "Run the selection algorithm.")
         .def("getGVSResult", &PyTRexGVSSelector::getGVSResult, "Fetch the detailed GVS selection result.");
 }
 // =====================================================================================

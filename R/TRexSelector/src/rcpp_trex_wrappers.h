@@ -1,21 +1,34 @@
 // ==============================================================================
 // rcpp_trex_wrappers.h - Safe bindings wrappers for TRex objects
 // ==============================================================================
-#ifndef TREX_RCPP_TREX_WRAPPERS_H
-#define TREX_RCPP_TREX_WRAPPERS_H
+#ifndef RCPP_TREX_WRAPPERS_H
+#define RCPP_TREX_WRAPPERS_H
+// ==============================================================================
 
+// std includes
 #include <memory>
+
 // [[Rcpp::depends(RcppEigen)]]
 #include <RcppEigen.h>
+
+// TRex includes
 #include <trex_selector_methods/trex_core/trex.hpp>
 
+// ==============================================================================
+
 using namespace trex::trex_selector_methods::trex_core;
+
+// ==============================================================================
 
 /**
  * @brief Rcpp wrapper class for TRexSelector leveraging zero-copy references.
  */
 class RTRexSelector {
-private:
+protected:
+    RTRexSelector() = default;
+public:
+    virtual ~RTRexSelector() = default;
+protected:
     std::unique_ptr<Eigen::Map<Eigen::MatrixXd>> X_map_;
     std::unique_ptr<Eigen::Map<Eigen::VectorXd>> y_map_;
     std::unique_ptr<TRexSelector> selector_;
@@ -36,9 +49,9 @@ public:
             *X_map_, *y_map_, tFDR, trex_control, seed, verbose
         );
     }
-    
+
     TRexSelector* get() const { return selector_.get(); }
-    TRexSelector::SelectionResult select() { return selector_->select(); }
+    virtual TRexSelector::SelectionResult select() { return selector_->select(); }
 
     // ============================================================
     // Public Getters
@@ -57,43 +70,4 @@ public:
     double getVotingThreshold() const noexcept { return selector_->getVotingThreshold(); }
 };
 
-
-#include <trex_selector_methods/trex_da/trex_da.hpp>
-using namespace trex::trex_selector_methods::trex_da;
-
-/**
- * @brief Rcpp wrapper class for TRexDASelector leveraging zero-copy references.
- */
-class RTRexDASelector {
-private:
-    std::unique_ptr<Eigen::Map<Eigen::MatrixXd>> X_map_;
-    std::unique_ptr<Eigen::Map<Eigen::VectorXd>> y_map_;
-    std::unique_ptr<TRexDASelector> selector_;
-
-public:
-    RTRexDASelector(
-        Eigen::Map<Eigen::MatrixXd> X,
-        Eigen::Map<Eigen::VectorXd> y,
-        double tFDR,
-        const TRexDAControlParameter& da_control,
-        const TRexControlParameter& trex_control,
-        int seed,
-        bool verbose
-    ) {
-        X_map_ = std::make_unique<Eigen::Map<Eigen::MatrixXd>>(X);
-        y_map_ = std::make_unique<Eigen::Map<Eigen::VectorXd>>(y);
-
-        selector_ = std::make_unique<TRexDASelector>(
-            *X_map_, *y_map_, tFDR, da_control, trex_control, seed, verbose
-        );
-    }
-    
-    TRexDASelector* get() const { return selector_.get(); }
-    const TRexDASelector::DASelectionResult& select() { 
-        selector_->select(); 
-        return selector_->getDAResult();
-    }
-};
-
-#endif // TREX_RCPP_TREX_WRAPPERS_H
-
+#endif // RCPP_TREX_WRAPPERS_H

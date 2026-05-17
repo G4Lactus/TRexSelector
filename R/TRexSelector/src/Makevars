@@ -1,15 +1,5 @@
-# R/TRexSelector/src/Makevars.in
-
 CXX_STD = CXX20
-WORKSPACE_ROOT = ../../..
-PKG_CPPFLAGS = -I$(WORKSPACE_ROOT)/src -Xpreprocessor -fopenmp -I/opt/homebrew/opt/libomp/include
-
-## Base Linker Flags
-
-PKG_LIBS = -L$(WORKSPACE_ROOT)/build/release/lib \
-           -ltrex_selector_methods \
-           -ltrex_tsolvers \
-           -ltrex_ml_methods \
-           -ltrex_utils \
-           $(LAPACK_LIBS) $(BLAS_LIBS) $(FLIBS) \
-           /opt/homebrew/opt/libomp/lib/libomp.dylib
+PKG_CPPFLAGS = -I. -DCRAN_BUILD=1 -DNDEBUG
+PKG_CXXFLAGS = -Xpreprocessor -fopenmp -I/opt/homebrew/opt/libomp/include
+OBJECTS = ml_methods/standardization/z_score_scaler.o ml_methods/standardization/lp_norm_scaler.o rcpp_tsolvers.o rcpp_trex_biobank_screening.o rcpp_trex_da.o tsolvers/tsolver_base.o tsolvers/solver_utils/solver_preprocessing.o tsolvers/linear_model/afs_based/tafs_solver.o tsolvers/linear_model/omp_based/tools_solver.o tsolvers/linear_model/omp_based/tacgp_solver.o tsolvers/linear_model/omp_based/tmp_solver.o tsolvers/linear_model/omp_based/tgp_solver.o tsolvers/linear_model/omp_based/tomp_solver.o tsolvers/linear_model/omp_based/tncgmp_solver.o tsolvers/linear_model/lars_based/tlars_solver.o tsolvers/linear_model/lars_based/tenet_solver.o tsolvers/linear_model/lars_based/tlasso_solver.o tsolvers/linear_model/lars_based/tstagewise_solver.o tsolvers/linear_model/lars_based/tstepwise_solver.o tsolvers/linear_model/lars_based/tienet_solver.o rcpp_ml_methods.o rcpp_trex_gvs.o utils/memmap/memory_mapped_matrix.o rcpp_trex_selector.o trex_selector_methods/trex_gvs/trex_gvs.o trex_selector_methods/utils/trex_data_normalizer.o trex_selector_methods/trex_da/trex_da.o trex_selector_methods/trex_screening/trex_biobank_screening.o trex_selector_methods/trex_screening/trex_screening.o trex_selector_methods/trex_sparse_pca/trex_sparse_pca.o trex_selector_methods/trex_core/trex.o rcpp_utils.o RcppExports.o rcpp_trex_screening.o rcpp_clustering.o 
+PKG_LIBS = $(LAPACK_LIBS) $(BLAS_LIBS) $(FLIBS) /opt/homebrew/opt/libomp/lib/libomp.dylib

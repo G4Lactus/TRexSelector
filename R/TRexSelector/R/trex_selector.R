@@ -1,3 +1,4 @@
+#' @name TRexSelector
 #' @title T-Rex Selector
 #' @description FDR-controlled variable selection algorithm.
 #' @importFrom R6 R6Class

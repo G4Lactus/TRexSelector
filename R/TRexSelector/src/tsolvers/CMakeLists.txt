@@ -62,8 +62,8 @@ add_library(trex::tsolvers ALIAS trex_tsolvers)
 # ==============================================================================
 target_include_directories(trex_tsolvers PUBLIC
     # Build-tree (dev)
-    $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/include>      # Public API headers
-    $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/src>          # Internal headers
+    $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include>      # Public API headers
+    $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/src>          # Internal headers
 
     # Install-tree (user)
     $<INSTALL_INTERFACE:include>                        # Installed headers
@@ -116,7 +116,7 @@ target_compile_options(trex_tsolvers PRIVATE
 target_sources(trex_tsolvers PUBLIC
     FILE_SET HEADERS
     BASE_DIRS
-        $<BUILD_INTERFACE:${CMAKE_SOURCE_DIR}/src>
+        $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/src>
         $<INSTALL_INTERFACE:include>
     FILES
         ${CMAKE_CURRENT_SOURCE_DIR}/tsolvers.hpp
