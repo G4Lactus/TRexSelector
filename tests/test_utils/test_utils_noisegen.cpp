@@ -1,9 +1,28 @@
+// ========================================================================================
+/**
+ * @file test_utils_noisegen.cpp
+ * @brief Unit tests for noise generation utilities in utils_noisegen.hpp
+ */
+// ========================================================================================
+
+// google test includes
 #include <gtest/gtest.h>
+
+// project utils includes
 #include <utils/datageneration/utils_noisegen.hpp>
+
+// Eigen includes
 #include <Eigen/Dense>
 
+
+// ========================================================================================
+
+// Namespace alias for convenience
 using namespace trex::utils::datageneration::noisegen;
 
+// ========================================================================================
+
+/** @brief Tests for noise policy validation */
 TEST(NoiseGenTest, NoisePolicyValidation) {
     EXPECT_NO_THROW(noise_policy::StudentT(5.0));
     EXPECT_THROW(noise_policy::StudentT(-1.0), std::invalid_argument);
@@ -13,9 +32,11 @@ TEST(NoiseGenTest, NoisePolicyValidation) {
     EXPECT_THROW(noise_policy::StudentTMixture(-1.0, 2.0), std::invalid_argument);
 }
 
+
+/** @brief Tests for noise parameter calculation */
 TEST(NoiseGenTest, CalculateNoiseParams) {
     Eigen::VectorXd y(5);
-    // Values: 1, 2, 3, 4, 5. Mean is 3. 
+    // Values: 1, 2, 3, 4, 5. Mean is 3.
     // Squared diffs: (-2)^2 + (-1)^2 + 0 + 1^2 + 2^2 = 4 + 1 + 0 + 1 + 4 = 10
     // signal_power: n <= 100, variance = sum / (n-1) = 10 / 4 = 2.5
     y << 1.0, 2.0, 3.0, 4.0, 5.0;
@@ -32,6 +53,8 @@ TEST(NoiseGenTest, CalculateNoiseParams) {
     EXPECT_DOUBLE_EQ(nstd0, 0.0); // should safely handle and return 0
 }
 
+
+/** @brief Tests for noise addition determinism */
 TEST(NoiseGenTest, AddNoiseDeterminism) {
     Eigen::VectorXd y_base(10);
     y_base.setOnes();
@@ -59,10 +82,14 @@ TEST(NoiseGenTest, AddNoiseDeterminism) {
     EXPECT_FALSE(y1.isApprox(y_base, 1e-15));
 }
 
+
+/** @brief Tests for noise addition with invalid standard deviation */
 TEST(NoiseGenTest, AddNoiseThrowsOnNegativeStd) {
     Eigen::VectorXd y(5);
     y.setOnes();
 
-    EXPECT_THROW(add_noise(y, 5, -1.0, noise_policy::Normal(), 123), std::invalid_argument);
-    EXPECT_THROW(add_noise(y, 5, 0.0, noise_policy::Normal(), 123), std::invalid_argument);
+    EXPECT_THROW(add_noise(y, 5, -1.0, noise_policy::Normal(), 123),
+                 std::invalid_argument);
+    EXPECT_THROW(add_noise(y, 5, 0.0, noise_policy::Normal(), 123),
+                 std::invalid_argument);
 }

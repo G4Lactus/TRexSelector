@@ -37,15 +37,15 @@ TRexBiobankScreeningSelector <- R6::R6Class("TRexBiobankScreeningSelector",
                           max_inner_threads = 1,
                           seed = -1,
                           verbose = TRUE) {
-                          
+
       private$refs <- list(X = X, Y = Y)
-      
+
       biobank_control_list <- list(
         target_FDR_trex = target_FDR_trex,
         lower_bound_FDR = lower_bound_FDR,
         upper_bound_FDR = upper_bound_FDR
       )
-      
+
       screen_control_list <- list(
         use_bootstrap_CI = use_bootstrap_CI,
         R_boot = R_boot,
@@ -60,7 +60,7 @@ TRexBiobankScreeningSelector <- R6::R6Class("TRexBiobankScreeningSelector",
         max_outer_threads = max_outer_threads,
         max_inner_threads = max_inner_threads
       )
-      
+
       if (is.vector(Y)) {
         private$is_multi <- FALSE
         private$ptr <- trex_biobank_screening_1d_create(
@@ -75,7 +75,7 @@ TRexBiobankScreeningSelector <- R6::R6Class("TRexBiobankScreeningSelector",
         stop("Response evaluation Y must be either a numeric vector or a numeric matrix.")
       }
     },
-    
+
     #' @description Run the Biobank Screening algorithm.
     #' @return A list with results. For vector 'Y', it gives a single phenotype result. For matrix 'Y', it gives a multi-phenotype result containing a `$statistics` data.frame and `$selected_indices` arrays.
     select = function() {

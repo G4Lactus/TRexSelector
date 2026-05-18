@@ -1,4 +1,7 @@
 # CMakeLists.txt for tsolvers demos
+# ==================================================================================
+# CMake configuration for T-Algorithm solver demos.
+
 
 add_demo_target(demo_ts_01_tlars
     demo_ts_01_tlars.cpp

@@ -19,7 +19,6 @@
 
 // std includes
 #include <utils/logging/logger.hpp>
-#include <iostream>
 #include <vector>
 #include <limits>
 #include <cmath>
@@ -220,4 +219,4 @@ public:
 // ===================================================================================
 } /* End of namespace trex::ml_methods::clustering::hierarchical::agglomerative */
 
-#endif /* ML_METHODS_CLUSTERING_HC_AGGLOMERATIVE_PROJECTED_GEOMETRIC_POLICY_HPP */
+#endif /* End of ML_METHODS_CLUSTERING_HC_AGGLOMERATIVE_PROJECTED_GEOMETRIC_POLICY_HPP */

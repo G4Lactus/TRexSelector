@@ -3,15 +3,22 @@
 // ==============================================================================
 #ifndef RCPP_TREX_BIOBANK_SCREENING_WRAPPER_H
 #define RCPP_TREX_BIOBANK_SCREENING_WRAPPER_H
+// ==============================================================================
 
 #include <memory>
+
 // [[Rcpp::depends(RcppEigen)]]
 #include <RcppEigen.h>
+
 #include <trex_selector_methods/trex_screening/trex_biobank_screening.hpp>
+
+// ==============================================================================
 
 using namespace trex::trex_selector_methods::trex_core;
 using namespace trex::trex_selector_methods::trex_screening;
 using namespace trex::trex_selector_methods::trex_biobank_screening;
+
+// ==============================================================================
 
 /**
  * @brief Rcpp wrapper class for BiobankScreenTRex leveraging zero-copy references.
@@ -59,4 +66,5 @@ public:
     BiobankScreenTRex* get() const { return this->selector_.get(); }
 };
 
-#endif // RCPP_TREX_BIOBANK_SCREENING_WRAPPER_H
+// ==============================================================================
+#endif /* End of RCPP_TREX_BIOBANK_SCREENING_WRAPPER_H */

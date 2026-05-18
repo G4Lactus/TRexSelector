@@ -46,8 +46,10 @@ class UnionFind {
 private:
     /* Parent pointers */
     std::vector<Eigen::Index> parent_;
+
     /* Size of each set */
     std::vector<Eigen::Index> size_;
+
     /* Active cluster IDs */
     std::vector<Eigen::Index> active_cluster_id_;
 
@@ -429,5 +431,5 @@ public:
 
 // ===================================================================================
 } /* End of namespace trex::ml_methods::clustering::hierarchical::agglomerative */
-
-#endif /* ML_METHODS_CLUSTERING_HC_AGGLOMERATIVE_DENDROGRAM_UTILS_HPP */
+// ===================================================================================
+#endif /* End of ML_METHODS_CLUSTERING_HC_AGGLOMERATIVE_DENDROGRAM_UTILS_HPP */

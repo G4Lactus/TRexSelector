@@ -21,6 +21,7 @@
 
 // ===================================================================================
 
+/** @brief Test serialization and deserialization of Eigen dense matrices. */
 TEST(SerializationTest, DenseMatrix) {
     // Create an Eigen matrix and populate it
     Eigen::MatrixXd original(2, 2);
@@ -48,6 +49,7 @@ TEST(SerializationTest, DenseMatrix) {
 }
 
 
+/** @brief Test serialization and deserialization of Eigen sparse matrices. */
 TEST(SerializationTest, SparseMatrix) {
     // Create an Eigen sparse matrix
     Eigen::SparseMatrix<double> original(3, 3);

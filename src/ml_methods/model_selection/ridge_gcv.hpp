@@ -8,7 +8,6 @@
  * @file ridge_gcv.hpp
  *
  * @brief Ridge regression with Generalized Cross-Validation (GCV) for model selection.
- *
  */
 // ===================================================================================
 
@@ -69,32 +68,34 @@ public:
      * @param X Design matrix (n x p)
      * @param y Response vector (n)
      */
-    void fit(Eigen::Ref<const Eigen::MatrixXd> X,
-             Eigen::Ref<const Eigen::VectorXd> y) {
+    void fit(
+        Eigen::Ref<const Eigen::MatrixXd> X, // NOLINT
+        Eigen::Ref<const Eigen::VectorXd> y  // NOLINT
+    ) {
 
         if (X.rows() != y.size()) {
             throw std::invalid_argument("ridge_gcv::fit: X.rows() != y.size()");
         }
 
-        m_ = X.rows();
+        n_ = X.rows();
         p_ = X.cols();
 
         x_mean_ = X.colwise().mean();
         y_mean_ = y.mean();
 
         // ||y_c||^2 = ||y||^2 - n * y_mean^2  (no copy of y needed)
-        yc_sq_norm_ = y.squaredNorm() - static_cast<double>(m_) * y_mean_ * y_mean_;
+        yc_sq_norm_ = y.squaredNorm() - static_cast<double>(n_) * y_mean_ * y_mean_;
 
         Eigen::VectorXd evals_desc;
 
-        if (m_ >= p_) {
+        if (n_ >= p_) {
 
             // -------------------------------------------------------------
             // n >= p: Eigen-decompose the p x p covariance matrix X^T X
             // -------------------------------------------------------------
             // X_c^T X_c = X^T X - n * x_mean * x_mean^T  (rank-1 correction)
             Eigen::MatrixXd K = X.transpose() * X;
-            K -= static_cast<double>(m_) * x_mean_ * x_mean_.transpose();
+            K -= static_cast<double>(n_) * x_mean_ * x_mean_.transpose();
             Eigen::SelfAdjointEigenSolver<Eigen::MatrixXd> eig(K);
 
             if (eig.info() != Eigen::Success) {
@@ -108,7 +109,7 @@ public:
             double s_max = std::sqrt(std::max(0.0, evals_desc(0)));
             double tol = std::numeric_limits<double>::epsilon() *
                          s_max *
-                         std::sqrt(static_cast<double>(m_));
+                         std::sqrt(static_cast<double>(n_));
 
             r_ = 0;
             for (Eigen::Index i = 0; i < p_; ++i) {
@@ -126,7 +127,7 @@ public:
             // X^T y = V Sigma U^T y  ->  U^T y = Sigma^{-1} V^T X^T y
             // X_c^T y_c = X^T y - n * y_mean * x_mean  (no copy)
             Eigen::VectorXd Xty = X.transpose() * y;
-            Xty -= static_cast<double>(m_) * y_mean_ * x_mean_;
+            Xty -= static_cast<double>(n_) * y_mean_ * x_mean_;
             Eigen::VectorXd Z = V_.transpose() * Xty;
             Uty_ = Z.cwiseQuotient(sigma_);
 
@@ -153,7 +154,7 @@ public:
                        * std::sqrt(static_cast<double>(p_));
 
             r_ = 0;
-            for (Eigen::Index i = 0; i < m_; ++i) {
+            for (Eigen::Index i = 0; i < n_; ++i) {
                 if (std::sqrt(std::max(0.0, evals_desc(i))) > tol) ++r_;
                 else break;
             }
@@ -249,7 +250,7 @@ public:
             df += filter;
         }
 
-        const double denom = 1.0 - df / static_cast<double>(m_);
+        const double denom = 1.0 - df / static_cast<double>(n_);
         // Return +inf whenever the hat-matrix trace is within 1% of n.
         // In the underdetermined regime (r_ close to n) the denominator collapses
         // toward zero, making GCV numerically unreliable.  Callers such as
@@ -258,7 +259,7 @@ public:
             return std::numeric_limits<double>::max();
         }
 
-        return (rss / static_cast<double>(m_)) / (denom * denom);
+        return (rss / static_cast<double>(n_)) / (denom * denom);
     }
 
 
@@ -291,8 +292,10 @@ public:
      *
      * @return Predicted response vector.
      */
-    Eigen::VectorXd predict(Eigen::Ref<const Eigen::MatrixXd> X_new,
-                            double lambda) const {
+    Eigen::VectorXd predict(
+        Eigen::Ref<const Eigen::MatrixXd> X_new, // NOLINT
+        double lambda
+    ) const {
         check_fitted();
         check_lambda(lambda, "predict");
 
@@ -318,8 +321,10 @@ public:
      *
      * @return Prediction matrix (n_new x K); column k corresponds to lambdas(k).
      */
-    Eigen::MatrixXd predict_path(Eigen::Ref<const Eigen::MatrixXd> X_new,
-                                  Eigen::Ref<const Eigen::VectorXd> lambdas) const {
+    Eigen::MatrixXd predict_path(
+        Eigen::Ref<const Eigen::MatrixXd> X_new, // NOLINT
+        Eigen::Ref<const Eigen::VectorXd> lambdas
+    ) const {
         check_fitted();
 
         if (X_new.cols() != p_) {
@@ -327,7 +332,8 @@ public:
                 "ridge_gcv::predict_path: X_new.cols() != p");
         }
 
-        const ridge_path path = solve_path(lambdas);  // validates all lambdas
+        // validates all lambdas
+        const ridge_path path = solve_path(std::move(lambdas));
 
         // Intercepts: b0_k = y_mean - x_mean^T beta_k  (1 x K)
         Eigen::RowVectorXd b0 =
@@ -346,13 +352,15 @@ public:
      *
      * @return Ridge path containing coefficients, GCV scores, and effective degrees of freedom.
      */
-    ridge_path solve_path(Eigen::Ref<const Eigen::VectorXd> lambdas) const {
+    ridge_path solve_path(
+        Eigen::Ref<const Eigen::VectorXd> lambdas // NOLINT
+    ) const {
         check_fitted();
 
         const Eigen::Index K = lambdas.size();
 
         ridge_path path;
-        path.lambdas = lambdas;
+        path.lambdas = Eigen::VectorXd(lambdas);
         path.coefficients.resize(p_, K);
         path.gcv_scores.resize(K);
         path.df_effective.resize(K);
@@ -457,14 +465,15 @@ public:
         double log_lo = std::log10(s_min_sq * 1e-4);
         const double log_hi = std::log10(s_max_sq * 1e4);
 
-        // When rank is close to n the GCV denominator (1 - df/n)^2 collapses toward
-        // zero.  gcv() already returns +inf whenever |1-df/n| < 0.01, so the grid and
-        // golden-section searches will naturally avoid that region.  As a belt-and-
-        // suspenders measure, also pre-shift log_lo to the lambda that reduces df_eff
-        // to 98% of n (denom ≈ 0.02, safely above the gcv() guard of 0.01).
+        // When the rank is close to n the GCV denominator (1 - df/n)^2 collapses toward
+        // zero.
+        // gcv() already returns +inf whenever |1 - df/n| < 0.01, so the grid and
+        // golden-section searches will naturally avoid that region.
+        // As a belt-and-suspenders measure, also pre-shift log_lo to the lambda that
+        // reduces df_eff to 98% of n (denom ≈ 0.02, safely above the gcv() guard of 0.01).
         double lambda_floor = 0.0;  // 0 == inactive for well-determined systems
-        if (r_ >= m_ - 1) {
-            lambda_floor = compute_df_floor((1.0 - 1e-2) * static_cast<double>(m_));
+        if (r_ >= n_ - 1) {
+            lambda_floor = compute_df_floor((1.0 - 1e-2) * static_cast<double>(n_));
             log_lo = std::max(log_lo, std::log10(lambda_floor));
         }
 
@@ -495,6 +504,7 @@ public:
         if (lambda_floor > 0.0) a = std::max(a, lambda_floor);
         b = std::min(b, std::pow(10.0, log_hi));
 
+        // Golden-section search in log-lambda space
         constexpr double phi = 0.6180339887498949;
 
         double la = std::log(a);
@@ -528,7 +538,7 @@ public:
     }
 
     /** @brief Number of samples in the dataset. */
-    Eigen::Index n_samples() const noexcept { return m_; }
+    Eigen::Index n_samples() const noexcept { return n_; }
 
     /** @brief Number of features in the dataset. */
     Eigen::Index n_features() const noexcept { return p_; }
@@ -609,7 +619,7 @@ private:
     bool fitted_ = false;
 
     /** @brief Number of samples in the dataset. */
-    Eigen::Index m_ = 0;
+    Eigen::Index n_ = 0;
 
     /** @brief Number of features in the dataset. */
     Eigen::Index p_ = 0;
@@ -646,9 +656,9 @@ private:
 };
 
 // ===================================================================================
-} /* namespace model_selection */
-} /* namespace ml_methods */
-} /* namespace trex */
+} /* End of namespace model_selection */
+} /* End of namespace ml_methods */
+} /* End of namespace trex */
 // ===================================================================================
 
 #endif /* End of TREX_ML_METHODS_MODEL_SELECTION_RIDGE_GCV_HPP */

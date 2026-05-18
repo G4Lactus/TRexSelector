@@ -1,10 +1,32 @@
+// =========================================================================================
+/**
+ * @file test_utils_fp_classify.cpp
+ *
+ * @brief Unit tests for evaluation of floating-point classification utilities in
+ *        utils/fp_classify.
+ */
+// =========================================================================================
+
+// google test includes
 #include <gtest/gtest.h>
+
+// std includes
 #include <limits>
+
+// Eigen includes
 #include <Eigen/Dense>
+
+// project utils includes
 #include <utils/fp_classify/fp_classify.hpp>
 
+// =========================================================================================
+
+// Namespace alias for convenience
 using namespace trex::utils::fp_classify;
 
+// =========================================================================================
+
+/** @brief Test for checking if a value is NaN. */
 TEST(FPClassifyTest, IsNaN) {
     double q_nan = std::numeric_limits<double>::quiet_NaN();
     double s_nan = std::numeric_limits<double>::signaling_NaN();
@@ -18,6 +40,8 @@ TEST(FPClassifyTest, IsNaN) {
     EXPECT_FALSE(isnan(0.0));
 }
 
+
+/** @brief Test for checking if a value is infinite. */
 TEST(FPClassifyTest, IsInf) {
     double inf = std::numeric_limits<double>::infinity();
     double n_inf = -std::numeric_limits<double>::infinity();
@@ -31,6 +55,8 @@ TEST(FPClassifyTest, IsInf) {
     EXPECT_FALSE(isinf(0.0));
 }
 
+
+/** @brief Test for checking if a value is finite. */
 TEST(FPClassifyTest, IsFinite) {
     double inf = std::numeric_limits<double>::infinity();
     double nan = std::numeric_limits<double>::quiet_NaN();
@@ -43,6 +69,8 @@ TEST(FPClassifyTest, IsFinite) {
     EXPECT_TRUE(trex::utils::fp_classify::isfinite(-0.0));
 }
 
+
+/** @brief Test for checking if all elements in a vector are finite. */
 TEST(FPClassifyTest, AllFinite) {
     Eigen::VectorXd valid(3);
     valid << 1.0, 2.0, 3.0;

@@ -228,6 +228,7 @@ endif()
 # ============================================================================
 # Add subdirectories with build targets (.cpp files)
 # ============================================================================
+include(CTest)
 enable_testing()
 add_subdirectory(src)
 add_subdirectory(tests)
@@ -310,7 +311,7 @@ endif()
 # ============================================================================
 # VS Code / IDE IntelliSense Dummy Target (DO NOT BUILD)
 # ============================================================================
-# This simply forces ms-vscode.cmake-tools to parse and provide IntelliSense for 
+# This simply forces ms-vscode.cmake-tools to parse and provide IntelliSense for
 # the R package source files that are otherwise built externally by `R CMD INSTALL`.
 file(GLOB_RECURSE R_BINDINGS_SOURCES "R/TRexSelector/src/*.cpp")
 add_library(r_bindings_ide_only EXCLUDE_FROM_ALL ${R_BINDINGS_SOURCES})

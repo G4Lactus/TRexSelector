@@ -1,9 +1,28 @@
+// ========================================================================================
+/**
+ * @file test_utils_dummygen.cpp
+ *
+ * @brief Unit tests for dummy generator utilities in utils_dummygen.hpp
+ */
+// ========================================================================================
+
+// google test includes
 #include <gtest/gtest.h>
+
+// project utils includes
 #include <utils/datageneration/utils_dummygen.hpp>
+
+// Eigen includes
 #include <Eigen/Dense>
 
+// ========================================================================================
+
+// Namespace alias for convenience
 using namespace trex::utils::datageneration::dummygen;
 
+// ========================================================================================
+
+/** @brief Unit tests for mix_seed function. */
 TEST(DummyGenTest, MixSeedDeterminism) {
     // Tests that mix_seed is deterministic and unique for different bases/indices
     std::uint32_t seed1 = mix_seed(42, 0);
@@ -16,6 +35,8 @@ TEST(DummyGenTest, MixSeedDeterminism) {
     EXPECT_NE(seed1, seed4) << "Different bases must produce different seeds";
 }
 
+
+/** @brief Unit tests for distribution factories. */
 TEST(DummyGenTest, DistributionFactories) {
     // Normal Check
     auto norm = Distribution::Normal();
@@ -53,10 +74,12 @@ TEST(DummyGenTest, DistributionFactories) {
     EXPECT_THROW(Distribution::ConstrainedSparseRademacher(-0.1), std::invalid_argument);
 }
 
+
+/** @brief Unit tests for Rademacher dummy generation bounds. */
 TEST(DummyGenTest, GenerateDummiesRademacherBounds) {
     Eigen::MatrixXd D(100, 5);
     unsigned int seed = 12345;
-    
+
     generate_dummies(D, 100, 5, seed, Distribution::Rademacher());
 
     // Rademacher should only be exactly -1.0 or 1.0
@@ -67,6 +90,8 @@ TEST(DummyGenTest, GenerateDummiesRademacherBounds) {
     }
 }
 
+
+/** @brief Unit tests for Normal dummy generation properties. */
 TEST(DummyGenTest, GenerateDummiesDeterminism) {
     Eigen::MatrixXd D1(10, 3);
     Eigen::MatrixXd D2(10, 3);
@@ -75,7 +100,7 @@ TEST(DummyGenTest, GenerateDummiesDeterminism) {
     unsigned int seed1 = 999;
     unsigned int seed2 = 999;
     unsigned int seed3 = 888;
-    
+
     auto dist = Distribution::Normal();
 
     generate_dummies(D1, 10, 3, seed1, dist);

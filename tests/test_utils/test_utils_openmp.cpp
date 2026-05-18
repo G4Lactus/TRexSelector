@@ -1,8 +1,23 @@
+// ========================================================================================
+/**
+ * @file test_utils_openmp.cpp
+ *
+ * @brief Unit tests for OpenMP utilities in utils_openmp.hpp
+ */
+// ========================================================================================
+
+// google test includes
 #include <gtest/gtest.h>
+
+// project utils includes
 #include <utils/openmp/utils_openmp.hpp>
 
-// Verify that the wrapper functions complete successfully 
-// without crashing, both in OpenMP-enabled and disabled environments.
+// ========================================================================================
+
+/**
+ * @brief Test that the wrapper functions complete successfully without crashing, both in
+ *        OpenMP-enabled and disabled environments.
+ */
 TEST(OpenMPTest, CoreFunctionStubs) {
     // Basic threads info
     int num_threads = omp_get_num_threads();
@@ -24,11 +39,13 @@ TEST(OpenMPTest, CoreFunctionStubs) {
     EXPECT_GT(tick, 0.0);
 }
 
+
+/** @brief Test OpenMP utilities in the utils namespace. */
 TEST(OpenMPTest, UtilsNamespace) {
     // Just verifying strings and calls are correctly hooked up
     bool available = trex::utils::openmp::is_available();
     std::string status = trex::utils::openmp::status_string();
-    
+
     if (available) {
         EXPECT_EQ(status, "OpenMP enabled");
     } else {
