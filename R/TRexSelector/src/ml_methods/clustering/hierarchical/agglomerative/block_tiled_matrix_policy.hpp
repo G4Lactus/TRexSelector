@@ -16,7 +16,10 @@
  */
  // ===================================================================================
 
+ // project utils includes
 #include <utils/logging/logger.hpp>
+
+// std includes
 #include <vector>
 #include <cmath>
 #include <limits>
@@ -28,25 +31,56 @@
 #include <random>
 #include <memory>
 
+// boost includes for memory mapping
 #include <boost/interprocess/file_mapping.hpp>
 #include <boost/interprocess/mapped_region.hpp>
 
+// Eigen includes
 #include <Eigen/Dense>
 
+// ml_methods includes
 #include <ml_methods/clustering/hierarchical/agglomerative/agglomerative_types.hpp>
+
+// ===================================================================================
 
 namespace trex::ml_methods::clustering::hierarchical::agglomerative {
 
+// ===================================================================================
+
+// Detail namespace for internal utilities
 namespace detail {
+
+    /** @brief Lance-Williams coefficients for hierarchical clustering */
     struct LanceWilliamsCoefficients {
+
+        /** @brief Coefficient for cluster c */
         double alpha_c = 0.0;
+
+        /** @brief Coefficient for cluster d */
         double alpha_d = 0.0;
+
+        /** @brief Beta coefficient */
         double beta = 0.0;
+
+        /** @brief Gamma coefficient */
         double gamma = 0.0;
     };
 
+    /**
+     * @brief Computes the Lance-Williams coefficients for the specified linkage method.
+     *
+     * @tparam SelectedMethod The linkage method to use.
+     *
+     * @param n_c The size of cluster c.
+     * @param n_d The size of cluster d.
+     * @param n_L The size of the new cluster formed by merging c and d
+     *            (only used for Ward's method).
+     *
+     * @return The computed Lance-Williams coefficients.
+     */
     template <LinkageMethod SelectedMethod>
     inline LanceWilliamsCoefficients compute_LW_coeffs(double n_c, double n_d, double n_L) {
+
         LanceWilliamsCoefficients coeffs;
         if constexpr (SelectedMethod == LinkageMethod::Average) {
             double total_n_cd = n_c + n_d;
@@ -80,22 +114,25 @@ namespace detail {
             coeffs.beta = -n_L / total_n;
 
         } else {
-            static_assert(sizeof(SelectedMethod) == 0, "Unsupported Linkage Method for Matrix Policy.");
+            static_assert(sizeof(SelectedMethod) == 0,
+                          "Unsupported Linkage Method for Matrix Policy.");
         }
         return coeffs;
     }
 }
 
+
 /**
- * @brief Block-tiled distance-matrix policy for cache-efficient hierarchical agglomerative clustering.
+ * @brief Block-tiled distance-matrix policy for cache-efficient hierarchical agglomerative
+ *        clustering.
  *
  * @details Stores the full pairwise distance matrix in a cache-friendly block-tiled layout
- * (tile size 256 × 256) and applies Lance-Williams updates in-place. Supports both
- * heap-allocated RAM and memory-mapped (Boost.Interprocess) backends.
+ * (tile size 256 × 256) and applies Lance-Williams updates in-place.
+ * Supports both heap-allocated RAM and memory-mapped (Boost.Interprocess) backends.
  *
- * @tparam MatrixType        Type of the input data matrix (e.g., Eigen::MatrixXf or Eigen::Map).
+ * @tparam MatrixType         Type of the input data matrix (e.g., Eigen::MatrixXf or Eigen::Map).
  * @tparam DistancePolicyType Distance metric policy type; must provide `get_distance(i, j)`.
- * @tparam SelectedMethod    Compile-time linkage method (determines Lance-Williams coefficients).
+ * @tparam SelectedMethod     Compile-time linkage method (determines Lance-Williams coefficients).
  */
 template <typename MatrixType, typename DistancePolicyType, LinkageMethod SelectedMethod>
 class BlockTiledMatrixPolicy {
@@ -148,8 +185,12 @@ private:
     }
 
 public:
+
     /**
      * @brief Constructor evaluating the optional memory map flag.
+     *
+     * @param data The input data matrix (columns are objects to cluster).
+     * @param use_mmap If true, the distance matrix is stored on disk using memory mapping.
      */
     BlockTiledMatrixPolicy(const MatrixType& data, bool use_mmap = false)
         : use_mmap_(use_mmap), dist_policy_(data)
@@ -158,16 +199,19 @@ public:
         namespace bip = boost::interprocess;
 
         num_original_ = data.cols();
-        blocks_per_row_ = static_cast<Eigen::Index>(std::ceil(static_cast<double>(num_original_) / BLOCK_SIZE));
+        blocks_per_row_ = static_cast<Eigen::Index>(
+                            std::ceil(static_cast<double>(num_original_) / BLOCK_SIZE));
         Eigen::Index total_elements = blocks_per_row_ * blocks_per_row_ * BLOCK_SIZE * BLOCK_SIZE;
 
         if (use_mmap_) {
-            std::uintmax_t file_size_bytes = static_cast<std::uintmax_t>(total_elements * sizeof(RealScalar));
+            std::uintmax_t file_size_bytes = static_cast<std::uintmax_t>(
+                                                total_elements * sizeof(RealScalar));
 
             std::random_device rd;
             std::mt19937_64 gen(rd());
             std::uniform_int_distribution<uint64_t> dis;
-            temp_filepath_ = fs::temp_directory_path() / ("trex_hac_matrix_" + std::to_string(dis(gen)) + ".bin");
+            temp_filepath_ = fs::temp_directory_path() / ("trex_hac_matrix_" +
+                             std::to_string(dis(gen)) + ".bin");
 
             {
                 std::ofstream ofs(temp_filepath_, std::ios::out | std::ios::binary);
@@ -182,20 +226,24 @@ public:
             }
 
             try {
-                file_mapping_ = std::make_unique<bip::file_mapping>(temp_filepath_.string().c_str(), bip::read_write);
-                mapped_region_ = std::make_unique<bip::mapped_region>(*file_mapping_, bip::read_write);
+                file_mapping_ = std::make_unique<bip::file_mapping>(
+                                    temp_filepath_.string().c_str(), bip::read_write);
+                mapped_region_ = std::make_unique<bip::mapped_region>(
+                                    *file_mapping_, bip::read_write);
                 data_ptr_ = static_cast<RealScalar*>(mapped_region_->get_address());
             } catch (const bip::interprocess_exception& e) {
                 fs::remove(temp_filepath_, ec);
                 throw std::runtime_error(std::string("Boost mmap failed: ") + e.what());
             }
-            TREX_INFO( "  -> [Backend] Mmap allocated " << (file_size_bytes / (1ULL << 30)) << " GB on NVMe.\n");
+            TREX_INFO( "  -> [Backend] Mmap allocated " << (file_size_bytes / (1ULL << 30))
+                                                        << " GB on NVMe.\n");
         }
         else {
             // Use physical RAM
             ram_backend_.assign(total_elements, 0.0);
             data_ptr_ = ram_backend_.data();
-            TREX_INFO( "  -> [Backend] RAM allocated " << (total_elements * sizeof(RealScalar) / (1ULL << 20)) << " MB.\n");
+            TREX_INFO( "  -> [Backend] RAM allocated "
+                << (total_elements * sizeof(RealScalar) / (1ULL << 20)) << " MB.\n");
         }
 
         id_to_idx_.assign(num_original_ * 2 - 1, -1);
@@ -211,6 +259,7 @@ public:
             }
         }
     }
+
 
     /** @brief Destructor. Unmaps and removes the temporary mmap file if applicable. */
     ~BlockTiledMatrixPolicy() {
@@ -231,6 +280,7 @@ public:
      *
      * @param c_id Logical cluster ID of the first cluster.
      * @param d_id Logical cluster ID of the second cluster.
+     *
      * @return Stored pairwise distance; returns `numeric_limits::max()` for dead clusters.
      */
     double get_logical_distance(Eigen::Index c_id, Eigen::Index d_id) const {
@@ -240,16 +290,24 @@ public:
         return get_physical_distance(idx_c, idx_d);
     }
 
+
     /**
      * @brief Find the nearest active neighbor of a given cluster.
      *
-     * @param c_id              Logical cluster ID to search from.
-     * @param active_clusters   Boolean flags indicating which cluster IDs are still active.
+     * @param c_id               Logical cluster ID to search from.
+     * @param active_clusters    Boolean flags indicating which cluster IDs are still active.
      * @param current_cluster_id Upper bound (exclusive) of cluster IDs to consider.
-     * @param min_dist          Output: distance to the nearest neighbor found.
+     * @param min_dist           Output: distance to the nearest neighbor found.
+     *
      * @return Logical cluster ID of the nearest neighbor, or -1 if none found.
      */
-    Eigen::Index find_nearest_neighbor(Eigen::Index c_id, const std::vector<bool>& active_clusters, Eigen::Index current_cluster_id, double& min_dist) const {
+    Eigen::Index find_nearest_neighbor(
+        Eigen::Index c_id,
+        const std::vector<bool>& active_clusters,
+        Eigen::Index current_cluster_id,
+        double& min_dist
+    ) const {
+
         min_dist = std::numeric_limits<double>::max();
         Eigen::Index best_d = -1;
         const Eigen::Index idx_c = id_to_idx_[c_id];
@@ -258,8 +316,10 @@ public:
             const double d = get_physical_distance(idx_c, id_to_idx_[i]);
             if (d < min_dist) { min_dist = d; best_d = i; }
         }
+
         return best_d;
     }
+
 
     /**
      * @brief Merge two clusters and update all pairwise distances via the Lance-Williams formula.
@@ -267,7 +327,11 @@ public:
      * @param args          Named-argument struct specifying c_id, d_id, and new_id.
      * @param cluster_sizes Current cluster sizes indexed by logical cluster ID.
      */
-    void merge_clusters(const MergeClustersArgs& args, const std::vector<Eigen::Index>& cluster_sizes) {
+    void merge_clusters(
+        const MergeClustersArgs& args,
+        const std::vector<Eigen::Index>& cluster_sizes
+    ) {
+
         const Eigen::Index idx_c = id_to_idx_[args.c_id];
         const Eigen::Index idx_d = id_to_idx_[args.d_id];
         const double n_c = static_cast<double>(cluster_sizes[args.c_id]);
@@ -296,7 +360,8 @@ public:
             const auto coeffs = detail::compute_LW_coeffs<SelectedMethod>(n_c, n_d, n_L);
 
             double new_dist = coeffs.alpha_c * dist_cL[i] + coeffs.alpha_d * dist_dL[i] +
-                              coeffs.beta * dist_cd + coeffs.gamma * std::abs(dist_cL[i] - dist_dL[i]);
+                              coeffs.beta * dist_cd +
+                              coeffs.gamma * std::abs(dist_cL[i] - dist_dL[i]);
 
             if (new_dist < 0.0) new_dist = 0.0;
             set_physical_distance(idx_c, k, new_dist);
@@ -305,4 +370,5 @@ public:
 };
 
 }
-#endif /* ML_METHODS_CLUSTERING_HC_AGGLOMERATIVE_BLOCK_TILED_POLICY_HPP */
+// ===================================================================================
+#endif /* End of ML_METHODS_CLUSTERING_HC_AGGLOMERATIVE_BLOCK_TILED_POLICY_HPP */

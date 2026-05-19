@@ -49,8 +49,8 @@ namespace trex::ml_methods::clustering::hierarchical::agglomerative {
  * with Ward's Minimum Variance, which strictly requires Euclidean space.
  */
 enum class DistanceMetric {
-    Euclidean,       /* Exact: |x - y||^2, squared Euclidean distance. Required for Ward,
-                        Centroid, Median.*/
+    Euclidean,       /* Exact: ||x - y||^2, squared Euclidean distance. Required for Ward,
+                        Centroid, Median. (Equivalent to SciPy's metric='sqeuclidean') */
     Correlation,     /* Exact: 1 - |corr(x_i, x_j)|. Assumes data is centered and L2 normalized.
                         Safe for all topologies.*/
     Manhattan,       /* Exact L1 norm ||x - y||_1. Manhattan distance is sum of absolute
@@ -244,4 +244,4 @@ public:
 // ===================================================================================
 } /* End of namespace trex::ml_methods::clustering::hierarchical::agglomerative */
 
-#endif /* ML_METHODS_CLUSTERING_HC_AGGLOMERATIVE_DISTANCE_POLICY_HPP */
+#endif /* End of ML_METHODS_CLUSTERING_HC_AGGLOMERATIVE_DISTANCE_POLICY_HPP */

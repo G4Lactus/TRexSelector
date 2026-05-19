@@ -190,6 +190,51 @@ void TRexSelector::validateTRexParameters() const {
             + std::to_string(trex_ctrl_.max_dummy_multiplier));
     }
 
+    if (trex_ctrl_.opt_threshold < 0.0 || trex_ctrl_.opt_threshold > 1.0) {
+        throw std::invalid_argument(
+            "Optimization threshold opt_threshold must be in [0, 1]. Got: "
+            + std::to_string(trex_ctrl_.opt_threshold));
+    }
+
+        if (trex_ctrl_.tloop_max_stagnant_steps < 0) {
+        throw std::invalid_argument(
+            "tloop_max_stagnant_steps must be >= 0. Got: "
+            + std::to_string(trex_ctrl_.tloop_max_stagnant_steps));
+    }
+
+    if (trex_ctrl_.max_outer_threads < 1) {
+        throw std::invalid_argument(
+            "max_outer_threads must be >= 1. Got: "
+            + std::to_string(trex_ctrl_.max_outer_threads));
+    }
+
+    if (trex_ctrl_.max_inner_threads < 1) {
+        throw std::invalid_argument(
+            "max_inner_threads must be >= 1. Got: "
+            + std::to_string(trex_ctrl_.max_inner_threads));
+    }
+
+    // Only strictly validate solver params if present
+    // (Assuming lambda2, rho_afs, and ncgmp_variant are inside trex_ctrl_.solver_params)
+    if (trex_ctrl_.solver_params.lambda2 < 0.0) {
+        throw std::invalid_argument(
+            "lambda2 must be >= 0.0. Got: "
+            + std::to_string(trex_ctrl_.solver_params.lambda2));
+    }
+
+    if (trex_ctrl_.solver_params.rho_afs < 0.0 || trex_ctrl_.solver_params.rho_afs > 1.0) {
+        throw std::invalid_argument(
+            "rho_afs must be in [0, 1]. Got: "
+            + std::to_string(trex_ctrl_.solver_params.rho_afs));
+    }
+
+    if (trex_ctrl_.solver_params.ncgmp_variant != 0 &&
+        trex_ctrl_.solver_params.ncgmp_variant != 1) {
+        throw std::invalid_argument(
+            "ncgmp_variant must be 0 or 1. Got: "
+            + std::to_string(trex_ctrl_.solver_params.ncgmp_variant));
+    }
+
     // Warn when stagnation detection is disabled for greedy solvers.
     if (!trex_ctrl_.tloop_stagnation_stop) {
         const sd::SolverTypeForTRex st = trex_ctrl_.solver_type;

@@ -32,7 +32,7 @@ Create a new TRexScreeningSelector object.
   R_boot = 1000,
   ci_grid_step = 0.001,
   trex_method = "TREX",
-  method = "LARS",
+  method = "TLARS",
   use_omp = TRUE,
   use_memory_mapping = FALSE,
   max_outer_threads = 1,
@@ -59,7 +59,7 @@ Create a new TRexScreeningSelector object.
 
 \item{\code{trex_method}}{Screening method: "TREX", "TREX_DA_AR1", "TREX_DA_EQUI", "TREX_DA_BLOCK_EQUI"}
 
-\item{\code{method}}{The solver method, e.g., "LARS", "TACGP", "TENET" (default: "LARS").}
+\item{\code{method}}{The solver method, e.g., "TLARS", "TACGP", "TENET" (default: "TLARS").}
 
 \item{\code{use_omp}}{Whether to use OpenMP parallelization (default: TRUE).}
 

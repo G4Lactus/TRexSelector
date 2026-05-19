@@ -483,10 +483,6 @@ public:
     /** @brief Get dummy multiplier L. */
     std::size_t getDummyMultiplierL() const noexcept { return dummy_multiplier_LL_; }
 
-    /** @brief Get stopping time T. */
-    std::size_t getStoppingTimeT() const noexcept { return T_stop_; }
-
-
 protected:
 
     // ============================================================

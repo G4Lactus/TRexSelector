@@ -15,7 +15,7 @@ TRexBiobankScreeningSelector <- R6::R6Class("TRexBiobankScreeningSelector",
     #' @param R_boot Number of bootstrap iterations.
     #' @param ci_grid_step Grid step sizes for interval calculations.
     #' @param trex_method Screening method: "TREX", "TREX_DA_AR1", "TREX_DA_EQUI", "TREX_DA_BLOCK_EQUI"
-    #' @param method The solver method, e.g., "LARS", "TACGP", "TENET" (default: "LARS").
+    #' @param method The solver method, e.g., "TLARS", "TACGP", "TENET" (default: "TLARS").
     #' @param use_omp Whether to use OpenMP parallelization (default: TRUE).
     #' @param use_memory_mapping Use out-of-core memory mapping (default: FALSE).
     #' @param max_outer_threads Thread count for K repetitions (default: 1).
@@ -30,7 +30,7 @@ TRexBiobankScreeningSelector <- R6::R6Class("TRexBiobankScreeningSelector",
                           R_boot = 1000,
                           ci_grid_step = 0.001,
                           trex_method = "TREX",
-                          method = "LARS",
+                          method = "TLARS",
                           use_omp = TRUE,
                           use_memory_mapping = FALSE,
                           max_outer_threads = 1,
@@ -50,7 +50,8 @@ TRexBiobankScreeningSelector <- R6::R6Class("TRexBiobankScreeningSelector",
         use_bootstrap_CI = use_bootstrap_CI,
         R_boot = R_boot,
         ci_grid_step = ci_grid_step,
-        trex_method = trex_method
+        trex_method = trex_method,
+        lloop_strategy = "STANDARD"
       )
 
       trex_control_list <- list(
@@ -58,15 +59,22 @@ TRexBiobankScreeningSelector <- R6::R6Class("TRexBiobankScreeningSelector",
         parallel_rnd_experiments = use_omp,
         use_memory_mapping = use_memory_mapping,
         max_outer_threads = max_outer_threads,
-        max_inner_threads = max_inner_threads
+        max_inner_threads = max_inner_threads,
+        lloop_strategy = "STANDARD"
       )
 
-      if (is.vector(Y)) {
+      if (!is.numeric(Y)) {
+        stop("Response evaluation Y must be either a numeric vector or a numeric matrix.")
+      }
+
+      if (is.vector(Y) || (is.array(Y) && length(dim(Y)) == 1)) {
+        if (nrow(X) != length(Y)) stop("Dimension mismatch: nrow(X) != length(Y)")
         private$is_multi <- FALSE
         private$ptr <- trex_biobank_screening_1d_create(
           X, Y, biobank_control_list, screen_control_list, trex_control_list, seed, verbose
         )
       } else if (is.matrix(Y)) {
+        if (nrow(X) != nrow(Y)) stop("Dimension mismatch: nrow(X) != nrow(Y)")
         private$is_multi <- TRUE
         private$ptr <- trex_biobank_screening_2d_create(
           X, Y, biobank_control_list, screen_control_list, trex_control_list, seed, verbose

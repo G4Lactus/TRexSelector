@@ -4,7 +4,8 @@
 \alias{TRexGVSSelector}
 \title{T-Rex Selector with Group Variable Selection (TRex GVS)}
 \description{
-FDR-controlled variable selection algorithm utilizing group-based structural augmentation.
+FDR-controlled variable selection algorithm utilizing group-based structural
+augmentation.
 }
 \section{Methods}{
 \subsection{Public methods}{
@@ -28,11 +29,10 @@ Create a new TRexGVSSelector object.
   tFDR = 0.1,
   seed = -1,
   verbose = TRUE,
-  method = "LARS",
   gvs_type = "EN",
   corr_max = 0.5,
   hc_linkage = "Single",
-  lambda_2 = 0,
+  lambda_2 = 0.1,
   groups = NULL,
   K = 20,
   max_dummy_multiplier = 10,
@@ -61,15 +61,14 @@ Create a new TRexGVSSelector object.
 
 \item{\code{verbose}}{Whether to print progress (default: TRUE).}
 
-\item{\code{method}}{The solver method (default: "LARS").}
-
-\item{\code{gvs_type}}{Augmentation policy: "EN", "IEN", "GL", "IGL", "SGL", "ISGL" (default: "EN").}
+\item{\code{gvs_type}}{Augmentation policy: "EN", "IEN" (default: "EN").}
 
 \item{\code{corr_max}}{Maximum pairwise correlation for clustering (default: 0.5).}
 
-\item{\code{hc_linkage}}{Hierarchical clustering linkage method: "Single", "Complete", "Average", "WPGMA" (default: "Single").}
+\item{\code{hc_linkage}}{Hierarchical clustering linkage method: "Single", "Complete", "Average",
+"WPGMA" (default: "Single").}
 
-\item{\code{lambda_2}}{Lambda2 for grouping.}
+\item{\code{lambda_2}}{Lambda2 for grouping (default: 0.1).}
 
 \item{\code{groups}}{User-specified groups (default: NULL).}
 

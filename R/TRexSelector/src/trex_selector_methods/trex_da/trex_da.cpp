@@ -67,15 +67,6 @@ TRexDASelector::TRexDASelector(
 
 void TRexDASelector::validateDAParameters() const {
 
-    // SKIPL has unverified semantics under DA deflation. Block until a
-    // concrete use case appears.
-    if (trex_ctrl_.lloop_strategy == tc::LLoopStrategy::SKIPL) {
-        throw std::invalid_argument(
-            "DA-TRex does not currently support LLoopStrategy::SKIPL. "
-            "Use STANDARD, HCONCAT, PERMUTATION, DIRECT, or "
-            "PERMUTATION_DIRECT.");
-    }
-
     if (!da_ctrl_.prior_groups.empty()) {
         for (const auto& level : da_ctrl_.prior_groups) {
             if (level.size() != p_) {
@@ -144,7 +135,7 @@ TRexDASelector::SelectionResult TRexDASelector::select() {
                           : ""));
     }
 
-    // 3. L-loop calibration (base driver, DA's evaluateStep override)
+    // 3. L-loop calibration (DA's evaluateStep override)
     if (verbose_) { printProgress("L-loop: Calibrating number of dummies..."); }
     Eigen::VectorXd FDP_hat;
     er::ExperimentResults exp_results;

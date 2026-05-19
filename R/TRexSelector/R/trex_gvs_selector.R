@@ -1,7 +1,12 @@
 #' @name TRexGVSSelector
+#'
 #' @title T-Rex Selector with Group Variable Selection (TRex GVS)
-#' @description FDR-controlled variable selection algorithm utilizing group-based structural augmentation.
+#'
+#' @description FDR-controlled variable selection algorithm utilizing group-based structural
+#'              augmentation.
+#'
 #' @importFrom R6 R6Class
+#'
 #' @export
 TRexGVSSelector <- R6::R6Class("TRexGVSSelector",
   public = list(
@@ -11,11 +16,11 @@ TRexGVSSelector <- R6::R6Class("TRexGVSSelector",
     #' @param tFDR Target FDR level (default: 0.1).
     #' @param seed Random seed (default: -1).
     #' @param verbose Whether to print progress (default: TRUE).
-    #' @param method The solver method (default: "LARS").
-    #' @param gvs_type Augmentation policy: "EN", "IEN", "GL", "IGL", "SGL", "ISGL" (default: "EN").
+    #' @param gvs_type Augmentation policy: "EN", "IEN" (default: "EN").
     #' @param corr_max Maximum pairwise correlation for clustering (default: 0.5).
-    #' @param hc_linkage Hierarchical clustering linkage method: "Single", "Complete", "Average", "WPGMA" (default: "Single").
-    #' @param lambda_2 Lambda2 for grouping.
+    #' @param hc_linkage Hierarchical clustering linkage method: "Single", "Complete", "Average",
+    #'          "WPGMA" (default: "Single").
+    #' @param lambda_2 Lambda2 for grouping (default: 0.1).
     #' @param groups User-specified groups (default: NULL).
     #' @param K Number of random experiments (default: 20).
     #' @param max_dummy_multiplier Max dummy features multiplier (default: 10).
@@ -32,11 +37,10 @@ TRexGVSSelector <- R6::R6Class("TRexGVSSelector",
                           tFDR = 0.1,
                           seed = -1,
                           verbose = TRUE,
-                          method = "LARS",
                           gvs_type = "EN",
                           corr_max = 0.5,
                           hc_linkage = "Single",
-                          lambda_2 = 0.0,
+                          lambda_2 = 0.1,
                           groups = NULL,
                           K = 20,
                           max_dummy_multiplier = 10,
@@ -49,9 +53,12 @@ TRexGVSSelector <- R6::R6Class("TRexGVSSelector",
                           use_memory_mapping = FALSE,
                           max_outer_threads = 1,
                           max_inner_threads = 1) {
-                          
+
       private$refs <- list(X = X, y = y)
-      
+
+      # Auto-assign solver method based on GVS Type
+      method <- if (gvs_type == "IEN") "TLASSO" else "TENET"
+
       gvs_control_list <- list(
         gvs_type = gvs_type,
         corr_max = corr_max,
@@ -74,7 +81,7 @@ TRexGVSSelector <- R6::R6Class("TRexGVSSelector",
         max_outer_threads = max_outer_threads,
         max_inner_threads = max_inner_threads
       )
-      
+
       if (inherits(X, "MemoryMappedMatrix")) {
         private$ptr <- trex_gvs_mmap_create(
           X$get_ptr(), y, tFDR, gvs_control_list, trex_control_list, seed, verbose
@@ -85,18 +92,18 @@ TRexGVSSelector <- R6::R6Class("TRexGVSSelector",
         )
       }
     },
-    
+
     #' @description Run the GVS algorithm.
     select = function() {
       trex_gvs_select(private$ptr)
     },
-    
+
     #' @description Get the integer indices (1-based) of the selected variables.
     #' @return Numeric vector of selected indices.
     get_selected_indices = function() {
       trex_gvs_get_selected_indices(private$ptr)
     },
-    
+
     #' @description Get generic solver results.
     #' @return A list containing results.
     get_results = function() {
@@ -105,6 +112,6 @@ TRexGVSSelector <- R6::R6Class("TRexGVSSelector",
   ),
   private = list(
     ptr = NULL,
-    refs = NULL 
+    refs = NULL
   )
 )

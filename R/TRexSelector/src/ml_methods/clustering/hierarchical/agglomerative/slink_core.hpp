@@ -227,4 +227,4 @@ public:
 // ===================================================================================
 } /* End of namespace trex::ml_methods::clustering::hierarchical::agglomerative  */
 
-#endif /* ML_METHODS_CLUSTERING_HC_AGGLOMERATIVE_SLINK_CORE_HPP */
+#endif /* End of ML_METHODS_CLUSTERING_HC_AGGLOMERATIVE_SLINK_CORE_HPP */

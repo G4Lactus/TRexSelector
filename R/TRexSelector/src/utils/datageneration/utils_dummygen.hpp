@@ -565,11 +565,10 @@ inline void generate_dummies(
 
         /** @brief Generate Normal distributed dummies. */
         case Distribution::Type::Normal: {
-            std::normal_distribution<double> distribution(0.0, 1.0);
-
             #pragma omp parallel for schedule(static)
             for (std::size_t j = 0; j < p; ++j) {
                 std::mt19937 gen(mix_seed(base_seed, j));
+                std::normal_distribution<double> distribution(0.0, 1.0);
                 for (std::size_t i = 0; i < n; ++i) {
                     D(i, j) = distribution(gen);
                 }
@@ -581,11 +580,10 @@ inline void generate_dummies(
         /** @brief Generate Uniform distributed dummies. */
         case Distribution::Type::Uniform: {
             double a = dist.uniform_a;
-            std::uniform_real_distribution<double> distribution(-a, a);
-
             #pragma omp parallel for schedule(static)
             for (std::size_t j = 0; j < p; ++j) {
                 std::mt19937 gen(mix_seed(base_seed, j));
+                std::uniform_real_distribution<double> distribution(-a, a);
                 for (std::size_t i = 0; i < n; ++i) {
                     D(i, j) = distribution(gen);
                 }
@@ -596,11 +594,10 @@ inline void generate_dummies(
 
         /** @brief Generate Rademacher distributed dummies. */
         case Distribution::Type::Rademacher: {
-            std::bernoulli_distribution distribution(0.5);
-
             #pragma omp parallel for schedule(static)
             for (std::size_t j = 0; j < p; ++j) {
                 std::mt19937 gen(mix_seed(base_seed, j));
+                std::bernoulli_distribution distribution(0.5);
                 for (std::size_t i = 0; i < n; ++i) {
                     D(i, j) = distribution(gen) ? 1.0 : -1.0;
                 }
@@ -612,13 +609,13 @@ inline void generate_dummies(
         /** @brief Generate Student's t-distributed dummies. */
         case Distribution::Type::StudentT: {
             double df = dist.student_t_df;
-            std::student_t_distribution<double> distribution(df);
             // Scale to unit variance if df > 2
             double scale = (df > 2.0) ? std::sqrt((df - 2.0) / df) :  1.0;
 
             #pragma omp parallel for schedule(static)
             for (std::size_t j = 0; j < p; ++j) {
                 std::mt19937 gen(mix_seed(base_seed, j));
+                std::student_t_distribution<double> distribution(df);
                 for (std::size_t i = 0; i < n; ++i) {
                     D(i, j) = distribution(gen) * scale;
                 }
@@ -631,11 +628,10 @@ inline void generate_dummies(
         case Distribution::Type::Laplace: {
             double location = dist.laplace_location;
             double scale = dist.laplace_scale;
-            boost::random::laplace_distribution<double> distribution(location, scale);
-
             #pragma omp parallel for schedule(static)
             for (std::size_t j = 0; j < p; ++j) {
                 std::mt19937 gen(mix_seed(base_seed, j));
+                boost::random::laplace_distribution<double> distribution(location, scale);
                 for (std::size_t i = 0; i < n; ++i) {
                     D(i, j) = distribution(gen);
                 }
@@ -651,11 +647,10 @@ inline void generate_dummies(
 
             // Gumbel mean: location + scale * gamma
             double adjusted_location = location + scale * std::numbers::egamma;
-            std::extreme_value_distribution<double> distribution(adjusted_location, scale);
-
             #pragma omp parallel for schedule(static)
             for (std::size_t j = 0; j < p; ++j) {
                 std::mt19937 gen(mix_seed(base_seed, j));
+                std::extreme_value_distribution<double> distribution(adjusted_location, scale);
                 for (std::size_t i = 0; i < n; ++i) {
                     D(i, j) = distribution(gen);
                 }
@@ -671,11 +666,10 @@ inline void generate_dummies(
 
             // Create Boost distribution for inverse transform
             boost::math::holtsmark_distribution<double> distribution(location, scale);
-            std::uniform_real_distribution<double> uniform_dist(0.0, 1.0);
-
             #pragma omp parallel for schedule(static)
             for (std::size_t j = 0; j < p; ++j) {
                 std::mt19937 gen(mix_seed(base_seed, j));
+                std::uniform_real_distribution<double> uniform_dist(0.0, 1.0);
                 for (std::size_t i = 0; i < n; ++i) {
                     double u = uniform_dist(gen);
                     D(i, j) = boost::math::quantile(distribution, u);
@@ -690,11 +684,10 @@ inline void generate_dummies(
             double a = dist.triangle_a;
             double b = dist.triangle_b;
             double c = dist.triangle_c;
-            boost::random::triangle_distribution<double> distribution(a, b, c);
-
             #pragma omp parallel for schedule(static)
             for (std::size_t j = 0; j < p; ++j) {
                 std::mt19937 gen(mix_seed(base_seed, j));
+                boost::random::triangle_distribution<double> distribution(a, b, c);
                 for (std::size_t i = 0; i < n; ++i) {
                     D(i, j) = distribution(gen);
                 }
@@ -715,11 +708,10 @@ inline void generate_dummies(
             }
 
             // Boost uniform_on_sphere distribution
-            boost::random::uniform_on_sphere<double> distribution(dim);
-
             #pragma omp parallel for schedule(static)
             for (std::size_t j = 0; j < p; j += static_cast<std::size_t>(dim)) {
                 std::mt19937 gen(mix_seed(base_seed, j));
+                boost::random::uniform_on_sphere<double> distribution(dim);
                 for (std::size_t i = 0; i < n; ++i) {
                     // Generate one point on sphere
                     std::vector<double> point = distribution(gen);
@@ -738,11 +730,10 @@ inline void generate_dummies(
         case Distribution::Type::Mammen: {
             double p1 = dist.mammen_param_p1; // Pr for value -(sqrt(5) - 1) / 2
             double p2 = dist.mammen_param_p2; // Pr for value +(sqrt(5) + 1) / 2
-            std::discrete_distribution<int> distribution({p1, p2});
-
             #pragma omp parallel for schedule(static)
             for (std::size_t j = 0; j < p; ++j) {
                 std::mt19937 gen(mix_seed(base_seed, j));
+                std::discrete_distribution<int> distribution({p1, p2});
                 for (std::size_t i = 0; i < n; ++i) {
                     int sample = distribution(gen);
                     D(i, j) = (sample == 0) ? (-(std::sqrt(5.0) - 1.0) / 2.0)
@@ -793,11 +784,10 @@ inline void generate_dummies(
         case Distribution::Type::Logistic: {
             double location = dist.logistic_location;
             double scale = dist.logistic_scale;
-            std::uniform_real_distribution<double> uniform_dist(0.0, 1.0);
-
             #pragma omp parallel for schedule (static)
             for (std::size_t j = 0; j < p; ++j) {
                 std::mt19937 gen(mix_seed(base_seed, j));
+                std::uniform_real_distribution<double> uniform_dist(0.0, 1.0);
                 for (std::size_t i = 0; i < n; ++i) {
                     double u = uniform_dist(gen);
                     D(i, j) = location + scale * std::log(u / (1.0 - u));

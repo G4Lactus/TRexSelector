@@ -29,7 +29,7 @@ Create a new TRexDASelector object.
   tFDR = 0.1,
   seed = -1,
   verbose = TRUE,
-  method = "LARS",
+  method = "TLARS",
   da_method = "BT",
   cor_coef = -2,
   rho_thr_DA = 0.02,
@@ -66,7 +66,7 @@ Create a new TRexDASelector object.
 
 \item{\code{verbose}}{Whether to print progress (default: TRUE).}
 
-\item{\code{method}}{The solver method, e.g., "LARS", "TACGP", "TENET" (default: "LARS").}
+\item{\code{method}}{The solver method, e.g., "TLARS", "TACGP", "TENET" (default: "TLARS").}
 
 \item{\code{da_method}}{Dependency method: "BT", "AR1", "EQUI" (default: "BT").}
 

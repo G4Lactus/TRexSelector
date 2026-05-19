@@ -29,7 +29,18 @@ namespace trex::trex_selector_methods::utils::filesystem {
 // =========================================================================
 
 class TempDirManager {
+private:
+    inline static std::string custom_temp_dir = "";
+
 public:
+    /**
+     * @brief Set a custom base directory for temporary files (e.g. for R compatibility).
+     * @param temp_dir The absolute path to use instead of the OS default temp directory.
+     */
+    static void setCustomTempDir(const std::string& temp_dir) {
+        custom_temp_dir = temp_dir;
+    }
+
     /**
      * @brief Creates a unique temporary directory with safety checks.
      * @param prefix The prefix for the folder name (e.g., "trex_memmap_", "trex_warmstart_").
@@ -41,7 +52,7 @@ public:
     static std::string create(const std::string& prefix, std::uintmax_t min_space_required = 0) {
         namespace fs = std::filesystem;
 
-        fs::path temp_base = fs::temp_directory_path();
+        fs::path temp_base = custom_temp_dir.empty() ? fs::temp_directory_path() : fs::path(custom_temp_dir);
 
         // 1. Disk space check
         if (min_space_required > 0) {

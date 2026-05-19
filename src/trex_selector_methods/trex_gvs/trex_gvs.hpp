@@ -49,7 +49,7 @@
  *    - The L-loop honors LLoopStrategy::STANDARD, HCONCAT, SKIPL, and
  *      DIRECT.
  *      STANDARD and DIRECT are equivalent inside GVS (the overridden
- *      evaluateStep` consumes `D_solver_bufs_` rather than streaming dummies from disk).
+ *      `evaluateStep` consumes `D_solver_bufs_` rather than streaming dummies from disk).
  *      SKIPL collapses to a single L-iter with LL = max_dummy_multiplier.
  *      PERMUTATION and PERMUTATION_DIRECT are rejected because row permutation
  *      would destroy the per-cluster MVN covariance structure that GVS dummies

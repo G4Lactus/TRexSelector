@@ -63,12 +63,16 @@ namespace hac = trex::ml_methods::clustering::hierarchical::agglomerative;
 enum class DAMethod {
     /** @brief AR(1) windowed correction for ordered predictors. */
     AR1,
+
     /** @brief Equicorrelation correction (all-vs-all). */
     EQUI,
+
     /** @brief Binary-tree dendrogram-based clustering. */
     BT,
+
     /** @brief Nearest-neighbour correlation threshold sweep. */
     NN,
+
     /** @brief User-supplied group labels at multiple hierarchy levels. */
     PRIOR_GROUPS
 };

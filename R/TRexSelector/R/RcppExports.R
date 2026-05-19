@@ -14,7 +14,7 @@
 #' @return A linkage matrix
 #' @noRd
 rcpp_agglomerative_cluster <- function(data, method_idx, metric_idx, use_mmap = FALSE) {
-    .Call('_TRexSelector_rcpp_agglomerative_cluster', PACKAGE = 'TRexSelector', data, method_idx, metric_idx, use_mmap)
+    .Call(`_TRexSelector_rcpp_agglomerative_cluster`, data, method_idx, metric_idx, use_mmap)
 }
 
 #' @title Rcpp Cut Tree
@@ -28,7 +28,7 @@ rcpp_agglomerative_cluster <- function(data, method_idx, metric_idx, use_mmap = 
 #' @return Integer vector of cluster indices
 #' @noRd
 rcpp_cut_tree <- function(linkage, num_orig_objs, num_clusters) {
-    .Call('_TRexSelector_rcpp_cut_tree', PACKAGE = 'TRexSelector', linkage, num_orig_objs, num_clusters)
+    .Call(`_TRexSelector_rcpp_cut_tree`, linkage, num_orig_objs, num_clusters)
 }
 
 #' @title Create ZScoreScaler
@@ -38,7 +38,7 @@ rcpp_cut_tree <- function(linkage, num_orig_objs, num_clusters) {
 #' @return XPtr to ZScoreScaler
 #' @noRd
 zscore_scaler_create <- function(with_mean, with_std) {
-    .Call('_TRexSelector_zscore_scaler_create', PACKAGE = 'TRexSelector', with_mean, with_std)
+    .Call(`_TRexSelector_zscore_scaler_create`, with_mean, with_std)
 }
 
 #' @title Fit ZScoreScaler
@@ -48,7 +48,7 @@ zscore_scaler_create <- function(with_mean, with_std) {
 #' @param threshold Numerical stability threshold
 #' @noRd
 zscore_scaler_fit <- function(ptr, X, threshold = 1e-12) {
-    invisible(.Call('_TRexSelector_zscore_scaler_fit', PACKAGE = 'TRexSelector', ptr, X, threshold))
+    invisible(.Call(`_TRexSelector_zscore_scaler_fit`, ptr, X, threshold))
 }
 
 #' @title Transform Inplace ZScoreScaler
@@ -57,7 +57,7 @@ zscore_scaler_fit <- function(ptr, X, threshold = 1e-12) {
 #' @param X Matrix to transform
 #' @noRd
 zscore_scaler_transform_inplace <- function(ptr, X) {
-    invisible(.Call('_TRexSelector_zscore_scaler_transform_inplace', PACKAGE = 'TRexSelector', ptr, X))
+    invisible(.Call(`_TRexSelector_zscore_scaler_transform_inplace`, ptr, X))
 }
 
 #' @title Inverse Transform Inplace ZScoreScaler
@@ -66,7 +66,7 @@ zscore_scaler_transform_inplace <- function(ptr, X) {
 #' @param X Matrix to transform
 #' @noRd
 zscore_scaler_inverse_transform_inplace <- function(ptr, X) {
-    invisible(.Call('_TRexSelector_zscore_scaler_inverse_transform_inplace', PACKAGE = 'TRexSelector', ptr, X))
+    invisible(.Call(`_TRexSelector_zscore_scaler_inverse_transform_inplace`, ptr, X))
 }
 
 #' @title Check if ZScoreScaler is fitted
@@ -75,7 +75,7 @@ zscore_scaler_inverse_transform_inplace <- function(ptr, X) {
 #' @return Boolean indicating fit status
 #' @noRd
 zscore_scaler_is_fitted <- function(ptr) {
-    .Call('_TRexSelector_zscore_scaler_is_fitted', PACKAGE = 'TRexSelector', ptr)
+    .Call(`_TRexSelector_zscore_scaler_is_fitted`, ptr)
 }
 
 #' @title Get dropped indices from ZScoreScaler
@@ -84,7 +84,7 @@ zscore_scaler_is_fitted <- function(ptr) {
 #' @return Vector of dropped indices
 #' @noRd
 zscore_scaler_get_dropped_indices <- function(ptr) {
-    .Call('_TRexSelector_zscore_scaler_get_dropped_indices', PACKAGE = 'TRexSelector', ptr)
+    .Call(`_TRexSelector_zscore_scaler_get_dropped_indices`, ptr)
 }
 
 #' @title Get with_mean flag from ZScoreScaler
@@ -93,7 +93,7 @@ zscore_scaler_get_dropped_indices <- function(ptr) {
 #' @return Boolean with_mean
 #' @noRd
 zscore_scaler_get_with_mean <- function(ptr) {
-    .Call('_TRexSelector_zscore_scaler_get_with_mean', PACKAGE = 'TRexSelector', ptr)
+    .Call(`_TRexSelector_zscore_scaler_get_with_mean`, ptr)
 }
 
 #' @title Get with_std flag from ZScoreScaler
@@ -102,7 +102,7 @@ zscore_scaler_get_with_mean <- function(ptr) {
 #' @return Boolean with_std
 #' @noRd
 zscore_scaler_get_with_std <- function(ptr) {
-    .Call('_TRexSelector_zscore_scaler_get_with_std', PACKAGE = 'TRexSelector', ptr)
+    .Call(`_TRexSelector_zscore_scaler_get_with_std`, ptr)
 }
 
 #' @title Get means from ZScoreScaler
@@ -111,7 +111,7 @@ zscore_scaler_get_with_std <- function(ptr) {
 #' @return Vector of means
 #' @noRd
 zscore_scaler_get_means <- function(ptr) {
-    .Call('_TRexSelector_zscore_scaler_get_means', PACKAGE = 'TRexSelector', ptr)
+    .Call(`_TRexSelector_zscore_scaler_get_means`, ptr)
 }
 
 #' @title Get scales from ZScoreScaler
@@ -120,7 +120,7 @@ zscore_scaler_get_means <- function(ptr) {
 #' @return Vector of scales
 #' @noRd
 zscore_scaler_get_scales <- function(ptr) {
-    .Call('_TRexSelector_zscore_scaler_get_scales', PACKAGE = 'TRexSelector', ptr)
+    .Call(`_TRexSelector_zscore_scaler_get_scales`, ptr)
 }
 
 #' @title Save ZScoreScaler
@@ -129,7 +129,7 @@ zscore_scaler_get_scales <- function(ptr) {
 #' @param filename Output filename
 #' @noRd
 zscore_scaler_save <- function(ptr, filename) {
-    invisible(.Call('_TRexSelector_zscore_scaler_save', PACKAGE = 'TRexSelector', ptr, filename))
+    invisible(.Call(`_TRexSelector_zscore_scaler_save`, ptr, filename))
 }
 
 #' @title Load ZScoreScaler
@@ -138,7 +138,7 @@ zscore_scaler_save <- function(ptr, filename) {
 #' @param filename Input filename
 #' @noRd
 zscore_scaler_load <- function(ptr, filename) {
-    invisible(.Call('_TRexSelector_zscore_scaler_load', PACKAGE = 'TRexSelector', ptr, filename))
+    invisible(.Call(`_TRexSelector_zscore_scaler_load`, ptr, filename))
 }
 
 #' @title Create LpNormScaler
@@ -148,7 +148,7 @@ zscore_scaler_load <- function(ptr, filename) {
 #' @return XPtr to LpNormScaler
 #' @noRd
 lpnorm_scaler_create <- function(norm_type, with_mean) {
-    .Call('_TRexSelector_lpnorm_scaler_create', PACKAGE = 'TRexSelector', norm_type, with_mean)
+    .Call(`_TRexSelector_lpnorm_scaler_create`, norm_type, with_mean)
 }
 
 #' @title Fit LpNormScaler
@@ -158,7 +158,7 @@ lpnorm_scaler_create <- function(norm_type, with_mean) {
 #' @param threshold Numerical stability threshold
 #' @noRd
 lpnorm_scaler_fit <- function(ptr, X, threshold = 1e-12) {
-    invisible(.Call('_TRexSelector_lpnorm_scaler_fit', PACKAGE = 'TRexSelector', ptr, X, threshold))
+    invisible(.Call(`_TRexSelector_lpnorm_scaler_fit`, ptr, X, threshold))
 }
 
 #' @title Transform Inplace LpNormScaler
@@ -167,7 +167,7 @@ lpnorm_scaler_fit <- function(ptr, X, threshold = 1e-12) {
 #' @param X Matrix to transform
 #' @noRd
 lpnorm_scaler_transform_inplace <- function(ptr, X) {
-    invisible(.Call('_TRexSelector_lpnorm_scaler_transform_inplace', PACKAGE = 'TRexSelector', ptr, X))
+    invisible(.Call(`_TRexSelector_lpnorm_scaler_transform_inplace`, ptr, X))
 }
 
 #' @title Inverse Transform Inplace LpNormScaler
@@ -176,7 +176,7 @@ lpnorm_scaler_transform_inplace <- function(ptr, X) {
 #' @param X Matrix to transform
 #' @noRd
 lpnorm_scaler_inverse_transform_inplace <- function(ptr, X) {
-    invisible(.Call('_TRexSelector_lpnorm_scaler_inverse_transform_inplace', PACKAGE = 'TRexSelector', ptr, X))
+    invisible(.Call(`_TRexSelector_lpnorm_scaler_inverse_transform_inplace`, ptr, X))
 }
 
 #' @title Check if LpNormScaler is fitted
@@ -185,7 +185,7 @@ lpnorm_scaler_inverse_transform_inplace <- function(ptr, X) {
 #' @return Boolean indicating fit status
 #' @noRd
 lpnorm_scaler_is_fitted <- function(ptr) {
-    .Call('_TRexSelector_lpnorm_scaler_is_fitted', PACKAGE = 'TRexSelector', ptr)
+    .Call(`_TRexSelector_lpnorm_scaler_is_fitted`, ptr)
 }
 
 #' @title Get dropped indices from LpNormScaler
@@ -194,7 +194,7 @@ lpnorm_scaler_is_fitted <- function(ptr) {
 #' @return Vector of dropped indices
 #' @noRd
 lpnorm_scaler_get_dropped_indices <- function(ptr) {
-    .Call('_TRexSelector_lpnorm_scaler_get_dropped_indices', PACKAGE = 'TRexSelector', ptr)
+    .Call(`_TRexSelector_lpnorm_scaler_get_dropped_indices`, ptr)
 }
 
 #' @title Get means from LpNormScaler
@@ -203,7 +203,7 @@ lpnorm_scaler_get_dropped_indices <- function(ptr) {
 #' @return Vector of means
 #' @noRd
 lpnorm_scaler_get_means <- function(ptr) {
-    .Call('_TRexSelector_lpnorm_scaler_get_means', PACKAGE = 'TRexSelector', ptr)
+    .Call(`_TRexSelector_lpnorm_scaler_get_means`, ptr)
 }
 
 #' @title Get scales from LpNormScaler
@@ -212,7 +212,7 @@ lpnorm_scaler_get_means <- function(ptr) {
 #' @return Vector of scales
 #' @noRd
 lpnorm_scaler_get_scales <- function(ptr) {
-    .Call('_TRexSelector_lpnorm_scaler_get_scales', PACKAGE = 'TRexSelector', ptr)
+    .Call(`_TRexSelector_lpnorm_scaler_get_scales`, ptr)
 }
 
 #' @title Get with_mean flag from LpNormScaler
@@ -221,7 +221,7 @@ lpnorm_scaler_get_scales <- function(ptr) {
 #' @return Boolean with_mean
 #' @noRd
 lpnorm_scaler_get_with_mean <- function(ptr) {
-    .Call('_TRexSelector_lpnorm_scaler_get_with_mean', PACKAGE = 'TRexSelector', ptr)
+    .Call(`_TRexSelector_lpnorm_scaler_get_with_mean`, ptr)
 }
 
 #' @title Get with_norm flag from LpNormScaler
@@ -230,7 +230,7 @@ lpnorm_scaler_get_with_mean <- function(ptr) {
 #' @return Boolean with_norm
 #' @noRd
 lpnorm_scaler_get_with_norm <- function(ptr) {
-    .Call('_TRexSelector_lpnorm_scaler_get_with_norm', PACKAGE = 'TRexSelector', ptr)
+    .Call(`_TRexSelector_lpnorm_scaler_get_with_norm`, ptr)
 }
 
 #' @title Get norm type from LpNormScaler
@@ -239,7 +239,7 @@ lpnorm_scaler_get_with_norm <- function(ptr) {
 #' @return Integer norm type
 #' @noRd
 lpnorm_scaler_get_norm_type <- function(ptr) {
-    .Call('_TRexSelector_lpnorm_scaler_get_norm_type', PACKAGE = 'TRexSelector', ptr)
+    .Call(`_TRexSelector_lpnorm_scaler_get_norm_type`, ptr)
 }
 
 #' @title Save LpNormScaler
@@ -248,7 +248,7 @@ lpnorm_scaler_get_norm_type <- function(ptr) {
 #' @param filename Output filename
 #' @noRd
 lpnorm_scaler_save <- function(ptr, filename) {
-    invisible(.Call('_TRexSelector_lpnorm_scaler_save', PACKAGE = 'TRexSelector', ptr, filename))
+    invisible(.Call(`_TRexSelector_lpnorm_scaler_save`, ptr, filename))
 }
 
 #' @title Load LpNormScaler
@@ -257,7 +257,7 @@ lpnorm_scaler_save <- function(ptr, filename) {
 #' @param filename Input filename
 #' @noRd
 lpnorm_scaler_load <- function(ptr, filename) {
-    invisible(.Call('_TRexSelector_lpnorm_scaler_load', PACKAGE = 'TRexSelector', ptr, filename))
+    invisible(.Call(`_TRexSelector_lpnorm_scaler_load`, ptr, filename))
 }
 
 #' @title Create Ridge GCV
@@ -265,7 +265,7 @@ lpnorm_scaler_load <- function(ptr, filename) {
 #' @return XPtr to ridge_gcv
 #' @noRd
 ridge_gcv_create <- function() {
-    .Call('_TRexSelector_ridge_gcv_create', PACKAGE = 'TRexSelector')
+    .Call(`_TRexSelector_ridge_gcv_create`)
 }
 
 #' @title Fit Ridge GCV
@@ -275,7 +275,7 @@ ridge_gcv_create <- function() {
 #' @param y Response vector
 #' @noRd
 ridge_gcv_fit <- function(ptr, X, y) {
-    invisible(.Call('_TRexSelector_ridge_gcv_fit', PACKAGE = 'TRexSelector', ptr, X, y))
+    invisible(.Call(`_TRexSelector_ridge_gcv_fit`, ptr, X, y))
 }
 
 #' @title Solve Ridge GCV
@@ -285,7 +285,7 @@ ridge_gcv_fit <- function(ptr, X, y) {
 #' @return Coefficients
 #' @noRd
 ridge_gcv_solve <- function(ptr, lambda_val) {
-    .Call('_TRexSelector_ridge_gcv_solve', PACKAGE = 'TRexSelector', ptr, lambda_val)
+    .Call(`_TRexSelector_ridge_gcv_solve`, ptr, lambda_val)
 }
 
 #' @title Get GCV Score
@@ -295,7 +295,7 @@ ridge_gcv_solve <- function(ptr, lambda_val) {
 #' @return GCV score
 #' @noRd
 ridge_gcv_gcv_score <- function(ptr, lambda_val) {
-    .Call('_TRexSelector_ridge_gcv_gcv_score', PACKAGE = 'TRexSelector', ptr, lambda_val)
+    .Call(`_TRexSelector_ridge_gcv_gcv_score`, ptr, lambda_val)
 }
 
 #' @title Predict with Ridge GCV
@@ -306,7 +306,7 @@ ridge_gcv_gcv_score <- function(ptr, lambda_val) {
 #' @return Predictions
 #' @noRd
 ridge_gcv_predict <- function(ptr, X_new, lambda_val) {
-    .Call('_TRexSelector_ridge_gcv_predict', PACKAGE = 'TRexSelector', ptr, X_new, lambda_val)
+    .Call(`_TRexSelector_ridge_gcv_predict`, ptr, X_new, lambda_val)
 }
 
 #' @title Predict Path with Ridge GCV
@@ -317,7 +317,7 @@ ridge_gcv_predict <- function(ptr, X_new, lambda_val) {
 #' @return Predictions
 #' @noRd
 ridge_gcv_predict_path <- function(ptr, X_new, lambdas) {
-    .Call('_TRexSelector_ridge_gcv_predict_path', PACKAGE = 'TRexSelector', ptr, X_new, lambdas)
+    .Call(`_TRexSelector_ridge_gcv_predict_path`, ptr, X_new, lambdas)
 }
 
 #' @title Get Default Lambda Grid from Ridge GCV
@@ -328,7 +328,7 @@ ridge_gcv_predict_path <- function(ptr, X_new, lambdas) {
 #' @return Lambda grid
 #' @noRd
 ridge_gcv_default_lambda_grid <- function(ptr, num_lambda, ratio) {
-    .Call('_TRexSelector_ridge_gcv_default_lambda_grid', PACKAGE = 'TRexSelector', ptr, num_lambda, ratio)
+    .Call(`_TRexSelector_ridge_gcv_default_lambda_grid`, ptr, num_lambda, ratio)
 }
 
 #' @title Get number of samples from Ridge GCV
@@ -337,7 +337,7 @@ ridge_gcv_default_lambda_grid <- function(ptr, num_lambda, ratio) {
 #' @return Number of samples
 #' @noRd
 ridge_gcv_n_samples <- function(ptr) {
-    .Call('_TRexSelector_ridge_gcv_n_samples', PACKAGE = 'TRexSelector', ptr)
+    .Call(`_TRexSelector_ridge_gcv_n_samples`, ptr)
 }
 
 #' @title Get number of features from Ridge GCV
@@ -346,7 +346,7 @@ ridge_gcv_n_samples <- function(ptr) {
 #' @return Number of features
 #' @noRd
 ridge_gcv_n_features <- function(ptr) {
-    .Call('_TRexSelector_ridge_gcv_n_features', PACKAGE = 'TRexSelector', ptr)
+    .Call(`_TRexSelector_ridge_gcv_n_features`, ptr)
 }
 
 #' @title Get rank from Ridge GCV
@@ -355,7 +355,7 @@ ridge_gcv_n_features <- function(ptr) {
 #' @return Rank
 #' @noRd
 ridge_gcv_rank <- function(ptr) {
-    .Call('_TRexSelector_ridge_gcv_rank', PACKAGE = 'TRexSelector', ptr)
+    .Call(`_TRexSelector_ridge_gcv_rank`, ptr)
 }
 
 #' @title Solve Path Ridge GCV
@@ -365,7 +365,7 @@ ridge_gcv_rank <- function(ptr) {
 #' @return List of path results
 #' @noRd
 ridge_gcv_solve_path <- function(ptr, lambdas) {
-    .Call('_TRexSelector_ridge_gcv_solve_path', PACKAGE = 'TRexSelector', ptr, lambdas)
+    .Call(`_TRexSelector_ridge_gcv_solve_path`, ptr, lambdas)
 }
 
 #' @title Get optimal lambda from Ridge GCV
@@ -376,7 +376,7 @@ ridge_gcv_solve_path <- function(ptr, lambdas) {
 #' @return Optimal GCV lambda
 #' @noRd
 ridge_gcv_optimal <- function(ptr, num_grid, tol) {
-    .Call('_TRexSelector_ridge_gcv_optimal', PACKAGE = 'TRexSelector', ptr, num_grid, tol)
+    .Call(`_TRexSelector_ridge_gcv_optimal`, ptr, num_grid, tol)
 }
 
 #' @title Create Ridge CV
@@ -384,7 +384,7 @@ ridge_gcv_optimal <- function(ptr, num_grid, tol) {
 #' @return XPtr to ridge_cv
 #' @noRd
 ridge_cv_create <- function() {
-    .Call('_TRexSelector_ridge_cv_create', PACKAGE = 'TRexSelector')
+    .Call(`_TRexSelector_ridge_cv_create`)
 }
 
 #' @title Fit Ridge CV
@@ -398,7 +398,7 @@ ridge_cv_create <- function() {
 #' @param seed Random seed
 #' @noRd
 ridge_cv_fit <- function(ptr, X, y, num_folds, n_lambda, lambda_ratio, seed) {
-    invisible(.Call('_TRexSelector_ridge_cv_fit', PACKAGE = 'TRexSelector', ptr, X, y, num_folds, n_lambda, lambda_ratio, seed))
+    invisible(.Call(`_TRexSelector_ridge_cv_fit`, ptr, X, y, num_folds, n_lambda, lambda_ratio, seed))
 }
 
 #' @title Get min CV error
@@ -407,7 +407,7 @@ ridge_cv_fit <- function(ptr, X, y, num_folds, n_lambda, lambda_ratio, seed) {
 #' @return Min CV error
 #' @noRd
 ridge_cv_min <- function(ptr) {
-    .Call('_TRexSelector_ridge_cv_min', PACKAGE = 'TRexSelector', ptr)
+    .Call(`_TRexSelector_ridge_cv_min`, ptr)
 }
 
 #' @title Get 1SE CV error
@@ -416,7 +416,7 @@ ridge_cv_min <- function(ptr) {
 #' @return 1SE CV error
 #' @noRd
 ridge_cv_1se <- function(ptr) {
-    .Call('_TRexSelector_ridge_cv_1se', PACKAGE = 'TRexSelector', ptr)
+    .Call(`_TRexSelector_ridge_cv_1se`, ptr)
 }
 
 #' @title Get min index
@@ -425,7 +425,7 @@ ridge_cv_1se <- function(ptr) {
 #' @return Index of min CV error
 #' @noRd
 ridge_cv_index_min <- function(ptr) {
-    .Call('_TRexSelector_ridge_cv_index_min', PACKAGE = 'TRexSelector', ptr)
+    .Call(`_TRexSelector_ridge_cv_index_min`, ptr)
 }
 
 #' @title Get 1SE index
@@ -434,7 +434,7 @@ ridge_cv_index_min <- function(ptr) {
 #' @return Index of 1SE CV error
 #' @noRd
 ridge_cv_index_1se <- function(ptr) {
-    .Call('_TRexSelector_ridge_cv_index_1se', PACKAGE = 'TRexSelector', ptr)
+    .Call(`_TRexSelector_ridge_cv_index_1se`, ptr)
 }
 
 #' @title Get Lambdas
@@ -443,7 +443,7 @@ ridge_cv_index_1se <- function(ptr) {
 #' @return Vector of lambdas
 #' @noRd
 ridge_cv_get_lambdas <- function(ptr) {
-    .Call('_TRexSelector_ridge_cv_get_lambdas', PACKAGE = 'TRexSelector', ptr)
+    .Call(`_TRexSelector_ridge_cv_get_lambdas`, ptr)
 }
 
 #' @title Get CV Errors
@@ -452,7 +452,7 @@ ridge_cv_get_lambdas <- function(ptr) {
 #' @return Vector of CV errors
 #' @noRd
 ridge_cv_get_cv_errors <- function(ptr) {
-    .Call('_TRexSelector_ridge_cv_get_cv_errors', PACKAGE = 'TRexSelector', ptr)
+    .Call(`_TRexSelector_ridge_cv_get_cv_errors`, ptr)
 }
 
 #' @title Get CV Standard Errors
@@ -461,157 +461,300 @@ ridge_cv_get_cv_errors <- function(ptr) {
 #' @return Vector of CV standard errors
 #' @noRd
 ridge_cv_get_cv_std <- function(ptr) {
-    .Call('_TRexSelector_ridge_cv_get_cv_std', PACKAGE = 'TRexSelector', ptr)
+    .Call(`_TRexSelector_ridge_cv_get_cv_std`, ptr)
 }
 
 #' @title Create RTRexBiobankScreeningSelector 1D
 #' @noRd
 trex_biobank_screening_1d_create <- function(X, y, biobank_control_list, screen_control_list, trex_control_list, seed, verbose) {
-    .Call('_TRexSelector_trex_biobank_screening_1d_create', PACKAGE = 'TRexSelector', X, y, biobank_control_list, screen_control_list, trex_control_list, seed, verbose)
+    .Call(`_TRexSelector_trex_biobank_screening_1d_create`, X, y, biobank_control_list, screen_control_list, trex_control_list, seed, verbose)
 }
 
 #' @title Create RTRexBiobankScreeningSelector 2D
 #' @noRd
 trex_biobank_screening_2d_create <- function(X, Y, biobank_control_list, screen_control_list, trex_control_list, seed, verbose) {
-    .Call('_TRexSelector_trex_biobank_screening_2d_create', PACKAGE = 'TRexSelector', X, Y, biobank_control_list, screen_control_list, trex_control_list, seed, verbose)
+    .Call(`_TRexSelector_trex_biobank_screening_2d_create`, X, Y, biobank_control_list, screen_control_list, trex_control_list, seed, verbose)
 }
 
 #' @title Screen Single Phenotype
 #' @noRd
 trex_biobank_screening_screen_phenotype <- function(r_ptr) {
-    .Call('_TRexSelector_trex_biobank_screening_screen_phenotype', PACKAGE = 'TRexSelector', r_ptr)
+    .Call(`_TRexSelector_trex_biobank_screening_screen_phenotype`, r_ptr)
 }
 
 #' @title Screen Multiple Phenotypes
 #' @noRd
 trex_biobank_screening_screen_phenotypes <- function(r_ptr) {
-    .Call('_TRexSelector_trex_biobank_screening_screen_phenotypes', PACKAGE = 'TRexSelector', r_ptr)
+    .Call(`_TRexSelector_trex_biobank_screening_screen_phenotypes`, r_ptr)
 }
 
 #' @title Create TRexDASelector
 #' @noRd
 trex_da_create <- function(X, y, tFDR, da_control_list, trex_control_list, seed, verbose) {
-    .Call('_TRexSelector_trex_da_create', PACKAGE = 'TRexSelector', X, y, tFDR, da_control_list, trex_control_list, seed, verbose)
+    .Call(`_TRexSelector_trex_da_create`, X, y, tFDR, da_control_list, trex_control_list, seed, verbose)
 }
 
 #' @title Create TRexDASelector from mmap
 #' @noRd
 trex_da_mmap_create <- function(X_ptr, y, tFDR, da_control_list, trex_control_list, seed, verbose) {
-    .Call('_TRexSelector_trex_da_mmap_create', PACKAGE = 'TRexSelector', X_ptr, y, tFDR, da_control_list, trex_control_list, seed, verbose)
+    .Call(`_TRexSelector_trex_da_mmap_create`, X_ptr, y, tFDR, da_control_list, trex_control_list, seed, verbose)
 }
 
 #' @title Run TRexDASelector
 #' @noRd
 trex_da_select <- function(r_ptr) {
-    invisible(.Call('_TRexSelector_trex_da_select', PACKAGE = 'TRexSelector', r_ptr))
+    invisible(.Call(`_TRexSelector_trex_da_select`, r_ptr))
 }
 
 #' @title Get DA Results
 #' @noRd
 trex_da_get_results <- function(r_ptr) {
-    .Call('_TRexSelector_trex_da_get_results', PACKAGE = 'TRexSelector', r_ptr)
+    .Call(`_TRexSelector_trex_da_get_results`, r_ptr)
 }
 
 #' @title Get DA Matrices
 #' @noRd
 trex_da_get_matrices <- function(r_ptr) {
-    .Call('_TRexSelector_trex_da_get_matrices', PACKAGE = 'TRexSelector', r_ptr)
+    .Call(`_TRexSelector_trex_da_get_matrices`, r_ptr)
 }
 
 #' @title Get DA Selected Indices
 #' @noRd
 trex_da_get_selected_indices <- function(r_ptr) {
-    .Call('_TRexSelector_trex_da_get_selected_indices', PACKAGE = 'TRexSelector', r_ptr)
+    .Call(`_TRexSelector_trex_da_get_selected_indices`, r_ptr)
 }
 
 #' @title Create TRexGVSSelector
 #' @noRd
 trex_gvs_create <- function(X, y, tFDR, gvs_control_list, trex_control_list, seed, verbose) {
-    .Call('_TRexSelector_trex_gvs_create', PACKAGE = 'TRexSelector', X, y, tFDR, gvs_control_list, trex_control_list, seed, verbose)
+    .Call(`_TRexSelector_trex_gvs_create`, X, y, tFDR, gvs_control_list, trex_control_list, seed, verbose)
 }
 
 #' @title Create TRexGVSSelector from MemoryMappedMatrix
 #' @noRd
 trex_gvs_mmap_create <- function(X_ptr, y, tFDR, gvs_control_list, trex_control_list, seed, verbose) {
-    .Call('_TRexSelector_trex_gvs_mmap_create', PACKAGE = 'TRexSelector', X_ptr, y, tFDR, gvs_control_list, trex_control_list, seed, verbose)
+    .Call(`_TRexSelector_trex_gvs_mmap_create`, X_ptr, y, tFDR, gvs_control_list, trex_control_list, seed, verbose)
 }
 
 #' @title Run TRexGVSSelector
 #' @noRd
 trex_gvs_select <- function(r_ptr) {
-    invisible(.Call('_TRexSelector_trex_gvs_select', PACKAGE = 'TRexSelector', r_ptr))
+    invisible(.Call(`_TRexSelector_trex_gvs_select`, r_ptr))
 }
 
 #' @title Get TRexGVSSelector Result
 #' @noRd
 trex_gvs_get_results <- function(r_ptr) {
-    .Call('_TRexSelector_trex_gvs_get_results', PACKAGE = 'TRexSelector', r_ptr)
+    .Call(`_TRexSelector_trex_gvs_get_results`, r_ptr)
 }
 
 #' @title Get Selected Indices
 #' @noRd
 trex_gvs_get_selected_indices <- function(r_ptr) {
-    .Call('_TRexSelector_trex_gvs_get_selected_indices', PACKAGE = 'TRexSelector', r_ptr)
+    .Call(`_TRexSelector_trex_gvs_get_selected_indices`, r_ptr)
 }
 
 #' @title Create RTRexScreeningSelector
+#'
+#' @details Instantiates a Screen-TRex selector object.
+#'
+#' @param X Design matrix (n x p).
+#' @param y Response vector (n).
+#' @param screen_control_list List of Screen-TRex specific control parameters.
+#' @param trex_control_list List of general T-Rex control parameters.
+#' @param seed Random seed for reproducibility.
+#' @param verbose Whether to print progress messages.
+#'
+#' @return XPtr to RTRexScreeningSelector instance.
+#'
 #' @noRd
+#'
 trex_screening_create <- function(X, y, screen_control_list, trex_control_list, seed, verbose) {
-    .Call('_TRexSelector_trex_screening_create', PACKAGE = 'TRexSelector', X, y, screen_control_list, trex_control_list, seed, verbose)
+    .Call(`_TRexSelector_trex_screening_create`, X, y, screen_control_list, trex_control_list, seed, verbose)
 }
 
 #' @title Create RTRexScreeningSelector from mmap
+#'
+#' @details Instantiates a Screen-TRex selector object using a memory-mapped design matrix
+#'
+#' @param X_ptr Pointer to MemoryMappedMatrix for the design matrix.
+#' @param y Response vector (n).
+#' @param screen_control_list List of Screen-TRex specific control parameters.
+#' @param trex_control_list List of general T-Rex control parameters.
+#' @param seed Random seed for reproducibility.
+#' @param verbose Whether to print progress messages.
+#'
 #' @noRd
+#'
 trex_screening_mmap_create <- function(X_ptr, y, screen_control_list, trex_control_list, seed, verbose) {
-    .Call('_TRexSelector_trex_screening_mmap_create', PACKAGE = 'TRexSelector', X_ptr, y, screen_control_list, trex_control_list, seed, verbose)
+    .Call(`_TRexSelector_trex_screening_mmap_create`, X_ptr, y, screen_control_list, trex_control_list, seed, verbose)
 }
 
 #' @title Run RTRexScreeningSelector
+#'
+#' @details Executes the selection procedure of the Screen-TRex selector.
+#'
+#' @param r_ptr Pointer to the RTRexScreeningSelector instance
+#'
 #' @noRd
+#'
 trex_screening_select <- function(r_ptr) {
-    invisible(.Call('_TRexSelector_trex_screening_select', PACKAGE = 'TRexSelector', r_ptr))
+    invisible(.Call(`_TRexSelector_trex_screening_select`, r_ptr))
 }
 
 #' @title Get RTRexScreeningSelector Result
+#'
+#' @details Retrieves the results of the Screen-TRex selection, including selected variables,
+#' confidence levels, and estimated FDR.
+#'
+#' @param r_ptr Pointer to the RTRexScreeningSelector instance
+#'
 #' @noRd
+#'
 trex_screening_get_results <- function(r_ptr) {
-    .Call('_TRexSelector_trex_screening_get_results', PACKAGE = 'TRexSelector', r_ptr)
+    .Call(`_TRexSelector_trex_screening_get_results`, r_ptr)
 }
 
 #' @title Get RTRexScreeningSelector Matrices
+#'
+#' @details Retrieves the beta matrix and dummy betas from the Screen-TRex selection process.
+#'
+#' @param r_ptr Pointer to the RTRexScreeningSelector instance.
+#'
 #' @noRd
+#'
 trex_screening_get_matrices <- function(r_ptr) {
-    .Call('_TRexSelector_trex_screening_get_matrices', PACKAGE = 'TRexSelector', r_ptr)
+    .Call(`_TRexSelector_trex_screening_get_matrices`, r_ptr)
 }
 
 #' @title Get Selected Indices
+#'
+#' @details Retrieves the indices of the selected variables from the Screen-TRex selector.
+#'
+#' @param r_ptr Pointer to the RTRexScreeningSelector instance.
+#'
 #' @noRd
+#'
 trex_screening_get_selected_indices <- function(r_ptr) {
-    .Call('_TRexSelector_trex_screening_get_selected_indices', PACKAGE = 'TRexSelector', r_ptr)
+    .Call(`_TRexSelector_trex_screening_get_selected_indices`, r_ptr)
 }
 
 #' @title Create TRexSelector
+#'
+#' @param X Design matrix (n × p).
+#' @param y Response vector (n).
+#' @param tFDR Target FDR level (default: 0.1).
+#' @param control List of control parameters (see details).
+#' @param seed Random seed (default: -1).
+#' @param verbose Whether to print progress (default: TRUE).
+#'
 #' @noRd
 trex_selector_create <- function(X, y, tFDR, control_list, seed, verbose) {
-    .Call('_TRexSelector_trex_selector_create', PACKAGE = 'TRexSelector', X, y, tFDR, control_list, seed, verbose)
+    .Call(`_TRexSelector_trex_selector_create`, X, y, tFDR, control_list, seed, verbose)
 }
 
 #' @title Create TRexSelector from mmap
+#'
+#' @param X_ptr Pointer to MemoryMappedMatrix (n × p).
+#' @param y Response vector (n).
+#' @param tFDR Target FDR level (default: 0.1).
+#' @param control List of control parameters (see details).
+#' @param seed Random seed (default: -1).
+#' @param verbose Whether to print progress (default: TRUE).
+#'
 #' @noRd
 trex_selector_mmap_create <- function(X_ptr, y, tFDR, control_list, seed, verbose) {
-    .Call('_TRexSelector_trex_selector_mmap_create', PACKAGE = 'TRexSelector', X_ptr, y, tFDR, control_list, seed, verbose)
+    .Call(`_TRexSelector_trex_selector_mmap_create`, X_ptr, y, tFDR, control_list, seed, verbose)
 }
 
 #' @title Run TRexSelector
+#'
+#' @param r_ptr Pointer to RTRexSelector instance.
+#'
 #' @noRd
 trex_selector_select <- function(r_ptr) {
-    .Call('_TRexSelector_trex_selector_select', PACKAGE = 'TRexSelector', r_ptr)
+    invisible(.Call(`_TRexSelector_trex_selector_select`, r_ptr))
+}
+
+#' @title Get Selected Variables
+#' @noRd
+trex_selector_get_selected_var <- function(r_ptr) {
+    .Call(`_TRexSelector_trex_selector_get_selected_var`, r_ptr)
 }
 
 #' @title Get Selected Indices
+#'
+#' @param r_ptr Pointer to RTRexSelector instance.
+#'
 #' @noRd
 trex_selector_get_selected_indices <- function(r_ptr) {
-    .Call('_TRexSelector_trex_selector_get_selected_indices', PACKAGE = 'TRexSelector', r_ptr)
+    .Call(`_TRexSelector_trex_selector_get_selected_indices`, r_ptr)
+}
+
+#' @title Get Voting Threshold
+#' @noRd
+trex_selector_get_voting_threshold <- function(r_ptr) {
+    .Call(`_TRexSelector_trex_selector_get_voting_threshold`, r_ptr)
+}
+
+#' @title Get Stopping Time T
+#' @noRd
+trex_selector_get_t_stop <- function(r_ptr) {
+    .Call(`_TRexSelector_trex_selector_get_t_stop`, r_ptr)
+}
+
+#' @title Get Dummy Multiplier L
+#' @noRd
+trex_selector_get_dummy_multiplier_l <- function(r_ptr) {
+    .Call(`_TRexSelector_trex_selector_get_dummy_multiplier_l`, r_ptr)
+}
+
+#' @title Get Voting Grid
+#' @noRd
+trex_selector_get_voting_grid <- function(r_ptr) {
+    .Call(`_TRexSelector_trex_selector_get_voting_grid`, r_ptr)
+}
+
+#' @title Get FDP Hat Matrix
+#' @noRd
+trex_selector_get_fdp_hat_mat <- function(r_ptr) {
+    .Call(`_TRexSelector_trex_selector_get_fdp_hat_mat`, r_ptr)
+}
+
+#' @title Get Phi Matrix
+#' @noRd
+trex_selector_get_phi_mat <- function(r_ptr) {
+    .Call(`_TRexSelector_trex_selector_get_phi_mat`, r_ptr)
+}
+
+#' @title Get R Matrix
+#' @noRd
+trex_selector_get_r_mat <- function(r_ptr) {
+    .Call(`_TRexSelector_trex_selector_get_r_mat`, r_ptr)
+}
+
+#' @title Get Phi Prime
+#' @noRd
+trex_selector_get_phi_prime <- function(r_ptr) {
+    .Call(`_TRexSelector_trex_selector_get_phi_prime`, r_ptr)
+}
+
+#' @title Get X Means
+#' @noRd
+trex_selector_get_x_means <- function(r_ptr) {
+    .Call(`_TRexSelector_trex_selector_get_x_means`, r_ptr)
+}
+
+#' @title Get X L2 Norms
+#' @noRd
+trex_selector_get_x_l2_norms <- function(r_ptr) {
+    .Call(`_TRexSelector_trex_selector_get_x_l2_norms`, r_ptr)
+}
+
+#' @title Get y Mean
+#' @noRd
+trex_selector_get_y_mean <- function(r_ptr) {
+    .Call(`_TRexSelector_trex_selector_get_y_mean`, r_ptr)
 }
 
 #' @title Create LARS Solver
@@ -623,7 +766,7 @@ trex_selector_get_selected_indices <- function(r_ptr) {
 #' @return XPtr to TSolver_Base
 #' @noRd
 tsolver_lars_create <- function(X, D, y) {
-    .Call('_TRexSelector_tsolver_lars_create', PACKAGE = 'TRexSelector', X, D, y)
+    .Call(`_TRexSelector_tsolver_lars_create`, X, D, y)
 }
 
 #' @title Create OMP Solver
@@ -635,7 +778,7 @@ tsolver_lars_create <- function(X, D, y) {
 #' @return XPtr to TSolver_Base
 #' @noRd
 tsolver_omp_create <- function(X, D, y) {
-    .Call('_TRexSelector_tsolver_omp_create', PACKAGE = 'TRexSelector', X, D, y)
+    .Call(`_TRexSelector_tsolver_omp_create`, X, D, y)
 }
 
 #' @title Create LARS Solver with Memory Mapped Matrix
@@ -647,7 +790,7 @@ tsolver_omp_create <- function(X, D, y) {
 #' @return XPtr to TSolver_Base
 #' @noRd
 tsolver_lars_mmap_create <- function(X_ptr, D, y) {
-    .Call('_TRexSelector_tsolver_lars_mmap_create', PACKAGE = 'TRexSelector', X_ptr, D, y)
+    .Call(`_TRexSelector_tsolver_lars_mmap_create`, X_ptr, D, y)
 }
 
 #' @title Create OMP Solver with Memory Mapped Matrix
@@ -659,7 +802,7 @@ tsolver_lars_mmap_create <- function(X_ptr, D, y) {
 #' @return XPtr to TSolver_Base
 #' @noRd
 tsolver_omp_mmap_create <- function(X_ptr, D, y) {
-    .Call('_TRexSelector_tsolver_omp_mmap_create', PACKAGE = 'TRexSelector', X_ptr, D, y)
+    .Call(`_TRexSelector_tsolver_omp_mmap_create`, X_ptr, D, y)
 }
 
 #' @title Execute Step in TSolver
@@ -669,7 +812,7 @@ tsolver_omp_mmap_create <- function(X_ptr, D, y) {
 #' @param early_stop Whether to stop early based on constraints
 #' @noRd
 tsolver_execute_step <- function(ptr, T_stop, early_stop = TRUE) {
-    invisible(.Call('_TRexSelector_tsolver_execute_step', PACKAGE = 'TRexSelector', ptr, T_stop, early_stop))
+    invisible(.Call(`_TRexSelector_tsolver_execute_step`, ptr, T_stop, early_stop))
 }
 
 #' @title Get Beta from TSolver
@@ -680,7 +823,7 @@ tsolver_execute_step <- function(ptr, T_stop, early_stop = TRUE) {
 #' @return Beta vector
 #' @noRd
 tsolver_get_beta <- function(ptr, step = -1L) {
-    .Call('_TRexSelector_tsolver_get_beta', PACKAGE = 'TRexSelector', ptr, step)
+    .Call(`_TRexSelector_tsolver_get_beta`, ptr, step)
 }
 
 #' @title Get Cp scores from TSolver
@@ -689,7 +832,7 @@ tsolver_get_beta <- function(ptr, step = -1L) {
 #' @return Numeric vector of Cp scores
 #' @noRd
 tsolver_get_cp <- function(ptr) {
-    .Call('_TRexSelector_tsolver_get_cp', PACKAGE = 'TRexSelector', ptr)
+    .Call(`_TRexSelector_tsolver_get_cp`, ptr)
 }
 
 #' @title Get RSS from TSolver
@@ -698,7 +841,7 @@ tsolver_get_cp <- function(ptr) {
 #' @return Numeric vector of RSS scores
 #' @noRd
 tsolver_get_rss <- function(ptr) {
-    .Call('_TRexSelector_tsolver_get_rss', PACKAGE = 'TRexSelector', ptr)
+    .Call(`_TRexSelector_tsolver_get_rss`, ptr)
 }
 
 #' @title Get R2 from TSolver
@@ -707,7 +850,7 @@ tsolver_get_rss <- function(ptr) {
 #' @return Numeric vector of R2 scores
 #' @noRd
 tsolver_get_r2 <- function(ptr) {
-    .Call('_TRexSelector_tsolver_get_r2', PACKAGE = 'TRexSelector', ptr)
+    .Call(`_TRexSelector_tsolver_get_r2`, ptr)
 }
 
 #' @title Get Degrees of Freedom from TSolver
@@ -716,7 +859,7 @@ tsolver_get_r2 <- function(ptr) {
 #' @return Numeric vector of DoF
 #' @noRd
 tsolver_get_dof <- function(ptr) {
-    .Call('_TRexSelector_tsolver_get_dof', PACKAGE = 'TRexSelector', ptr)
+    .Call(`_TRexSelector_tsolver_get_dof`, ptr)
 }
 
 #' @title Get Active Set from TSolver
@@ -725,7 +868,7 @@ tsolver_get_dof <- function(ptr) {
 #' @return Numeric vector of active variable indices
 #' @noRd
 tsolver_get_actives <- function(ptr) {
-    .Call('_TRexSelector_tsolver_get_actives', PACKAGE = 'TRexSelector', ptr)
+    .Call(`_TRexSelector_tsolver_get_actives`, ptr)
 }
 
 #' @title Get Inactive Set from TSolver
@@ -734,7 +877,7 @@ tsolver_get_actives <- function(ptr) {
 #' @return Numeric vector of inactive variable indices
 #' @noRd
 tsolver_get_inactives <- function(ptr) {
-    .Call('_TRexSelector_tsolver_get_inactives', PACKAGE = 'TRexSelector', ptr)
+    .Call(`_TRexSelector_tsolver_get_inactives`, ptr)
 }
 
 #' @title Get Intercept from TSolver
@@ -744,7 +887,7 @@ tsolver_get_inactives <- function(ptr) {
 #' @return Numeric intercept value
 #' @noRd
 tsolver_get_intercept <- function(ptr, step = -1L) {
-    .Call('_TRexSelector_tsolver_get_intercept', PACKAGE = 'TRexSelector', ptr, step)
+    .Call(`_TRexSelector_tsolver_get_intercept`, ptr, step)
 }
 
 #' @title Save TSolver to File
@@ -753,7 +896,7 @@ tsolver_get_intercept <- function(ptr, step = -1L) {
 #' @param filename Output filename
 #' @noRd
 tsolver_save <- function(ptr, filename) {
-    invisible(.Call('_TRexSelector_tsolver_save', PACKAGE = 'TRexSelector', ptr, filename))
+    invisible(.Call(`_TRexSelector_tsolver_save`, ptr, filename))
 }
 
 #' @title Load TSolver from File
@@ -762,64 +905,85 @@ tsolver_save <- function(ptr, filename) {
 #' @param filename Input filename
 #' @noRd
 tsolver_load <- function(ptr, filename) {
-    invisible(.Call('_TRexSelector_tsolver_load', PACKAGE = 'TRexSelector', ptr, filename))
+    invisible(.Call(`_TRexSelector_tsolver_load`, ptr, filename))
+}
+
+#' @title Set custom temp directory for the C++ backend
+#'
+#' @description Injects the R session's tempdir() into the C++ backend to obey CRAN memory rules.
+#'
+#' @param temp_dir The absolute path to the directory (e.g. from `tempdir()`).
+#'
+#' @noRd
+rcpp_set_custom_temp_dir <- function(temp_dir) {
+    invisible(.Call(`_TRexSelector_rcpp_set_custom_temp_dir`, temp_dir))
 }
 
 #' @title Create Memory Mapped Matrix
 #'
-#' @param filename Path to the file
+#' @param filename Path to the file.
 #' @param rows Number of rows
-#' @param cols Number of columns
-#' @param mode_idx Mode index
+#' @param cols Number of columns.
+#' @param mode_idx Mode index with 0: ReadOnly, 1: ReadWrite.
+#'
 #' @return XPtr to MemoryMappedMatrix
+#'
 #' @noRd
 mmap_matrix_create <- function(filename, rows, cols, mode_idx = 1L) {
-    .Call('_TRexSelector_mmap_matrix_create', PACKAGE = 'TRexSelector', filename, rows, cols, mode_idx)
+    .Call(`_TRexSelector_mmap_matrix_create`, filename, rows, cols, mode_idx)
 }
 
 #' @title Convert Memory Mapped Matrix to R Matrix
 #'
 #' @param ptr XPtr to MemoryMappedMatrix
+#'
 #' @return NumericMatrix
+#'
 #' @noRd
 mmap_matrix_to_r_matrix <- function(ptr) {
-    .Call('_TRexSelector_mmap_matrix_to_r_matrix', PACKAGE = 'TRexSelector', ptr)
+    .Call(`_TRexSelector_mmap_matrix_to_r_matrix`, ptr)
 }
 
 #' @title Convert R Matrix to Memory Mapped Matrix
 #'
 #' @param mat R NumericMatrix
 #' @param filename Output filename
+#'
 #' @noRd
 convert_to_memory_mapped_matrix <- function(mat, filename) {
-    invisible(.Call('_TRexSelector_convert_to_memory_mapped_matrix', PACKAGE = 'TRexSelector', mat, filename))
+    invisible(.Call(`_TRexSelector_convert_to_memory_mapped_matrix`, mat, filename))
 }
 
 #' @title Get Number of Rows in Memory Mapped Matrix
 #'
 #' @param ptr XPtr to MemoryMappedMatrix
+#'
 #' @return Integer number of rows
+#'
 #' @noRd
 mmap_matrix_rows <- function(ptr) {
-    .Call('_TRexSelector_mmap_matrix_rows', PACKAGE = 'TRexSelector', ptr)
+    .Call(`_TRexSelector_mmap_matrix_rows`, ptr)
 }
 
 #' @title Get Number of Columns in Memory Mapped Matrix
 #'
 #' @param ptr XPtr to MemoryMappedMatrix
 #' @return Integer number of columns
+#'
 #' @noRd
 mmap_matrix_cols <- function(ptr) {
-    .Call('_TRexSelector_mmap_matrix_cols', PACKAGE = 'TRexSelector', ptr)
+    .Call(`_TRexSelector_mmap_matrix_cols`, ptr)
 }
 
 #' @title Get Total Size of Memory Mapped Matrix
 #'
 #' @param ptr XPtr to MemoryMappedMatrix
+#'
 #' @return Integer total size
+#'
 #' @noRd
 mmap_matrix_size <- function(ptr) {
-    .Call('_TRexSelector_mmap_matrix_size', PACKAGE = 'TRexSelector', ptr)
+    .Call(`_TRexSelector_mmap_matrix_size`, ptr)
 }
 
 #' @title Read Block from Memory Mapped Matrix
@@ -829,71 +993,85 @@ mmap_matrix_size <- function(ptr) {
 #' @param row_count Number of rows to read
 #' @param col_start Start column index (0-based)
 #' @param col_count Number of columns to read
+#'
 #' @return NumericMatrix block
+#'
 #' @noRd
 mmap_matrix_read_range <- function(ptr, row_start, row_count, col_start, col_count) {
-    .Call('_TRexSelector_mmap_matrix_read_range', PACKAGE = 'TRexSelector', ptr, row_start, row_count, col_start, col_count)
+    .Call(`_TRexSelector_mmap_matrix_read_range`, ptr, row_start, row_count, col_start, col_count)
 }
 
 #' @title Compute FDP from sets
 #'
 #' @param selected_indices Selected indices
 #' @param true_support True support indices
+#'
 #' @return FDP value
+#'
 #' @noRd
 rcpp_compute_fdp <- function(selected_indices, true_support) {
-    .Call('_TRexSelector_rcpp_compute_fdp', PACKAGE = 'TRexSelector', selected_indices, true_support)
+    .Call(`_TRexSelector_rcpp_compute_fdp`, selected_indices, true_support)
 }
 
 #' @title Compute TPP from sets
 #'
 #' @param selected_indices Selected indices
 #' @param true_support True support indices
+#'
 #' @return TPP value
+#'
 #' @noRd
 rcpp_compute_tpp <- function(selected_indices, true_support) {
-    .Call('_TRexSelector_rcpp_compute_tpp', PACKAGE = 'TRexSelector', selected_indices, true_support)
+    .Call(`_TRexSelector_rcpp_compute_tpp`, selected_indices, true_support)
 }
 
 #' @title Compute Precision from sets
 #'
 #' @param selected_indices Selected indices
 #' @param true_support True support indices
+#'
 #' @return Precision value
+#'
 #' @noRd
 rcpp_compute_precision <- function(selected_indices, true_support) {
-    .Call('_TRexSelector_rcpp_compute_precision', PACKAGE = 'TRexSelector', selected_indices, true_support)
+    .Call(`_TRexSelector_rcpp_compute_precision`, selected_indices, true_support)
 }
 
 #' @title Compute Recall from sets
 #'
 #' @param selected_indices Selected indices
 #' @param true_support True support indices
+#'
 #' @return Recall value
+#'
 #' @noRd
 rcpp_compute_recall <- function(selected_indices, true_support) {
-    .Call('_TRexSelector_rcpp_compute_recall', PACKAGE = 'TRexSelector', selected_indices, true_support)
+    .Call(`_TRexSelector_rcpp_compute_recall`, selected_indices, true_support)
 }
 
 #' @title Compute FDP from dense vectors
 #'
-#' @param beta_hat Estimated coefficients
-#' @param beta True coefficients
-#' @param eps Tolerance
+#' @param beta_hat Estimated coefficients.
+#' @param beta True coefficients.
+#' @param eps Tolerance.
+#'
 #' @return FDP value
+#'
 #' @noRd
 rcpp_compute_fdp_dense <- function(beta_hat, beta, eps = 1e-15) {
-    .Call('_TRexSelector_rcpp_compute_fdp_dense', PACKAGE = 'TRexSelector', beta_hat, beta, eps)
+    .Call(`_TRexSelector_rcpp_compute_fdp_dense`, beta_hat, beta, eps)
 }
 
 #' @title Compute TPP from dense vectors
 #'
-#' @param beta_hat Estimated coefficients
-#' @param beta True coefficients
-#' @param eps Tolerance
-#' @return TPP value
+#' @param beta_hat Estimated coefficients.
+#' @param beta True coefficients.
+#' @param eps Tolerance.
+#'
+#' @return TPP value.
+#'
 #' @noRd
 rcpp_compute_tpp_dense <- function(beta_hat, beta, eps = 1e-15) {
-    .Call('_TRexSelector_rcpp_compute_tpp_dense', PACKAGE = 'TRexSelector', beta_hat, beta, eps)
+    .Call(`_TRexSelector_rcpp_compute_tpp_dense`, beta_hat, beta, eps)
 }
 

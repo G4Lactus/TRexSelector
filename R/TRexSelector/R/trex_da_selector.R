@@ -11,7 +11,7 @@ TRexDASelector <- R6::R6Class("TRexDASelector",
     #' @param tFDR Target FDR level (default: 0.1).
     #' @param seed Random seed (default: -1).
     #' @param verbose Whether to print progress (default: TRUE).
-    #' @param method The solver method, e.g., "LARS", "TACGP", "TENET" (default: "LARS").
+    #' @param method The solver method, e.g., "TLARS", "TACGP", "TENET" (default: "TLARS").
     #' @param da_method Dependency method: "BT", "AR1", "EQUI" (default: "BT").
     #' @param cor_coef Correlation coefficient for AR1/EQUI.
     #' @param rho_thr_DA Threshold below which equi-correlation is skipped (default: 0.02).
@@ -36,7 +36,7 @@ TRexDASelector <- R6::R6Class("TRexDASelector",
                           tFDR = 0.1,
                           seed = -1,
                           verbose = TRUE,
-                          method = "LARS",
+                          method = "TLARS",
                           da_method = "BT",
                           cor_coef = -2.0, # AUTO_ESTIMATE_CORRELATION
                           rho_thr_DA = 0.02,
