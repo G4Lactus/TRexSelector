@@ -1,11 +1,11 @@
 // ==============================================================================
-// rcpp_trex_wrappers.h - Safe bindings wrappers for TRex objects
+// rcpp_trex_selector.h - Safe bindings wrappers for TRex objects
 // ==============================================================================
-#ifndef RCPP_TREX_WRAPPERS_H
-#define RCPP_TREX_WRAPPERS_H
+#ifndef RCPP_TREX_SELECTOR_H
+#define RCPP_TREX_SELECTOR_H
 // ==============================================================================
 /**
- * @file rcpp_trex_wrappers.h
+ * @file rcpp_trex_selector.h
  *
  * @brief Bindings wrappers for TRex objects.
  */
@@ -146,4 +146,4 @@ public:
     std::size_t getDummyMultiplierL() const noexcept { return selector_->getDummyMultiplierL(); }
 };
 // ==============================================================================
-#endif /* End of RCPP_TREX_WRAPPERS_H */
+#endif /* End of RCPP_TREX_SELECTOR_H */

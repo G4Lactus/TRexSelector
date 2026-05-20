@@ -1,0 +1,16 @@
+Package: TRexSelector
+Type: Package
+Title: T-Rex Selector Variable Selection Framework
+Version: 0.1.0
+Author: Fabian Scheidt
+Maintainer: Fabian Scheidt <fabian.scheidt@example.com>
+Description: FDR-controlled variable selection for regression and classification, providing bindings to the TRexSelector C++ library.
+License: MIT + file LICENSE
+Encoding: UTF-8
+Roxygen: list(markdown = TRUE)
+RoxygenNote: 7.3.3
+LinkingTo: Rcpp, RcppEigen, BH, Rcereal
+Imports: Rcpp, R6
+SystemRequirements: C++20
+NeedsCompilation: yes
+Packaged: 2026-05-18 20:26:15 UTC; fabianscheidt

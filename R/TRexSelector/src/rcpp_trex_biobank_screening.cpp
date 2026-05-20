@@ -1,6 +1,6 @@
 // [[Rcpp::depends(RcppEigen)]]
 #include <RcppEigen.h>
-#include "rcpp_trex_biobank_screening_wrapper.h"
+#include "rcpp_trex_biobank_screening.h"
 
 using namespace Rcpp;
 

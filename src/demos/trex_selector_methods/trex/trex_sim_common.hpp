@@ -157,7 +157,7 @@ inline TrexGridPointResult run_mc_trials_trex(
         fdp_vec[mc] = rates::compute_fdp(sel, dat.true_support);
         tpp_vec[mc] = rates::compute_tpp(sel, dat.true_support);
         L_vec[mc]   = static_cast<double>(selector.getDummyMultiplierL());
-        T_vec[mc]   = static_cast<double>(selector.getStoppingTimeT());
+        T_vec[mc]   = static_cast<double>(selector.getTStop());
     }
 
     // Compute means
@@ -255,7 +255,7 @@ inline TrexGridPointResult run_mc_trials_trex_mmap(
         fdp_vec[mc] = rates::compute_fdp(sel, dat.true_support);
         tpp_vec[mc] = rates::compute_tpp(sel, dat.true_support);
         L_vec[mc]   = static_cast<double>(selector.getDummyMultiplierL());
-        T_vec[mc]   = static_cast<double>(selector.getStoppingTimeT());
+        T_vec[mc]   = static_cast<double>(selector.getTStop());
     }
 
     // Compute means

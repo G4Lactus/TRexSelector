@@ -95,6 +95,8 @@ TRexSelector::TRexSelector(
 
     // 2. Data Preprocessing: Normalize X, center y
     // -----------------------------------------------------
+    eps_ = (trex_ctrl_.solver_params.tol > 0.0) ?
+            trex_ctrl_.solver_params.tol : std::numeric_limits<double>::epsilon();
     dn::centerY(y_, norm_params_);
     dn::centerAndL2NormalizeX(*X_, norm_params_, eps_, verbose_);
     X_is_normalized_ = true;

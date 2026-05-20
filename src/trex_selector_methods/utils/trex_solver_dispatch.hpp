@@ -103,6 +103,8 @@ struct SolverHyperparameters {
     /** @brief Variant selector for NCGMP solver
      * (0: Line Search/MP, 1: Fully Corrective/OMP) (ignored by non-using solvers). */
     int ncgmp_variant = 0;  //
+    /** @brief Numerical tolerance for solver steps. */
+    double tol = 1e-6;      //
 };
 
 
@@ -199,7 +201,8 @@ Eigen::MatrixXd dispatchSolver(const SolverConfig& cfg) {
 
     if (cfg.use_warm_start && !cfg.solver_file.empty()) {
         TSolver solver = TSolver::load(cfg.solver_file, cfg.X, cfg.D);
-        solver.executeStep(cfg.T_stop, cfg.early_stop);
+        solver.setTolerance(cfg.hyperparams.tol);
+            solver.executeStep(cfg.T_stop, cfg.early_stop);
         pathMatrix = solver.getBetaPath();
         solver.save(cfg.solver_file);
     } else {
@@ -208,6 +211,7 @@ Eigen::MatrixXd dispatchSolver(const SolverConfig& cfg) {
 
             TSolver solver(cfg.X, cfg.D, cfg.y, cfg.hyperparams.lambda2, cfg.normalize,
                            cfg.intercept, cfg.verbose);
+            solver.setTolerance(cfg.hyperparams.tol);
             solver.executeStep(cfg.T_stop, cfg.early_stop);
             pathMatrix = solver.getBetaPath();
             if (!cfg.solver_file.empty()) solver.save(cfg.solver_file);
@@ -216,6 +220,7 @@ Eigen::MatrixXd dispatchSolver(const SolverConfig& cfg) {
 
             TSolver solver(cfg.X, cfg.D, cfg.y, cfg.hyperparams.rho_afs, cfg.normalize,
                             cfg.intercept, cfg.verbose);
+            solver.setTolerance(cfg.hyperparams.tol);
             solver.executeStep(cfg.T_stop, cfg.early_stop);
             pathMatrix = solver.getBetaPath();
             if (!cfg.solver_file.empty()) solver.save(cfg.solver_file);
@@ -225,6 +230,7 @@ Eigen::MatrixXd dispatchSolver(const SolverConfig& cfg) {
             auto variant =
                 static_cast<omp::NCGMPVariant>(cfg.hyperparams.ncgmp_variant);
             TSolver solver(cfg.X, cfg.D, cfg.y, variant, cfg.normalize, cfg.intercept, cfg.verbose);
+            solver.setTolerance(cfg.hyperparams.tol);
             solver.executeStep(cfg.T_stop, cfg.early_stop);
             pathMatrix = solver.getBetaPath();
             if (!cfg.solver_file.empty()) solver.save(cfg.solver_file);
@@ -232,6 +238,7 @@ Eigen::MatrixXd dispatchSolver(const SolverConfig& cfg) {
         } else {
 
             TSolver solver(cfg.X, cfg.D, cfg.y, cfg.normalize, cfg.intercept, cfg.verbose);
+            solver.setTolerance(cfg.hyperparams.tol);
             solver.executeStep(cfg.T_stop, cfg.early_stop);
             pathMatrix = solver.getBetaPath();
             if (!cfg.solver_file.empty()) solver.save(cfg.solver_file);

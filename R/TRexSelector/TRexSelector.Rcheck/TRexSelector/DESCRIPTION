@@ -1,0 +1,35 @@
+Package: TRexSelector
+Type: Package
+Title: T-Rex Selector: High-Dimensional Variable Selection & FDR
+        Control
+Version: 2.0.0
+Description: FDR-controlled variable selection for regression and classification
+    in high-dimensional settings while controlling the false discovery rate (FDR) at a
+    user-specified target level. The R package comes as R bindings to the TRexSelector C++ library.
+Authors@R: 
+    c(
+      person(given = "Jasin", family = "Machkour", email = "jasin.machkour@tu-darmstadt.de", role = c("aut", "cre")),
+      person(given = "Fabian", family = "Scheidt", email = "fabian.scheidt@tu-darmstadt.de", role = "aut"),
+      person(given = "Simon", family = "Tien", email = "simon.tien@stud.tu-darmstadt.de", role = "aut"),
+      person(given = c("Daniel", "P."), family = "Palomar", email = "daniel.p.palomar@gmail.com", role = "aut"),
+      person(given = "Michael", family = "Muma", email = "michael.muma@tu-darmstadt.de", role = "aut")
+    )
+Maintainer: Jasin Machkour <jasin.machkour@tu-darmstadt.de>
+License: GPL (>= 3)
+Encoding: UTF-8
+LazyData: true
+Roxygen: list(markdown = TRUE)
+RoxygenNote: 7.3.3
+LinkingTo: Rcpp, RcppEigen, BH, Rcereal
+Depends: R (>= 2.10)
+Imports: Rcpp, R6
+Suggests: testthat (>= 3.0.0)
+SystemRequirements: C++20
+NeedsCompilation: yes
+Packaged: 2026-05-20 18:57:50 UTC; fabianscheidt
+Author: Jasin Machkour [aut, cre],
+  Fabian Scheidt [aut],
+  Simon Tien [aut],
+  Daniel P. Palomar [aut],
+  Michael Muma [aut]
+Built: R 4.5.3; aarch64-apple-darwin20; 2026-05-20 18:59:11 UTC; unix

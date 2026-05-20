@@ -1,0 +1,117 @@
+// [[Rcpp::depends(RcppEigen)]]
+#include <RcppEigen.h>
+#include "rcpp_trex_screening_wrapper.h"
+
+using namespace Rcpp;
+using namespace trex::trex_selector_methods::trex_screening;
+using namespace trex::trex_selector_methods::trex_core;
+
+extern TRexControlParameter parse_control_parameter(const Rcpp::List& control);
+
+/**
+ * @brief Parses an R list into a ScreenTRexControlParameter C++ struct.
+ * 
+ * Configures bootstrap iterations, confidence thresholds, and the base 
+ * T-Rex methodology mapped to the Screen-TRex variant.
+ * 
+ * @param control List of parameters passed from R.
+ * @return Populated ScreenTRexControlParameter instance.
+ */
+ScreenTRexControlParameter parse_screen_parameter(const Rcpp::List& control) {
+    ScreenTRexControlParameter params;
+
+    if (control.containsElementNamed("use_bootstrap_CI")) params.use_bootstrap_CI = control["use_bootstrap_CI"];
+    if (control.containsElementNamed("R_boot")) params.R_boot = control["R_boot"];
+    if (control.containsElementNamed("ci_grid_step")) params.ci_grid_step = control["ci_grid_step"];
+    
+    if (control.containsElementNamed("trex_method")) {
+        std::string method = control["trex_method"];
+        if (method == "TREX") params.trex_method = ScreenTRexMethod::TREX;
+        else if (method == "TREX_DA_AR1") params.trex_method = ScreenTRexMethod::TREX_DA_AR1;
+        else if (method == "TREX_DA_EQUI") params.trex_method = ScreenTRexMethod::TREX_DA_EQUI;
+        else if (method == "TREX_DA_BLOCK_EQUI") params.trex_method = ScreenTRexMethod::TREX_DA_BLOCK_EQUI;
+        else Rcpp::stop("Unknown ScreenTRexMethod: " + method);
+    }
+    
+    return params;
+}
+
+//' @title Create RTRexScreeningSelector
+//' @noRd
+// [[Rcpp::export]]
+XPtr<RTRexScreeningSelector> trex_screening_create(
+    Eigen::Map<Eigen::MatrixXd> X,
+    Eigen::Map<Eigen::VectorXd> y,
+    Rcpp::List screen_control_list,
+    Rcpp::List trex_control_list,
+    int seed,
+    bool verbose
+) {
+    ScreenTRexControlParameter screen_control = parse_screen_parameter(screen_control_list);
+    TRexControlParameter trex_control = parse_control_parameter(trex_control_list);
+    return XPtr<RTRexScreeningSelector>(new RTRexScreeningSelector(X, y, screen_control, trex_control, seed, verbose));
+}
+
+//' @title Create RTRexScreeningSelector from mmap
+//' @noRd
+// [[Rcpp::export]]
+XPtr<RTRexScreeningSelector> trex_screening_mmap_create(
+    XPtr<trex::utils::memmap::MemoryMappedMatrix<double>> X_ptr,
+    Eigen::Map<Eigen::VectorXd> y,
+    Rcpp::List screen_control_list,
+    Rcpp::List trex_control_list,
+    int seed,
+    bool verbose
+) {
+    ScreenTRexControlParameter screen_control = parse_screen_parameter(screen_control_list);
+    TRexControlParameter trex_control = parse_control_parameter(trex_control_list);
+    return XPtr<RTRexScreeningSelector>(new RTRexScreeningSelector(X_ptr->getMap(), y, screen_control, trex_control, seed, verbose));
+}
+
+//' @title Run RTRexScreeningSelector
+//' @noRd
+// [[Rcpp::export]]
+void trex_screening_select(XPtr<RTRexScreeningSelector> r_ptr) {
+    r_ptr->select();
+}
+
+//' @title Get RTRexScreeningSelector Result
+//' @noRd
+// [[Rcpp::export]]
+List trex_screening_get_results(XPtr<RTRexScreeningSelector> r_ptr) {
+    auto res = r_ptr->get()->getScreenResult();
+    
+    return List::create(
+        Named("selected_var")          = res.selected_var,
+        Named("T_stop")                = res.T_stop,
+        Named("v_thresh")              = res.v_thresh,
+        Named("estimated_FDR")         = res.estimated_FDR,
+        Named("used_bootstrap")        = res.used_bootstrap,
+        Named("confidence_level")      = res.confidence_level,
+        Named("estimated_correlation") = res.estimated_correlation
+    );
+}
+
+//' @title Get RTRexScreeningSelector Matrices
+//' @noRd
+// [[Rcpp::export]]
+List trex_screening_get_matrices(XPtr<RTRexScreeningSelector> r_ptr) {
+    auto res = r_ptr->get()->getScreenResult();
+    
+    return List::create(
+        Named("beta_mat")    = res.beta_mat,
+        Named("dummy_betas") = res.dummy_betas
+    );
+}
+
+//' @title Get Selected Indices
+//' @noRd
+// [[Rcpp::export]]
+IntegerVector trex_screening_get_selected_indices(XPtr<RTRexScreeningSelector> r_ptr) {
+    const auto& indices = r_ptr->get()->getSelectedIndices();
+    IntegerVector r_indices(indices.size());
+    for (size_t i = 0; i < indices.size(); ++i) {
+        r_indices[i] = indices[i] + 1; // 1-based indexing for R
+    }
+    return r_indices;
+}

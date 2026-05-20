@@ -465,7 +465,7 @@ inline GridPointResult run_mc_trials(
         fdp_vec[mc] = rates::compute_fdp(sel_idx, dat.true_support);
         tpp_vec[mc] = rates::compute_tpp(sel_idx, dat.true_support);
         L_vec[mc]   = static_cast<double>(selector.getDummyMultiplierL());
-        T_vec[mc]   = static_cast<double>(selector.getStoppingTimeT());
+        T_vec[mc]   = static_cast<double>(selector.getTStop());
     }
 
     // Compute mean
@@ -559,7 +559,7 @@ inline GridPointResult run_mc_trials_base(
         fdp_vec[mc] = rates::compute_fdp(sel_idx, dat.true_support);
         tpp_vec[mc] = rates::compute_tpp(sel_idx, dat.true_support);
         L_vec[mc]   = static_cast<double>(selector.getDummyMultiplierL());
-        T_vec[mc]   = static_cast<double>(selector.getStoppingTimeT());
+        T_vec[mc]   = static_cast<double>(selector.getTStop());
     }
 
     // Compute mean
