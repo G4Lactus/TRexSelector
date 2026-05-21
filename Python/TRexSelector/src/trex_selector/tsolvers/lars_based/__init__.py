@@ -1,15 +1,15 @@
 from ..._core.tsolvers.lars_based import (
-    TLarsSolver,
-    TLassoSolver,
-    TStepwiseSolver,
-    TStagewiseSolver,
+    TLARS_Solver,
+    TLASSO_Solver,
+    TSTEPWISE_Solver,
+    TSTAGEWISE_Solver,
     TENET_Solver
 )
 
 __all__ = [
-    "TLarsSolver",
-    "TLassoSolver",
-    "TStepwiseSolver",
-    "TStagewiseSolver",
+    "TLARS_Solver",
+    "TLASSO_Solver",
+    "TSTEPWISE_Solver",
+    "TSTAGEWISE_Solver",
     "TENET_Solver"
 ]

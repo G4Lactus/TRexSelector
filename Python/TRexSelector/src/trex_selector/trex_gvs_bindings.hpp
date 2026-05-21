@@ -80,22 +80,25 @@ public:
  */
 inline void bind_trex_gvs(py::module& m) {
     py::enum_<GVSType>(m, "GVSType", "Group Variable Selection method variants.")
-        .value("EN", GVSType::EN, "Elastic Net type standard methodology.")
-        .value("IEN", GVSType::IEN, "Interleaved Elastic Net variant.")
+        .value("EN", GVSType::EN, "Elastic-Net group variable selection (uses TENET solver).")
+        .value("IEN", GVSType::IEN, "Informed Elastic-Net using group structure from clustering (uses TLASSO solver).")
         .export_values();
 
-    py::class_<TRexGVSControlParameter>(m, "TRexGVSControlParameter", "Configuration parameters for the GVS logic.")
+    py::class_<TRexGVSControlParameter>(m, "TRexGVSControlParameter", "Control parameters for TRexGVSSelector.")
         .def(py::init<>())
-        .def_readwrite("gvs_type", &TRexGVSControlParameter::gvs_type, "Type of GVS method to execute.")
-        .def_readwrite("corr_max", &TRexGVSControlParameter::corr_max, "Maximum correlation bounds for grouping.");
+        .def_readwrite("gvs_type",    &TRexGVSControlParameter::gvs_type,    "GVS method variant (EN = Elastic Net, IEN = Informed Elastic Net).")
+        .def_readwrite("corr_max",    &TRexGVSControlParameter::corr_max,    "Maximum pairwise correlation for automatic cluster formation.")
+        .def_readwrite("hc_linkage",  &TRexGVSControlParameter::hc_linkage,  "Hierarchical clustering linkage method.")
+        .def_readwrite("lambda2_lars", &TRexGVSControlParameter::lambda2_lars, "L2 penalty weight for group structure (0 = auto-select via GCV).")
+        .def_readwrite("prior_groups", &TRexGVSControlParameter::prior_groups, "Manually specified group assignments (0-based; empty = auto-cluster).");
 
-    py::class_<TRexGVSSelector::GVSSelectionResult, TRexSelector::SelectionResult>(m, "GVSSelectionResult", "Extended SelectionResult holding specific GVS outputs.")
-        .def_readonly("lambda2_used", &TRexGVSSelector::GVSSelectionResult::lambda2_used, "Lambda2 regularization term value chosen.")
-        .def_readonly("gvs_type", &TRexGVSSelector::GVSSelectionResult::gvs_type, "GVS method that was executed.")
-        .def_readonly("max_clusters", &TRexGVSSelector::GVSSelectionResult::max_clusters, "Maximum number of independent group bounds clustered.")
-        .def_readonly("hc_method_used", &TRexGVSSelector::GVSSelectionResult::hc_method_used, "Specific Hierarchical link method evaluated.")
-        .def_readonly("groups_vec", &TRexGVSSelector::GVSSelectionResult::groups_vec, "Discrete arrays defining explicit groups assignments.")
-        .def_readonly("group_labels", &TRexGVSSelector::GVSSelectionResult::group_labels, "Labeling metrics applied over groups.");
+    py::class_<TRexGVSSelector::GVSSelectionResult, TRexSelector::SelectionResult>(m, "GVSSelectionResult", "SelectionResult extended with GVS-specific fields.")
+        .def_readonly("lambda2_used", &TRexGVSSelector::GVSSelectionResult::lambda2_used, "L2 penalty lambda2 used (auto-selected via GCV if not specified).")
+        .def_readonly("gvs_type", &TRexGVSSelector::GVSSelectionResult::gvs_type, "GVS method used (EN or IEN).")
+        .def_readonly("max_clusters", &TRexGVSSelector::GVSSelectionResult::max_clusters, "Number of variable groups identified by hierarchical clustering.")
+        .def_readonly("hc_method_used", &TRexGVSSelector::GVSSelectionResult::hc_method_used, "Hierarchical clustering linkage method used.")
+        .def_readonly("groups_vec", &TRexGVSSelector::GVSSelectionResult::groups_vec, "Group assignment vector (0-based group index per predictor).")
+        .def_readonly("group_labels", &TRexGVSSelector::GVSSelectionResult::group_labels, "Unique group label integers.");
 
     py::class_<PyTRexGVSSelector, PyTRexSelector>(m, "TRexGVSSelector", "TRex Selector with Group Variable Selection support.")
         .def(py::init<Eigen::Ref<Eigen::MatrixXd>, Eigen::Ref<Eigen::VectorXd>, double, const TRexGVSControlParameter&, const TRexControlParameter&, int, bool>(),
@@ -103,8 +106,8 @@ inline void bind_trex_gvs(py::module& m) {
              py::arg("gvs_control") = TRexGVSControlParameter(),
              py::arg("trex_control") = TRexControlParameter(),
              py::arg("seed") = -1, py::arg("verbose") = true,
-             "Mapping engine directly utilizing Python NumPy states strictly via zero-copy paths.")
-        .def("getGVSResult", &PyTRexGVSSelector::getGVSResult, "Fetch the detailed GVS selection result.");
+             "Construct the GVS selector. X and y are accessed zero-copy via Eigen::Map.")
+        .def("getGVSResult", &PyTRexGVSSelector::getGVSResult, "Return the GVSSelectionResult after calling select().");
 }
 // =====================================================================================
 #endif /* End of TREX_PYTHON_TREX_GVS_BINDINGS_HPP */

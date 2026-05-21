@@ -52,7 +52,6 @@ void TMP_Solver::executeStep(std::size_t T_stop, bool early_stop) {
 
         // MP: single-atom update — take primary atom after tie-breaking
         const std::size_t col_idx = new_vars[0];
-        currentStep_++;
 
         // ==========================================================
         // STEP 2: Update active set (with inherited dummy tracking)
@@ -91,6 +90,7 @@ void TMP_Solver::executeStep(std::size_t T_stop, bool early_stop) {
         // ==========================================================
         // STEP 6: Path and diagnostics
         // ==========================================================
+        currentStep_++;
         updateBetaPath();
 
         double rss = r_.dot(r_);

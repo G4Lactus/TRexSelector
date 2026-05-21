@@ -192,6 +192,25 @@ public:
     bool isConnected() const { return solver_->isConnected(); }
 
     // =================================================================================
+    // Solver-Specific Getters (only valid for the corresponding solver type)
+    // =================================================================================
+
+    /** @brief Get regularization parameter sequence (TLARS-specific). */
+    const std::vector<double>& getLambda() const { return solver_->getLambda(); }
+
+    /** @brief Get the current Kahan summation refresh interval (TLARS-specific). */
+    std::size_t getKahanRefreshInterval() const { return solver_->getKahanRefreshInterval(); }
+
+    /** @brief Set the Kahan summation refresh interval (TLARS-specific). */
+    void setKahanRefreshInterval(std::size_t interval) { solver_->setKahanRefreshInterval(interval); }
+
+    /** @brief Get total number of variable removals (TLASSO/TSTAGEWISE/TENET-specific). */
+    std::size_t getNumRemovals() const { return solver_->getNumRemovals(); }
+
+    /** @brief Get cycling ratio of removals to additions (TLASSO/TSTAGEWISE/TENET-specific). */
+    double getCyclingRatio() const { return solver_->getCyclingRatio(); }
+
+    // =================================================================================
     // Structural Bindings (State reconnects and Cereal Serialization)
     // =================================================================================
 
@@ -254,9 +273,9 @@ public:
  * @param name The class name assigned in the Python wrapper space.
  */
 template<typename Solver>
-void bind_standard_tsolver(py::module& m, const std::string& name) {
-    py::class_<PySolverWrapper<Solver>>(m, name.c_str())
-        .def(py::init<Eigen::Ref<Eigen::MatrixXd>, Eigen::Ref<Eigen::MatrixXd>,
+py::class_<PySolverWrapper<Solver>> bind_standard_tsolver(py::module& m, const std::string& name) {
+    py::class_<PySolverWrapper<Solver>> cls(m, name.c_str());
+    cls.def(py::init<Eigen::Ref<Eigen::MatrixXd>, Eigen::Ref<Eigen::MatrixXd>,
                       Eigen::Ref<Eigen::VectorXd>, bool, bool, bool>(),
              py::arg("X"),
              py::arg("D"),
@@ -316,6 +335,7 @@ void bind_standard_tsolver(py::module& m, const std::string& name) {
              "Serialize calculation state directly to disk utilizing Cereal.")
         .def("load", &PySolverWrapper<Solver>::load, py::arg("filepath"),
              "Hydrate a solver explicitly from a pre-calculated Cereal output file on disk.");
+    return cls;
 }
 
 
@@ -333,10 +353,28 @@ inline void bind_tsolvers_module(py::module& m) {
     py::module m_lars = m.def_submodule("lars_based", "LARS-based T-Solvers");
     using namespace trex::tsolvers::linear_model::lars_based;
 
-    bind_standard_tsolver<TLARS_Solver>(m_lars, "TLarsSolver");
-    bind_standard_tsolver<TLASSO_Solver>(m_lars, "TLassoSolver");
-    bind_standard_tsolver<TSTEPWISE_Solver>(m_lars, "TStepwiseSolver");
-    bind_standard_tsolver<TSTAGEWISE_Solver>(m_lars, "TStagewiseSolver");
+    bind_standard_tsolver<TLARS_Solver>(m_lars, "TLARS_Solver")
+        .def("getLambda", &PySolverWrapper<TLARS_Solver>::getLambda,
+             "Get the regularization parameter sequence (max correlation per step).")
+        .def("getKahanRefreshInterval", &PySolverWrapper<TLARS_Solver>::getKahanRefreshInterval,
+             "Get the current Kahan summation refresh interval.")
+        .def("setKahanRefreshInterval", &PySolverWrapper<TLARS_Solver>::setKahanRefreshInterval,
+             py::arg("interval"),
+             "Set the Kahan summation refresh interval (call before executeStep).");
+
+    bind_standard_tsolver<TLASSO_Solver>(m_lars, "TLASSO_Solver")
+        .def("getNumRemovals", &PySolverWrapper<TLASSO_Solver>::getNumRemovals,
+             "Get the total number of variable removals during solution path.")
+        .def("getCyclingRatio", &PySolverWrapper<TLASSO_Solver>::getCyclingRatio,
+             "Get the cycling ratio (removals / additions).");
+
+    bind_standard_tsolver<TSTEPWISE_Solver>(m_lars, "TSTEPWISE_Solver");
+
+    bind_standard_tsolver<TSTAGEWISE_Solver>(m_lars, "TSTAGEWISE_Solver")
+        .def("getNumRemovals", &PySolverWrapper<TSTAGEWISE_Solver>::getNumRemovals,
+             "Get the total number of coefficient removals.")
+        .def("getCyclingRatio", &PySolverWrapper<TSTAGEWISE_Solver>::getCyclingRatio,
+             "Get the cycling ratio (removals / additions).");
 
     // TENET specifically has a constructor with lambda2
     py::class_<PySolverWrapper<TENET_Solver>>(m_lars, "TENET_Solver")
@@ -382,7 +420,11 @@ inline void bind_tsolvers_module(py::module& m) {
         .def("restore", &PySolverWrapper<TENET_Solver>::restore, py::arg("X"),
                     py::arg("D"), py::arg("y"))
         .def("save", &PySolverWrapper<TENET_Solver>::save, py::arg("filepath"))
-        .def("load", &PySolverWrapper<TENET_Solver>::load, py::arg("filepath"));
+        .def("load", &PySolverWrapper<TENET_Solver>::load, py::arg("filepath"))
+        .def("getNumRemovals", &PySolverWrapper<TENET_Solver>::getNumRemovals,
+             "Get the total number of variable removals during solution path.")
+        .def("getCyclingRatio", &PySolverWrapper<TENET_Solver>::getCyclingRatio,
+             "Get the cycling ratio (removals / additions).");
 
 
     // -------------------------------------------------------------------------

@@ -52,7 +52,6 @@ void TACGP_Solver::executeStep(std::size_t T_stop, bool early_stop) {
         }
 
         pruneTiedDummies(new_vars, T_stop, early_stop);
-        currentStep_++;
 
         // ================================================================
         // STEP 2: Update active set (with inherited dummy tracking)
@@ -113,6 +112,7 @@ void TACGP_Solver::executeStep(std::size_t T_stop, bool early_stop) {
         // STEP 10: Update path and diagnostics
         // ================================================================
 
+        currentStep_++;
         updateBetaPath();
 
         double rss = r_.dot(r_);

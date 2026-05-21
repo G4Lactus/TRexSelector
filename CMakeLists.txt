@@ -230,8 +230,11 @@ endif()
 # ============================================================================
 include(CTest)
 enable_testing()
+option(TREX_BUILD_TESTS "Build C++ test executables" ON)
 add_subdirectory(src)
-add_subdirectory(tests)
+if (TREX_BUILD_TESTS)
+    add_subdirectory(tests)
+endif()
 
 
 # ============================================================================

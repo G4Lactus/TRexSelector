@@ -100,7 +100,11 @@ inline void bind_trex_da(py::module& m) {
     py::class_<TRexDASelector::DASelectionResult, TRexSelector::SelectionResult>(m, "DASelectionResult", "Extended SelectionResult holding specific DA outputs.")
         .def_readonly("rho_thresh", &TRexDASelector::DASelectionResult::rho_thresh, "The threshold applied for rho.")
         .def_readonly("rho_grid", &TRexDASelector::DASelectionResult::rho_grid, "Grid values used for rho.")
-        .def_readonly("method", &TRexDASelector::DASelectionResult::method, "The resulting DA method applied.");
+        .def_readonly("method",           &TRexDASelector::DASelectionResult::method,           "The resulting DA method applied.")
+        .def_readonly("cor_coef",          &TRexDASelector::DASelectionResult::cor_coef,          "Auto-estimated or supplied correlation coefficient.")
+        .def_readonly("fdp_hat_array_bt",  &TRexDASelector::DASelectionResult::FDP_hat_array_BT,  "Per-rho-level FDP estimate matrices (BT method only).")
+        .def_readonly("phi_array_bt",      &TRexDASelector::DASelectionResult::Phi_array_BT,      "Per-rho-level deflated Phi matrices (BT method only).")
+        .def_readonly("r_array_bt",        &TRexDASelector::DASelectionResult::R_array_BT,        "Per-rho-level R matrices (BT method only).");
 
     py::class_<PyTRexDASelector, PyTRexSelector>(m, "TRexDASelector", "TRex Selector with Data Augmentation support.")
         .def(py::init<Eigen::Ref<Eigen::MatrixXd>, Eigen::Ref<Eigen::VectorXd>, double, const TRexDAControlParameter&, const TRexControlParameter&, int, bool>(),
@@ -108,7 +112,7 @@ inline void bind_trex_da(py::module& m) {
              py::arg("da_control") = TRexDAControlParameter(),
              py::arg("trex_control") = TRexControlParameter(),
              py::arg("seed") = -1, py::arg("verbose") = true,
-             "Mapping engine directly utilizing Python NumPy states strictly via zero-copy paths.")
+             "Construct the DA selector. X and y are accessed zero-copy via Eigen::Map.")
         .def("getDAResult", &PyTRexDASelector::getDAResult, "Fetch the detailed DA selection result.");
 }
 // =====================================================================================

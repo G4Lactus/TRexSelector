@@ -10,12 +10,15 @@
  */
 // =====================================================================================
 
+// pybind11 includes
 #include <pybind11/pybind11.h>
 #include <pybind11/eigen.h>
 #include <pybind11/stl.h>
 
+// trexselector project utils include
 #include <utils/logging/logger.hpp>
 
+// project
 #include "tsolver_bindings.hpp"
 #include "ml_bindings.hpp"
 #include "clustering_bindings.hpp"
@@ -27,6 +30,8 @@
 #include "trex_gvs_bindings.hpp"
 #include "trex_screen_bindings.hpp"
 #include "trex_screening_biobanks_bindings.hpp"
+
+// =====================================================================================
 
 namespace py = pybind11;
 
@@ -41,7 +46,8 @@ PYBIND11_MODULE(_core, m) {
     py::module m_utils = m.def_submodule("utils", "Utility classes and functions");
     py::module m_ml = m.def_submodule("ml_methods", "Machine learning methods");
     py::module m_tsolvers = m.def_submodule("tsolvers", "Terminating Solvers");
-    py::module m_tsm = m.def_submodule("trex_selector_methods", "T-Rex Selector variants and core algorithms");
+    py::module m_tsm = m.def_submodule("trex_selector_methods",
+                                       "T-Rex Selector variants and core algorithms");
 
     // Call external binder functions
     bind_trex_core(m_tsm);
@@ -56,7 +62,8 @@ PYBIND11_MODULE(_core, m) {
     bind_trex_screening_biobanks(m_tsm);
 
     // Bind Hierarchical clustering as a submodule of m_ml
-    py::module m_clustering = m_ml.def_submodule("clustering", "Hierarchical clustering algorithms");
+    py::module m_clustering = m_ml.def_submodule("clustering",
+                                                 "Hierarchical clustering algorithms");
     trex::python_bindings::bind_clustering(m_clustering);
 }
 

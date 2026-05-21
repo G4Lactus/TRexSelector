@@ -78,34 +78,38 @@ public:
  */
 inline void bind_trex_screen(py::module& m) {
     py::enum_<ScreenTRexMethod>(m, "ScreenTRexMethod", "Screening TRex baseline variants.")
-        .value("TREX", ScreenTRexMethod::TREX, "Vanilla TRex Selector baseline.")
-        .value("TREX_DA_AR1", ScreenTRexMethod::TREX_DA_AR1, "Data Augmentation with AR1 bounds.")
-        .value("TREX_DA_EQUI", ScreenTRexMethod::TREX_DA_EQUI, "Data Augmentation with Equicorrelated matrices.")
-        .value("TREX_DA_BLOCK_EQUI", ScreenTRexMethod::TREX_DA_BLOCK_EQUI, "Data Augmentation via Block-Equicorrelations.")
+        .value("TREX", ScreenTRexMethod::TREX, "Standard T-Rex screening without data augmentation.")
+        .value("TREX_DA_AR1", ScreenTRexMethod::TREX_DA_AR1, "T-Rex screening with AR(1) data augmentation.")
+        .value("TREX_DA_EQUI", ScreenTRexMethod::TREX_DA_EQUI, "T-Rex screening with equicorrelated data augmentation.")
+        .value("TREX_DA_BLOCK_EQUI", ScreenTRexMethod::TREX_DA_BLOCK_EQUI, "T-Rex screening with block-equicorrelated data augmentation.")
         .export_values();
 
-    py::class_<ScreenTRexControlParameter>(m, "ScreenTRexControlParameter", "Configuration parameters for Screen metrics.")
+    py::class_<ScreenTRexControlParameter>(m, "ScreenTRexControlParameter", "Control parameters for TRexScreeningSelector.")
         .def(py::init<>())
-        .def_readwrite("use_bootstrap_CI", &ScreenTRexControlParameter::use_bootstrap_CI, "Whether to strictly employ bootstrapping.")
-        .def_readwrite("R_boot", &ScreenTRexControlParameter::R_boot, "Bootstrap iteration counts.")
-        .def_readwrite("ci_grid_step", &ScreenTRexControlParameter::ci_grid_step, "Step size utilized when gridding Confidence Intervals.")
-        .def_readwrite("trex_method", &ScreenTRexControlParameter::trex_method, "Core method wrapper invoked for evaluation.")
-        .def_readwrite("rho_thr_DA", &ScreenTRexControlParameter::rho_thr_DA, "Correlation bounds strictly passed into inner DA steps.")
-        .def_readwrite("cor_coef", &ScreenTRexControlParameter::cor_coef, "Coefficient utilized defining underlying structure limits.");
+        .def_readwrite("use_bootstrap_CI", &ScreenTRexControlParameter::use_bootstrap_CI, "Use bootstrap confidence intervals for FDR estimation (default false).")
+        .def_readwrite("R_boot", &ScreenTRexControlParameter::R_boot, "Number of bootstrap replicates (default 1000).")
+        .def_readwrite("ci_grid_step", &ScreenTRexControlParameter::ci_grid_step, "Step size for the confidence-interval grid.")
+        .def_readwrite("trex_method", &ScreenTRexControlParameter::trex_method, "Screening method variant to use (see ScreenTRexMethod).")
+        .def_readwrite("rho_thr_DA", &ScreenTRexControlParameter::rho_thr_DA, "Correlation threshold passed to the inner DA step. Only applies for TREX_DA_AR1 and TREX_DA_EQUI.")
+        .def_readwrite("cor_coef",   &ScreenTRexControlParameter::cor_coef,   "Fixed correlation coefficient for AR1 or equicorrelated structure. Estimated automatically if <= -1. Only applies for TREX_DA_AR1 and TREX_DA_EQUI.")
+        .def_readwrite("n_blocks",   &ScreenTRexControlParameter::n_blocks,   "Number of equicorrelated blocks. Only applies for TREX_DA_BLOCK_EQUI.");
 
-    py::class_<ScreenTRexSelectionResult, TRexSelector::SelectionResult>(m, "ScreenTRexSelectionResult", "Extended SelectionResult holding specific Screen outputs.")
-        .def_readonly("estimated_FDR", &ScreenTRexSelectionResult::estimated_FDR, "Derived total FDR bound estimation mapped.")
-        .def_readonly("used_bootstrap", &ScreenTRexSelectionResult::used_bootstrap, "Indicates if bootstrap sampling was engaged.")
-        .def_readonly("confidence_level", &ScreenTRexSelectionResult::confidence_level, "Bound evaluation level achieved correctly.");
+    py::class_<ScreenTRexSelectionResult, TRexSelector::SelectionResult>(m, "ScreenTRexSelectionResult", "SelectionResult extended with screening-specific fields.")
+        .def_readonly("estimated_FDR", &ScreenTRexSelectionResult::estimated_FDR, "Estimated false discovery rate.")
+        .def_readonly("used_bootstrap", &ScreenTRexSelectionResult::used_bootstrap, "Whether bootstrap CI was used for FDR estimation.")
+        .def_readonly("confidence_level",      &ScreenTRexSelectionResult::confidence_level,      "Bootstrap confidence level achieved.")
+        .def_readonly("beta_mat",               &ScreenTRexSelectionResult::beta_mat,               "Coefficient matrix averaged over K experiments (p x T_stop).")
+        .def_readonly("dummy_betas",            &ScreenTRexSelectionResult::dummy_betas,            "Non-zero dummy coefficients collected during screening.")
+        .def_readonly("estimated_correlation",  &ScreenTRexSelectionResult::estimated_correlation,  "Estimated correlation used by DA-based screening variants.");
 
-    py::class_<PyScreenTRexSelector, PyTRexSelector>(m, "ScreenTRexSelector", "TRex Selector with fast variable Screening heuristics.")
+    py::class_<PyScreenTRexSelector, PyTRexSelector>(m, "TRexScreeningSelector", "T-Rex Selector with fast variable screening via dummy comparison.")
         .def(py::init<Eigen::Ref<Eigen::MatrixXd>, Eigen::Ref<Eigen::VectorXd>, const ScreenTRexControlParameter&, const TRexControlParameter&, int, bool>(),
              py::arg("X"), py::arg("y"),
              py::arg("screen_control") = ScreenTRexControlParameter(),
              py::arg("trex_control") = TRexControlParameter(),
              py::arg("seed") = -1, py::arg("verbose") = true,
-             "Mapping engine directly utilizing Python NumPy states strictly via zero-copy paths.")
-        .def("getScreenResult", &PyScreenTRexSelector::getScreenResult, "Fetch the detailed Screen selection metric results.");
+             "Construct the screening selector. X and y are accessed zero-copy via Eigen::Map.")
+        .def("getScreenResult", &PyScreenTRexSelector::getScreenResult, "Return the ScreenTRexSelectionResult after calling select().");
 }
 
 #endif // TREX_PYTHON_TREX_SCREEN_BINDINGS_HPP

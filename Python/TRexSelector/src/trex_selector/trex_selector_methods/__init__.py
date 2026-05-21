@@ -1,6 +1,9 @@
 # Core TRex Selector Methods classes
 from .._core.trex_selector_methods import (
     LLoopStrategy,
+    SolverTypeForTRex,
+    SolverHyperparameters,
+    DummyDistribution,
     TRexControlParameter,
     SelectionResult,
     TRexSelector,
@@ -18,15 +21,18 @@ from .._core.trex_selector_methods import (
     ScreenTRexMethod,
     ScreenTRexControlParameter,
     ScreenTRexSelectionResult,
-    ScreenTRexSelector,
+    TRexScreeningSelector,
     # Biobank Screen-TRex
     BiobankScreenTRexControl,
     BiobankScreenTRexResult,
-    BiobankScreenTRex
+    TRexBiobankScreeningSelector
 )
 
 __all__ = [
     "LLoopStrategy",
+    "SolverTypeForTRex",
+    "SolverHyperparameters",
+    "DummyDistribution",
     "TRexControlParameter",
     "SelectionResult",
     "TRexSelector",
@@ -41,8 +47,8 @@ __all__ = [
     "ScreenTRexMethod",
     "ScreenTRexControlParameter",
     "ScreenTRexSelectionResult",
-    "ScreenTRexSelector",
+    "TRexScreeningSelector",
     "BiobankScreenTRexControl",
     "BiobankScreenTRexResult",
-    "BiobankScreenTRex"
+    "TRexBiobankScreeningSelector"
 ]

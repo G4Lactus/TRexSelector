@@ -1,3 +1,15 @@
+// ========================================================================================
+// rcpp_clustering.cpp - Rcpp bindings for hierarchical agglomerative clustering
+// ========================================================================================
+/*
+ * Note on Roxygen Documentation:
+ * All functions exported via Rcpp in this file are documented using standard Roxygen tags
+ * but strictly include the `@noRd` tag. These are internal C++ bindings that are wrapped
+ * by user-friendly R6 classes and R functions in the package namespace. Generating `.Rd`
+ * manuals for these endpoints would clutter the public API.
+ */
+ //
+
 // [[Rcpp::depends(RcppEigen)]]
 #include <RcppEigen.h>
 #include <stdexcept>
@@ -9,14 +21,6 @@
 #include "ml_methods/clustering/hierarchical/agglomerative/distance_policy.hpp"
 
 // ========================================================================================
-
-/*
- * Note on Roxygen Documentation:
- * All functions exported via Rcpp in this file are documented using standard Roxygen tags 
- * but strictly include the `@noRd` tag. These are internal C++ bindings that are wrapped 
- * by user-friendly R6 classes and R functions in the package namespace. Generating `.Rd` 
- * manuals for these endpoints would clutter the public API.
- */
 
 using namespace Rcpp;
 using namespace trex::ml_methods::clustering::hierarchical::agglomerative;
@@ -138,6 +142,7 @@ std::vector<MergeStep> internal_dispatch_linkage(
 //' @param use_mmap Boolean flag for memory mapping
 //'
 //' @return A linkage matrix
+//'
 //' @noRd
 // [[Rcpp::export]]
 NumericMatrix rcpp_agglomerative_cluster(
@@ -195,6 +200,7 @@ NumericMatrix rcpp_agglomerative_cluster(
 //' @param num_clusters Desired number of flat clusters
 //'
 //' @return Integer vector of cluster indices
+//'
 //' @noRd
 // [[Rcpp::export]]
 IntegerVector rcpp_cut_tree(

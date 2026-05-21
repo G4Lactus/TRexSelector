@@ -19,6 +19,9 @@ set(TREX_USE_BLAS_LAPACK OFF CACHE BOOL "Disable BLAS for Python" FORCE)
 # Disable Demos to avoid linker errors with executable targets
 set(TREX_BUILD_DEMOS OFF CACHE BOOL "Disable Demos wrapping in Python" FORCE)
 
+# Disable Tests to avoid linker errors with executable targets
+set(TREX_BUILD_TESTS     OFF CACHE BOOL "Disable Tests for Python"  FORCE)
+
 # Add the parent directory containing the main TRexSelector C++ project
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../.. ${CMAKE_CURRENT_BINARY_DIR}/trex_core)
 
@@ -29,6 +32,11 @@ pybind11_add_module(_core src/trex_selector/bindings.cpp)
 target_link_libraries(_core PRIVATE
     trex::trex_selector_methods
     trex::utils
+)
+
+# Optimization flags for the _core binding itself (mirrors library flags)
+target_compile_options(_core PRIVATE
+    -O3 -DNDEBUG -march=native -ffast-math -funroll-loops
 )
 
 # Install the extension into the trex_selector package directory

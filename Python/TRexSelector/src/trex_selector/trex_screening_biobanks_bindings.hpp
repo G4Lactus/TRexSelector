@@ -118,40 +118,40 @@ public:
 
 /**
  * @brief Binds the BiobankScreenTRex and related configurations.
- * 
+ *
  * @param m The Python module to bind against.
  */
 inline void bind_trex_screening_biobanks(py::module& m) {
-    py::class_<BiobankScreenTRexControl>(m, "BiobankScreenTRexControl", "Configurations orchestrating the Biobank bounds execution.")
+    py::class_<BiobankScreenTRexControl>(m, "BiobankScreenTRexControl", "Control parameters for TRexBiobankScreeningSelector.")
         .def(py::init<>())
-        .def_readwrite("target_FDR_trex", &BiobankScreenTRexControl::target_FDR_trex, "Initial FDR constraint strictly loaded.")
-        .def_readwrite("lower_bound_FDR", &BiobankScreenTRexControl::lower_bound_FDR, "Lowest scaling FDR factor mapping boundaries.")
-        .def_readwrite("upper_bound_FDR", &BiobankScreenTRexControl::upper_bound_FDR, "Maximum bounded target bounds allowed natively.");
+        .def_readwrite("target_FDR_trex", &BiobankScreenTRexControl::target_FDR_trex, "Target FDR for the core T-Rex fallback (default 0.1).")
+        .def_readwrite("lower_bound_FDR", &BiobankScreenTRexControl::lower_bound_FDR, "Lower bound on the FDR search range.")
+        .def_readwrite("upper_bound_FDR", &BiobankScreenTRexControl::upper_bound_FDR, "Upper bound on the FDR search range.");
 
-    py::class_<BiobankScreenTRexResult>(m, "BiobankScreenTRexResult", "Diagnostic statistics bounds mapping phenotype solutions.")
-        .def_readonly("phenotype_index", &BiobankScreenTRexResult::phenotype_index, "Numerical mapping matching specific target column bound ranges.")
-        .def_readonly("selected_indices", &BiobankScreenTRexResult::selected_indices, "Vector output mapping original unfiltered arrays correctly.")
-        .def_readonly("estimated_FDR", &BiobankScreenTRexResult::estimated_FDR, "Explicit mapped estimation values evaluated against boundary limits.")
-        .def_readonly("method_used", &BiobankScreenTRexResult::method_used, "Fallback bound configuration indication algorithm string.")
-        .def_readonly("estimated_FDR_screen_ordinary", &BiobankScreenTRexResult::estimated_FDR_screen_ordinary, "Base computation FDR bound unweighted.")
-        .def_readonly("estimated_FDR_screen_bootstrap", &BiobankScreenTRexResult::estimated_FDR_screen_bootstrap, "Resampled approximation mapping distributions natively.")
-        .def_readonly("selected_indices_screen_ordinary", &BiobankScreenTRexResult::selected_indices_screen_ordinary, "Unweighted selected indices mapping elements internally.")
-        .def_readonly("selected_indices_screen_bootstrap", &BiobankScreenTRexResult::selected_indices_screen_bootstrap, "Bounded inclusion distributions properly restricted.")
-        .def_readonly("used_fallback_trex", &BiobankScreenTRexResult::used_fallback_trex, "Indicator highlighting basic fallback methods executing tightly.");
+    py::class_<BiobankScreenTRexResult>(m, "BiobankScreenTRexResult", "Result for a single phenotype returned by screenPhenotype() or screenPhenotypes().")
+        .def_readonly("phenotype_index", &BiobankScreenTRexResult::phenotype_index, "0-based column index of the screened phenotype.")
+        .def_readonly("selected_indices", &BiobankScreenTRexResult::selected_indices, "0-based indices of selected predictors.")
+        .def_readonly("estimated_FDR", &BiobankScreenTRexResult::estimated_FDR, "Estimated FDR of the selection.")
+        .def_readonly("method_used", &BiobankScreenTRexResult::method_used, "Method used: 'screening_ordinary', 'screening_bootstrap', or 'trex'.")
+        .def_readonly("estimated_FDR_screen_ordinary", &BiobankScreenTRexResult::estimated_FDR_screen_ordinary, "Estimated FDR from the ordinary (non-bootstrap) screening method.")
+        .def_readonly("estimated_FDR_screen_bootstrap", &BiobankScreenTRexResult::estimated_FDR_screen_bootstrap, "Estimated FDR from the bootstrap screening method.")
+        .def_readonly("selected_indices_screen_ordinary", &BiobankScreenTRexResult::selected_indices_screen_ordinary, "Selected indices from the ordinary screening method (0-based).")
+        .def_readonly("selected_indices_screen_bootstrap", &BiobankScreenTRexResult::selected_indices_screen_bootstrap, "Selected indices from the bootstrap screening method (0-based).")
+        .def_readonly("used_fallback_trex", &BiobankScreenTRexResult::used_fallback_trex, "True if the T-Rex fallback was used instead of screening.");
 
-    py::class_<PyBiobankScreenTRex>(m, "BiobankScreenTRex", "Highly scalable algorithm handling iterative massive trait distributions tightly.")
+    py::class_<PyBiobankScreenTRex>(m, "TRexBiobankScreeningSelector", "Biobank-scale T-Rex selector for FDR-controlled variable selection across one or many phenotypes.")
         .def(py::init<Eigen::Ref<Eigen::MatrixXd>, Eigen::Ref<Eigen::VectorXd>, const BiobankScreenTRexControl&, int, bool>(),
              py::arg("X"), py::arg("y"),
              py::arg("biosctrex_ctrl") = BiobankScreenTRexControl(),
              py::arg("seed") = -1, py::arg("verbose") = false,
-             "Single phenotype initialization engine directly utilizing Python NumPy states strictly via zero-copy paths.")
+             "Construct for a single phenotype (1-D y). X and y are accessed zero-copy.")
         .def(py::init<Eigen::Ref<Eigen::MatrixXd>, Eigen::Ref<Eigen::MatrixXd>, const BiobankScreenTRexControl&, int, bool>(),
              py::arg("X"), py::arg("Y"),
              py::arg("biosctrex_ctrl") = BiobankScreenTRexControl(),
              py::arg("seed") = -1, py::arg("verbose") = false,
-             "Multiple phenotype 2D initialization utilizing pure matrix representations handling mappings natively.")
-        .def("screenPhenotype", &PyBiobankScreenTRex::screenPhenotype, py::call_guard<py::gil_scoped_release>(), "Computes selections explicitly over the distinct variable subset.")
-        .def("screenPhenotypes", &PyBiobankScreenTRex::screenPhenotypes, py::call_guard<py::gil_scoped_release>(), "Iteratively traverses and determines bounds properly across 2D distributions.");
+             "Construct for multiple phenotypes (2-D Y). X and Y are accessed zero-copy.")
+        .def("screenPhenotype", &PyBiobankScreenTRex::screenPhenotype, py::call_guard<py::gil_scoped_release>(), "Run screening for the single loaded phenotype.")
+        .def("screenPhenotypes", &PyBiobankScreenTRex::screenPhenotypes, py::call_guard<py::gil_scoped_release>(), "Run screening for all loaded phenotypes.");
 
 // =====================================================================================
 }

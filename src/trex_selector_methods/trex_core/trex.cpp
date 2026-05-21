@@ -1041,9 +1041,9 @@ void TRexSelector::runTLoop(
     er::ExperimentStrategy exp_strategy;
     switch (trex_ctrl_.lloop_strategy) {
         case LLoopStrategy::PERMUTATION:
-        case LLoopStrategy::PERMUTATION_DIRECT:
             exp_strategy = er::ExperimentStrategy::Permutation;
             break;
+        case LLoopStrategy::PERMUTATION_DIRECT:
         case LLoopStrategy::DIRECT:
             exp_strategy = er::ExperimentStrategy::Direct;
             break;

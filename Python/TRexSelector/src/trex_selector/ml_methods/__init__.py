@@ -1,12 +1,13 @@
 # Machine Learning methods
-from .._core.ml_methods import ZScoreScaler, LpNormScaler, RidgeCV, RidgeGCV, RidgePath
+from .._core.ml_methods import ZScoreScaler, LpNormScaler, RidgeCV, RidgeGCV, RidgePath, NormType
 
 __all__ = [
     "ZScoreScaler",
     "LpNormScaler",
+    "NormType",
     "RidgeCV",
     "RidgeGCV",
-    "RidgePath"
+    "RidgePath",
 ]
 
 from . import clustering

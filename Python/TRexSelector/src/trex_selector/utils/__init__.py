@@ -1,5 +1,16 @@
 # Utility classes from the C++ core
-from .._core.utils import AccessMode, MemoryMappedMatrix
+from .._core.utils import (
+    AccessMode,
+    MemoryMappedMatrix,
+    compute_fdp,
+    compute_tpp,
+    compute_precision,
+    compute_recall,
+    compute_fdp_dense,
+    compute_tpp_dense,
+    get_max_threads,
+    set_num_threads,
+)
 import numpy as np
 
 def numpy_to_memmap(filename: str, data: np.ndarray) -> MemoryMappedMatrix:
@@ -40,5 +51,13 @@ def numpy_to_memmap(filename: str, data: np.ndarray) -> MemoryMappedMatrix:
 __all__ = [
     "AccessMode",
     "MemoryMappedMatrix",
-    "numpy_to_memmap"
+    "numpy_to_memmap",
+    "compute_fdp",
+    "compute_tpp",
+    "compute_precision",
+    "compute_recall",
+    "compute_fdp_dense",
+    "compute_tpp_dense",
+    "get_max_threads",
+    "set_num_threads",
 ]

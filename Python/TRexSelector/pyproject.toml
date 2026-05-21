@@ -14,3 +14,11 @@ dependencies = [
 [tool.scikit-build]
 wheel.packages = ["src/trex_selector"]
 cmake.source-dir = "."
+cmake.build-type = "Release"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "--verbose"
+
+[project.optional-dependencies]
+dev = ["pytest"]
