@@ -241,6 +241,7 @@ void TRexSelector::validateTRexParameters() const {
     if (!trex_ctrl_.tloop_stagnation_stop) {
         const sd::SolverTypeForTRex st = trex_ctrl_.solver_type;
         const bool is_greedy =
+            st == sd::SolverTypeForTRex::TSTAGEWISE ||
             st == sd::SolverTypeForTRex::TSTEPWISE  ||
             st == sd::SolverTypeForTRex::TOMP       ||
             st == sd::SolverTypeForTRex::TGP        ||
