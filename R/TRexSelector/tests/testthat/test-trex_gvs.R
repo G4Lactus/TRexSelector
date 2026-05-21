@@ -11,12 +11,12 @@ test_that("TRexGVSSelector instantiation and dimensional validation work", {
   y <- rnorm(n)
 
   # 1. Valid instantiation
-  expect_silent(TRexGVSSelector$new(X, y, verbose = FALSE, gvs_type = "EN"))
+  expect_silent(TRexGVSSelector$new(X, y, verbose = FALSE, gvs_control = trex_gvs_control(gvs_type = "EN")))
 
   # 2. Dimension mismatch (y length != X rows)
   y_bad <- rnorm(n + 10)
   expect_error(
-    TRexGVSSelector$new(X, y_bad, verbose = FALSE, gvs_type = "EN"),
+    TRexGVSSelector$new(X, y_bad, verbose = FALSE, gvs_control = trex_gvs_control(gvs_type = "EN")),
     "length equal to the number of rows"
   )
 
@@ -24,7 +24,7 @@ test_that("TRexGVSSelector instantiation and dimensional validation work", {
   X_empty <- matrix(numeric(0), nrow = 0, ncol = p)
   y_empty <- numeric(0)
   expect_error(
-    TRexGVSSelector$new(X_empty, y_empty, verbose = FALSE, gvs_type = "EN"),
+    TRexGVSSelector$new(X_empty, y_empty, verbose = FALSE, gvs_control = trex_gvs_control(gvs_type = "EN")),
     "non-zero dimensions"
   )
 
@@ -32,7 +32,7 @@ test_that("TRexGVSSelector instantiation and dimensional validation work", {
   y_na <- y
   y_na[1] <- NA
   expect_error(
-    TRexGVSSelector$new(X, y_na, verbose = FALSE, gvs_type = "EN"),
+    TRexGVSSelector$new(X, y_na, verbose = FALSE, gvs_control = trex_gvs_control(gvs_type = "EN")),
     "NaN or Inf values"
   )
 
@@ -51,7 +51,9 @@ test_that("TRexGVSSelector executes correctly with valid data", {
   y <- X[, 1] * 5 + X[, 2] * -4 + X[, 3] * 3 + rnorm(n)
 
   # Instantiate TRex selector
-  selector <- TRexGVSSelector$new(X, y, tFDR = 0.1, K = 5, verbose = FALSE, gvs_type = "IEN")
+  selector <- TRexGVSSelector$new(X, y, tFDR = 0.1, verbose = FALSE,
+                                  gvs_control = trex_gvs_control(gvs_type = "IEN"),
+                                  control = trex_control(K = 5))
 
   # Execute variable selection
   selector$select()
@@ -82,8 +84,11 @@ test_that("TRexGVSSelector handles concurrent execution properly (OpenMP)", {
 
   # Ensure the object can be created and bound appropriately with concurrency settings
   selector_openmp <- expect_no_error(
-    TRexGVSSelector$new(X, y, K = 5, use_openmp = TRUE, max_inner_threads = 2,
-                        max_outer_threads = 2, gvs_type = "IEN", verbose = FALSE)
+    TRexGVSSelector$new(X, y,
+                        gvs_control = trex_gvs_control(gvs_type = "IEN"),
+                        control = trex_control(K = 5, use_openmp = TRUE, max_inner_threads = 2,
+                                              max_outer_threads = 2),
+                        verbose = FALSE)
   )
 
   # Run the algorithm targeting out threaded branches; fall back if openMP is disabled
@@ -109,30 +114,30 @@ test_that("TRexGVSSelector correctly guards against invalid parameters", {
 
   # Unsupported L-Loop Strategy
   expect_error(
-    TRexGVSSelector$new(X, y, gvs_type = "EN",
-                        lloop_strategy = "PERMUTATION", verbose = FALSE),
+    TRexGVSSelector$new(X, y, gvs_control = trex_gvs_control(gvs_type = "EN"),
+                        control = trex_control(lloop_strategy = "PERMUTATION"), verbose = FALSE),
     "are not supported"
   )
 
   # Invalid Hierarchical Control Parameters
   expect_error(
-    TRexGVSSelector$new(X, y, gvs_type = "EN", corr_max = -0.1, verbose = FALSE),
+    TRexGVSSelector$new(X, y, gvs_control = trex_gvs_control(gvs_type = "EN", corr_max = -0.1), verbose = FALSE),
     "corr_max"
   )
   expect_error(
-    TRexGVSSelector$new(X, y, gvs_type = "EN", corr_max = 1.1, verbose = FALSE),
+    TRexGVSSelector$new(X, y, gvs_control = trex_gvs_control(gvs_type = "EN", corr_max = 1.1), verbose = FALSE),
     "corr_max"
   )
 
   # Invalid linkage triggers Rcpp stop()
   expect_error(
-    TRexGVSSelector$new(X, y, gvs_type = "EN", hc_linkage = "UNKNOWN_LINKAGE", verbose = FALSE),
+    TRexGVSSelector$new(X, y, gvs_control = trex_gvs_control(gvs_type = "EN", hc_linkage = "UNKNOWN_LINKAGE"), verbose = FALSE),
     "Unsupported linkage method for GVS"
   )
 
   # Negative Ridge lambda_2 penalty
   expect_error(
-    TRexGVSSelector$new(X, y, gvs_type = "EN", lambda_2 = -1.0, verbose = FALSE),
+    TRexGVSSelector$new(X, y, gvs_control = trex_gvs_control(gvs_type = "EN", lambda_2 = -1.0), verbose = FALSE),
     "lambda2_lars must be >= 0"
   )
 })
@@ -148,7 +153,7 @@ test_that("TRexGVSSelector handles manual grouping vectors correctly", {
 
   # Wrong length for groups
   expect_error(
-    TRexGVSSelector$new(X, y, gvs_type = "EN", groups = c(1, 2), verbose = FALSE),
+    TRexGVSSelector$new(X, y, gvs_control = trex_gvs_control(gvs_type = "EN", groups = c(1, 2)), verbose = FALSE),
     "length must equal p"
   )
 
@@ -156,7 +161,7 @@ test_that("TRexGVSSelector handles manual grouping vectors correctly", {
   # Trying to assign clusters 1 and 3 (R 1-based indexing, skips 2)
   bad_groups <- rep(c(1, 3), length.out = p)
   expect_error(
-    TRexGVSSelector$new(X, y, gvs_type = "EN", groups = bad_groups, verbose = FALSE),
+    TRexGVSSelector$new(X, y, gvs_control = trex_gvs_control(gvs_type = "EN", groups = bad_groups), verbose = FALSE),
     "non-contiguous"
   )
 
@@ -164,7 +169,7 @@ test_that("TRexGVSSelector handles manual grouping vectors correctly", {
   # (R uses 1-based indexing; sending 0 becomes -1 in C++)
   zero_groups <- rep(c(0, 1), length.out = p)
   expect_error(
-    TRexGVSSelector$new(X, y, gvs_type = "EN", groups = zero_groups, verbose = FALSE),
+    TRexGVSSelector$new(X, y, gvs_control = trex_gvs_control(gvs_type = "EN", groups = zero_groups), verbose = FALSE),
     "non-negative"
   )
 })
@@ -179,8 +184,9 @@ test_that("TRexGVSSelector behaves memory safe with memory mapping enabled", {
   y <- rnorm(n)
 
   # Use use_memory_mapping = TRUE to confirm tempdir() doesn't crash
-  selector <- TRexGVSSelector$new(X, y, K = 3,
-                                  verbose = FALSE, use_memory_mapping = TRUE, gvs_type = "IEN")
+  selector <- TRexGVSSelector$new(X, y, verbose = FALSE,
+                                  gvs_control = trex_gvs_control(gvs_type = "IEN"),
+                                  control = trex_control(K = 3, use_memory_mapping = TRUE))
   selector$select()
 
   res_indices <- selector$selected_indices
@@ -199,7 +205,9 @@ test_that("TRexGVSSelector selected_var and selected_indices are consistent (1-b
   y <- X[, 1] * 5 + X[, 2] * -4 + X[, 3] * 3 + rnorm(n)
 
   for (gvs in c("EN", "IEN")) {
-    sel <- TRexGVSSelector$new(X, y, tFDR = 0.1, K = 3, gvs_type = gvs, verbose = FALSE)
+    sel <- TRexGVSSelector$new(X, y, tFDR = 0.1, verbose = FALSE,
+                               gvs_control = trex_gvs_control(gvs_type = gvs),
+                               control = trex_control(K = 3))
     sel$select()
 
     idx <- sel$selected_indices
@@ -223,7 +231,9 @@ test_that("TRexGVSSelector phi_prime is in [0, 1] and phi_mat has correct dimens
   X <- matrix(rnorm(n * p), n, p)
   y <- X[, 1] * 5 + X[, 2] * -4 + rnorm(n)
 
-  selector <- TRexGVSSelector$new(X, y, tFDR = 0.1, K = 3, gvs_type = "IEN", verbose = FALSE)
+  selector <- TRexGVSSelector$new(X, y, tFDR = 0.1, verbose = FALSE,
+                                  gvs_control = trex_gvs_control(gvs_type = "IEN"),
+                                  control = trex_control(K = 3))
   selector$select()
 
   phi_p <- selector$phi_prime
@@ -247,7 +257,9 @@ test_that("TRexGVSSelector GVS-specific fields have valid values", {
   y <- X[, 1] * 5 + X[, 2] * -4 + rnorm(n)
 
   for (gvs in c("EN", "IEN")) {
-    sel <- TRexGVSSelector$new(X, y, K = 3, gvs_type = gvs, verbose = FALSE)
+    sel <- TRexGVSSelector$new(X, y, verbose = FALSE,
+                               gvs_control = trex_gvs_control(gvs_type = gvs),
+                               control = trex_control(K = 3))
     sel$select()
 
     expect_equal(sel$gvs_type, gvs, label = paste(gvs, "gvs_type roundtrip"))
@@ -273,9 +285,7 @@ test_that("TRexScreeningSelector correctly executes confidence-based bootstrappi
   selector_boot <- expect_no_error(
     TRexScreeningSelector$new(
       X, y,
-      use_bootstrap_CI = TRUE,
-      R_boot = 100,
-      ci_grid_step = 0.01,
+      screen_control = trex_screen_control(use_bootstrap_CI = TRUE, R_boot = 100, ci_grid_step = 0.01),
       verbose = FALSE
     )
   )

@@ -56,7 +56,7 @@ test_that("All TSolver variants execute on Gauss_data with T_stop = 3", {
 # =============================================================================
 
 test_that("TRexSelector runs on Gauss_data and returns valid selection", {
-  sel <- TRexSelector$new(X_g, y_g, tFDR = 0.10, K = 20, verbose = FALSE)
+  sel <- TRexSelector$new(X_g, y_g, tFDR = 0.10, verbose = FALSE, control = trex_control(K = 20))
   sel$select()
 
   idx <- sel$selected_indices
@@ -73,8 +73,9 @@ test_that("TRexSelector runs on Gauss_data and returns valid selection", {
 
 test_that("TRexGVSSelector (EN and IEN) runs on Gauss_data and returns valid selection", {
   for (gvs in c("EN", "IEN")) {
-    sel <- TRexGVSSelector$new(X_g, y_g, tFDR = 0.10, K = 20, gvs_type = gvs,
-                               verbose = FALSE)
+    sel <- TRexGVSSelector$new(X_g, y_g, tFDR = 0.10, verbose = FALSE,
+                               gvs_control = trex_gvs_control(gvs_type = gvs),
+                               control = trex_control(K = 20))
     sel$select()
 
     idx <- sel$selected_indices
@@ -91,7 +92,7 @@ test_that("TRexGVSSelector (EN and IEN) runs on Gauss_data and returns valid sel
 
 
 test_that("TRexScreeningSelector runs on Gauss_data and returns valid selection", {
-  sel <- TRexScreeningSelector$new(X_g, y_g, K = 20, verbose = FALSE)
+  sel <- TRexScreeningSelector$new(X_g, y_g, verbose = FALSE, control = trex_control(K = 20))
   sel$select()
 
   idx <- sel$selected_indices
@@ -107,7 +108,7 @@ test_that("TRexScreeningSelector runs on Gauss_data and returns valid selection"
 
 
 test_that("TRexDASelector runs on Gauss_data and returns valid selection", {
-  sel <- TRexDASelector$new(X_g, y_g, tFDR = 0.10, K = 20, verbose = FALSE)
+  sel <- TRexDASelector$new(X_g, y_g, tFDR = 0.10, verbose = FALSE, control = trex_control(K = 20))
   sel$select()
 
   idx <- sel$selected_indices
@@ -123,8 +124,8 @@ test_that("TRexDASelector runs on Gauss_data and returns valid selection", {
 
 
 test_that("TRexBiobankScreeningSelector runs on Gauss_data and returns valid selection", {
-  sel <- TRexBiobankScreeningSelector$new(X_g, y_g, tFDR = 0.10, K = 20,
-                                          verbose = FALSE)
+  sel <- TRexBiobankScreeningSelector$new(X_g, y_g, tFDR = 0.10,
+                                          verbose = FALSE, control = trex_control(K = 20))
   res <- sel$select()
 
   idx <- res$selected_indices

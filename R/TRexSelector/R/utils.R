@@ -1,3 +1,7 @@
+# =============================================================================
+# utils.R - Utility functions for TRexSelector
+# =============================================================================
+
 #' @importFrom Rcpp evalCpp
 NULL
 
@@ -11,6 +15,14 @@ NULL
 #' @param filename String destination file path.
 #'
 #' @return NULL invisibly mapped.
+#'
+#' @examples
+#' \donttest{
+#' mat <- matrix(as.double(1:20), nrow = 4, ncol = 5)
+#' f <- tempfile(fileext = ".bin")
+#' on.exit(unlink(f), add = TRUE)
+#' convert_to_memory_mapped(mat, f)
+#' }
 #'
 #' @export
 convert_to_memory_mapped <- function(mat, filename) {
@@ -26,9 +38,9 @@ convert_to_memory_mapped <- function(mat, filename) {
 }
 
 
-#' Memory-Mapped Matrix Object
+#' @title Memory-Mapped Matrix Object
 #'
-#' @description S3 object wrapping an external pointer to a C++ MemoryMappedMatrix.
+#' @description S3 object wrapping an external pointer to a Cpp MemoryMappedMatrix.
 #'
 #' @param filename Path to binary mmap file
 #' @param rows Number of rows
@@ -36,6 +48,16 @@ convert_to_memory_mapped <- function(mat, filename) {
 #' @param mode Access mode: 'readonly' or 'readwrite' (default)
 #'
 #' @return Object of classes \code{MemoryMappedMatrix} and \code{mmap_matrix} (S3 XPtr wrapper)
+#'
+#' @examples
+#' \donttest{
+#' mat <- matrix(as.double(1:20), nrow = 4, ncol = 5)
+#' f <- tempfile(fileext = ".bin")
+#' on.exit(unlink(f), add = TRUE)
+#' convert_to_memory_mapped(mat, f)
+#' mm <- mmap_matrix(f, rows = 4, cols = 5)
+#' }
+#'
 #' @export
 mmap_matrix <- function(filename, rows, cols, mode = "readwrite") {
   if (!file.exists(filename) && mode == "readonly") {
@@ -55,9 +77,23 @@ mmap_matrix <- function(filename, rows, cols, mode = "readwrite") {
 
 
 #' @title Get the External Pointer of a MemoryMappedMatrix
+#'
 #' @param x A \code{MemoryMappedMatrix} / \code{mmap_matrix} object.
+#'
 #' @param ... unused arguments
+#'
 #' @return The underlying external pointer (the object itself).
+#'
+#' @examples
+#' \donttest{
+#' mat <- matrix(as.double(1:20), nrow = 4, ncol = 5)
+#' f <- tempfile(fileext = ".bin")
+#' on.exit(unlink(f), add = TRUE)
+#' convert_to_memory_mapped(mat, f)
+#' mm <- mmap_matrix(f, rows = 4, cols = 5)
+#' get_ptr(mm)
+#' }
+#'
 #' @export
 get_ptr <- function(x, ...) UseMethod("get_ptr")
 
@@ -66,9 +102,22 @@ get_ptr.mmap_matrix <- function(x, ...) x
 
 
 #' @title Print mmap_matrix
+#'
 #' @param x mmap_matrix object
 #' @param ... arguments passed to other methods
+#'
 #' @return invisibly returns x
+#'
+#' @examples
+#' \donttest{
+#' mat <- matrix(as.double(1:20), nrow = 4, ncol = 5)
+#' f <- tempfile(fileext = ".bin")
+#' on.exit(unlink(f), add = TRUE)
+#' convert_to_memory_mapped(mat, f)
+#' mm <- mmap_matrix(f, rows = 4, cols = 5)
+#' print(mm)
+#' }
+#'
 #' @export
 print.mmap_matrix <- function(x, ...) {
   cat(sprintf("MemoryMappedMatrix [%d x %d]\n",
@@ -80,8 +129,20 @@ print.mmap_matrix <- function(x, ...) {
 
 
 #' @title Get mmap_matrix dimensions
+#'
 #' @param x mmap_matrix object
+#'
 #' @return an integer vector of length 2
+#'
+#' @examples
+#' \donttest{
+#' mat <- matrix(as.double(1:20), nrow = 4, ncol = 5)
+#' f <- tempfile(fileext = ".bin")
+#' on.exit(unlink(f), add = TRUE)
+#' convert_to_memory_mapped(mat, f)
+#' mm <- mmap_matrix(f, rows = 4, cols = 5)
+#' dim(mm)
+#' }
 #' @export
 dim.mmap_matrix <- function(x) {
   c(mmap_matrix_rows(x), mmap_matrix_cols(x))
@@ -89,12 +150,25 @@ dim.mmap_matrix <- function(x) {
 
 
 #' @title Extract block from mmap_matrix
+#'
 #' @param x mmap_matrix object
 #' @param i row indices
 #' @param j column indices
 #' @param ... unused arguments
-#' @param drop logical. If TRUE the result is coerced to the lowest possible dimension (not supported).
+#' @param drop logical. If TRUE the result is coerced to the lowest possible dimension
+#' (not supported).
+#'
 #' @return a matrix block
+#'
+#' @examples
+#' \donttest{
+#' mat <- matrix(as.double(1:20), nrow = 4, ncol = 5)
+#' f <- tempfile(fileext = ".bin")
+#' on.exit(unlink(f), add = TRUE)
+#' convert_to_memory_mapped(mat, f)
+#' mm <- mmap_matrix(f, rows = 4, cols = 5)
+#' mm[1:2, 1:3]
+#' }
 #' @export
 `[.mmap_matrix` <- function(x, i, j, ..., drop = FALSE) {
   rows <- mmap_matrix_rows(x)
@@ -107,7 +181,7 @@ dim.mmap_matrix <- function(x) {
   } else {
     i <- as.integer(i)
     if (any(i <= 0 | i > rows)) stop("Row indices out of bounds")
-    # For now, we only support contiguous sequences to match C++ block API
+    # For now, we only support contiguous sequences to match Cpp block API
     if (length(i) > 1 && !all(diff(i) == 1)) {
       stop("Non-contiguous row slices are not currently supported by mmap_matrix")
     }
@@ -133,12 +207,23 @@ dim.mmap_matrix <- function(x) {
 }
 
 
-#' Get Zero-Copy View as Numeric Vector (Block)
+#' @title Get Zero-Copy View as Numeric Vector (Block)
 #'
 #' @param x mmap_matrix object
 #' @param ... extra arguments including row_range and col_range
 #'
 #' @return Numeric matrix (copied)
+#'
+#' @examples
+#' \donttest{
+#' mat <- matrix(as.double(1:20), nrow = 4, ncol = 5)
+#' f <- tempfile(fileext = ".bin")
+#' on.exit(unlink(f), add = TRUE)
+#' convert_to_memory_mapped(mat, f)
+#' mm <- mmap_matrix(f, rows = 4, cols = 5)
+#' as.matrix(mm)
+#' }
+#'
 #' @export
 as.matrix.mmap_matrix <- function(x, ...) {
   args <- list(...)
@@ -171,33 +256,50 @@ as.matrix.mmap_matrix <- function(x, ...) {
 # Evaluation Metrics
 # ========================================================================================
 
-#' Compute False Discovery Proportion (FDP) using index sets
+#' @title Compute False Discovery Proportion (FDP) using index sets
 #'
 #' @param selected_indices Integer vector of selected indices.
 #' @param true_support Integer vector of true active indices.
+#'
 #' @return Numeric FDP value.
+#'
+#' @examples
+#' compute_fdp(c(1L, 3L, 5L), c(1L, 2L, 3L))
+#'
 #' @export
 compute_fdp <- function(selected_indices, true_support) {
   if (length(selected_indices) == 0 || length(true_support) == 0) return(0.0)
   rcpp_compute_fdp(as.integer(selected_indices), as.integer(true_support))
 }
 
-#' Compute True Positive Proportion (TPP) using index sets
+
+#' @title Compute True Positive Proportion (TPP) using index sets
 #'
 #' @param selected_indices Integer vector of selected indices.
 #' @param true_support Integer vector of true active indices.
+#'
 #' @return Numeric TPP value.
+#'
+#' @examples
+#' compute_tpp(c(1L, 3L, 5L), c(1L, 2L, 3L))
+#'
 #' @export
 compute_tpp <- function(selected_indices, true_support) {
   if (length(selected_indices) == 0 || length(true_support) == 0) return(0.0)
   rcpp_compute_tpp(as.integer(selected_indices), as.integer(true_support))
 }
 
-#' Compute Precision using index sets
+
+#' @title Compute Precision using index sets
 #'
 #' @param selected_indices Integer vector of selected indices.
 #' @param true_support Integer vector of true active indices.
+#'
 #' @return Numeric precision value.
+#'
+#' @examples
+#' compute_precision(c(1L, 3L, 5L), c(1L, 2L, 3L))
+#'
 #' @export
 compute_precision <- function(selected_indices, true_support) {
   if (length(selected_indices) == 0) return(0.0)
@@ -205,11 +307,17 @@ compute_precision <- function(selected_indices, true_support) {
   rcpp_compute_precision(as.integer(selected_indices), as.integer(true_support))
 }
 
-#' Compute Recall using index sets
+
+#' @title Compute Recall using index sets
 #'
 #' @param selected_indices Integer vector of selected indices.
 #' @param true_support Integer vector of true active indices.
+#'
 #' @return Numeric recall value.
+#'
+#' @examples
+#' compute_recall(c(1L, 3L, 5L), c(1L, 2L, 3L))
+#'
 #' @export
 compute_recall <- function(selected_indices, true_support) {
   if (length(true_support) == 0) return(0.0)
@@ -217,23 +325,32 @@ compute_recall <- function(selected_indices, true_support) {
   rcpp_compute_recall(as.integer(selected_indices), as.integer(true_support))
 }
 
+
 #' Compute False Discovery Proportion (FDP) using dense vectors
 #'
 #' @param beta_hat Numeric vector of estimated coefficients.
 #' @param beta Numeric vector of true coefficients.
 #' @param eps Numeric threshold for counting non-zeros (default: 1e-15).
 #' @return Numeric FDP value.
+#' @examples
+#' compute_fdp_dense(c(1.5, 0, 0.8, 0, 0), c(2.0, 0, 1.0, 0, 0))
 #' @export
 compute_fdp_dense <- function(beta_hat, beta, eps = 1e-15) {
   rcpp_compute_fdp_dense(as.numeric(beta_hat), as.numeric(beta), eps)
 }
 
-#' Compute True Positive Proportion (TPP) using dense vectors
+
+#' @title Compute True Positive Proportion (TPP) using dense vectors
 #'
 #' @param beta_hat Numeric vector of estimated coefficients.
 #' @param beta Numeric vector of true coefficients.
 #' @param eps Numeric threshold for counting non-zeros (default: 1e-15).
+#'
 #' @return Numeric TPP value.
+#'
+#' @examples
+#' compute_tpp_dense(c(1.5, 0, 0.8, 0, 0), c(2.0, 0, 1.0, 0, 0))
+#'
 #' @export
 compute_tpp_dense <- function(beta_hat, beta, eps = 1e-15) {
   rcpp_compute_tpp_dense(as.numeric(beta_hat), as.numeric(beta), eps)

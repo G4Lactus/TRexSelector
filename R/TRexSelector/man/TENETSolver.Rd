@@ -7,6 +7,17 @@
 Terminating Elastic Net solver (L1 + L2 regularization).
 Inherits all common methods from \code{\link{TSolverBase}}.
 }
+\examples{
+set.seed(1)
+n <- 20; p <- 5
+X <- matrix(rnorm(n * p), n, p)
+D <- matrix(rnorm(n * p), n, p)
+y <- X[, 1] * 2 + rnorm(n)
+solver <- TENETSolver$new(X, D, y, lambda2 = 0.1)
+solver$execute_step(T_stop = 3)
+solver$get_beta()
+
+}
 \section{Super class}{
 \code{\link[TRexSelector:TSolverBase]{TRexSelector::TSolverBase}} -> \code{TENETSolver}
 }

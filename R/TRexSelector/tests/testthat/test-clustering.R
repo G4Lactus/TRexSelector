@@ -29,6 +29,7 @@ data_fix <- matrix(c(0, 0,
                      16, 0),
                    nrow = 5L, ncol = 2L, byrow = TRUE)
 
+
 # =============================================================================
 # Group 1: agglomerative_cluster input validation
 # =============================================================================
@@ -42,10 +43,11 @@ test_that("agglomerative_cluster rejects non-matrix input", {
 
 test_that("agglomerative_cluster rejects non-numeric matrix", {
   expect_error(
-    agglomerative_cluster(matrix(c("a","b","c","d"), 2, 2), LinkageMethod$Single),
+    agglomerative_cluster(matrix(c("a", "b", "c", "d"), 2, 2), LinkageMethod$Single),
     "must be a numeric matrix"
   )
 })
+
 
 # =============================================================================
 # Group 2: cut_tree input validation
@@ -74,6 +76,7 @@ test_that("cut_tree rejects num_clusters > num_orig_objs", {
   )
 })
 
+
 # =============================================================================
 # Group 3: Output format contracts
 # =============================================================================
@@ -95,6 +98,7 @@ test_that("new_size column is in [2, n]", {
   expect_true(all(lnk[, 4] >= 2))
   expect_true(all(lnk[, 4] <= n_fix))
 })
+
 
 # =============================================================================
 # Group 4: Single linkage correctness
@@ -135,6 +139,7 @@ test_that("single linkage produces correct merge sequence (1-based)", {
   expect_equal(lnk[4, 4], 5)
 })
 
+
 # =============================================================================
 # Group 5: Average linkage correctness
 # Mirrors C++ test AverageLinkageSciPyMatch (1-based IDs)
@@ -174,6 +179,7 @@ test_that("average linkage produces correct merge sequence (1-based)", {
   expect_equal(lnk[4, 4], 5)
 })
 
+
 # =============================================================================
 # Group 6: Centroid linkage correctness
 # Mirrors C++ test CentroidLinkageSciPyMatch (1-based IDs)
@@ -212,6 +218,7 @@ test_that("centroid linkage produces correct merge sequence (1-based)", {
   expect_equal(lnk[4, 3], 113.77777777777777, tolerance = 1e-4)
   expect_equal(lnk[4, 4], 5)
 })
+
 
 # =============================================================================
 # Group 7: cut_tree correctness
@@ -263,6 +270,7 @@ test_that("cut_tree with k=n assigns each object a unique label", {
   expect_equal(length(unique(labels)), 4L)
 })
 
+
 # =============================================================================
 # Group 8: End-to-end round-trip + independent hclust cross-check
 #
@@ -294,6 +302,7 @@ test_that("single linkage cut to 2 clusters gives correct partition (1-based)", 
   expect_false(labels[1] == labels[5])
 })
 
+
 test_that("single linkage partition matches hclust reference (squared Euclidean)", {
   lnk <- agglomerative_cluster(data_fix,
                                method = LinkageMethod$Single,
@@ -314,4 +323,34 @@ test_that("single linkage partition matches hclust reference (squared Euclidean)
       )
     }
   }
+})
+
+
+# =============================================================================
+# Group 9: use_mmap=TRUE produces numerically identical results to use_mmap=FALSE
+# =============================================================================
+
+test_that("agglomerative_cluster use_mmap=TRUE matches use_mmap=FALSE (Single linkage)", {
+  lnk_ram  <- agglomerative_cluster(data_fix, LinkageMethod$Single,  use_mmap = FALSE)
+  lnk_mmap <- agglomerative_cluster(data_fix, LinkageMethod$Single,  use_mmap = TRUE)
+  expect_equal(lnk_ram, lnk_mmap)
+})
+
+test_that("agglomerative_cluster use_mmap=TRUE matches use_mmap=FALSE (Average linkage)", {
+  lnk_ram  <- agglomerative_cluster(data_fix, LinkageMethod$Average, use_mmap = FALSE)
+  lnk_mmap <- agglomerative_cluster(data_fix, LinkageMethod$Average, use_mmap = TRUE)
+  expect_equal(lnk_ram, lnk_mmap)
+})
+
+test_that("agglomerative_cluster use_mmap=TRUE matches use_mmap=FALSE (Centroid linkage)", {
+  lnk_ram  <- agglomerative_cluster(data_fix, LinkageMethod$Centroid, use_mmap = FALSE)
+  lnk_mmap <- agglomerative_cluster(data_fix, LinkageMethod$Centroid, use_mmap = TRUE)
+  expect_equal(lnk_ram, lnk_mmap)
+})
+
+test_that("cut_tree round-trip works on mmap-derived linkage", {
+  lnk <- agglomerative_cluster(data_fix, LinkageMethod$Single, use_mmap = TRUE)
+  clusters <- cut_tree(lnk, num_orig_objs = n_fix, num_clusters = 2L)
+  expect_length(clusters, n_fix)
+  expect_equal(length(unique(clusters)), 2L)
 })

@@ -21,4 +21,8 @@ Supported methods include:
 - \code{Median}: Median linkage: codes as 5.
 - \code{Centroid}: Centroid linkage: codes as 6.
 }
+\examples{
+LinkageMethod$Ward
+LinkageMethod$Average
+}
 \keyword{datasets}

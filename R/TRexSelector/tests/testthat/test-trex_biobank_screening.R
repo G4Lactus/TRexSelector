@@ -109,8 +109,7 @@ test_that("TRexBiobankScreeningSelector correctly triggers fallback T-Rex decisi
   # Force fallback by setting an impossible FDR acceptance range for Screen-TRex
   selector <- TRexBiobankScreeningSelector$new(
     X, y,
-    lower_bound_FDR = 0.0001,
-    upper_bound_FDR = 0.0002,
+    biobank_control = trex_biobank_control(lower_bound_FDR = 0.0001, upper_bound_FDR = 0.0002),
     verbose = FALSE
   )
   res <- selector$select()
@@ -131,13 +130,13 @@ test_that("TRexBiobankScreeningSelector protects against invalid framework strin
 
   # Invalid solver fallback
   expect_error(
-    TRexBiobankScreeningSelector$new(X, y, method = "UNKNOWN_SOLVER", verbose = FALSE),
+    TRexBiobankScreeningSelector$new(X, y, control = trex_control(method = "UNKNOWN_SOLVER"), verbose = FALSE),
     "Unknown TRex selector method"
   )
 
   # Invalid core screening method parameter mapping
   expect_error(
-    TRexBiobankScreeningSelector$new(X, y, trex_method = "UNKNOWN_VARIANT", verbose = FALSE),
+    TRexBiobankScreeningSelector$new(X, y, screen_control = trex_screen_control(trex_method = "UNKNOWN_VARIANT"), verbose = FALSE),
     "Unknown ScreenTRexMethod"
   )
 })

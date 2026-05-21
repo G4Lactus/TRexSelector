@@ -7,6 +7,16 @@
 Efficiently solves Ridge Regression while computing Generalized
 Cross-Validation (GCV).
 }
+\examples{
+set.seed(1)
+X <- matrix(rnorm(50 * 5), 50, 5)
+y <- X[, 1] * 2 + rnorm(50)
+gcv <- RidgeGCV$new()
+gcv$fit(X, y)
+lam_opt <- gcv$gcv_optimal()
+gcv$solve(lam_opt)
+
+}
 \section{Methods}{
 \subsection{Public methods}{
 \itemize{

@@ -6,6 +6,17 @@
 \description{
 Genomic biobank phenotype screening algorithm based on TRex architecture.
 }
+\examples{
+\donttest{
+data(Gauss_data)
+X <- Gauss_data$X
+y <- Gauss_data$y
+sel <- TRexBiobankScreeningSelector$new(X, y, tFDR = 0.1, verbose = FALSE)
+res <- sel$select()
+res$selected_indices
+}
+
+}
 \section{Methods}{
 \subsection{Public methods}{
 \itemize{
@@ -23,21 +34,12 @@ Create a new TRexBiobankScreeningSelector object.
 \if{html}{\out{<div class="r">}}\preformatted{TRexBiobankScreeningSelector$new(
   X,
   Y,
-  target_FDR_trex = 0.1,
-  lower_bound_FDR = 0.05,
-  upper_bound_FDR = 0.15,
-  use_bootstrap_CI = FALSE,
-  R_boot = 1000,
-  ci_grid_step = 0.001,
-  trex_method = "TREX",
-  method = "TLARS",
-  K = 20,
-  use_openmp = TRUE,
-  use_memory_mapping = FALSE,
-  max_outer_threads = 1,
-  max_inner_threads = 1,
+  tFDR = 0.1,
   seed = -1,
-  verbose = TRUE
+  verbose = TRUE,
+  biobank_control = trex_biobank_control(),
+  screen_control = trex_screen_control(),
+  control = trex_control()
 )}\if{html}{\out{</div>}}
 }
 
@@ -48,35 +50,20 @@ Create a new TRexBiobankScreeningSelector object.
 
 \item{\code{Y}}{Response vector (1D) or matrix (2D).}
 
-\item{\code{target_FDR_trex}}{Target FDR for fallback T-Rex.}
-
-\item{\code{lower_bound_FDR}}{Lower bound for acceptable estimated FDR.}
-
-\item{\code{upper_bound_FDR}}{Upper bound for acceptable estimated FDR.}
-
-\item{\code{use_bootstrap_CI}}{Whether to use bootstrap CI screening.}
-
-\item{\code{R_boot}}{Number of bootstrap iterations.}
-
-\item{\code{ci_grid_step}}{Grid step sizes for interval calculations.}
-
-\item{\code{trex_method}}{Screening method: "TREX", "TREX_DA_AR1", "TREX_DA_EQUI", "TREX_DA_BLOCK_EQUI"}
-
-\item{\code{method}}{The solver method, e.g., "TLARS", "TACGP", "TENET" (default: "TLARS").}
-
-\item{\code{K}}{Number of random experiments (default: 20).}
-
-\item{\code{use_openmp}}{Whether to use OpenMP parallelization (default: TRUE).}
-
-\item{\code{use_memory_mapping}}{Use out-of-core memory mapping (default: FALSE).}
-
-\item{\code{max_outer_threads}}{Thread count for K repetitions (default: 1).}
-
-\item{\code{max_inner_threads}}{Thread count for inner solvers (default: 1).}
+\item{\code{tFDR}}{Target FDR level (default: 0.1).}
 
 \item{\code{seed}}{Random seed (default: -1).}
 
 \item{\code{verbose}}{Whether to print progress (default: TRUE).}
+
+\item{\code{biobank_control}}{A biobank control list from \code{\link{trex_biobank_control}()}
+(default: \code{trex_biobank_control()}).}
+
+\item{\code{screen_control}}{A screen control list from \code{\link{trex_screen_control}()}
+(default: \code{trex_screen_control()}).}
+
+\item{\code{control}}{A control list from \code{\link{trex_control}()} (default:
+\code{trex_control()}). The \code{lloop_strategy} field is forced to "STANDARD".}
 }
 \if{html}{\out{</div>}}
 }

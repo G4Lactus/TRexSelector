@@ -104,7 +104,7 @@ struct SolverHyperparameters {
      * (0: Line Search/MP, 1: Fully Corrective/OMP) (ignored by non-using solvers). */
     int ncgmp_variant = 0;  //
     /** @brief Numerical tolerance for solver steps. */
-    double tol = 1e-4;      //
+    double tol = 1e-6;      //
 };
 
 

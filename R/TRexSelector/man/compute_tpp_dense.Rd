@@ -19,3 +19,7 @@ Numeric TPP value.
 \description{
 Compute True Positive Proportion (TPP) using dense vectors
 }
+\examples{
+compute_tpp_dense(c(1.5, 0, 0.8, 0, 0), c(2.0, 0, 1.0, 0, 0))
+
+}

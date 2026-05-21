@@ -27,3 +27,8 @@ A numeric matrix representing the computed hierarchical linkage.
 \description{
 Performs hierarchical agglomerative clustering on a numeric matrix.
 }
+\examples{
+set.seed(1)
+data <- matrix(rnorm(30), nrow = 10)
+agglomerative_cluster(data, method = LinkageMethod$Ward)
+}

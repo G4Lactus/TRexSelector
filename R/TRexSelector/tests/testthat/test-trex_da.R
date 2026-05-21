@@ -33,7 +33,7 @@ test_that("TRexDASelector executes correctly with valid data", {
   y <- X[, 1] * 5 + X[, 2] * -4 + X[, 3] * 3 + rnorm(n)
 
   # Instantiate TRex selector
-  selector <- TRexDASelector$new(X, y, tFDR = 0.1, K = 5, verbose = FALSE)
+  selector <- TRexDASelector$new(X, y, tFDR = 0.1, verbose = FALSE, control = trex_control(K = 5))
 
   # Execute variable selection
   selector$select()
@@ -65,7 +65,7 @@ test_that("TRexDASelector behaves memory safe with memory mapping enabled", {
   y <- rnorm(n)
 
   # Use use_memory_mapping = TRUE to confirm the sandboxed tempdir() doesn't crash
-  selector <- TRexDASelector$new(X, y, K = 3, verbose = FALSE, use_memory_mapping = TRUE)
+  selector <- TRexDASelector$new(X, y, verbose = FALSE, control = trex_control(K = 3, use_memory_mapping = TRUE))
   selector$select()
 
   res_indices <- selector$selected_indices
@@ -89,30 +89,30 @@ test_that("TRexDASelector correctly guards against invalid DA parameters", {
 
   # Invalid DA threshold parameter bounds (rho_thr_DA must be [0, 1])
   expect_error(
-    TRexDASelector$new(X, y, da_method = "EQUI", rho_thr_DA = -0.5, verbose = FALSE),
+    TRexDASelector$new(X, y, da_control = trex_da_control(da_method = "EQUI", rho_thr_DA = -0.5), verbose = FALSE),
     "rho_thr_DA"
   )
   expect_error(
-    TRexDASelector$new(X, y, da_method = "EQUI", rho_thr_DA = 1.5, verbose = FALSE),
+    TRexDASelector$new(X, y, da_control = trex_da_control(da_method = "EQUI", rho_thr_DA = 1.5), verbose = FALSE),
     "rho_thr_DA"
   )
 
   # Invalid DA Methods that are caught by Rcpp string mapping
   expect_error(
-    TRexDASelector$new(X, y, da_method = "UNKNOWN_DA", verbose = FALSE),
+    TRexDASelector$new(X, y, da_control = trex_da_control(da_method = "UNKNOWN_DA"), verbose = FALSE),
     "Unknown DAMethod:"
   )
 
   # Invalid Hierarchical Linkage Options (rejected at Rcpp mapping)
   expect_error(
-    TRexDASelector$new(X, y, da_method = "BT", hc_linkage = "UNKNOWN", verbose = FALSE),
+    TRexDASelector$new(X, y, da_control = trex_da_control(da_method = "BT", hc_linkage = "UNKNOWN"), verbose = FALSE),
     "Unknown LinkageMethod:"
   )
 
   # Unsupported Hierarchical Linkage (passed Rcpp, rejected by C++ Core)
   # (Ward relies on non-Euclidean geometry and is blocked in validateDAParameters)
   expect_error(
-    TRexDASelector$new(X, y, da_method = "BT", hc_linkage = "Ward", verbose = FALSE),
+    TRexDASelector$new(X, y, da_control = trex_da_control(da_method = "BT", hc_linkage = "Ward"), verbose = FALSE),
     "Unsupported linkage method for DA-BT"
   )
 
@@ -130,8 +130,10 @@ test_that("TRexDASelector handles concurrent execution properly (OpenMP with DA)
 
   # DA creates nested 3D calibrations; multithreaded runs ensure no race conditions
   selector_openmp <- expect_no_error(
-    TRexDASelector$new(X, y, K = 5, use_openmp = TRUE, max_inner_threads = 2, max_outer_threads = 2,
-                       da_method = "BT", hc_linkage = "Average", verbose = FALSE)
+    TRexDASelector$new(X, y,
+                       da_control = trex_da_control(da_method = "BT", hc_linkage = "Average"),
+                       control = trex_control(K = 5, use_openmp = TRUE, max_inner_threads = 2, max_outer_threads = 2),
+                       verbose = FALSE)
   )
 
   # Let it resolve the OpenMP execution through evaluateStep overrides
@@ -195,7 +197,9 @@ test_that("TRexDASelector active bindings return expected data types post-select
   y <- rnorm(n)
 
   # Using BT with a valid K for multidimensional matrices
-  selector <- TRexDASelector$new(X, y, verbose = FALSE, K = 3, hc_grid_length = 3)
+  selector <- TRexDASelector$new(X, y, verbose = FALSE,
+                                 da_control = trex_da_control(hc_grid_length = 3),
+                                 control = trex_control(K = 3))
 
   # Execute so matrices get allocated
   selector$select()
@@ -225,7 +229,7 @@ test_that("TRexDASelector selected_var and selected_indices are consistent (1-ba
   X <- matrix(rnorm(n * p), n, p)
   y <- rnorm(n)
 
-  selector <- TRexDASelector$new(X, y, verbose = FALSE, K = 3)
+  selector <- TRexDASelector$new(X, y, verbose = FALSE, control = trex_control(K = 3))
   selector$select()
 
   idx <- selector$selected_indices
@@ -247,7 +251,7 @@ test_that("TRexDASelector phi_prime is in [0, 1] with length p", {
   X <- matrix(rnorm(n * p), n, p)
   y <- rnorm(n)
 
-  selector <- TRexDASelector$new(X, y, verbose = FALSE, K = 3)
+  selector <- TRexDASelector$new(X, y, verbose = FALSE, control = trex_control(K = 3))
   selector$select()
 
   phi_p <- selector$phi_prime
@@ -263,7 +267,7 @@ test_that("TRexDASelector phi_mat has T_stop rows and p columns", {
   X <- matrix(rnorm(n * p), n, p)
   y <- rnorm(n)
 
-  selector <- TRexDASelector$new(X, y, verbose = FALSE, K = 3)
+  selector <- TRexDASelector$new(X, y, verbose = FALSE, control = trex_control(K = 3))
   selector$select()
 
   ts <- selector$T_stop
@@ -282,7 +286,9 @@ test_that("TRexDASelector DA-specific fields have valid bounds after selection",
   X <- matrix(rnorm(n * p), n, p)
   y <- rnorm(n)
 
-  selector <- TRexDASelector$new(X, y, verbose = FALSE, K = 3, da_method = "BT")
+  selector <- TRexDASelector$new(X, y, verbose = FALSE,
+                                 da_control = trex_da_control(da_method = "BT"),
+                                 control = trex_control(K = 3))
   selector$select()
 
   expect_gte(selector$rho_thresh, 0.0)

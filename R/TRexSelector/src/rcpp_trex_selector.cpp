@@ -15,6 +15,7 @@
 
 // project utils includes
 #include <utils/memmap/memory_mapped_matrix.hpp>
+#include <utils/datageneration/utils_dummygen.hpp>
 
 // =========================================================================================
 
@@ -127,6 +128,56 @@ TRexControlParameter parse_control_parameter(const Rcpp::List& control) {
     }
     if (control.containsElementNamed("tol")) {
         params.solver_params.tol = control["tol"];
+    }
+
+    // Dummy variable distribution
+    if (control.containsElementNamed("dummy_distribution")) {
+        using namespace trex::utils::datageneration::dummygen;
+        Rcpp::List dd = control["dummy_distribution"];
+        std::string type_str = dd["type"];
+
+        if (type_str == "Normal") {
+            params.dummy_distribution = Distribution::Normal();
+        } else if (type_str == "Uniform") {
+            double a = dd.containsElementNamed("a") ? (double)dd["a"] : std::sqrt(3.0);
+            params.dummy_distribution = Distribution::Uniform(a);
+        } else if (type_str == "Rademacher") {
+            params.dummy_distribution = Distribution::Rademacher();
+        } else if (type_str == "StudentT") {
+            double df = dd.containsElementNamed("df") ? (double)dd["df"] : 5.0;
+            params.dummy_distribution = Distribution::StudentT(df);
+        } else if (type_str == "Laplace") {
+            double loc   = dd.containsElementNamed("location") ? (double)dd["location"] : 0.0;
+            double scale = dd.containsElementNamed("scale")    ? (double)dd["scale"]    : 1.0 / std::sqrt(2.0);
+            params.dummy_distribution = Distribution::Laplace(loc, scale);
+        } else if (type_str == "Gumbel") {
+            double loc   = dd.containsElementNamed("location") ? (double)dd["location"] : 0.0;
+            double scale = dd.containsElementNamed("scale")    ? (double)dd["scale"]    : 1.0;
+            params.dummy_distribution = Distribution::Gumbel(loc, scale);
+        } else if (type_str == "Holtsmark") {
+            double loc   = dd.containsElementNamed("location") ? (double)dd["location"] : 0.0;
+            double scale = dd.containsElementNamed("scale")    ? (double)dd["scale"]    : 1.0;
+            params.dummy_distribution = Distribution::Holtsmark(loc, scale);
+        } else if (type_str == "Triangle") {
+            double a = dd.containsElementNamed("a") ? (double)dd["a"] : -std::sqrt(6.0);
+            double b = dd.containsElementNamed("b") ? (double)dd["b"] : 0.0;
+            double c = dd.containsElementNamed("c") ? (double)dd["c"] : std::sqrt(6.0);
+            params.dummy_distribution = Distribution::Triangle(a, b, c);
+        } else if (type_str == "UniformSphere") {
+            int dim = dd.containsElementNamed("dim") ? (int)dd["dim"] : 3;
+            params.dummy_distribution = Distribution::UniformSphere(dim);
+        } else if (type_str == "Mammen") {
+            params.dummy_distribution = Distribution::Mammen();
+        } else if (type_str == "ConstrainedSparseRademacher") {
+            double s = dd.containsElementNamed("s") ? (double)dd["s"] : 0.1;
+            params.dummy_distribution = Distribution::ConstrainedSparseRademacher(s);
+        } else if (type_str == "Logistic") {
+            double loc   = dd.containsElementNamed("location") ? (double)dd["location"] : 0.0;
+            double scale = dd.containsElementNamed("scale")    ? (double)dd["scale"]    : std::sqrt(3.0) / std::numbers::pi;
+            params.dummy_distribution = Distribution::Logistic(loc, scale);
+        } else {
+            Rcpp::stop("Unknown dummy distribution type: " + type_str);
+        }
     }
 
     params.autoConfigResources();

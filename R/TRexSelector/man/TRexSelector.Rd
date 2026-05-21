@@ -6,6 +6,16 @@
 \description{
 FDR-controlled variable selection algorithm.
 }
+\examples{
+\donttest{
+data(Gauss_data)
+X <- Gauss_data$X
+y <- Gauss_data$y
+sel <- TRexSelector$new(X, y, tFDR = 0.1, verbose = FALSE)
+sel$select()
+sel$selected_indices
+}
+}
 \section{Active bindings}{
 \if{html}{\out{<div class="r6-active-bindings">}}
 \describe{
@@ -61,22 +71,7 @@ Create a new TRexSelector object.
   tFDR = 0.1,
   seed = -1,
   verbose = TRUE,
-  method = "TLARS",
-  K = 20,
-  max_dummy_multiplier = 10,
-  use_max_T_stop = TRUE,
-  opt_threshold = 0.75,
-  lloop_strategy = "HCONCAT",
-  tloop_stagnation_stop = FALSE,
-  tloop_max_stagnant_steps = 5,
-  use_openmp = FALSE,
-  use_memory_mapping = FALSE,
-  max_outer_threads = 1,
-  max_inner_threads = 1,
-  tol = 1e-06,
-  lambda2 = 0.1,
-  rho_afs = 0.3,
-  ncgmp_variant = 0
+  control = trex_control()
 )}\if{html}{\out{</div>}}
 }
 
@@ -93,37 +88,8 @@ Create a new TRexSelector object.
 
 \item{\code{verbose}}{Whether to print progress (default: TRUE).}
 
-\item{\code{method}}{The solver method, e.g., "TLARS", "TACGP", "TENET" (default: "TLARS").}
-
-\item{\code{K}}{Number of random experiments (default: 20).}
-
-\item{\code{max_dummy_multiplier}}{Max dummy features multiplier (default: 10).}
-
-\item{\code{use_max_T_stop}}{Whether to bound max T_stop (default: TRUE).}
-
-\item{\code{opt_threshold}}{Optimization threshold (default: 0.75).}
-
-\item{\code{lloop_strategy}}{Strategy for L-loop (default: "HCONCAT").}
-
-\item{\code{tloop_stagnation_stop}}{Whether to stop early if stagnation (default: FALSE).}
-
-\item{\code{tloop_max_stagnant_steps}}{Steps before stagnation trigger (default: 5).}
-
-\item{\code{use_openmp}}{Whether to use OpenMP parallelization (default: FALSE).}
-
-\item{\code{use_memory_mapping}}{Use out-of-core memory mapping (default: FALSE).}
-
-\item{\code{max_outer_threads}}{Thread count for K repetitions (default: 1).}
-
-\item{\code{max_inner_threads}}{Thread count for inner solvers (default: 1).}
-
-\item{\code{tol}}{Tolerance for solver algorithms (default: 1e-6).}
-
-\item{\code{lambda2}}{ENET hyperparameter (default: 0.1).}
-
-\item{\code{rho_afs}}{AFS hyperparameter (default: 0.3).}
-
-\item{\code{ncgmp_variant}}{NCGMP strategy (default: 0).}
+\item{\code{control}}{A control list from \code{\link{trex_control}()} (default:
+\code{trex_control()}).}
 }
 \if{html}{\out{</div>}}
 }

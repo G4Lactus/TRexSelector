@@ -17,3 +17,7 @@ Numeric recall value.
 \description{
 Compute Recall using index sets
 }
+\examples{
+compute_recall(c(1L, 3L, 5L), c(1L, 2L, 3L))
+
+}

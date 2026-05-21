@@ -15,11 +15,22 @@
 
 \item{...}{unused arguments}
 
-\item{drop}{logical. If TRUE the result is coerced to the lowest possible dimension (not supported).}
+\item{drop}{logical. If TRUE the result is coerced to the lowest possible dimension
+(not supported).}
 }
 \value{
 a matrix block
 }
 \description{
 Extract block from mmap_matrix
+}
+\examples{
+\donttest{
+mat <- matrix(as.double(1:20), nrow = 4, ncol = 5)
+f <- tempfile(fileext = ".bin")
+on.exit(unlink(f), add = TRUE)
+convert_to_memory_mapped(mat, f)
+mm <- mmap_matrix(f, rows = 4, cols = 5)
+mm[1:2, 1:3]
+}
 }

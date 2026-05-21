@@ -17,3 +17,14 @@ Numeric matrix (copied)
 \description{
 Get Zero-Copy View as Numeric Vector (Block)
 }
+\examples{
+\donttest{
+mat <- matrix(as.double(1:20), nrow = 4, ncol = 5)
+f <- tempfile(fileext = ".bin")
+on.exit(unlink(f), add = TRUE)
+convert_to_memory_mapped(mat, f)
+mm <- mmap_matrix(f, rows = 4, cols = 5)
+as.matrix(mm)
+}
+
+}

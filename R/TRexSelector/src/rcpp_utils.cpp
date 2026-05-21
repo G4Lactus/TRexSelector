@@ -88,7 +88,8 @@ XPtr<MemoryMappedMatrix<double>> mmap_matrix_create(
 NumericMatrix mmap_matrix_to_r_matrix(
     XPtr<MemoryMappedMatrix<double>> ptr  // NOLINT(performance-unnecessary-value-param)
 ) {
-    auto map = ptr->getMap();
+    const MemoryMappedMatrix<double>& cref = *ptr;
+    auto map = cref.getMap();
 
     // Copy the mapped memory safely to a standard R matrix buffer
     NumericMatrix result(static_cast<int>(map.rows()), static_cast<int>(map.cols()));
@@ -186,7 +187,8 @@ NumericMatrix mmap_matrix_read_range(
     int row_start, int row_count,
     int col_start, int col_count) {
 
-    auto map = ptr->getMap();
+    const MemoryMappedMatrix<double>& cref = *ptr;
+    auto map = cref.getMap();
 
     // Bounds checking
     if (row_start < 0 || col_start < 0 || row_count < 0 || col_count < 0 ||

@@ -5,9 +5,13 @@
 \title{Base T-Solver Class}
 \description{
 Abstract base class for all T-Solver R6 wrappers. Provides the common solver
-API backed by a C++ \code{TSolver_Base} instance. Users should instantiate one
+API backed by a Cpp \code{TSolver_Base} instance. Users should instantiate one
 of the concrete subclasses (\code{TLARSSolver}, \code{TLASSOSolver}, etc.)
 rather than this class directly.
+}
+\examples{
+# TSolverBase is abstract; use a concrete subclass instead, e.g.:
+# solver <- TLARSSolver$new(X, D, y)
 }
 \section{Public fields}{
 \if{html}{\out{<div class="r6-fields">}}
@@ -18,7 +22,7 @@ rather than this class directly.
 
 \item{\code{y}}{Numeric response vector.}
 
-\item{\code{ptr}}{External pointer to the underlying C++ \code{TSolver_Base} object.}
+\item{\code{ptr}}{External pointer to the underlying Cpp \code{TSolver_Base} object.}
 }
 \if{html}{\out{</div>}}
 }
@@ -114,7 +118,7 @@ Get the action path (variable additions and removals per step).
 \describe{
 \item{\code{r_index}}{Logical; if \code{TRUE} (default) indices inside each
 action vector are 1-based (R convention); if \code{FALSE} they are
-0-based (C++ convention).}
+0-based (Cpp convention).}
 }
 \if{html}{\out{</div>}}
 }
@@ -208,7 +212,7 @@ Get currently active variable indices.
 \if{html}{\out{<div class="arguments">}}
 \describe{
 \item{\code{r_index}}{Logical; if \code{TRUE} (default) indices are 1-based
-(R convention); if \code{FALSE} they are 0-based (C++ convention).}
+(R convention); if \code{FALSE} they are 0-based (Cpp convention).}
 }
 \if{html}{\out{</div>}}
 }
@@ -229,7 +233,7 @@ Get currently inactive variable indices.
 \if{html}{\out{<div class="arguments">}}
 \describe{
 \item{\code{r_index}}{Logical; if \code{TRUE} (default) indices are 1-based
-(R convention); if \code{FALSE} they are 0-based (C++ convention).}
+(R convention); if \code{FALSE} they are 0-based (Cpp convention).}
 }
 \if{html}{\out{</div>}}
 }

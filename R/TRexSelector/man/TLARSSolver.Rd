@@ -7,6 +7,18 @@
 Terminating Least Angle Regression (T-LARS) solver.
 Inherits all common methods from \code{\link{TSolverBase}}.
 }
+\examples{
+set.seed(1)
+n <- 20; p <- 5
+X <- matrix(rnorm(n * p), n, p)
+D <- matrix(rnorm(n * p), n, p)
+y <- X[, 1] * 2 + rnorm(n)
+solver <- TLARSSolver$new(X, D, y)
+solver$execute_step(T_stop = 3)
+solver$get_beta()
+solver$get_actives()
+
+}
 \section{Super class}{
 \code{\link[TRexSelector:TSolverBase]{TRexSelector::TSolverBase}} -> \code{TLARSSolver}
 }

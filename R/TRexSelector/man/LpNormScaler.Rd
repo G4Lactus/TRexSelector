@@ -6,6 +6,14 @@
 \description{
 Scales input features to unit norm based on the chosen L1 or L2 formulation.
 }
+\examples{
+set.seed(1)
+X <- matrix(rnorm(50 * 5), 50, 5)
+scaler <- LpNormScaler$new(norm_type = 2)
+scaler$fit(X)
+X_norm <- scaler$transform_inplace(X)
+
+}
 \section{Methods}{
 \subsection{Public methods}{
 \itemize{
@@ -56,7 +64,7 @@ Compute the norm parameters.
 \subsection{Arguments}{
 \if{html}{\out{<div class="arguments">}}
 \describe{
-\item{\code{X}}{A numeric matrix.}
+\item{\code{X}}{A numeric matrix (n x p).}
 
 \item{\code{threshold}}{Double, lower bound for norm (default: 1e-12).}
 }
@@ -78,7 +86,7 @@ Perform standardization in-place.
 \subsection{Arguments}{
 \if{html}{\out{<div class="arguments">}}
 \describe{
-\item{\code{X}}{A numeric matrix.}
+\item{\code{X}}{A numeric matrix (n x p).}
 }
 \if{html}{\out{</div>}}
 }
@@ -98,7 +106,7 @@ Inverse transform to original scale.
 \subsection{Arguments}{
 \if{html}{\out{<div class="arguments">}}
 \describe{
-\item{\code{X}}{A numeric matrix.}
+\item{\code{X}}{A numeric matrix (n x p).}
 }
 \if{html}{\out{</div>}}
 }

@@ -38,7 +38,7 @@ test_that("TRexSelector active bindings return expected data types post-selectio
   X <- matrix(rnorm(n * p), n, p)
   y <- rnorm(n)
 
-  selector <- TRexSelector$new(X, y, verbose = FALSE, K = 3)
+  selector <- TRexSelector$new(X, y, verbose = FALSE, control = trex_control(K = 3))
 
   # Before execution, properties may understandably be empty or matrix of 0
   # We invoke the algorithm directly
@@ -73,7 +73,7 @@ test_that("TRexSelector selected_indices are 1-based and in [1, p]", {
   X <- matrix(rnorm(n * p), n, p)
   y <- rnorm(n)
 
-  selector <- TRexSelector$new(X, y, verbose = FALSE, K = 3)
+  selector <- TRexSelector$new(X, y, verbose = FALSE, control = trex_control(K = 3))
   selector$select()
 
   idx <- selector$selected_indices
@@ -91,7 +91,7 @@ test_that("TRexSelector selected_var and selected_indices are consistent", {
   X <- matrix(rnorm(n * p), n, p)
   y <- rnorm(n)
 
-  selector <- TRexSelector$new(X, y, verbose = FALSE, K = 3)
+  selector <- TRexSelector$new(X, y, verbose = FALSE, control = trex_control(K = 3))
   selector$select()
 
   idx <- selector$selected_indices
@@ -111,7 +111,7 @@ test_that("TRexSelector phi_prime is in [0, 1] with length p", {
   X <- matrix(rnorm(n * p), n, p)
   y <- rnorm(n)
 
-  selector <- TRexSelector$new(X, y, verbose = FALSE, K = 3)
+  selector <- TRexSelector$new(X, y, verbose = FALSE, control = trex_control(K = 3))
   selector$select()
 
   phi_p <- selector$phi_prime
@@ -127,7 +127,7 @@ test_that("TRexSelector phi_mat has T_stop rows and p columns", {
   X <- matrix(rnorm(n * p), n, p)
   y <- rnorm(n)
 
-  selector <- TRexSelector$new(X, y, verbose = FALSE, K = 3)
+  selector <- TRexSelector$new(X, y, verbose = FALSE, control = trex_control(K = 3))
   selector$select()
 
   ts <- selector$T_stop
@@ -147,8 +147,8 @@ test_that("TRexSelector multiple solver methods return 1-based indices consisten
   y <- X[, 5] * 4.0 + X[, 15] * (-2.5) + rnorm(n)
 
   for (method in c("TLARS", "TLASSO", "TOMP")) {
-    sel <- TRexSelector$new(X, y, tFDR = 0.1, K = 20, method = method,
-                            tloop_stagnation_stop = TRUE, verbose = FALSE)
+    sel <- TRexSelector$new(X, y, tFDR = 0.1, verbose = FALSE,
+                            control = trex_control(K = 20, method = method))
     sel$select()
 
     idx <- sel$selected_indices

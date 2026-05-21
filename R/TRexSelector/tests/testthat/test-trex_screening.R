@@ -62,7 +62,8 @@ test_that("TRexScreeningSelector behaves memory safe with memory mapping enabled
   y <- rnorm(n)
 
   # use_memory_mapping = TRUE to confirm tempdir() doesn't crash
-  selector <- TRexScreeningSelector$new(X, y, verbose = FALSE, use_memory_mapping = TRUE)
+  selector <- TRexScreeningSelector$new(X, y, verbose = FALSE,
+                                        control = trex_control(use_memory_mapping = TRUE))
   selector$select()
 
   res_indices <- selector$selected_indices
@@ -84,7 +85,7 @@ test_that("TRexScreeningSelector correctly guards against invalid parameters", {
 
   # Invalid Screening Variants that are caught by Rcpp string mapping
   expect_error(
-    TRexScreeningSelector$new(X, y, trex_method = "UNKNOWN_VARIANT", verbose = FALSE),
+    TRexScreeningSelector$new(X, y, screen_control = trex_screen_control(trex_method = "UNKNOWN_VARIANT"), verbose = FALSE),
     "Unknown ScreenTRexMethod:"
   )
 })
@@ -102,9 +103,7 @@ test_that("TrexScreeningSelector correctly executes confidence-interval based bo
   selector_boot <- expect_no_error(
     TRexScreeningSelector$new(
       X, y,
-      use_bootstrap_CI = TRUE,
-      R_boot = 100,
-      ci_grid_step = 0.01,
+      screen_control = trex_screen_control(use_bootstrap_CI = TRUE, R_boot = 100, ci_grid_step = 0.01),
       verbose = FALSE
     )
   )
@@ -131,8 +130,10 @@ test_that("TRexScreeningSelector handles concurrent execution properly (OpenMP)"
 
   # Run multithreaded (runs one sweeping K-loop for fast Screening)
   selector_openmp <- expect_no_error(
-    TRexScreeningSelector$new(X, y, use_openmp = TRUE, max_inner_threads = 2,
-                              max_outer_threads = 2, verbose = FALSE)
+    TRexScreeningSelector$new(X, y,
+                              control = trex_control(use_openmp = TRUE, max_inner_threads = 2,
+                                                    max_outer_threads = 2),
+                              verbose = FALSE)
   )
 
   selector_openmp$select()
@@ -223,7 +224,9 @@ test_that("TRexScreeningSelector DA-method variants run without error and return
   y <- X[, 1] * 5 + X[, 2] * -4 + rnorm(n)
 
   for (tm in c("TREX_DA_AR1", "TREX_DA_EQUI", "TREX_DA_BLOCK_EQUI")) {
-    sel <- TRexScreeningSelector$new(X, y, trex_method = tm, verbose = FALSE)
+    sel <- TRexScreeningSelector$new(X, y,
+                                     screen_control = trex_screen_control(trex_method = tm),
+                                     verbose = FALSE)
     sel$select()
 
     idx <- sel$selected_indices

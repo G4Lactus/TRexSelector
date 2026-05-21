@@ -7,6 +7,17 @@
 Terminating Stagewise Regression solver.
 Inherits all common methods from \code{\link{TSolverBase}}.
 }
+\examples{
+set.seed(1)
+n <- 20; p <- 5
+X <- matrix(rnorm(n * p), n, p)
+D <- matrix(rnorm(n * p), n, p)
+y <- X[, 1] * 2 + rnorm(n)
+solver <- TStagewiseSolver$new(X, D, y)
+solver$execute_step(T_stop = 3)
+solver$get_beta()
+
+}
 \section{Super class}{
 \code{\link[TRexSelector:TSolverBase]{TRexSelector::TSolverBase}} -> \code{TStagewiseSolver}
 }

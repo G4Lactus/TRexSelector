@@ -1,3 +1,8 @@
+# =============================================================================
+# tsolvers.R - T-Solver R6 class definitions
+# =============================================================================
+
+
 #' @importFrom Rcpp evalCpp
 #' @import R6
 NULL
@@ -10,14 +15,17 @@ NULL
 #'
 #' @description
 #' Abstract base class for all T-Solver R6 wrappers. Provides the common solver
-#' API backed by a C++ \code{TSolver_Base} instance. Users should instantiate one
+#' API backed by a Cpp \code{TSolver_Base} instance. Users should instantiate one
 #' of the concrete subclasses (\code{TLARSSolver}, \code{TLASSOSolver}, etc.)
 #' rather than this class directly.
 #'
 #' @field X Numeric matrix of predictors, or an \code{mmap_matrix}.
 #' @field D Numeric matrix of dummies.
 #' @field y Numeric response vector.
-#' @field ptr External pointer to the underlying C++ \code{TSolver_Base} object.
+#' @field ptr External pointer to the underlying Cpp \code{TSolver_Base} object.
+#' @examples
+#' # TSolverBase is abstract; use a concrete subclass instead, e.g.:
+#' # solver <- TLARSSolver$new(X, D, y)
 #' @export
 TSolverBase <- R6::R6Class(
   "TSolverBase",
@@ -65,7 +73,7 @@ TSolverBase <- R6::R6Class(
     #' @description Get the action path (variable additions and removals per step).
     #' @param r_index Logical; if \code{TRUE} (default) indices inside each
     #'   action vector are 1-based (R convention); if \code{FALSE} they are
-    #'   0-based (C++ convention).
+    #'   0-based (Cpp convention).
     #' @return A list of integer vectors, one per step. Positive indices denote
     #'   variable additions; negative indices denote removals.
     get_actions = function(r_index = TRUE) {
@@ -111,7 +119,7 @@ TSolverBase <- R6::R6Class(
 
     #' @description Get currently active variable indices.
     #' @param r_index Logical; if \code{TRUE} (default) indices are 1-based
-    #'   (R convention); if \code{FALSE} they are 0-based (C++ convention).
+    #'   (R convention); if \code{FALSE} they are 0-based (Cpp convention).
     #' @return Integer vector of active variable indices.
     get_actives = function(r_index = TRUE) {
       p <- ncol(self$X)
@@ -123,7 +131,7 @@ TSolverBase <- R6::R6Class(
 
     #' @description Get currently inactive variable indices.
     #' @param r_index Logical; if \code{TRUE} (default) indices are 1-based
-    #'   (R convention); if \code{FALSE} they are 0-based (C++ convention).
+    #'   (R convention); if \code{FALSE} they are 0-based (Cpp convention).
     #' @return Integer vector of inactive variable indices.
     get_inactives = function(r_index = TRUE) {
       p <- ncol(self$X)
@@ -169,6 +177,18 @@ TSolverBase <- R6::R6Class(
 #' @description
 #' Terminating Least Angle Regression (T-LARS) solver.
 #' Inherits all common methods from \code{\link{TSolverBase}}.
+#'
+#' @examples
+#' set.seed(1)
+#' n <- 20; p <- 5
+#' X <- matrix(rnorm(n * p), n, p)
+#' D <- matrix(rnorm(n * p), n, p)
+#' y <- X[, 1] * 2 + rnorm(n)
+#' solver <- TLARSSolver$new(X, D, y)
+#' solver$execute_step(T_stop = 3)
+#' solver$get_beta()
+#' solver$get_actives()
+#'
 #' @export
 TLARSSolver <- R6::R6Class(
   "TLARSSolver",
@@ -209,6 +229,17 @@ TLARSSolver <- R6::R6Class(
 #' @description
 #' Terminating LASSO solver (T-LARS with variable removal).
 #' Inherits all common methods from \code{\link{TSolverBase}}.
+#'
+#' @examples
+#' set.seed(1)
+#' n <- 20; p <- 5
+#' X <- matrix(rnorm(n * p), n, p)
+#' D <- matrix(rnorm(n * p), n, p)
+#' y <- X[, 1] * 2 + rnorm(n)
+#' solver <- TLASSOSolver$new(X, D, y)
+#' solver$execute_step(T_stop = 3)
+#' solver$get_beta()
+#'
 #' @export
 TLASSOSolver <- R6::R6Class(
   "TLASSOSolver",
@@ -255,6 +286,17 @@ TLASSOSolver <- R6::R6Class(
 #' @description
 #' Terminating Forward Stepwise Regression solver.
 #' Inherits all common methods from \code{\link{TSolverBase}}.
+#'
+#' @examples
+#' set.seed(1)
+#' n <- 20; p <- 5
+#' X <- matrix(rnorm(n * p), n, p)
+#' D <- matrix(rnorm(n * p), n, p)
+#' y <- X[, 1] * 2 + rnorm(n)
+#' solver <- TSTEPWISESolver$new(X, D, y)
+#' solver$execute_step(T_stop = 3)
+#' solver$get_beta()
+#'
 #' @export
 TSTEPWISESolver <- R6::R6Class(
   "TSTEPWISESolver",
@@ -295,12 +337,24 @@ TSTEPWISESolver <- R6::R6Class(
 #' @description
 #' Terminating Elastic Net solver (L1 + L2 regularization).
 #' Inherits all common methods from \code{\link{TSolverBase}}.
+#'
+#' @examples
+#' set.seed(1)
+#' n <- 20; p <- 5
+#' X <- matrix(rnorm(n * p), n, p)
+#' D <- matrix(rnorm(n * p), n, p)
+#' y <- X[, 1] * 2 + rnorm(n)
+#' solver <- TENETSolver$new(X, D, y, lambda2 = 0.1)
+#' solver$execute_step(T_stop = 3)
+#' solver$get_beta()
+#'
 #' @export
 TENETSolver <- R6::R6Class(
   "TENETSolver",
   inherit = TSolverBase,
   public = list(
     #' @description Create a new \code{TENETSolver}.
+    #'
     #' @param X Numeric matrix of predictors, or \code{mmap_matrix}.
     #' @param D Numeric matrix of dummies.
     #' @param y Numeric response vector.
@@ -324,18 +378,21 @@ TENETSolver <- R6::R6Class(
     },
 
     #' @description Get the number of coefficient removals.
+    #'
     #' @return Integer count of removals.
     get_num_removals = function() {
       tsolver_get_num_removals(self$ptr)
     },
 
     #' @description Get the cycling ratio (removals / total steps).
+    #'
     #' @return Scalar numeric cycling ratio.
     get_cycling_ratio = function() {
       tsolver_get_cycling_ratio(self$ptr)
     },
 
     #' @description Get the regularization (lambda) path.
+    #'
     #' @return Numeric vector of lambda values, one per step.
     get_lambda = function() {
       tsolver_get_lambda(self$ptr)
@@ -349,12 +406,24 @@ TENETSolver <- R6::R6Class(
 #' @description
 #' Terminating Stagewise Regression solver.
 #' Inherits all common methods from \code{\link{TSolverBase}}.
+#'
+#' @examples
+#' set.seed(1)
+#' n <- 20; p <- 5
+#' X <- matrix(rnorm(n * p), n, p)
+#' D <- matrix(rnorm(n * p), n, p)
+#' y <- X[, 1] * 2 + rnorm(n)
+#' solver <- TStagewiseSolver$new(X, D, y)
+#' solver$execute_step(T_stop = 3)
+#' solver$get_beta()
+#'
 #' @export
 TStagewiseSolver <- R6::R6Class(
   "TStagewiseSolver",
   inherit = TSolverBase,
   public = list(
     #' @description Create a new \code{TStagewiseSolver}.
+    #'
     #' @param X Numeric matrix of predictors, or \code{mmap_matrix}.
     #' @param D Numeric matrix of dummies.
     #' @param y Numeric response vector.
@@ -405,6 +474,17 @@ TStagewiseSolver <- R6::R6Class(
 #' @description
 #' Terminating Orthogonal Matching Pursuit (T-OMP) solver.
 #' Inherits all common methods from \code{\link{TSolverBase}}.
+#'
+#' @examples
+#' set.seed(1)
+#' n <- 20; p <- 5
+#' X <- matrix(rnorm(n * p), n, p)
+#' D <- matrix(rnorm(n * p), n, p)
+#' y <- X[, 1] * 2 + rnorm(n)
+#' solver <- TOMPSolver$new(X, D, y)
+#' solver$execute_step(T_stop = 3)
+#' solver$get_beta()
+#'
 #' @export
 TOMPSolver <- R6::R6Class(
   "TOMPSolver",
@@ -439,12 +519,24 @@ TOMPSolver <- R6::R6Class(
 #' @description
 #' Terminating Gradient Pursuit (T-GP) solver.
 #' Inherits all common methods from \code{\link{TSolverBase}}.
+#'
+#' @examples
+#' set.seed(1)
+#' n <- 20; p <- 5
+#' X <- matrix(rnorm(n * p), n, p)
+#' D <- matrix(rnorm(n * p), n, p)
+#' y <- X[, 1] * 2 + rnorm(n)
+#' solver <- TGPSolver$new(X, D, y)
+#' solver$execute_step(T_stop = 3)
+#' solver$get_beta()
+#'
 #' @export
 TGPSolver <- R6::R6Class(
   "TGPSolver",
   inherit = TSolverBase,
   public = list(
     #' @description Create a new \code{TGPSolver}.
+    #'
     #' @param X Numeric matrix of predictors, or \code{mmap_matrix}.
     #' @param D Numeric matrix of dummies.
     #' @param y Numeric response vector.
@@ -473,6 +565,17 @@ TGPSolver <- R6::R6Class(
 #' @description
 #' Terminating Approximate Conjugate Gradient Pursuit (T-ACGP) solver.
 #' Inherits all common methods from \code{\link{TSolverBase}}.
+#'
+#' @examples
+#' set.seed(1)
+#' n <- 20; p <- 5
+#' X <- matrix(rnorm(n * p), n, p)
+#' D <- matrix(rnorm(n * p), n, p)
+#' y <- X[, 1] * 2 + rnorm(n)
+#' solver <- TACGPSolver$new(X, D, y)
+#' solver$execute_step(T_stop = 3)
+#' solver$get_beta()
+#'
 #' @export
 TACGPSolver <- R6::R6Class(
   "TACGPSolver",
@@ -507,6 +610,17 @@ TACGPSolver <- R6::R6Class(
 #' @description
 #' Terminating Matching Pursuit (T-MP) solver.
 #' Inherits all common methods from \code{\link{TSolverBase}}.
+#'
+#' @examples
+#' set.seed(1)
+#' n <- 20; p <- 5
+#' X <- matrix(rnorm(n * p), n, p)
+#' D <- matrix(rnorm(n * p), n, p)
+#' y <- X[, 1] * 2 + rnorm(n)
+#' solver <- TMPSolver$new(X, D, y)
+#' solver$execute_step(T_stop = 3)
+#' solver$get_beta()
+#'
 #' @export
 TMPSolver <- R6::R6Class(
   "TMPSolver",
@@ -541,6 +655,17 @@ TMPSolver <- R6::R6Class(
 #' @description
 #' Terminating Orthogonal Least Squares (T-OLS) solver.
 #' Inherits all common methods from \code{\link{TSolverBase}}.
+#'
+#' @examples
+#' set.seed(1)
+#' n <- 20; p <- 5
+#' X <- matrix(rnorm(n * p), n, p)
+#' D <- matrix(rnorm(n * p), n, p)
+#' y <- X[, 1] * 2 + rnorm(n)
+#' solver <- TOOLSSolver$new(X, D, y)
+#' solver$execute_step(T_stop = 3)
+#' solver$get_beta()
+#'
 #' @export
 TOOLSSolver <- R6::R6Class(
   "TOOLSSolver",
@@ -577,6 +702,17 @@ TOOLSSolver <- R6::R6Class(
 #' Two variants are available: \code{"line_search"} (standard, 1-D projection)
 #' and \code{"fully_corrective"} (OMP-style least squares over the active set).
 #' Inherits all common methods from \code{\link{TSolverBase}}.
+#'
+#' @examples
+#' set.seed(1)
+#' n <- 20; p <- 5
+#' X <- matrix(rnorm(n * p), n, p)
+#' D <- matrix(rnorm(n * p), n, p)
+#' y <- X[, 1] * 2 + rnorm(n)
+#' solver <- TNCGMPSolver$new(X, D, y, variant = "line_search")
+#' solver$execute_step(T_stop = 3)
+#' solver$get_beta()
+#'
 #' @export
 TNCGMPSolver <- R6::R6Class(
   "TNCGMPSolver",
@@ -626,6 +762,17 @@ TNCGMPSolver <- R6::R6Class(
 #' The shrinkage parameter \code{rho} interpolates between Forward Stepwise
 #' (\code{rho = 1}) and LAR/LASSO (\code{rho -> 0}).
 #' Inherits all common methods from \code{\link{TSolverBase}}.
+#'
+#' @examples
+#' set.seed(1)
+#' n <- 20; p <- 5
+#' X <- matrix(rnorm(n * p), n, p)
+#' D <- matrix(rnorm(n * p), n, p)
+#' y <- X[, 1] * 2 + rnorm(n)
+#' solver <- TAFSSolver$new(X, D, y, rho = 0.5)
+#' solver$execute_step(T_stop = 3)
+#' solver$get_beta()
+#'
 #' @export
 TAFSSolver <- R6::R6Class(
   "TAFSSolver",

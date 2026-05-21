@@ -19,5 +19,15 @@ mmap_matrix(filename, rows, cols, mode = "readwrite")
 Object of classes \code{MemoryMappedMatrix} and \code{mmap_matrix} (S3 XPtr wrapper)
 }
 \description{
-S3 object wrapping an external pointer to a C++ MemoryMappedMatrix.
+S3 object wrapping an external pointer to a Cpp MemoryMappedMatrix.
+}
+\examples{
+\donttest{
+mat <- matrix(as.double(1:20), nrow = 4, ncol = 5)
+f <- tempfile(fileext = ".bin")
+on.exit(unlink(f), add = TRUE)
+convert_to_memory_mapped(mat, f)
+mm <- mmap_matrix(f, rows = 4, cols = 5)
+}
+
 }

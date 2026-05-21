@@ -18,6 +18,7 @@
 
  // project utils includes
 #include <utils/logging/logger.hpp>
+#include <utils/global_temp_dir.hpp>
 
 // std includes
 #include <vector>
@@ -210,7 +211,7 @@ public:
             std::random_device rd;
             std::mt19937_64 gen(rd());
             std::uniform_int_distribution<uint64_t> dis;
-            temp_filepath_ = fs::temp_directory_path() / ("trex_hac_matrix_" +
+            temp_filepath_ = trex::utils::get_global_temp_dir() / ("trex_hac_matrix_" +
                              std::to_string(dis(gen)) + ".bin");
 
             {
