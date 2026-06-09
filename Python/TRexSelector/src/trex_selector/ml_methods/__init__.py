@@ -9,7 +9,3 @@ __all__ = [
     "RidgeGCV",
     "RidgePath",
 ]
-
-from . import clustering
-
-__all__.append("clustering")

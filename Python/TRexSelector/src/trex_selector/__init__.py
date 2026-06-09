@@ -11,23 +11,27 @@ from .trex_selector_methods import (
     LLoopStrategy, TRexControlParameter, SelectionResult, TRexSelector as PyTRexSelector,
     TRexDASelector as PyTRexDASelector, TRexDAControlParameter, DAMethod, DASelectionResult,
     TRexGVSSelector as PyTRexGVSSelector, TRexGVSControlParameter, GVSType, GVSSelectionResult,
-    TRexScreeningSelector as PyTRexScreeningSelector, ScreenTRexControlParameter, ScreenTRexMethod, ScreenTRexSelectionResult,
-    TRexBiobankScreeningSelector as PyBiobankScreeningSelector, BiobankScreenTRexControl, BiobankScreenTRexResult,
+    TRexScreeningSelector as PyTRexScreeningSelector, ScreenTRexControlParameter, ScreenTRexMethod,
+                             ScreenTRexSelectionResult,
+    TRexBiobankScreeningSelector as PyBiobankScreeningSelector, BiobankScreenTRexControl,
+                                    BiobankScreenTRexResult,
     SolverTypeForTRex, SolverHyperparameters, DummyDistribution,
 )
+
 
 class TRexSelector:
     """
     Python wrapper for the C++ TRexSelector.
 
-    This class performs FDR-controlled variable selection using the T-Rex algorithm.
+    This class performs FDR-controlled variable selection using the T-Rex selector.
     """
 
     def __init__(self, X: np.ndarray, y: np.ndarray, tFDR: float = 0.1,
-                 trex_control: TRexControlParameter = None,
+                 trex_control: TRexControlParameter | None = None,
                  seed: int = -1, verbose: bool = True):
+
         # Validate data types and ensure Fortran contiguity for Eigen
-        # Eigen Map defaults to ColumnMajor (Fortran order).
+        # Eigen Map defaults to ColumnMajor (Fortran order)
         self.X = np.asfortranarray(X, dtype=np.float64)
         self.y = np.asfortranarray(y, dtype=np.float64)
 
@@ -109,18 +113,19 @@ class TRexSelector:
         return self._selector.getSelectedVar()
 
     @property
-    def selected_indices(self) -> list:
+    def selected_indices(self) -> np.ndarray:
         return self._selector.getSelectedIndices()
 
 
 class TRexDASelector(TRexSelector):
     """
-    Python wrapper for the C++ TRexDASelector (Data Augmentation).
+    Python wrapper for the C++ TRexDASelector (Dependency Awareness).
     """
     def __init__(self, X: np.ndarray, y: np.ndarray, tFDR: float = 0.1,
-                 da_control: TRexDAControlParameter = None,
-                 trex_control: TRexControlParameter = None,
+                 da_control: TRexDAControlParameter | None = None,
+                 trex_control: TRexControlParameter | None = None,
                  seed: int = -1, verbose: bool = True):
+
         self.X = np.asfortranarray(X, dtype=np.float64)
         self.y = np.asfortranarray(y, dtype=np.float64)
 
@@ -129,7 +134,10 @@ class TRexDASelector(TRexSelector):
         if trex_control is None:
             trex_control = TRexControlParameter()
 
-        self._selector = PyTRexDASelector(self.X, self.y, tFDR, da_control, trex_control, seed, verbose)
+        self._selector: PyTRexDASelector = PyTRexDASelector(self.X, self.y, tFDR,
+                                                            da_control,
+                                                            trex_control,
+                                                            seed, verbose)
 
     def select(self) -> DASelectionResult:
         self._selector.select()
@@ -141,9 +149,10 @@ class TRexGVSSelector(TRexSelector):
     Python wrapper for the C++ TRexGVSSelector (Group Variable Selection).
     """
     def __init__(self, X: np.ndarray, y: np.ndarray, tFDR: float = 0.1,
-                 gvs_control: TRexGVSControlParameter = None,
-                 trex_control: TRexControlParameter = None,
+                 gvs_control: TRexGVSControlParameter | None = None,
+                 trex_control: TRexControlParameter | None = None,
                  seed: int = -1, verbose: bool = True):
+
         self.X = np.asfortranarray(X, dtype=np.float64)
         self.y = np.asfortranarray(y, dtype=np.float64)
 
@@ -153,12 +162,16 @@ class TRexGVSSelector(TRexSelector):
             trex_control = TRexControlParameter()
 
         # Derive solver_type from gvs_type — mirrors R package behaviour.
-        # EN (Ordinary Elastic Net) requires TENET; IEN (Informed EN) requires TLASSO.
+        # EN (Ordinary Elastic Net) requires TENET;
+        # IEN (Informed EN) requires TLASSO.
         trex_control.solver_type = (SolverTypeForTRex.TLASSO
                                     if gvs_control.gvs_type == GVSType.IEN
                                     else SolverTypeForTRex.TENET)
 
-        self._selector = PyTRexGVSSelector(self.X, self.y, tFDR, gvs_control, trex_control, seed, verbose)
+        self._selector: PyTRexGVSSelector = PyTRexGVSSelector(self.X, self.y, tFDR,
+                                                              gvs_control,
+                                                              trex_control,
+                                                              seed, verbose)
 
     def select(self) -> GVSSelectionResult:
         self._selector.select()
@@ -170,9 +183,10 @@ class TRexScreeningSelector(TRexSelector):
     Python wrapper for the C++ TRexScreeningSelector.
     """
     def __init__(self, X: np.ndarray, y: np.ndarray,
-                 screen_control: ScreenTRexControlParameter = None,
-                 trex_control: TRexControlParameter = None,
+                 screen_control: ScreenTRexControlParameter | None = None,
+                 trex_control: TRexControlParameter | None = None,
                  seed: int = -1, verbose: bool = True):
+
         self.X = np.asfortranarray(X, dtype=np.float64)
         self.y = np.asfortranarray(y, dtype=np.float64)
 
@@ -180,11 +194,15 @@ class TRexScreeningSelector(TRexSelector):
             screen_control = ScreenTRexControlParameter()
         if trex_control is None:
             trex_control = TRexControlParameter()
+
         # ScreenTRex only accepts STANDARD or PERMUTATION lloop_strategy.
         if trex_control.lloop_strategy not in (LLoopStrategy.STANDARD, LLoopStrategy.PERMUTATION):
             trex_control.lloop_strategy = LLoopStrategy.STANDARD
 
-        self._selector = PyTRexScreeningSelector(self.X, self.y, screen_control, trex_control, seed, verbose)
+        self._selector: PyTRexScreeningSelector = PyTRexScreeningSelector(self.X, self.y,
+                                                                          screen_control,
+                                                                          trex_control,
+                                                                          seed, verbose)
 
     def select(self) -> ScreenTRexSelectionResult:
         self._selector.select()
@@ -193,24 +211,28 @@ class TRexScreeningSelector(TRexSelector):
 
 class TRexBiobankScreeningSelector:
     """
-    Python wrapper for the C++ TRexBiobankScreeningSelector.
+    Python wrapper for the C++ TRexBiobankScreeningSelector orchestrator.
 
     Dispatches to screenPhenotype() for a single 1-D response vector
-    or screenPhenotypes() for a 2-D response matrix.
+    or screenPhenotypes() for a m-D response matrix.
     """
 
     def __init__(self, X: np.ndarray, Y,
-                 biosctrex_ctrl: BiobankScreenTRexControl = None,
+                 biosctrex_ctrl: BiobankScreenTRexControl | None = None,
                  seed: int = -1, verbose: bool = False):
+
         self.X = np.asfortranarray(X, dtype=np.float64)
         if biosctrex_ctrl is None:
             biosctrex_ctrl = BiobankScreenTRexControl()
-        Y = np.asarray(Y, dtype=np.float64)
-        self._is_2d = Y.ndim > 1
-        self._Y = np.asfortranarray(Y)
-        self._selector = PyBiobankScreeningSelector(self.X, self._Y, biosctrex_ctrl, seed, verbose)
 
-    def select(self):
+        Y = np.asarray(Y, dtype=np.float64)
+        self._is_mD = Y.ndim > 1
+        self._Y = np.asfortranarray(Y)
+        self._selector = PyBiobankScreeningSelector(self.X, self._Y,
+                                                    biosctrex_ctrl,
+                                                    seed, verbose)
+
+    def select(self) -> BiobankScreenTRexResult | list[BiobankScreenTRexResult]:
         """
         Run Biobank screening.
 
@@ -219,9 +241,9 @@ class TRexBiobankScreeningSelector:
         BiobankScreenTRexResult
             For a 1-D response (single phenotype).
         list[BiobankScreenTRexResult]
-            For a 2-D response (multiple phenotypes).
+            For a m-D response (multiple phenotypes).
         """
-        if self._is_2d:
+        if self._is_mD:
             return self._selector.screenPhenotypes()
         return self._selector.screenPhenotype()
 

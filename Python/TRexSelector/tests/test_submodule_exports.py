@@ -59,12 +59,30 @@ def test_top_level_classes_importable():
         BiobankScreenTRexControl,
         BiobankScreenTRexResult,
     )
-    # Spot-check a few
+
+    # Spot-check
     assert callable(TRexSelector)
     assert callable(TRexDASelector)
     assert callable(TRexGVSSelector)
     assert callable(TRexScreeningSelector)
     assert callable(TRexBiobankScreeningSelector)
+    assert callable(DummyDistribution)
+    assert callable(LLoopStrategy)
+    assert callable(SolverTypeForTRex)
+    assert callable(SolverHyperparameters)
+    assert callable(TRexControlParameter)
+    assert callable(SelectionResult)
+    assert callable(TRexDAControlParameter)
+    assert callable(DAMethod)
+    assert callable(DASelectionResult)
+    assert callable(TRexGVSControlParameter)
+    assert callable(GVSType)
+    assert callable(GVSSelectionResult)
+    assert callable(ScreenTRexControlParameter)
+    assert callable(ScreenTRexMethod)
+    assert callable(ScreenTRexSelectionResult)
+    assert callable(BiobankScreenTRexControl)
+    assert callable(BiobankScreenTRexResult)
 
 
 def test_utils_symbols_importable():
@@ -83,8 +101,16 @@ def test_utils_symbols_importable():
     )
     assert callable(compute_fdp)
     assert callable(compute_tpp)
+    assert callable(compute_precision)
+    assert callable(compute_recall)
+    assert callable(compute_fdp_dense)
+    assert callable(compute_tpp_dense)
     assert callable(get_max_threads)
     assert callable(set_num_threads)
+    assert callable(numpy_to_memmap)
+    assert callable(MemoryMappedMatrix)
+    assert AccessMode.ReadOnly is not None
+    assert AccessMode.ReadWrite is not None
 
 
 def test_ml_methods_symbols_importable():
@@ -100,6 +126,9 @@ def test_ml_methods_symbols_importable():
     assert callable(LpNormScaler)
     assert callable(RidgeCV)
     assert callable(RidgeGCV)
+    assert callable(RidgePath)
+    assert NormType.L1 is not None
+    assert NormType.L2 is not None
 
 
 def test_clustering_symbols_importable():
@@ -111,3 +140,5 @@ def test_clustering_symbols_importable():
     )
     assert callable(agglomerative_cluster)
     assert callable(cut_tree)
+    assert LinkageMethod.Ward is not None
+    assert DistanceMetric.Euclidean is not None

@@ -3,7 +3,6 @@ Tests for TRexBiobankScreeningSelector.
 """
 import numpy as np
 import pytest
-import trex_selector
 from trex_selector import (
     TRexBiobankScreeningSelector,
     BiobankScreenTRexControl,
@@ -55,6 +54,7 @@ def test_result_phenotype_index(signal_data):
     X, y, n, p = signal_data
     sel = TRexBiobankScreeningSelector(X, y, verbose=False)
     res = sel.select()
+    assert isinstance(res, BiobankScreenTRexResult)
     assert res.phenotype_index == 0
 
 
@@ -62,6 +62,7 @@ def test_result_selected_indices(signal_data):
     X, y, n, p = signal_data
     sel = TRexBiobankScreeningSelector(X, y, verbose=False)
     res = sel.select()
+    assert isinstance(res, BiobankScreenTRexResult)
     assert isinstance(res.selected_indices, list)
     if res.selected_indices:
         assert all(0 <= i < p for i in res.selected_indices)
@@ -71,6 +72,7 @@ def test_result_estimated_fdr(signal_data):
     X, y, n, p = signal_data
     sel = TRexBiobankScreeningSelector(X, y, verbose=False)
     res = sel.select()
+    assert isinstance(res, BiobankScreenTRexResult)
     assert isinstance(res.estimated_FDR, float)
     assert 0.0 <= res.estimated_FDR <= 1.0
 
@@ -79,6 +81,7 @@ def test_result_method_used(signal_data):
     X, y, n, p = signal_data
     sel = TRexBiobankScreeningSelector(X, y, verbose=False)
     res = sel.select()
+    assert isinstance(res, BiobankScreenTRexResult)
     assert isinstance(res.method_used, str)
     assert len(res.method_used) > 0
 
@@ -87,6 +90,7 @@ def test_result_used_fallback_trex(signal_data):
     X, y, n, p = signal_data
     sel = TRexBiobankScreeningSelector(X, y, verbose=False)
     res = sel.select()
+    assert isinstance(res, BiobankScreenTRexResult)
     assert isinstance(res.used_fallback_trex, bool)
 
 
@@ -94,6 +98,7 @@ def test_result_auxiliary_index_lists(signal_data):
     X, y, n, p = signal_data
     sel = TRexBiobankScreeningSelector(X, y, verbose=False)
     res = sel.select()
+    assert isinstance(res, BiobankScreenTRexResult)
     assert isinstance(res.selected_indices_screen_ordinary, list)
     assert isinstance(res.selected_indices_screen_bootstrap, list)
 
@@ -123,6 +128,7 @@ def test_select_2d_phenotype_indices(signal_data):
     Y = np.column_stack([y, y])
     sel = TRexBiobankScreeningSelector(X, Y, verbose=False)
     results = sel.select()
+    assert isinstance(results, list)
     indices = [r.phenotype_index for r in results]
     assert sorted(indices) == [0, 1]
 
@@ -132,6 +138,7 @@ def test_select_2d_result_types(signal_data):
     Y = np.column_stack([y, y])
     sel = TRexBiobankScreeningSelector(X, Y, verbose=False)
     results = sel.select()
+    assert isinstance(results, list)
     for res in results:
         assert isinstance(res, BiobankScreenTRexResult)
         assert isinstance(res.selected_indices, list)

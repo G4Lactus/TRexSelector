@@ -89,7 +89,6 @@ def test_zscore_no_mean_centering():
     scaler = ZScoreScaler(with_mean=False, with_std=True)
     scaler.fit(X)
     X_copy = X.copy()
-    original_means = X.mean(axis=0)
     scaler.transform_inplace(X_copy)
     # Column means should still be non-zero (not centered)
     assert not np.allclose(X_copy.mean(axis=0), 0.0, atol=0.5)
@@ -245,6 +244,7 @@ def test_ridgegcv_df_effective(regression_data):
     model = RidgeGCV()
     model.fit(X, y)
     rpath = model.solve_path(lambdas)
-    assert len(rpath.df_effective) == len(lambdas)
+    df_eff = rpath.df_effective
+    assert len(df_eff) == len(lambdas)
     # Effective df should be in (0, p]
-    assert all(0 < v <= p + 1 for v in rpath.df_effective)
+    assert all(0 < v <= p + 1 for v in df_eff)

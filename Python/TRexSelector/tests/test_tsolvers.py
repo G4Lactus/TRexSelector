@@ -3,7 +3,6 @@ Tests for all T-Solver classes: common API + solver-specific getters.
 """
 import numpy as np
 import pytest
-import trex_selector
 from trex_selector.tsolvers.lars_based import (
     TLARS_Solver,
     TLASSO_Solver,
