@@ -88,10 +88,10 @@ TEST(MemMapTest, SerializationCompatibility) {
     // 2. Read mem map and serialize it via Cereal
     std::stringstream string_stream;
     {
-        trex::utils::memmap::MemoryMappedMatrix<double> mm_read(
+        const trex::utils::memmap::MemoryMappedMatrix<double> mm_read(
             temp_file, rows, cols, trex::utils::memmap::AccessMode::ReadOnly
         );
-        auto mapped_data = mm_read.getMap();
+        const auto mapped_data = mm_read.getMap();
 
         // Convert to concrete matrix for serialization
         Eigen::MatrixXd mat_to_serialize = mapped_data;

@@ -6,6 +6,15 @@
 \description{
 Standardizes features by removing the mean and scaling to unit variance.
 }
+\examples{
+set.seed(1)
+X <- matrix(rnorm(50 * 5), 50, 5)
+scaler <- ZScoreScaler$new()
+scaler$fit(X)
+X_std <- scaler$transform_inplace(X)
+scaler$get_means()
+
+}
 \section{Methods}{
 \subsection{Public methods}{
 \itemize{
@@ -55,7 +64,7 @@ Compute the mean and std to be used for later scaling.
 \subsection{Arguments}{
 \if{html}{\out{<div class="arguments">}}
 \describe{
-\item{\code{X}}{A numeric matrix.}
+\item{\code{X}}{A numeric matrix (n x p).}
 
 \item{\code{threshold}}{Double, lower bound for standard deviation (default: 1e-12).}
 }
@@ -77,7 +86,7 @@ Perform standardization by centering and scaling in-place.
 \subsection{Arguments}{
 \if{html}{\out{<div class="arguments">}}
 \describe{
-\item{\code{X}}{A numeric matrix.}
+\item{\code{X}}{A numeric matrix (n x p).}
 }
 \if{html}{\out{</div>}}
 }
@@ -97,7 +106,7 @@ Inverse transform to original scale.
 \subsection{Arguments}{
 \if{html}{\out{<div class="arguments">}}
 \describe{
-\item{\code{X}}{A numeric matrix.}
+\item{\code{X}}{A numeric matrix (n x p).}
 }
 \if{html}{\out{</div>}}
 }

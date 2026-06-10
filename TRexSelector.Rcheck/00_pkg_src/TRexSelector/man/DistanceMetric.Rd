@@ -19,4 +19,8 @@ Supported metrics include:
 - \code{Correlation_LSH_Filter}: Correlation distance with LSH-based filtering: codes as 3.
 - \code{Correlation_LSH_Approx}: Approximate correlation distance using LSH: codes as 4.
 }
+\examples{
+DistanceMetric$Euclidean
+DistanceMetric$Correlation
+}
 \keyword{datasets}

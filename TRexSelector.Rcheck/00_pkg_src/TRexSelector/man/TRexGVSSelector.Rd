@@ -4,15 +4,39 @@
 \alias{TRexGVSSelector}
 \title{T-Rex Selector with Group Variable Selection (TRex GVS)}
 \description{
-FDR-controlled variable selection algorithm utilizing group-based structural augmentation.
+FDR-controlled variable selection algorithm utilizing group-based structural
+augmentation.
+}
+\examples{
+\donttest{
+data(Gauss_data)
+X <- Gauss_data$X
+y <- Gauss_data$y
+sel <- TRexGVSSelector$new(X, y, tFDR = 0.1, verbose = FALSE,
+                           gvs_control = trex_gvs_control(gvs_type = "EN"))
+sel$select()
+sel$selected_indices
+}
+}
+\section{Super class}{
+\code{\link[TRexSelector:TRexSelector]{TRexSelector::TRexSelector}} -> \code{TRexGVSSelector}
+}
+\section{Active bindings}{
+\if{html}{\out{<div class="r6-active-bindings">}}
+\describe{
+\item{\code{lambda2_used}}{Lambda2 regularization term selected/applied.}
+
+\item{\code{gvs_type}}{The augmentation policy name used (e.g., "EN", "IEN").}
+
+\item{\code{max_clusters}}{The number of unique clusters dynamically formulated.}
+}
+\if{html}{\out{</div>}}
 }
 \section{Methods}{
 \subsection{Public methods}{
 \itemize{
 \item \href{#method-TRexGVSSelector-new}{\code{TRexGVSSelector$new()}}
 \item \href{#method-TRexGVSSelector-select}{\code{TRexGVSSelector$select()}}
-\item \href{#method-TRexGVSSelector-get_selected_indices}{\code{TRexGVSSelector$get_selected_indices()}}
-\item \href{#method-TRexGVSSelector-get_results}{\code{TRexGVSSelector$get_results()}}
 \item \href{#method-TRexGVSSelector-clone}{\code{TRexGVSSelector$clone()}}
 }
 }
@@ -28,23 +52,8 @@ Create a new TRexGVSSelector object.
   tFDR = 0.1,
   seed = -1,
   verbose = TRUE,
-  method = "LARS",
-  gvs_type = "EN",
-  corr_max = 0.5,
-  hc_linkage = "Single",
-  lambda_2 = 0,
-  groups = NULL,
-  K = 20,
-  max_dummy_multiplier = 10,
-  use_max_T_stop = TRUE,
-  opt_threshold = 0.75,
-  lloop_strategy = "HCONCAT",
-  tloop_stagnation_stop = TRUE,
-  tloop_max_stagnant_steps = 5,
-  use_omp = TRUE,
-  use_memory_mapping = FALSE,
-  max_outer_threads = 1,
-  max_inner_threads = 1
+  gvs_control = trex_gvs_control(),
+  control = trex_control()
 )}\if{html}{\out{</div>}}
 }
 
@@ -61,39 +70,13 @@ Create a new TRexGVSSelector object.
 
 \item{\code{verbose}}{Whether to print progress (default: TRUE).}
 
-\item{\code{method}}{The solver method (default: "LARS").}
+\item{\code{gvs_control}}{A GVS control list from \code{\link{trex_gvs_control}()} (default:
+\code{trex_gvs_control()}). The solver method is derived from \code{gvs_type}:
+"EN" uses TENET, "IEN" uses TLASSO. The \code{method} field in \code{control}
+is ignored.}
 
-\item{\code{gvs_type}}{Augmentation policy: "EN", "IEN", "GL", "IGL", "SGL", "ISGL" (default: "EN").}
-
-\item{\code{corr_max}}{Maximum pairwise correlation for clustering (default: 0.5).}
-
-\item{\code{hc_linkage}}{Hierarchical clustering linkage method: "Single", "Complete", "Average", "WPGMA" (default: "Single").}
-
-\item{\code{lambda_2}}{Lambda2 for grouping.}
-
-\item{\code{groups}}{User-specified groups (default: NULL).}
-
-\item{\code{K}}{Number of random experiments (default: 20).}
-
-\item{\code{max_dummy_multiplier}}{Max dummy features multiplier (default: 10).}
-
-\item{\code{use_max_T_stop}}{Whether to bound max T_stop (default: TRUE).}
-
-\item{\code{opt_threshold}}{Optimization threshold (default: 0.75).}
-
-\item{\code{lloop_strategy}}{Strategy for L-loop (default: "HCONCAT").}
-
-\item{\code{tloop_stagnation_stop}}{Whether to stop early if stagnation (default: TRUE).}
-
-\item{\code{tloop_max_stagnant_steps}}{Steps before stagnation trigger (default: 5).}
-
-\item{\code{use_omp}}{Whether to use OpenMP parallelization (default: TRUE).}
-
-\item{\code{use_memory_mapping}}{Use out-of-core memory mapping (default: FALSE).}
-
-\item{\code{max_outer_threads}}{Thread count for K repetitions (default: 1).}
-
-\item{\code{max_inner_threads}}{Thread count for inner solvers (default: 1).}
+\item{\code{control}}{A control list from \code{\link{trex_control}()} (default:
+\code{trex_control()}). The \code{method} field is overridden by \code{gvs_type}.}
 }
 \if{html}{\out{</div>}}
 }
@@ -107,32 +90,6 @@ Run the GVS algorithm.
 \if{html}{\out{<div class="r">}}\preformatted{TRexGVSSelector$select()}\if{html}{\out{</div>}}
 }
 
-}
-\if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-TRexGVSSelector-get_selected_indices"></a>}}
-\if{latex}{\out{\hypertarget{method-TRexGVSSelector-get_selected_indices}{}}}
-\subsection{Method \code{get_selected_indices()}}{
-Get the integer indices (1-based) of the selected variables.
-\subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{TRexGVSSelector$get_selected_indices()}\if{html}{\out{</div>}}
-}
-
-\subsection{Returns}{
-Numeric vector of selected indices.
-}
-}
-\if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-TRexGVSSelector-get_results"></a>}}
-\if{latex}{\out{\hypertarget{method-TRexGVSSelector-get_results}{}}}
-\subsection{Method \code{get_results()}}{
-Get generic solver results.
-\subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{TRexGVSSelector$get_results()}\if{html}{\out{</div>}}
-}
-
-\subsection{Returns}{
-A list containing results.
-}
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-TRexGVSSelector-clone"></a>}}

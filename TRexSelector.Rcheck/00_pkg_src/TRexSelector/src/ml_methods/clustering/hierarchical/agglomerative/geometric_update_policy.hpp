@@ -196,4 +196,4 @@ public:
 // ===================================================================================
 } /* End of trex::ml_methods::clustering::hierarchical::agglomerative  */
 
-#endif /* ML_METHODS_CLUSTERING_HC_AGGLOMERATIVE_GEOMETRIC_UPDATE_POLICY_HPP */
+#endif /* End of ML_METHODS_CLUSTERING_HC_AGGLOMERATIVE_GEOMETRIC_UPDATE_POLICY_HPP */

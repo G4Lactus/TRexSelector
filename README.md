@@ -1,135 +1,215 @@
-# The T-Rex Selector -  The C++ Implementation
+# TRexSelector
 
-## Intro
+**C++20 library for FDR-controlled variable selection in high-dimensional regression and classification.**
+
+---
 
 ## About the T-Rex Selector
 
-### Dependencies
+The T-Rex Selector is a statistically principled method for selecting relevant predictors from
+high-dimensional datasets while rigorously controlling the False Discovery Rate (FDR) — the
+expected proportion of falsely selected variables — at a user-specified level.
+The algorithm works by generating random dummy variables that act as a calibration baseline:
+during each of *K* independent random experiments, a terminating solver traces solution paths
+through both the real predictors and the dummies.
+By comparing how often each real predictor is selected relative to the dummies across all
+experiments, a voting threshold is derived that provably bounds the FDR.
+The result is a fast selector that scales to high-dimensional problems without
+sacrificing statistical guarantees.
 
-The following packages are required:
+**Papers:**
 
-- **Eigen3** – Linear algebra library (any recent version)
-- **Boost** ≥ 1.80 – Headers and iostreams components
-- **Cereal** – Serialization framework  
-- **OpenMP** – Parallel computing support
-- **BLAS/LAPACK** – Linear algebra backend (Accelerate on macOS, OpenBLAS elsewhere)|
+- [Machkour, Muma, Palomar — *The Terminating-Random Experiments Selector: Fast High-Dimensional Variable Selection with False Discovery Rate Control*, Elsevier Signal Processing (2025)](https://www.sciencedirect.com/science/article/pii/S016516842500009X)
+- [Machkour, Muma, Palomar - *High-dimensional false discovery rate control for dependent variables*, Elsevier Signal Processing (2025)](https://www.sciencedirect.com/science/article/pii/S0165168425001045)
 
-### Quick Install
+**Project website:** [trexselector.com](https://trexselector.com)
 
-**macOS:**
+---
+
+## Implemented Variants
+
+| Class | Description |
+|---|---|
+| `TRexSelector` | Core FDR-controlled selector for linear regression |
+| `TRexDASelector` | Dependency-aware variant for correlated predictors |
+| `TRexGVSSelector` | Grouped variable selection |
+| `TRexScreeningSelector` | Fast FDR-controlled variable pre-screening for large *p* |
+| `TRexBiobankScreeningSelector` | High-throughput genomic / biobank screening |
+
+R and Python bindings expose all variants — see the [R Package](#r-package) and
+[Python Package](#python-package) sections below.
+
+---
+
+## Dependencies
+
+| Library | Role | Version | Required |
+|---|---|---|---|
+| [Eigen3](https://eigen.tuxfamily.org) | Linear algebra | any recent | Yes |
+| [Boost](https://www.boost.org) | Headers + iostreams (memory-mapped files) | ≥ 1.80 | Yes |
+| [Cereal](https://uscilab.github.io/cereal) | Serialization of solver state | any recent | Yes |
+| [OpenMP](https://www.openmp.org) | Parallelisation of random experiments | ≥ 3.1 | Yes |
+| BLAS / LAPACK | Accelerated linear algebra backend | — | Optional |
+
+On **macOS**, BLAS/LAPACK defaults to Apple Accelerate. On **Linux**, OpenBLAS is used.
+The BLAS/LAPACK backend can be disabled at configure time with `-DTREX_USE_BLAS_LAPACK=OFF`.
+
+---
+
+## Quick Install
+
+**macOS (Homebrew):**
 
 ```bash
-    brew install llvm eigen cereal boost openblas libomp
+brew install llvm eigen cereal boost openblas libomp
 ```
 
-**Ubuntu/Debian:**
+> CMake requires Homebrew LLVM (not Apple Clang) for OpenMP support.
+> The build system detects it automatically at `/opt/homebrew/opt/llvm`.
+
+**Ubuntu / Debian:**
 
 ```bash
-    apt install libeigen3-dev libcereal-dev libboost-all-dev libopenblas-dev libomp-dev
+sudo apt install libeigen3-dev libcereal-dev libboost-all-dev libopenblas-dev libomp-dev
 ```
 
-**Windows (via vcpkg):**
+**Windows (vcpkg):**
 
-Install [vcpkg](https://github.com/microsoft/vcpkg), set `VCPKG_ROOT`, then:
+Install [vcpkg](https://github.com/microsoft/vcpkg), set `VCPKG_ROOT`, then let the
+preset handle everything:
 
 ```bash
 cmake --workflow --preset vcpkg-release
 ```
 
-vcpkg will automatically install Eigen3, Boost, cereal, and all other dependencies.
+vcpkg reads `vcpkg.json` and automatically installs Eigen3, Boost, Cereal, and libomp.
 
-## Notes
+---
 
-```txt
+## Build
 
-Step 1: Nuke the Build Cache
-CMake heavily caches variables. If something goes wrong with compiler detection, you must delete the physical cache, not just "clean" the targets.
+Configure and build using CMake presets:
 
-    Open the VSCode Explorer.
+```bash
+# Debug build (symbols, no optimisation)
+cmake --preset debug
+cmake --build --preset debug-build
 
-    Delete the entire build/ folder (which contains your debug/ and release/ preset folders).
-
-    Delete the compile_commands.json file sitting at the root of your workspace (if it exists).
-
-
-Step 2: Disarm Conflicting Extensions & Kits
-Before reconfiguring, we must ensure VSCode isn't trying to hijack CMake.
-
-    Extensions: Ensure conflicting linting extensions (like C/C++ Runner) are disabled. 
-    You only want the official Microsoft C/C++ and CMake Tools extensions active.
-
-    Kits: Look at the blue status bar at the bottom of VSCode. Find the CMake Kit section. 
-    Click it and explicitly set it to [Unspecified]. 
-    This forces VSCode to respect the Homebrew LLVM compiler block inside your CMakeLists.txt.
-
-
-Step 3: Reconfigure the Project
-Now we let CMake rebuild its cache and generate a fresh compilation database.
-
-    Press Cmd + Shift + P (macOS) to open the Command Palette.
-
-    Run the command: CMake: Delete Cache and Reconfigure.
-
-    Alternative: If the CMake extension is being stubborn, you can run your custom task via 
-    Terminal -> Run Task... -> CMake Full Build (Debug).
-
-    Wait for the configuration to finish. 
-    You should see your custom message *** Using Homebrew LLVM: ... in the output panel.
-
-
-Step 4: Verify the Compile Commands
-IntelliSense relies entirely on the compilation database to find your system headers.
-
-    Look at the root of your VSCode Explorer tree.
-
-    Verify that a fresh compile_commands.json file has automatically appeared there. 
-    (This happens automatically because of the "cmake.copyCompileCommands": 
-    "${workspaceFolder}/compile_commands.json" rule we added to your settings.json).
-
-
-Step 5: Force an IntelliSense Rescan
-Finally, we tell the C++ linter to wake up and read the new map.
-
-    Press Cmd + Shift + P.
-
-    Run the command: C/C++: Rescan Workspace.
-
-    Give it a few seconds to parse. The red squiggly lines under your standard library includes 
-    (like <vector> or <string>) will disappear.
+# Release build (optimised)
+cmake --preset release
+cmake --build --preset release-build
 ```
 
-When to use?
+Or use the VS Code tasks: **CMake Full Build (Debug)** / **CMake Full Build (Release)**
+via *Terminal → Run Task…*
 
-- After switching git branches where CMakeLists.txt might have changed.
-- After installing a new system library via Homebrew (e.g., updating Boost or Eigen).
-- If you ever see a red squiggly line under standard C++ headers.
-- If CMake throws bizarre linker errors complaining about architectures (e.g., x86_x64 vs arm64).
+Build artefacts land in `build/debug/` and `build/release/`. Executables are placed in
+the `bin/` subdirectory of each build directory.
 
-## Development
+> **macOS pitfall:** If IntelliSense or builds break after a branch switch or library upgrade,
+> see [notes/IDE_Troubleshooting.md](notes/IDE_Troubleshooting.md) for the full
+> cache-clearing and reconfiguration procedure.
 
-- LLVM
-- clangd
-- VSCode Clang deactivated
-- No Apple Clang compiler, no openMP support
+---
 
+## Testing
 
-```
-cmake --install build/ --prefix /usr/local
-```
+The test suite uses GoogleTest. After building:
 
-````
-/usr/local/
-├── include/tsolvers/          ← all your .hpp files
-├── lib/
-│   ├── libtrex_tsolvers.a
-│   └── cmake/TRexSelector/
-│       ├── TRexSelectorConfig.cmake
-│       ├── TRexSelectorConfigVersion.cmake
-│       └── TRexSelectorTargets.cmake
+```bash
+# Debug
+cd build/debug && ctest --output-on-failure
+
+# Release
+cd build/release && ctest --output-on-failure
 ```
 
-A user then only needs:
+---
+
+## R Package
+
+The R bindings live in [`R/TRexSelector/`](R/TRexSelector/) and are implemented with
+RcppEigen. The C++ backend is compiled automatically on installation — no separate
+CMake step is needed.
+
+**Install from source:**
+
+```r
+install.packages("path/to/R/TRexSelector", repos = NULL, type = "source")
 ```
-find_package(TRexSelector 0.1 REQUIRED)
-target_link_libraries(my_app PRIVATE TRexSelector::tsolvers)
+
+Or directly from the repository root:
+
+```bash
+R CMD INSTALL R/TRexSelector
 ```
+
+CRAN submission is in progress. The package passes `R CMD check --as-cran` with no
+errors, warnings, or notes on macOS arm64.
+
+---
+
+## Python Package
+
+The Python bindings live in [`Python/TRexSelector/`](Python/TRexSelector/) and are
+implemented with pybind11, built via scikit-build-core.
+
+**Install from source** (requires CMake ≥ 3.24, a C++20 compiler, and the C++ dependencies above):
+
+```bash
+pip install --no-build-isolation -e Python/TRexSelector
+```
+
+PyPI distribution is planned. See
+[notes/Plan for Packages.txt](notes/Plan%20for%20Packages.txt) for the release roadmap.
+
+---
+
+## Platform Compatibility
+
+| Platform | Architecture | C++ Core | R Package | Python Package |
+|---|---|---|---|---|
+| macOS | arm64 | Tested ✓ | Tested ✓ | Tested ✓ |
+| Linux | x86_64 | Open | Open | Open |
+| Windows | x86_64 | Open | Open | Open |
+
+Linux and Windows support is expected to work but has not yet been formally verified.
+Contributions and test reports are welcome.
+
+---
+
+## For C++ Developers
+
+The library exports CMake targets and can be consumed by other C++ projects.
+
+**Install:**
+
+```bash
+cmake --install build/release --prefix /usr/local
+```
+
+This installs headers to `/usr/local/include/` and the CMake config files to
+`/usr/local/lib/cmake/TRexSelector/`.
+
+**Consume in your project:**
+
+```cmake
+find_package(TRexSelector REQUIRED)
+target_link_libraries(my_app PRIVATE trex::trex_selector_methods)
+```
+
+Available targets: `trex::utils`, `trex::ml_methods`, `trex::tsolvers`,
+`trex::trex_selector_methods`.
+
+---
+
+## References
+
+- [Machkour, Muma, Palomar — *The Terminating-Random Experiments Selector: Fast High-Dimensional Variable Selection with False Discovery Rate Control*, Elsevier Signal Processing (2025)](https://www.sciencedirect.com/science/article/pii/S016516842500009X)
+- [Machkour, Muma, Palomar - *High-dimensional false discovery rate control for dependent variables*, Elsevier Signal Processing (2025)](https://www.sciencedirect.com/science/article/pii/S0165168425001045)
+
+---
+
+## License
+
+GPL ≥ 3 — see [LICENSE](LICENSE).

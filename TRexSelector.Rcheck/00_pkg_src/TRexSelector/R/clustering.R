@@ -1,4 +1,11 @@
-#' @useDynLib TRexSelector
+# =============================================================================
+# clustering.R - Hierarchical Clustering and Tree Cutting
+#
+# Functions are based on the implementations within the TRexSelector package,
+# written in Cpp with Rcpp interfaces.
+# =============================================================================
+
+
 #' @importFrom Rcpp evalCpp
 NULL
 
@@ -15,6 +22,9 @@ NULL
 #'              - `Median`: Median linkage: codes as 5.
 #'              - `Centroid`: Centroid linkage: codes as 6.
 #'
+#' @examples
+#' LinkageMethod$Ward
+#' LinkageMethod$Average
 #' @export
 LinkageMethod <- list(
   Ward = 0,
@@ -37,6 +47,9 @@ LinkageMethod <- list(
 #'            - `Correlation_LSH_Filter`: Correlation distance with LSH-based filtering: codes as 3.
 #'            - `Correlation_LSH_Approx`: Approximate correlation distance using LSH: codes as 4.
 #'
+#' @examples
+#' DistanceMetric$Euclidean
+#' DistanceMetric$Correlation
 #' @export
 DistanceMetric <- list(
   Euclidean = 0,
@@ -59,6 +72,10 @@ DistanceMetric <- list(
 #'
 #' @return A numeric matrix representing the computed hierarchical linkage.
 #'
+#' @examples
+#' set.seed(1)
+#' data <- matrix(rnorm(30), nrow = 10)
+#' agglomerative_cluster(data, method = LinkageMethod$Ward)
 #' @export
 agglomerative_cluster <- function(data,
                                   method = LinkageMethod$Ward,
@@ -69,7 +86,10 @@ agglomerative_cluster <- function(data,
   }
 
   # Delegate to Rcpp layer
-  rcpp_agglomerative_cluster(data, method, metric, use_mmap)
+  result <- rcpp_agglomerative_cluster(data, method, metric, use_mmap)
+  # convert 0-based Cpp cluster IDs to 1-based R convention
+  result[, 1:2] <- result[, 1:2] + 1L
+  result
 }
 
 
@@ -83,6 +103,11 @@ agglomerative_cluster <- function(data,
 #'
 #' @return An integer vector mapping observation indexes to cluster arrays.
 #'
+#' @examples
+#' set.seed(1)
+#' data <- matrix(rnorm(30), nrow = 10)
+#' linkage <- agglomerative_cluster(data, method = LinkageMethod$Ward)
+#' cut_tree(linkage, num_orig_objs = 10, num_clusters = 3)
 #' @export
 cut_tree <- function(linkage, num_orig_objs, num_clusters) {
   if (!is.matrix(linkage) || !is.numeric(linkage)) {
@@ -92,5 +117,9 @@ cut_tree <- function(linkage, num_orig_objs, num_clusters) {
     stop("num_clusters must be > 0 and <= num_orig_objs")
   }
 
-  rcpp_cut_tree(linkage, as.integer(num_orig_objs), as.integer(num_clusters))
+  # Convert 1-based R linkage cluster IDs back to 0-based Cpp before calling Rcpp;
+  linkage_0 <- linkage
+  linkage_0[, 1:2] <- linkage_0[, 1:2] - 1L
+  # then shift the returned 0-based labels to 1-based R convention
+  rcpp_cut_tree(linkage_0, as.integer(num_orig_objs), as.integer(num_clusters)) + 1L
 }

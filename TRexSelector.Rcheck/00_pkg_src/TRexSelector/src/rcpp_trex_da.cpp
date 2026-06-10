@@ -1,6 +1,6 @@
 // [[Rcpp::depends(RcppEigen)]]
 #include <RcppEigen.h>
-#include "rcpp_trex_da_wrapper.h"
+#include "rcpp_trex_da.h"
 
 using namespace Rcpp;
 using namespace trex::trex_selector_methods::trex_core;
@@ -87,55 +87,67 @@ void trex_da_select(XPtr<RTRexDASelector> r_ptr) {
     r_ptr->select();
 }
 
-//' @title Get DA Results
+// =========================================================================================
+// Getters
+// =========================================================================================
+
+//' @title Cast DA pointer to Base pointer
 //' @noRd
 // [[Rcpp::export]]
-List trex_da_get_results(XPtr<RTRexDASelector> r_ptr) {
-    const auto& res = r_ptr->get()->getDAResult();
-    
-    // Map enums to strings for R
-    std::string method_str = (res.method == DAMethod::BT) ? "BT" : 
-                             (res.method == DAMethod::AR1) ? "AR1" : "EQUI";
-                             
-    return List::create(
-        Named("selected_var") = res.selected_var,
-        Named("v_thresh") = res.v_thresh,
-        Named("T_stop") = res.T_stop,
-        Named("num_dummies") = res.num_dummies,
-        Named("dummy_factor_L") = res.dummy_factor_L,
-        Named("voting_grid") = res.voting_grid,
-        Named("rho_thresh") = res.rho_thresh,
-        Named("rho_grid") = res.rho_grid,
-        Named("method") = method_str,
-        Named("cor_coef") = res.cor_coef
-    );
+XPtr<RTRexSelector> trex_da_to_base_ptr(XPtr<RTRexDASelector> r_ptr) {
+    RTRexSelector* base_ptr = static_cast<RTRexSelector*>(r_ptr.get());
+    return XPtr<RTRexSelector>(base_ptr, false);
 }
 
-//' @title Get DA Matrices
+//' @title Get DA Rho Threshold
 //' @noRd
 // [[Rcpp::export]]
-List trex_da_get_matrices(XPtr<RTRexDASelector> r_ptr) {
-    const auto& res = r_ptr->get()->getDAResult();
-    
-    return List::create(
-        Named("R_mat") = res.R_mat,
-        Named("FDP_hat_mat") = res.FDP_hat_mat,
-        Named("Phi_mat") = res.Phi_mat,
-        Named("Phi_prime") = res.Phi_prime,
-        Named("FDP_hat_array_BT") = res.FDP_hat_array_BT,
-        Named("Phi_array_BT") = res.Phi_array_BT,
-        Named("R_array_BT") = res.R_array_BT
-    );
+double trex_da_get_rho_thresh(XPtr<RTRexDASelector> r_ptr) {
+    return r_ptr->get()->getDAResult().rho_thresh;
 }
 
-//' @title Get DA Selected Indices
+//' @title Get DA Rho Grid
 //' @noRd
 // [[Rcpp::export]]
-IntegerVector trex_da_get_selected_indices(XPtr<RTRexDASelector> r_ptr) {
-    auto indices = r_ptr->get()->getSelectedIndices();
-    IntegerVector res(indices.size());
-    for(size_t i = 0; i < indices.size(); ++i) {
-        res[i] = static_cast<int>(indices[i] + 1); // 1-based indexing for R
-    }
-    return res;
+Eigen::VectorXd trex_da_get_rho_grid(XPtr<RTRexDASelector> r_ptr) {
+    return r_ptr->get()->getDAResult().rho_grid;
+}
+
+//' @title Get DA Method String
+//' @noRd
+// [[Rcpp::export]]
+std::string trex_da_get_method_string(XPtr<RTRexDASelector> r_ptr) {
+    DAMethod m = r_ptr->get()->getDAResult().method;
+    if (m == DAMethod::BT) return "BT";
+    if (m == DAMethod::AR1) return "AR1";
+    if (m == DAMethod::EQUI) return "EQUI";
+    return "UNKNOWN";
+}
+
+//' @title Get DA Cor Coef
+//' @noRd
+// [[Rcpp::export]]
+double trex_da_get_cor_coef(XPtr<RTRexDASelector> r_ptr) {
+    return r_ptr->get()->getDAResult().cor_coef;
+}
+
+//' @title Get DA FDP Hat Array BT
+//' @noRd
+// [[Rcpp::export]]
+std::vector<Eigen::MatrixXd> trex_da_get_fdp_hat_array_bt(XPtr<RTRexDASelector> r_ptr) {
+    return r_ptr->get()->getDAResult().FDP_hat_array_BT;
+}
+
+//' @title Get DA Phi Array BT
+//' @noRd
+// [[Rcpp::export]]
+std::vector<Eigen::MatrixXd> trex_da_get_phi_array_bt(XPtr<RTRexDASelector> r_ptr) {
+    return r_ptr->get()->getDAResult().Phi_array_BT;
+}
+
+//' @title Get DA R Array BT
+//' @noRd
+// [[Rcpp::export]]
+std::vector<Eigen::MatrixXd> trex_da_get_r_array_bt(XPtr<RTRexDASelector> r_ptr) {
+    return r_ptr->get()->getDAResult().R_array_BT;
 }

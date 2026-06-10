@@ -47,6 +47,14 @@ public:
      * @brief Executes hierarchical clustering, automatically dispatching to the
      * mathematically optimal engine.
      *
+     * @note SciPy Equivalence:
+     * - Metrics: `DistanceMetric::Euclidean` calculates squared distances (equivalent
+     *   to SciPy's `metric='sqeuclidean'`).
+     * - Inversions: Standard SciPy preserves non-monotonic inversions for methods like
+     *   Centroid and Median. This framework currently enforces strict distance
+     *   monotonicity globally, which may reorder rows compared to SciPy's chronological
+     *   output for those specific non-reducible methods.
+     *
      * @tparam MatrixType          The type of the input data matrix.
      * @tparam DistancePolicyType  The distance metric policy.
      * @tparam Method              The linkage method requested by the user.
@@ -127,4 +135,4 @@ public:
 // ===================================================================================
 } /* End of namespace trex::ml_methods::clustering::hierarchical::agglomerative */
 
-#endif /* ML_METHODS_CLUSTERING_HC_AGGLOMERATIVE_DISPATCHER_HPP */
+#endif /* End of ML_METHODS_CLUSTERING_HC_AGGLOMERATIVE_DISPATCHER_HPP */

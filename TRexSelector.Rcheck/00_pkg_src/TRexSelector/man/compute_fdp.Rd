@@ -17,3 +17,7 @@ Numeric FDP value.
 \description{
 Compute False Discovery Proportion (FDP) using index sets
 }
+\examples{
+compute_fdp(c(1L, 3L, 5L), c(1L, 2L, 3L))
+
+}

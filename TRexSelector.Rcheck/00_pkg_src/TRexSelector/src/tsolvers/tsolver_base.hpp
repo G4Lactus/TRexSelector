@@ -146,7 +146,7 @@ protected:
      * @brief Numerical tolerance for various checks (e.g., collinearity).
      * Default is machine epsilon.
      */
-    const double eps_ = std::numeric_limits<double>::epsilon();
+    double eps_ = std::numeric_limits<double>::epsilon();
 
     /** @brief Flag indicating if the solver is connected to the data. Default is false. */
     bool is_connected_{false};
@@ -210,6 +210,9 @@ public:
 
     /** @brief Defaulted move constructor. */
     TSolver_Base(TSolver_Base&&) = default;
+
+    /** @brief Sets numerical tolerance for numeric comparisons internally. */
+    void setTolerance(double tol) { eps_ = tol; }
 
     // ==========================================================================
     // Pure Virtual Interface

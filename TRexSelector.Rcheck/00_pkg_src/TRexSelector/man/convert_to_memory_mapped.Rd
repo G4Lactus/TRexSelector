@@ -18,3 +18,12 @@ NULL invisibly mapped.
 Maps a given R numeric matrix into a binary formatted memory-mapped file on disk
 efficiently.
 }
+\examples{
+\donttest{
+mat <- matrix(as.double(1:20), nrow = 4, ncol = 5)
+f <- tempfile(fileext = ".bin")
+on.exit(unlink(f), add = TRUE)
+convert_to_memory_mapped(mat, f)
+}
+
+}

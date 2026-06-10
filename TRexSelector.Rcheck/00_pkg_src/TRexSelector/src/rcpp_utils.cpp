@@ -1,3 +1,15 @@
+// =========================================================================================
+// rcpp_utils.cpp - Rcpp utility functions for TRexSelector.
+// =========================================================================================
+/*
+ * Note on Roxygen Documentation:
+ * All functions exported via Rcpp in this file are documented using standard Roxygen tags
+ * but strictly include the `@noRd` tag. These are internal C++ bindings that are wrapped
+ * by user-friendly R6 classes and R functions in the package namespace. Generating `.Rd`
+ * manuals for these endpoints would clutter the public API.
+ */
+// =========================================================================================
+
 // [[Rcpp::depends(RcppEigen)]]
 #include <RcppEigen.h>
 #include <string>
@@ -14,14 +26,7 @@
 
 // ========================================================================================
 
-/*
- * Note on Roxygen Documentation:
- * All functions exported via Rcpp in this file are documented using standard Roxygen tags 
- * but strictly include the `@noRd` tag. These are internal C++ bindings that are wrapped 
- * by user-friendly R6 classes and R functions in the package namespace. Generating `.Rd` 
- * manuals for these endpoints would clutter the public API.
- */
-
+// Namespace convenience
 using namespace Rcpp;
 using namespace trex::utils::memmap;
 
@@ -30,9 +35,11 @@ using namespace trex::utils::memmap;
 // ========================================================================================
 
 //' @title Set custom temp directory for the C++ backend
+//'
 //' @description Injects the R session's tempdir() into the C++ backend to obey CRAN memory rules.
+//'
 //' @param temp_dir The absolute path to the directory (e.g. from `tempdir()`).
-//' @export
+//'
 //' @noRd
 // [[Rcpp::export]]
 void rcpp_set_custom_temp_dir(const std::string& temp_dir) {
@@ -45,18 +52,21 @@ void rcpp_set_custom_temp_dir(const std::string& temp_dir) {
 
 //' @title Create Memory Mapped Matrix
 //'
-//' @param filename Path to the file
+//' @param filename Path to the file.
 //' @param rows Number of rows
-//' @param cols Number of columns
-//' @param mode_idx Mode index
+//' @param cols Number of columns.
+//' @param mode_idx Mode index with 0: ReadOnly, 1: ReadWrite.
+//'
 //' @return XPtr to MemoryMappedMatrix
+//'
 //' @noRd
 // [[Rcpp::export]]
 XPtr<MemoryMappedMatrix<double>> mmap_matrix_create(
     const std::string& filename,
     int rows,
     int cols,
-    int mode_idx = 1) { // 0: ReadOnly, 1: ReadWrite
+    int mode_idx = 1
+) {
 
     AccessMode mode = (mode_idx == 0) ? AccessMode::ReadOnly : AccessMode::ReadWrite;
     return XPtr<MemoryMappedMatrix<double>>(
@@ -66,16 +76,20 @@ XPtr<MemoryMappedMatrix<double>> mmap_matrix_create(
     );
 }
 
+
 //' @title Convert Memory Mapped Matrix to R Matrix
 //'
 //' @param ptr XPtr to MemoryMappedMatrix
+//'
 //' @return NumericMatrix
+//'
 //' @noRd
 // [[Rcpp::export]]
 NumericMatrix mmap_matrix_to_r_matrix(
     XPtr<MemoryMappedMatrix<double>> ptr  // NOLINT(performance-unnecessary-value-param)
 ) {
-    auto map = ptr->getMap();
+    const MemoryMappedMatrix<double>& cref = *ptr;
+    auto map = cref.getMap();
 
     // Copy the mapped memory safely to a standard R matrix buffer
     NumericMatrix result(static_cast<int>(map.rows()), static_cast<int>(map.cols()));
@@ -86,10 +100,12 @@ NumericMatrix mmap_matrix_to_r_matrix(
     return result;
 }
 
+
 //' @title Convert R Matrix to Memory Mapped Matrix
 //'
 //' @param mat R NumericMatrix
 //' @param filename Output filename
+//'
 //' @noRd
 // [[Rcpp::export]]
 void convert_to_memory_mapped_matrix(
@@ -113,7 +129,9 @@ void convert_to_memory_mapped_matrix(
 //' @title Get Number of Rows in Memory Mapped Matrix
 //'
 //' @param ptr XPtr to MemoryMappedMatrix
+//'
 //' @return Integer number of rows
+//'
 //' @noRd
 // [[Rcpp::export]]
 int mmap_matrix_rows(
@@ -127,6 +145,7 @@ int mmap_matrix_rows(
 //'
 //' @param ptr XPtr to MemoryMappedMatrix
 //' @return Integer number of columns
+//'
 //' @noRd
 // [[Rcpp::export]]
 int mmap_matrix_cols(
@@ -139,7 +158,9 @@ int mmap_matrix_cols(
 //' @title Get Total Size of Memory Mapped Matrix
 //'
 //' @param ptr XPtr to MemoryMappedMatrix
+//'
 //' @return Integer total size
+//'
 //' @noRd
 // [[Rcpp::export]]
 int mmap_matrix_size(
@@ -156,7 +177,9 @@ int mmap_matrix_size(
 //' @param row_count Number of rows to read
 //' @param col_start Start column index (0-based)
 //' @param col_count Number of columns to read
+//'
 //' @return NumericMatrix block
+//'
 //' @noRd
 // [[Rcpp::export]]
 NumericMatrix mmap_matrix_read_range(
@@ -164,7 +187,8 @@ NumericMatrix mmap_matrix_read_range(
     int row_start, int row_count,
     int col_start, int col_count) {
 
-    auto map = ptr->getMap();
+    const MemoryMappedMatrix<double>& cref = *ptr;
+    auto map = cref.getMap();
 
     // Bounds checking
     if (row_start < 0 || col_start < 0 || row_count < 0 || col_count < 0 ||
@@ -190,7 +214,9 @@ NumericMatrix mmap_matrix_read_range(
 //'
 //' @param selected_indices Selected indices
 //' @param true_support True support indices
+//'
 //' @return FDP value
+//'
 //' @noRd
 // [[Rcpp::export]]
 double rcpp_compute_fdp(
@@ -205,7 +231,9 @@ double rcpp_compute_fdp(
 //'
 //' @param selected_indices Selected indices
 //' @param true_support True support indices
+//'
 //' @return TPP value
+//'
 //' @noRd
 // [[Rcpp::export]]
 double rcpp_compute_tpp(
@@ -220,7 +248,9 @@ double rcpp_compute_tpp(
 //'
 //' @param selected_indices Selected indices
 //' @param true_support True support indices
+//'
 //' @return Precision value
+//'
 //' @noRd
 // [[Rcpp::export]]
 double rcpp_compute_precision(
@@ -235,7 +265,9 @@ double rcpp_compute_precision(
 //'
 //' @param selected_indices Selected indices
 //' @param true_support True support indices
+//'
 //' @return Recall value
+//'
 //' @noRd
 // [[Rcpp::export]]
 double rcpp_compute_recall(
@@ -248,10 +280,12 @@ double rcpp_compute_recall(
 
 //' @title Compute FDP from dense vectors
 //'
-//' @param beta_hat Estimated coefficients
-//' @param beta True coefficients
-//' @param eps Tolerance
+//' @param beta_hat Estimated coefficients.
+//' @param beta True coefficients.
+//' @param eps Tolerance.
+//'
 //' @return FDP value
+//'
 //' @noRd
 // [[Rcpp::export]]
 double rcpp_compute_fdp_dense(
@@ -265,10 +299,12 @@ double rcpp_compute_fdp_dense(
 
 //' @title Compute TPP from dense vectors
 //'
-//' @param beta_hat Estimated coefficients
-//' @param beta True coefficients
-//' @param eps Tolerance
-//' @return TPP value
+//' @param beta_hat Estimated coefficients.
+//' @param beta True coefficients.
+//' @param eps Tolerance.
+//'
+//' @return TPP value.
+//'
 //' @noRd
 // [[Rcpp::export]]
 double rcpp_compute_tpp_dense(

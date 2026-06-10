@@ -19,3 +19,9 @@ An integer vector mapping observation indexes to cluster arrays.
 \description{
 Flatten the dendrogram clustering results based on the number of requested groups.
 }
+\examples{
+set.seed(1)
+data <- matrix(rnorm(30), nrow = 10)
+linkage <- agglomerative_cluster(data, method = LinkageMethod$Ward)
+cut_tree(linkage, num_orig_objs = 10, num_clusters = 3)
+}

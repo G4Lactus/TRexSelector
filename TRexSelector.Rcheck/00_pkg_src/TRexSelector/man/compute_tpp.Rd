@@ -17,3 +17,7 @@ Numeric TPP value.
 \description{
 Compute True Positive Proportion (TPP) using index sets
 }
+\examples{
+compute_tpp(c(1L, 3L, 5L), c(1L, 2L, 3L))
+
+}

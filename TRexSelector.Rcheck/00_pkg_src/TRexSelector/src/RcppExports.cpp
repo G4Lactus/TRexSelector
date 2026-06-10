@@ -664,36 +664,91 @@ BEGIN_RCPP
     return R_NilValue;
 END_RCPP
 }
-// trex_da_get_results
-List trex_da_get_results(XPtr<RTRexDASelector> r_ptr);
-RcppExport SEXP _TRexSelector_trex_da_get_results(SEXP r_ptrSEXP) {
+// trex_da_to_base_ptr
+XPtr<RTRexSelector> trex_da_to_base_ptr(XPtr<RTRexDASelector> r_ptr);
+RcppExport SEXP _TRexSelector_trex_da_to_base_ptr(SEXP r_ptrSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
     Rcpp::traits::input_parameter< XPtr<RTRexDASelector> >::type r_ptr(r_ptrSEXP);
-    rcpp_result_gen = Rcpp::wrap(trex_da_get_results(r_ptr));
+    rcpp_result_gen = Rcpp::wrap(trex_da_to_base_ptr(r_ptr));
     return rcpp_result_gen;
 END_RCPP
 }
-// trex_da_get_matrices
-List trex_da_get_matrices(XPtr<RTRexDASelector> r_ptr);
-RcppExport SEXP _TRexSelector_trex_da_get_matrices(SEXP r_ptrSEXP) {
+// trex_da_get_rho_thresh
+double trex_da_get_rho_thresh(XPtr<RTRexDASelector> r_ptr);
+RcppExport SEXP _TRexSelector_trex_da_get_rho_thresh(SEXP r_ptrSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
     Rcpp::traits::input_parameter< XPtr<RTRexDASelector> >::type r_ptr(r_ptrSEXP);
-    rcpp_result_gen = Rcpp::wrap(trex_da_get_matrices(r_ptr));
+    rcpp_result_gen = Rcpp::wrap(trex_da_get_rho_thresh(r_ptr));
     return rcpp_result_gen;
 END_RCPP
 }
-// trex_da_get_selected_indices
-IntegerVector trex_da_get_selected_indices(XPtr<RTRexDASelector> r_ptr);
-RcppExport SEXP _TRexSelector_trex_da_get_selected_indices(SEXP r_ptrSEXP) {
+// trex_da_get_rho_grid
+Eigen::VectorXd trex_da_get_rho_grid(XPtr<RTRexDASelector> r_ptr);
+RcppExport SEXP _TRexSelector_trex_da_get_rho_grid(SEXP r_ptrSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
     Rcpp::traits::input_parameter< XPtr<RTRexDASelector> >::type r_ptr(r_ptrSEXP);
-    rcpp_result_gen = Rcpp::wrap(trex_da_get_selected_indices(r_ptr));
+    rcpp_result_gen = Rcpp::wrap(trex_da_get_rho_grid(r_ptr));
+    return rcpp_result_gen;
+END_RCPP
+}
+// trex_da_get_method_string
+std::string trex_da_get_method_string(XPtr<RTRexDASelector> r_ptr);
+RcppExport SEXP _TRexSelector_trex_da_get_method_string(SEXP r_ptrSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< XPtr<RTRexDASelector> >::type r_ptr(r_ptrSEXP);
+    rcpp_result_gen = Rcpp::wrap(trex_da_get_method_string(r_ptr));
+    return rcpp_result_gen;
+END_RCPP
+}
+// trex_da_get_cor_coef
+double trex_da_get_cor_coef(XPtr<RTRexDASelector> r_ptr);
+RcppExport SEXP _TRexSelector_trex_da_get_cor_coef(SEXP r_ptrSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< XPtr<RTRexDASelector> >::type r_ptr(r_ptrSEXP);
+    rcpp_result_gen = Rcpp::wrap(trex_da_get_cor_coef(r_ptr));
+    return rcpp_result_gen;
+END_RCPP
+}
+// trex_da_get_fdp_hat_array_bt
+std::vector<Eigen::MatrixXd> trex_da_get_fdp_hat_array_bt(XPtr<RTRexDASelector> r_ptr);
+RcppExport SEXP _TRexSelector_trex_da_get_fdp_hat_array_bt(SEXP r_ptrSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< XPtr<RTRexDASelector> >::type r_ptr(r_ptrSEXP);
+    rcpp_result_gen = Rcpp::wrap(trex_da_get_fdp_hat_array_bt(r_ptr));
+    return rcpp_result_gen;
+END_RCPP
+}
+// trex_da_get_phi_array_bt
+std::vector<Eigen::MatrixXd> trex_da_get_phi_array_bt(XPtr<RTRexDASelector> r_ptr);
+RcppExport SEXP _TRexSelector_trex_da_get_phi_array_bt(SEXP r_ptrSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< XPtr<RTRexDASelector> >::type r_ptr(r_ptrSEXP);
+    rcpp_result_gen = Rcpp::wrap(trex_da_get_phi_array_bt(r_ptr));
+    return rcpp_result_gen;
+END_RCPP
+}
+// trex_da_get_r_array_bt
+std::vector<Eigen::MatrixXd> trex_da_get_r_array_bt(XPtr<RTRexDASelector> r_ptr);
+RcppExport SEXP _TRexSelector_trex_da_get_r_array_bt(SEXP r_ptrSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< XPtr<RTRexDASelector> >::type r_ptr(r_ptrSEXP);
+    rcpp_result_gen = Rcpp::wrap(trex_da_get_r_array_bt(r_ptr));
     return rcpp_result_gen;
 END_RCPP
 }
@@ -741,14 +796,36 @@ BEGIN_RCPP
     return R_NilValue;
 END_RCPP
 }
-// trex_gvs_get_results
-List trex_gvs_get_results(XPtr<RTRexGVSSelector> r_ptr);
-RcppExport SEXP _TRexSelector_trex_gvs_get_results(SEXP r_ptrSEXP) {
+// trex_gvs_get_lambda2_used
+double trex_gvs_get_lambda2_used(XPtr<RTRexGVSSelector> r_ptr);
+RcppExport SEXP _TRexSelector_trex_gvs_get_lambda2_used(SEXP r_ptrSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
     Rcpp::traits::input_parameter< XPtr<RTRexGVSSelector> >::type r_ptr(r_ptrSEXP);
-    rcpp_result_gen = Rcpp::wrap(trex_gvs_get_results(r_ptr));
+    rcpp_result_gen = Rcpp::wrap(trex_gvs_get_lambda2_used(r_ptr));
+    return rcpp_result_gen;
+END_RCPP
+}
+// trex_gvs_get_gvs_type
+std::string trex_gvs_get_gvs_type(XPtr<RTRexGVSSelector> r_ptr);
+RcppExport SEXP _TRexSelector_trex_gvs_get_gvs_type(SEXP r_ptrSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< XPtr<RTRexGVSSelector> >::type r_ptr(r_ptrSEXP);
+    rcpp_result_gen = Rcpp::wrap(trex_gvs_get_gvs_type(r_ptr));
+    return rcpp_result_gen;
+END_RCPP
+}
+// trex_gvs_get_max_clusters
+int trex_gvs_get_max_clusters(XPtr<RTRexGVSSelector> r_ptr);
+RcppExport SEXP _TRexSelector_trex_gvs_get_max_clusters(SEXP r_ptrSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< XPtr<RTRexGVSSelector> >::type r_ptr(r_ptrSEXP);
+    rcpp_result_gen = Rcpp::wrap(trex_gvs_get_max_clusters(r_ptr));
     return rcpp_result_gen;
 END_RCPP
 }
@@ -805,25 +882,69 @@ BEGIN_RCPP
     return R_NilValue;
 END_RCPP
 }
-// trex_screening_get_results
-List trex_screening_get_results(XPtr<RTRexScreeningSelector> r_ptr);
-RcppExport SEXP _TRexSelector_trex_screening_get_results(SEXP r_ptrSEXP) {
+// trex_screening_get_estimated_fdr
+double trex_screening_get_estimated_fdr(XPtr<RTRexScreeningSelector> r_ptr);
+RcppExport SEXP _TRexSelector_trex_screening_get_estimated_fdr(SEXP r_ptrSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
     Rcpp::traits::input_parameter< XPtr<RTRexScreeningSelector> >::type r_ptr(r_ptrSEXP);
-    rcpp_result_gen = Rcpp::wrap(trex_screening_get_results(r_ptr));
+    rcpp_result_gen = Rcpp::wrap(trex_screening_get_estimated_fdr(r_ptr));
     return rcpp_result_gen;
 END_RCPP
 }
-// trex_screening_get_matrices
-List trex_screening_get_matrices(XPtr<RTRexScreeningSelector> r_ptr);
-RcppExport SEXP _TRexSelector_trex_screening_get_matrices(SEXP r_ptrSEXP) {
+// trex_screening_get_used_bootstrap
+bool trex_screening_get_used_bootstrap(XPtr<RTRexScreeningSelector> r_ptr);
+RcppExport SEXP _TRexSelector_trex_screening_get_used_bootstrap(SEXP r_ptrSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
     Rcpp::traits::input_parameter< XPtr<RTRexScreeningSelector> >::type r_ptr(r_ptrSEXP);
-    rcpp_result_gen = Rcpp::wrap(trex_screening_get_matrices(r_ptr));
+    rcpp_result_gen = Rcpp::wrap(trex_screening_get_used_bootstrap(r_ptr));
+    return rcpp_result_gen;
+END_RCPP
+}
+// trex_screening_get_confidence_level
+double trex_screening_get_confidence_level(XPtr<RTRexScreeningSelector> r_ptr);
+RcppExport SEXP _TRexSelector_trex_screening_get_confidence_level(SEXP r_ptrSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< XPtr<RTRexScreeningSelector> >::type r_ptr(r_ptrSEXP);
+    rcpp_result_gen = Rcpp::wrap(trex_screening_get_confidence_level(r_ptr));
+    return rcpp_result_gen;
+END_RCPP
+}
+// trex_screening_get_estimated_correlation
+double trex_screening_get_estimated_correlation(XPtr<RTRexScreeningSelector> r_ptr);
+RcppExport SEXP _TRexSelector_trex_screening_get_estimated_correlation(SEXP r_ptrSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< XPtr<RTRexScreeningSelector> >::type r_ptr(r_ptrSEXP);
+    rcpp_result_gen = Rcpp::wrap(trex_screening_get_estimated_correlation(r_ptr));
+    return rcpp_result_gen;
+END_RCPP
+}
+// trex_screening_get_beta_mat
+Eigen::MatrixXd trex_screening_get_beta_mat(XPtr<RTRexScreeningSelector> r_ptr);
+RcppExport SEXP _TRexSelector_trex_screening_get_beta_mat(SEXP r_ptrSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< XPtr<RTRexScreeningSelector> >::type r_ptr(r_ptrSEXP);
+    rcpp_result_gen = Rcpp::wrap(trex_screening_get_beta_mat(r_ptr));
+    return rcpp_result_gen;
+END_RCPP
+}
+// trex_screening_get_dummy_betas
+Eigen::MatrixXd trex_screening_get_dummy_betas(XPtr<RTRexScreeningSelector> r_ptr);
+RcppExport SEXP _TRexSelector_trex_screening_get_dummy_betas(SEXP r_ptrSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< XPtr<RTRexScreeningSelector> >::type r_ptr(r_ptrSEXP);
+    rcpp_result_gen = Rcpp::wrap(trex_screening_get_dummy_betas(r_ptr));
     return rcpp_result_gen;
 END_RCPP
 }
@@ -839,7 +960,7 @@ BEGIN_RCPP
 END_RCPP
 }
 // trex_selector_create
-XPtr<RTRexSelector> trex_selector_create(Eigen::Map<Eigen::MatrixXd> X, Eigen::Map<Eigen::VectorXd> y, double tFDR, Rcpp::List control_list, int seed, bool verbose);
+XPtr<RTRexSelector> trex_selector_create(Eigen::Map<Eigen::MatrixXd> X, Eigen::Map<Eigen::VectorXd> y, double tFDR, const Rcpp::List& control_list, int seed, bool verbose);
 RcppExport SEXP _TRexSelector_trex_selector_create(SEXP XSEXP, SEXP ySEXP, SEXP tFDRSEXP, SEXP control_listSEXP, SEXP seedSEXP, SEXP verboseSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
@@ -847,7 +968,7 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< Eigen::Map<Eigen::MatrixXd> >::type X(XSEXP);
     Rcpp::traits::input_parameter< Eigen::Map<Eigen::VectorXd> >::type y(ySEXP);
     Rcpp::traits::input_parameter< double >::type tFDR(tFDRSEXP);
-    Rcpp::traits::input_parameter< Rcpp::List >::type control_list(control_listSEXP);
+    Rcpp::traits::input_parameter< const Rcpp::List& >::type control_list(control_listSEXP);
     Rcpp::traits::input_parameter< int >::type seed(seedSEXP);
     Rcpp::traits::input_parameter< bool >::type verbose(verboseSEXP);
     rcpp_result_gen = Rcpp::wrap(trex_selector_create(X, y, tFDR, control_list, seed, verbose));
@@ -855,7 +976,7 @@ BEGIN_RCPP
 END_RCPP
 }
 // trex_selector_mmap_create
-XPtr<RTRexSelector> trex_selector_mmap_create(XPtr<trex::utils::memmap::MemoryMappedMatrix<double>> X_ptr, Eigen::Map<Eigen::VectorXd> y, double tFDR, Rcpp::List control_list, int seed, bool verbose);
+XPtr<RTRexSelector> trex_selector_mmap_create(XPtr<trex::utils::memmap::MemoryMappedMatrix<double>> X_ptr, Eigen::Map<Eigen::VectorXd> y, double tFDR, const Rcpp::List& control_list, int seed, bool verbose);
 RcppExport SEXP _TRexSelector_trex_selector_mmap_create(SEXP X_ptrSEXP, SEXP ySEXP, SEXP tFDRSEXP, SEXP control_listSEXP, SEXP seedSEXP, SEXP verboseSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
@@ -863,7 +984,7 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< XPtr<trex::utils::memmap::MemoryMappedMatrix<double>> >::type X_ptr(X_ptrSEXP);
     Rcpp::traits::input_parameter< Eigen::Map<Eigen::VectorXd> >::type y(ySEXP);
     Rcpp::traits::input_parameter< double >::type tFDR(tFDRSEXP);
-    Rcpp::traits::input_parameter< Rcpp::List >::type control_list(control_listSEXP);
+    Rcpp::traits::input_parameter< const Rcpp::List& >::type control_list(control_listSEXP);
     Rcpp::traits::input_parameter< int >::type seed(seedSEXP);
     Rcpp::traits::input_parameter< bool >::type verbose(verboseSEXP);
     rcpp_result_gen = Rcpp::wrap(trex_selector_mmap_create(X_ptr, y, tFDR, control_list, seed, verbose));
@@ -871,13 +992,23 @@ BEGIN_RCPP
 END_RCPP
 }
 // trex_selector_select
-List trex_selector_select(XPtr<RTRexSelector> r_ptr);
+void trex_selector_select(XPtr<RTRexSelector> r_ptr);
 RcppExport SEXP _TRexSelector_trex_selector_select(SEXP r_ptrSEXP) {
+BEGIN_RCPP
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< XPtr<RTRexSelector> >::type r_ptr(r_ptrSEXP);
+    trex_selector_select(r_ptr);
+    return R_NilValue;
+END_RCPP
+}
+// trex_selector_get_selected_var
+LogicalVector trex_selector_get_selected_var(XPtr<RTRexSelector> r_ptr);
+RcppExport SEXP _TRexSelector_trex_selector_get_selected_var(SEXP r_ptrSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
     Rcpp::traits::input_parameter< XPtr<RTRexSelector> >::type r_ptr(r_ptrSEXP);
-    rcpp_result_gen = Rcpp::wrap(trex_selector_select(r_ptr));
+    rcpp_result_gen = Rcpp::wrap(trex_selector_get_selected_var(r_ptr));
     return rcpp_result_gen;
 END_RCPP
 }
@@ -892,64 +1023,523 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// trex_selector_get_voting_threshold
+double trex_selector_get_voting_threshold(XPtr<RTRexSelector> r_ptr);
+RcppExport SEXP _TRexSelector_trex_selector_get_voting_threshold(SEXP r_ptrSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< XPtr<RTRexSelector> >::type r_ptr(r_ptrSEXP);
+    rcpp_result_gen = Rcpp::wrap(trex_selector_get_voting_threshold(r_ptr));
+    return rcpp_result_gen;
+END_RCPP
+}
+// trex_selector_get_t_stop
+int trex_selector_get_t_stop(XPtr<RTRexSelector> r_ptr);
+RcppExport SEXP _TRexSelector_trex_selector_get_t_stop(SEXP r_ptrSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< XPtr<RTRexSelector> >::type r_ptr(r_ptrSEXP);
+    rcpp_result_gen = Rcpp::wrap(trex_selector_get_t_stop(r_ptr));
+    return rcpp_result_gen;
+END_RCPP
+}
+// trex_selector_get_dummy_multiplier_l
+int trex_selector_get_dummy_multiplier_l(XPtr<RTRexSelector> r_ptr);
+RcppExport SEXP _TRexSelector_trex_selector_get_dummy_multiplier_l(SEXP r_ptrSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< XPtr<RTRexSelector> >::type r_ptr(r_ptrSEXP);
+    rcpp_result_gen = Rcpp::wrap(trex_selector_get_dummy_multiplier_l(r_ptr));
+    return rcpp_result_gen;
+END_RCPP
+}
+// trex_selector_get_voting_grid
+Eigen::VectorXd trex_selector_get_voting_grid(XPtr<RTRexSelector> r_ptr);
+RcppExport SEXP _TRexSelector_trex_selector_get_voting_grid(SEXP r_ptrSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< XPtr<RTRexSelector> >::type r_ptr(r_ptrSEXP);
+    rcpp_result_gen = Rcpp::wrap(trex_selector_get_voting_grid(r_ptr));
+    return rcpp_result_gen;
+END_RCPP
+}
+// trex_selector_get_fdp_hat_mat
+Eigen::MatrixXd trex_selector_get_fdp_hat_mat(XPtr<RTRexSelector> r_ptr);
+RcppExport SEXP _TRexSelector_trex_selector_get_fdp_hat_mat(SEXP r_ptrSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< XPtr<RTRexSelector> >::type r_ptr(r_ptrSEXP);
+    rcpp_result_gen = Rcpp::wrap(trex_selector_get_fdp_hat_mat(r_ptr));
+    return rcpp_result_gen;
+END_RCPP
+}
+// trex_selector_get_phi_mat
+Eigen::MatrixXd trex_selector_get_phi_mat(XPtr<RTRexSelector> r_ptr);
+RcppExport SEXP _TRexSelector_trex_selector_get_phi_mat(SEXP r_ptrSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< XPtr<RTRexSelector> >::type r_ptr(r_ptrSEXP);
+    rcpp_result_gen = Rcpp::wrap(trex_selector_get_phi_mat(r_ptr));
+    return rcpp_result_gen;
+END_RCPP
+}
+// trex_selector_get_r_mat
+Eigen::MatrixXd trex_selector_get_r_mat(XPtr<RTRexSelector> r_ptr);
+RcppExport SEXP _TRexSelector_trex_selector_get_r_mat(SEXP r_ptrSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< XPtr<RTRexSelector> >::type r_ptr(r_ptrSEXP);
+    rcpp_result_gen = Rcpp::wrap(trex_selector_get_r_mat(r_ptr));
+    return rcpp_result_gen;
+END_RCPP
+}
+// trex_selector_get_phi_prime
+Eigen::VectorXd trex_selector_get_phi_prime(XPtr<RTRexSelector> r_ptr);
+RcppExport SEXP _TRexSelector_trex_selector_get_phi_prime(SEXP r_ptrSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< XPtr<RTRexSelector> >::type r_ptr(r_ptrSEXP);
+    rcpp_result_gen = Rcpp::wrap(trex_selector_get_phi_prime(r_ptr));
+    return rcpp_result_gen;
+END_RCPP
+}
+// trex_selector_get_x_means
+Eigen::VectorXd trex_selector_get_x_means(XPtr<RTRexSelector> r_ptr);
+RcppExport SEXP _TRexSelector_trex_selector_get_x_means(SEXP r_ptrSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< XPtr<RTRexSelector> >::type r_ptr(r_ptrSEXP);
+    rcpp_result_gen = Rcpp::wrap(trex_selector_get_x_means(r_ptr));
+    return rcpp_result_gen;
+END_RCPP
+}
+// trex_selector_get_x_l2_norms
+Eigen::VectorXd trex_selector_get_x_l2_norms(XPtr<RTRexSelector> r_ptr);
+RcppExport SEXP _TRexSelector_trex_selector_get_x_l2_norms(SEXP r_ptrSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< XPtr<RTRexSelector> >::type r_ptr(r_ptrSEXP);
+    rcpp_result_gen = Rcpp::wrap(trex_selector_get_x_l2_norms(r_ptr));
+    return rcpp_result_gen;
+END_RCPP
+}
+// trex_selector_get_y_mean
+double trex_selector_get_y_mean(XPtr<RTRexSelector> r_ptr);
+RcppExport SEXP _TRexSelector_trex_selector_get_y_mean(SEXP r_ptrSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< XPtr<RTRexSelector> >::type r_ptr(r_ptrSEXP);
+    rcpp_result_gen = Rcpp::wrap(trex_selector_get_y_mean(r_ptr));
+    return rcpp_result_gen;
+END_RCPP
+}
 // tsolver_lars_create
-XPtr<TSolver_Base> tsolver_lars_create(Eigen::Map<Eigen::MatrixXd> X, Eigen::Map<Eigen::MatrixXd> D, Eigen::Map<Eigen::VectorXd> y);
-RcppExport SEXP _TRexSelector_tsolver_lars_create(SEXP XSEXP, SEXP DSEXP, SEXP ySEXP) {
+XPtr<TSolverRcpp> tsolver_lars_create(Eigen::Map<Eigen::MatrixXd> X, Eigen::Map<Eigen::MatrixXd> D, Eigen::Map<Eigen::VectorXd> y, bool normalize, bool intercept, bool verbose);
+RcppExport SEXP _TRexSelector_tsolver_lars_create(SEXP XSEXP, SEXP DSEXP, SEXP ySEXP, SEXP normalizeSEXP, SEXP interceptSEXP, SEXP verboseSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
     Rcpp::traits::input_parameter< Eigen::Map<Eigen::MatrixXd> >::type X(XSEXP);
     Rcpp::traits::input_parameter< Eigen::Map<Eigen::MatrixXd> >::type D(DSEXP);
     Rcpp::traits::input_parameter< Eigen::Map<Eigen::VectorXd> >::type y(ySEXP);
-    rcpp_result_gen = Rcpp::wrap(tsolver_lars_create(X, D, y));
+    Rcpp::traits::input_parameter< bool >::type normalize(normalizeSEXP);
+    Rcpp::traits::input_parameter< bool >::type intercept(interceptSEXP);
+    Rcpp::traits::input_parameter< bool >::type verbose(verboseSEXP);
+    rcpp_result_gen = Rcpp::wrap(tsolver_lars_create(X, D, y, normalize, intercept, verbose));
     return rcpp_result_gen;
 END_RCPP
 }
 // tsolver_omp_create
-XPtr<TSolver_Base> tsolver_omp_create(Eigen::Map<Eigen::MatrixXd> X, Eigen::Map<Eigen::MatrixXd> D, Eigen::Map<Eigen::VectorXd> y);
-RcppExport SEXP _TRexSelector_tsolver_omp_create(SEXP XSEXP, SEXP DSEXP, SEXP ySEXP) {
+XPtr<TSolverRcpp> tsolver_omp_create(Eigen::Map<Eigen::MatrixXd> X, Eigen::Map<Eigen::MatrixXd> D, Eigen::Map<Eigen::VectorXd> y, bool normalize, bool intercept, bool verbose);
+RcppExport SEXP _TRexSelector_tsolver_omp_create(SEXP XSEXP, SEXP DSEXP, SEXP ySEXP, SEXP normalizeSEXP, SEXP interceptSEXP, SEXP verboseSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
     Rcpp::traits::input_parameter< Eigen::Map<Eigen::MatrixXd> >::type X(XSEXP);
     Rcpp::traits::input_parameter< Eigen::Map<Eigen::MatrixXd> >::type D(DSEXP);
     Rcpp::traits::input_parameter< Eigen::Map<Eigen::VectorXd> >::type y(ySEXP);
-    rcpp_result_gen = Rcpp::wrap(tsolver_omp_create(X, D, y));
+    Rcpp::traits::input_parameter< bool >::type normalize(normalizeSEXP);
+    Rcpp::traits::input_parameter< bool >::type intercept(interceptSEXP);
+    Rcpp::traits::input_parameter< bool >::type verbose(verboseSEXP);
+    rcpp_result_gen = Rcpp::wrap(tsolver_omp_create(X, D, y, normalize, intercept, verbose));
     return rcpp_result_gen;
 END_RCPP
 }
 // tsolver_lars_mmap_create
-XPtr<TSolver_Base> tsolver_lars_mmap_create(XPtr<MemoryMappedMatrix<double>> X_ptr, Eigen::Map<Eigen::MatrixXd> D, Eigen::Map<Eigen::VectorXd> y);
-RcppExport SEXP _TRexSelector_tsolver_lars_mmap_create(SEXP X_ptrSEXP, SEXP DSEXP, SEXP ySEXP) {
+XPtr<TSolverRcpp> tsolver_lars_mmap_create(XPtr<MemoryMappedMatrix<double>> X_ptr, Eigen::Map<Eigen::MatrixXd> D, Eigen::Map<Eigen::VectorXd> y, bool normalize, bool intercept, bool verbose);
+RcppExport SEXP _TRexSelector_tsolver_lars_mmap_create(SEXP X_ptrSEXP, SEXP DSEXP, SEXP ySEXP, SEXP normalizeSEXP, SEXP interceptSEXP, SEXP verboseSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
     Rcpp::traits::input_parameter< XPtr<MemoryMappedMatrix<double>> >::type X_ptr(X_ptrSEXP);
     Rcpp::traits::input_parameter< Eigen::Map<Eigen::MatrixXd> >::type D(DSEXP);
     Rcpp::traits::input_parameter< Eigen::Map<Eigen::VectorXd> >::type y(ySEXP);
-    rcpp_result_gen = Rcpp::wrap(tsolver_lars_mmap_create(X_ptr, D, y));
+    Rcpp::traits::input_parameter< bool >::type normalize(normalizeSEXP);
+    Rcpp::traits::input_parameter< bool >::type intercept(interceptSEXP);
+    Rcpp::traits::input_parameter< bool >::type verbose(verboseSEXP);
+    rcpp_result_gen = Rcpp::wrap(tsolver_lars_mmap_create(X_ptr, D, y, normalize, intercept, verbose));
     return rcpp_result_gen;
 END_RCPP
 }
 // tsolver_omp_mmap_create
-XPtr<TSolver_Base> tsolver_omp_mmap_create(XPtr<MemoryMappedMatrix<double>> X_ptr, Eigen::Map<Eigen::MatrixXd> D, Eigen::Map<Eigen::VectorXd> y);
-RcppExport SEXP _TRexSelector_tsolver_omp_mmap_create(SEXP X_ptrSEXP, SEXP DSEXP, SEXP ySEXP) {
+XPtr<TSolverRcpp> tsolver_omp_mmap_create(XPtr<MemoryMappedMatrix<double>> X_ptr, Eigen::Map<Eigen::MatrixXd> D, Eigen::Map<Eigen::VectorXd> y, bool normalize, bool intercept, bool verbose);
+RcppExport SEXP _TRexSelector_tsolver_omp_mmap_create(SEXP X_ptrSEXP, SEXP DSEXP, SEXP ySEXP, SEXP normalizeSEXP, SEXP interceptSEXP, SEXP verboseSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
     Rcpp::traits::input_parameter< XPtr<MemoryMappedMatrix<double>> >::type X_ptr(X_ptrSEXP);
     Rcpp::traits::input_parameter< Eigen::Map<Eigen::MatrixXd> >::type D(DSEXP);
     Rcpp::traits::input_parameter< Eigen::Map<Eigen::VectorXd> >::type y(ySEXP);
-    rcpp_result_gen = Rcpp::wrap(tsolver_omp_mmap_create(X_ptr, D, y));
+    Rcpp::traits::input_parameter< bool >::type normalize(normalizeSEXP);
+    Rcpp::traits::input_parameter< bool >::type intercept(interceptSEXP);
+    Rcpp::traits::input_parameter< bool >::type verbose(verboseSEXP);
+    rcpp_result_gen = Rcpp::wrap(tsolver_omp_mmap_create(X_ptr, D, y, normalize, intercept, verbose));
+    return rcpp_result_gen;
+END_RCPP
+}
+// tsolver_tlasso_create
+XPtr<TSolverRcpp> tsolver_tlasso_create(Eigen::Map<Eigen::MatrixXd> X, Eigen::Map<Eigen::MatrixXd> D, Eigen::Map<Eigen::VectorXd> y, bool normalize, bool intercept, bool verbose);
+RcppExport SEXP _TRexSelector_tsolver_tlasso_create(SEXP XSEXP, SEXP DSEXP, SEXP ySEXP, SEXP normalizeSEXP, SEXP interceptSEXP, SEXP verboseSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< Eigen::Map<Eigen::MatrixXd> >::type X(XSEXP);
+    Rcpp::traits::input_parameter< Eigen::Map<Eigen::MatrixXd> >::type D(DSEXP);
+    Rcpp::traits::input_parameter< Eigen::Map<Eigen::VectorXd> >::type y(ySEXP);
+    Rcpp::traits::input_parameter< bool >::type normalize(normalizeSEXP);
+    Rcpp::traits::input_parameter< bool >::type intercept(interceptSEXP);
+    Rcpp::traits::input_parameter< bool >::type verbose(verboseSEXP);
+    rcpp_result_gen = Rcpp::wrap(tsolver_tlasso_create(X, D, y, normalize, intercept, verbose));
+    return rcpp_result_gen;
+END_RCPP
+}
+// tsolver_tstepwise_create
+XPtr<TSolverRcpp> tsolver_tstepwise_create(Eigen::Map<Eigen::MatrixXd> X, Eigen::Map<Eigen::MatrixXd> D, Eigen::Map<Eigen::VectorXd> y, bool normalize, bool intercept, bool verbose);
+RcppExport SEXP _TRexSelector_tsolver_tstepwise_create(SEXP XSEXP, SEXP DSEXP, SEXP ySEXP, SEXP normalizeSEXP, SEXP interceptSEXP, SEXP verboseSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< Eigen::Map<Eigen::MatrixXd> >::type X(XSEXP);
+    Rcpp::traits::input_parameter< Eigen::Map<Eigen::MatrixXd> >::type D(DSEXP);
+    Rcpp::traits::input_parameter< Eigen::Map<Eigen::VectorXd> >::type y(ySEXP);
+    Rcpp::traits::input_parameter< bool >::type normalize(normalizeSEXP);
+    Rcpp::traits::input_parameter< bool >::type intercept(interceptSEXP);
+    Rcpp::traits::input_parameter< bool >::type verbose(verboseSEXP);
+    rcpp_result_gen = Rcpp::wrap(tsolver_tstepwise_create(X, D, y, normalize, intercept, verbose));
+    return rcpp_result_gen;
+END_RCPP
+}
+// tsolver_tenet_create
+XPtr<TSolverRcpp> tsolver_tenet_create(Eigen::Map<Eigen::MatrixXd> X, Eigen::Map<Eigen::MatrixXd> D, Eigen::Map<Eigen::VectorXd> y, double lambda2, bool normalize, bool intercept, bool verbose);
+RcppExport SEXP _TRexSelector_tsolver_tenet_create(SEXP XSEXP, SEXP DSEXP, SEXP ySEXP, SEXP lambda2SEXP, SEXP normalizeSEXP, SEXP interceptSEXP, SEXP verboseSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< Eigen::Map<Eigen::MatrixXd> >::type X(XSEXP);
+    Rcpp::traits::input_parameter< Eigen::Map<Eigen::MatrixXd> >::type D(DSEXP);
+    Rcpp::traits::input_parameter< Eigen::Map<Eigen::VectorXd> >::type y(ySEXP);
+    Rcpp::traits::input_parameter< double >::type lambda2(lambda2SEXP);
+    Rcpp::traits::input_parameter< bool >::type normalize(normalizeSEXP);
+    Rcpp::traits::input_parameter< bool >::type intercept(interceptSEXP);
+    Rcpp::traits::input_parameter< bool >::type verbose(verboseSEXP);
+    rcpp_result_gen = Rcpp::wrap(tsolver_tenet_create(X, D, y, lambda2, normalize, intercept, verbose));
+    return rcpp_result_gen;
+END_RCPP
+}
+// tsolver_tstagewise_create
+XPtr<TSolverRcpp> tsolver_tstagewise_create(Eigen::Map<Eigen::MatrixXd> X, Eigen::Map<Eigen::MatrixXd> D, Eigen::Map<Eigen::VectorXd> y, bool normalize, bool intercept, bool verbose);
+RcppExport SEXP _TRexSelector_tsolver_tstagewise_create(SEXP XSEXP, SEXP DSEXP, SEXP ySEXP, SEXP normalizeSEXP, SEXP interceptSEXP, SEXP verboseSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< Eigen::Map<Eigen::MatrixXd> >::type X(XSEXP);
+    Rcpp::traits::input_parameter< Eigen::Map<Eigen::MatrixXd> >::type D(DSEXP);
+    Rcpp::traits::input_parameter< Eigen::Map<Eigen::VectorXd> >::type y(ySEXP);
+    Rcpp::traits::input_parameter< bool >::type normalize(normalizeSEXP);
+    Rcpp::traits::input_parameter< bool >::type intercept(interceptSEXP);
+    Rcpp::traits::input_parameter< bool >::type verbose(verboseSEXP);
+    rcpp_result_gen = Rcpp::wrap(tsolver_tstagewise_create(X, D, y, normalize, intercept, verbose));
+    return rcpp_result_gen;
+END_RCPP
+}
+// tsolver_tgp_create
+XPtr<TSolverRcpp> tsolver_tgp_create(Eigen::Map<Eigen::MatrixXd> X, Eigen::Map<Eigen::MatrixXd> D, Eigen::Map<Eigen::VectorXd> y, bool normalize, bool intercept, bool verbose);
+RcppExport SEXP _TRexSelector_tsolver_tgp_create(SEXP XSEXP, SEXP DSEXP, SEXP ySEXP, SEXP normalizeSEXP, SEXP interceptSEXP, SEXP verboseSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< Eigen::Map<Eigen::MatrixXd> >::type X(XSEXP);
+    Rcpp::traits::input_parameter< Eigen::Map<Eigen::MatrixXd> >::type D(DSEXP);
+    Rcpp::traits::input_parameter< Eigen::Map<Eigen::VectorXd> >::type y(ySEXP);
+    Rcpp::traits::input_parameter< bool >::type normalize(normalizeSEXP);
+    Rcpp::traits::input_parameter< bool >::type intercept(interceptSEXP);
+    Rcpp::traits::input_parameter< bool >::type verbose(verboseSEXP);
+    rcpp_result_gen = Rcpp::wrap(tsolver_tgp_create(X, D, y, normalize, intercept, verbose));
+    return rcpp_result_gen;
+END_RCPP
+}
+// tsolver_tacgp_create
+XPtr<TSolverRcpp> tsolver_tacgp_create(Eigen::Map<Eigen::MatrixXd> X, Eigen::Map<Eigen::MatrixXd> D, Eigen::Map<Eigen::VectorXd> y, bool normalize, bool intercept, bool verbose);
+RcppExport SEXP _TRexSelector_tsolver_tacgp_create(SEXP XSEXP, SEXP DSEXP, SEXP ySEXP, SEXP normalizeSEXP, SEXP interceptSEXP, SEXP verboseSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< Eigen::Map<Eigen::MatrixXd> >::type X(XSEXP);
+    Rcpp::traits::input_parameter< Eigen::Map<Eigen::MatrixXd> >::type D(DSEXP);
+    Rcpp::traits::input_parameter< Eigen::Map<Eigen::VectorXd> >::type y(ySEXP);
+    Rcpp::traits::input_parameter< bool >::type normalize(normalizeSEXP);
+    Rcpp::traits::input_parameter< bool >::type intercept(interceptSEXP);
+    Rcpp::traits::input_parameter< bool >::type verbose(verboseSEXP);
+    rcpp_result_gen = Rcpp::wrap(tsolver_tacgp_create(X, D, y, normalize, intercept, verbose));
+    return rcpp_result_gen;
+END_RCPP
+}
+// tsolver_tmp_create
+XPtr<TSolverRcpp> tsolver_tmp_create(Eigen::Map<Eigen::MatrixXd> X, Eigen::Map<Eigen::MatrixXd> D, Eigen::Map<Eigen::VectorXd> y, bool normalize, bool intercept, bool verbose);
+RcppExport SEXP _TRexSelector_tsolver_tmp_create(SEXP XSEXP, SEXP DSEXP, SEXP ySEXP, SEXP normalizeSEXP, SEXP interceptSEXP, SEXP verboseSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< Eigen::Map<Eigen::MatrixXd> >::type X(XSEXP);
+    Rcpp::traits::input_parameter< Eigen::Map<Eigen::MatrixXd> >::type D(DSEXP);
+    Rcpp::traits::input_parameter< Eigen::Map<Eigen::VectorXd> >::type y(ySEXP);
+    Rcpp::traits::input_parameter< bool >::type normalize(normalizeSEXP);
+    Rcpp::traits::input_parameter< bool >::type intercept(interceptSEXP);
+    Rcpp::traits::input_parameter< bool >::type verbose(verboseSEXP);
+    rcpp_result_gen = Rcpp::wrap(tsolver_tmp_create(X, D, y, normalize, intercept, verbose));
+    return rcpp_result_gen;
+END_RCPP
+}
+// tsolver_tools_create
+XPtr<TSolverRcpp> tsolver_tools_create(Eigen::Map<Eigen::MatrixXd> X, Eigen::Map<Eigen::MatrixXd> D, Eigen::Map<Eigen::VectorXd> y, bool normalize, bool intercept, bool verbose);
+RcppExport SEXP _TRexSelector_tsolver_tools_create(SEXP XSEXP, SEXP DSEXP, SEXP ySEXP, SEXP normalizeSEXP, SEXP interceptSEXP, SEXP verboseSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< Eigen::Map<Eigen::MatrixXd> >::type X(XSEXP);
+    Rcpp::traits::input_parameter< Eigen::Map<Eigen::MatrixXd> >::type D(DSEXP);
+    Rcpp::traits::input_parameter< Eigen::Map<Eigen::VectorXd> >::type y(ySEXP);
+    Rcpp::traits::input_parameter< bool >::type normalize(normalizeSEXP);
+    Rcpp::traits::input_parameter< bool >::type intercept(interceptSEXP);
+    Rcpp::traits::input_parameter< bool >::type verbose(verboseSEXP);
+    rcpp_result_gen = Rcpp::wrap(tsolver_tools_create(X, D, y, normalize, intercept, verbose));
+    return rcpp_result_gen;
+END_RCPP
+}
+// tsolver_tncgmp_create
+XPtr<TSolverRcpp> tsolver_tncgmp_create(Eigen::Map<Eigen::MatrixXd> X, Eigen::Map<Eigen::MatrixXd> D, Eigen::Map<Eigen::VectorXd> y, int variant, bool normalize, bool intercept, bool verbose);
+RcppExport SEXP _TRexSelector_tsolver_tncgmp_create(SEXP XSEXP, SEXP DSEXP, SEXP ySEXP, SEXP variantSEXP, SEXP normalizeSEXP, SEXP interceptSEXP, SEXP verboseSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< Eigen::Map<Eigen::MatrixXd> >::type X(XSEXP);
+    Rcpp::traits::input_parameter< Eigen::Map<Eigen::MatrixXd> >::type D(DSEXP);
+    Rcpp::traits::input_parameter< Eigen::Map<Eigen::VectorXd> >::type y(ySEXP);
+    Rcpp::traits::input_parameter< int >::type variant(variantSEXP);
+    Rcpp::traits::input_parameter< bool >::type normalize(normalizeSEXP);
+    Rcpp::traits::input_parameter< bool >::type intercept(interceptSEXP);
+    Rcpp::traits::input_parameter< bool >::type verbose(verboseSEXP);
+    rcpp_result_gen = Rcpp::wrap(tsolver_tncgmp_create(X, D, y, variant, normalize, intercept, verbose));
+    return rcpp_result_gen;
+END_RCPP
+}
+// tsolver_tafs_create
+XPtr<TSolverRcpp> tsolver_tafs_create(Eigen::Map<Eigen::MatrixXd> X, Eigen::Map<Eigen::MatrixXd> D, Eigen::Map<Eigen::VectorXd> y, double rho, bool normalize, bool intercept, bool verbose);
+RcppExport SEXP _TRexSelector_tsolver_tafs_create(SEXP XSEXP, SEXP DSEXP, SEXP ySEXP, SEXP rhoSEXP, SEXP normalizeSEXP, SEXP interceptSEXP, SEXP verboseSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< Eigen::Map<Eigen::MatrixXd> >::type X(XSEXP);
+    Rcpp::traits::input_parameter< Eigen::Map<Eigen::MatrixXd> >::type D(DSEXP);
+    Rcpp::traits::input_parameter< Eigen::Map<Eigen::VectorXd> >::type y(ySEXP);
+    Rcpp::traits::input_parameter< double >::type rho(rhoSEXP);
+    Rcpp::traits::input_parameter< bool >::type normalize(normalizeSEXP);
+    Rcpp::traits::input_parameter< bool >::type intercept(interceptSEXP);
+    Rcpp::traits::input_parameter< bool >::type verbose(verboseSEXP);
+    rcpp_result_gen = Rcpp::wrap(tsolver_tafs_create(X, D, y, rho, normalize, intercept, verbose));
+    return rcpp_result_gen;
+END_RCPP
+}
+// tsolver_tlasso_mmap_create
+XPtr<TSolverRcpp> tsolver_tlasso_mmap_create(XPtr<MemoryMappedMatrix<double>> X_ptr, Eigen::Map<Eigen::MatrixXd> D, Eigen::Map<Eigen::VectorXd> y, bool normalize, bool intercept, bool verbose);
+RcppExport SEXP _TRexSelector_tsolver_tlasso_mmap_create(SEXP X_ptrSEXP, SEXP DSEXP, SEXP ySEXP, SEXP normalizeSEXP, SEXP interceptSEXP, SEXP verboseSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< XPtr<MemoryMappedMatrix<double>> >::type X_ptr(X_ptrSEXP);
+    Rcpp::traits::input_parameter< Eigen::Map<Eigen::MatrixXd> >::type D(DSEXP);
+    Rcpp::traits::input_parameter< Eigen::Map<Eigen::VectorXd> >::type y(ySEXP);
+    Rcpp::traits::input_parameter< bool >::type normalize(normalizeSEXP);
+    Rcpp::traits::input_parameter< bool >::type intercept(interceptSEXP);
+    Rcpp::traits::input_parameter< bool >::type verbose(verboseSEXP);
+    rcpp_result_gen = Rcpp::wrap(tsolver_tlasso_mmap_create(X_ptr, D, y, normalize, intercept, verbose));
+    return rcpp_result_gen;
+END_RCPP
+}
+// tsolver_tstepwise_mmap_create
+XPtr<TSolverRcpp> tsolver_tstepwise_mmap_create(XPtr<MemoryMappedMatrix<double>> X_ptr, Eigen::Map<Eigen::MatrixXd> D, Eigen::Map<Eigen::VectorXd> y, bool normalize, bool intercept, bool verbose);
+RcppExport SEXP _TRexSelector_tsolver_tstepwise_mmap_create(SEXP X_ptrSEXP, SEXP DSEXP, SEXP ySEXP, SEXP normalizeSEXP, SEXP interceptSEXP, SEXP verboseSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< XPtr<MemoryMappedMatrix<double>> >::type X_ptr(X_ptrSEXP);
+    Rcpp::traits::input_parameter< Eigen::Map<Eigen::MatrixXd> >::type D(DSEXP);
+    Rcpp::traits::input_parameter< Eigen::Map<Eigen::VectorXd> >::type y(ySEXP);
+    Rcpp::traits::input_parameter< bool >::type normalize(normalizeSEXP);
+    Rcpp::traits::input_parameter< bool >::type intercept(interceptSEXP);
+    Rcpp::traits::input_parameter< bool >::type verbose(verboseSEXP);
+    rcpp_result_gen = Rcpp::wrap(tsolver_tstepwise_mmap_create(X_ptr, D, y, normalize, intercept, verbose));
+    return rcpp_result_gen;
+END_RCPP
+}
+// tsolver_tenet_mmap_create
+XPtr<TSolverRcpp> tsolver_tenet_mmap_create(XPtr<MemoryMappedMatrix<double>> X_ptr, Eigen::Map<Eigen::MatrixXd> D, Eigen::Map<Eigen::VectorXd> y, double lambda2, bool normalize, bool intercept, bool verbose);
+RcppExport SEXP _TRexSelector_tsolver_tenet_mmap_create(SEXP X_ptrSEXP, SEXP DSEXP, SEXP ySEXP, SEXP lambda2SEXP, SEXP normalizeSEXP, SEXP interceptSEXP, SEXP verboseSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< XPtr<MemoryMappedMatrix<double>> >::type X_ptr(X_ptrSEXP);
+    Rcpp::traits::input_parameter< Eigen::Map<Eigen::MatrixXd> >::type D(DSEXP);
+    Rcpp::traits::input_parameter< Eigen::Map<Eigen::VectorXd> >::type y(ySEXP);
+    Rcpp::traits::input_parameter< double >::type lambda2(lambda2SEXP);
+    Rcpp::traits::input_parameter< bool >::type normalize(normalizeSEXP);
+    Rcpp::traits::input_parameter< bool >::type intercept(interceptSEXP);
+    Rcpp::traits::input_parameter< bool >::type verbose(verboseSEXP);
+    rcpp_result_gen = Rcpp::wrap(tsolver_tenet_mmap_create(X_ptr, D, y, lambda2, normalize, intercept, verbose));
+    return rcpp_result_gen;
+END_RCPP
+}
+// tsolver_tstagewise_mmap_create
+XPtr<TSolverRcpp> tsolver_tstagewise_mmap_create(XPtr<MemoryMappedMatrix<double>> X_ptr, Eigen::Map<Eigen::MatrixXd> D, Eigen::Map<Eigen::VectorXd> y, bool normalize, bool intercept, bool verbose);
+RcppExport SEXP _TRexSelector_tsolver_tstagewise_mmap_create(SEXP X_ptrSEXP, SEXP DSEXP, SEXP ySEXP, SEXP normalizeSEXP, SEXP interceptSEXP, SEXP verboseSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< XPtr<MemoryMappedMatrix<double>> >::type X_ptr(X_ptrSEXP);
+    Rcpp::traits::input_parameter< Eigen::Map<Eigen::MatrixXd> >::type D(DSEXP);
+    Rcpp::traits::input_parameter< Eigen::Map<Eigen::VectorXd> >::type y(ySEXP);
+    Rcpp::traits::input_parameter< bool >::type normalize(normalizeSEXP);
+    Rcpp::traits::input_parameter< bool >::type intercept(interceptSEXP);
+    Rcpp::traits::input_parameter< bool >::type verbose(verboseSEXP);
+    rcpp_result_gen = Rcpp::wrap(tsolver_tstagewise_mmap_create(X_ptr, D, y, normalize, intercept, verbose));
+    return rcpp_result_gen;
+END_RCPP
+}
+// tsolver_tgp_mmap_create
+XPtr<TSolverRcpp> tsolver_tgp_mmap_create(XPtr<MemoryMappedMatrix<double>> X_ptr, Eigen::Map<Eigen::MatrixXd> D, Eigen::Map<Eigen::VectorXd> y, bool normalize, bool intercept, bool verbose);
+RcppExport SEXP _TRexSelector_tsolver_tgp_mmap_create(SEXP X_ptrSEXP, SEXP DSEXP, SEXP ySEXP, SEXP normalizeSEXP, SEXP interceptSEXP, SEXP verboseSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< XPtr<MemoryMappedMatrix<double>> >::type X_ptr(X_ptrSEXP);
+    Rcpp::traits::input_parameter< Eigen::Map<Eigen::MatrixXd> >::type D(DSEXP);
+    Rcpp::traits::input_parameter< Eigen::Map<Eigen::VectorXd> >::type y(ySEXP);
+    Rcpp::traits::input_parameter< bool >::type normalize(normalizeSEXP);
+    Rcpp::traits::input_parameter< bool >::type intercept(interceptSEXP);
+    Rcpp::traits::input_parameter< bool >::type verbose(verboseSEXP);
+    rcpp_result_gen = Rcpp::wrap(tsolver_tgp_mmap_create(X_ptr, D, y, normalize, intercept, verbose));
+    return rcpp_result_gen;
+END_RCPP
+}
+// tsolver_tacgp_mmap_create
+XPtr<TSolverRcpp> tsolver_tacgp_mmap_create(XPtr<MemoryMappedMatrix<double>> X_ptr, Eigen::Map<Eigen::MatrixXd> D, Eigen::Map<Eigen::VectorXd> y, bool normalize, bool intercept, bool verbose);
+RcppExport SEXP _TRexSelector_tsolver_tacgp_mmap_create(SEXP X_ptrSEXP, SEXP DSEXP, SEXP ySEXP, SEXP normalizeSEXP, SEXP interceptSEXP, SEXP verboseSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< XPtr<MemoryMappedMatrix<double>> >::type X_ptr(X_ptrSEXP);
+    Rcpp::traits::input_parameter< Eigen::Map<Eigen::MatrixXd> >::type D(DSEXP);
+    Rcpp::traits::input_parameter< Eigen::Map<Eigen::VectorXd> >::type y(ySEXP);
+    Rcpp::traits::input_parameter< bool >::type normalize(normalizeSEXP);
+    Rcpp::traits::input_parameter< bool >::type intercept(interceptSEXP);
+    Rcpp::traits::input_parameter< bool >::type verbose(verboseSEXP);
+    rcpp_result_gen = Rcpp::wrap(tsolver_tacgp_mmap_create(X_ptr, D, y, normalize, intercept, verbose));
+    return rcpp_result_gen;
+END_RCPP
+}
+// tsolver_tmp_mmap_create
+XPtr<TSolverRcpp> tsolver_tmp_mmap_create(XPtr<MemoryMappedMatrix<double>> X_ptr, Eigen::Map<Eigen::MatrixXd> D, Eigen::Map<Eigen::VectorXd> y, bool normalize, bool intercept, bool verbose);
+RcppExport SEXP _TRexSelector_tsolver_tmp_mmap_create(SEXP X_ptrSEXP, SEXP DSEXP, SEXP ySEXP, SEXP normalizeSEXP, SEXP interceptSEXP, SEXP verboseSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< XPtr<MemoryMappedMatrix<double>> >::type X_ptr(X_ptrSEXP);
+    Rcpp::traits::input_parameter< Eigen::Map<Eigen::MatrixXd> >::type D(DSEXP);
+    Rcpp::traits::input_parameter< Eigen::Map<Eigen::VectorXd> >::type y(ySEXP);
+    Rcpp::traits::input_parameter< bool >::type normalize(normalizeSEXP);
+    Rcpp::traits::input_parameter< bool >::type intercept(interceptSEXP);
+    Rcpp::traits::input_parameter< bool >::type verbose(verboseSEXP);
+    rcpp_result_gen = Rcpp::wrap(tsolver_tmp_mmap_create(X_ptr, D, y, normalize, intercept, verbose));
+    return rcpp_result_gen;
+END_RCPP
+}
+// tsolver_tools_mmap_create
+XPtr<TSolverRcpp> tsolver_tools_mmap_create(XPtr<MemoryMappedMatrix<double>> X_ptr, Eigen::Map<Eigen::MatrixXd> D, Eigen::Map<Eigen::VectorXd> y, bool normalize, bool intercept, bool verbose);
+RcppExport SEXP _TRexSelector_tsolver_tools_mmap_create(SEXP X_ptrSEXP, SEXP DSEXP, SEXP ySEXP, SEXP normalizeSEXP, SEXP interceptSEXP, SEXP verboseSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< XPtr<MemoryMappedMatrix<double>> >::type X_ptr(X_ptrSEXP);
+    Rcpp::traits::input_parameter< Eigen::Map<Eigen::MatrixXd> >::type D(DSEXP);
+    Rcpp::traits::input_parameter< Eigen::Map<Eigen::VectorXd> >::type y(ySEXP);
+    Rcpp::traits::input_parameter< bool >::type normalize(normalizeSEXP);
+    Rcpp::traits::input_parameter< bool >::type intercept(interceptSEXP);
+    Rcpp::traits::input_parameter< bool >::type verbose(verboseSEXP);
+    rcpp_result_gen = Rcpp::wrap(tsolver_tools_mmap_create(X_ptr, D, y, normalize, intercept, verbose));
+    return rcpp_result_gen;
+END_RCPP
+}
+// tsolver_tncgmp_mmap_create
+XPtr<TSolverRcpp> tsolver_tncgmp_mmap_create(XPtr<MemoryMappedMatrix<double>> X_ptr, Eigen::Map<Eigen::MatrixXd> D, Eigen::Map<Eigen::VectorXd> y, int variant, bool normalize, bool intercept, bool verbose);
+RcppExport SEXP _TRexSelector_tsolver_tncgmp_mmap_create(SEXP X_ptrSEXP, SEXP DSEXP, SEXP ySEXP, SEXP variantSEXP, SEXP normalizeSEXP, SEXP interceptSEXP, SEXP verboseSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< XPtr<MemoryMappedMatrix<double>> >::type X_ptr(X_ptrSEXP);
+    Rcpp::traits::input_parameter< Eigen::Map<Eigen::MatrixXd> >::type D(DSEXP);
+    Rcpp::traits::input_parameter< Eigen::Map<Eigen::VectorXd> >::type y(ySEXP);
+    Rcpp::traits::input_parameter< int >::type variant(variantSEXP);
+    Rcpp::traits::input_parameter< bool >::type normalize(normalizeSEXP);
+    Rcpp::traits::input_parameter< bool >::type intercept(interceptSEXP);
+    Rcpp::traits::input_parameter< bool >::type verbose(verboseSEXP);
+    rcpp_result_gen = Rcpp::wrap(tsolver_tncgmp_mmap_create(X_ptr, D, y, variant, normalize, intercept, verbose));
+    return rcpp_result_gen;
+END_RCPP
+}
+// tsolver_tafs_mmap_create
+XPtr<TSolverRcpp> tsolver_tafs_mmap_create(XPtr<MemoryMappedMatrix<double>> X_ptr, Eigen::Map<Eigen::MatrixXd> D, Eigen::Map<Eigen::VectorXd> y, double rho, bool normalize, bool intercept, bool verbose);
+RcppExport SEXP _TRexSelector_tsolver_tafs_mmap_create(SEXP X_ptrSEXP, SEXP DSEXP, SEXP ySEXP, SEXP rhoSEXP, SEXP normalizeSEXP, SEXP interceptSEXP, SEXP verboseSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< XPtr<MemoryMappedMatrix<double>> >::type X_ptr(X_ptrSEXP);
+    Rcpp::traits::input_parameter< Eigen::Map<Eigen::MatrixXd> >::type D(DSEXP);
+    Rcpp::traits::input_parameter< Eigen::Map<Eigen::VectorXd> >::type y(ySEXP);
+    Rcpp::traits::input_parameter< double >::type rho(rhoSEXP);
+    Rcpp::traits::input_parameter< bool >::type normalize(normalizeSEXP);
+    Rcpp::traits::input_parameter< bool >::type intercept(interceptSEXP);
+    Rcpp::traits::input_parameter< bool >::type verbose(verboseSEXP);
+    rcpp_result_gen = Rcpp::wrap(tsolver_tafs_mmap_create(X_ptr, D, y, rho, normalize, intercept, verbose));
     return rcpp_result_gen;
 END_RCPP
 }
 // tsolver_execute_step
-void tsolver_execute_step(XPtr<TSolver_Base> ptr, int T_stop, bool early_stop);
+void tsolver_execute_step(XPtr<TSolverRcpp> ptr, int T_stop, bool early_stop);
 RcppExport SEXP _TRexSelector_tsolver_execute_step(SEXP ptrSEXP, SEXP T_stopSEXP, SEXP early_stopSEXP) {
 BEGIN_RCPP
     Rcpp::RNGScope rcpp_rngScope_gen;
-    Rcpp::traits::input_parameter< XPtr<TSolver_Base> >::type ptr(ptrSEXP);
+    Rcpp::traits::input_parameter< XPtr<TSolverRcpp> >::type ptr(ptrSEXP);
     Rcpp::traits::input_parameter< int >::type T_stop(T_stopSEXP);
     Rcpp::traits::input_parameter< bool >::type early_stop(early_stopSEXP);
     tsolver_execute_step(ptr, T_stop, early_stop);
@@ -957,112 +1547,167 @@ BEGIN_RCPP
 END_RCPP
 }
 // tsolver_get_beta
-Eigen::VectorXd tsolver_get_beta(XPtr<TSolver_Base> ptr, int step);
+Eigen::VectorXd tsolver_get_beta(XPtr<TSolverRcpp> ptr, int step);
 RcppExport SEXP _TRexSelector_tsolver_get_beta(SEXP ptrSEXP, SEXP stepSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
-    Rcpp::traits::input_parameter< XPtr<TSolver_Base> >::type ptr(ptrSEXP);
+    Rcpp::traits::input_parameter< XPtr<TSolverRcpp> >::type ptr(ptrSEXP);
     Rcpp::traits::input_parameter< int >::type step(stepSEXP);
     rcpp_result_gen = Rcpp::wrap(tsolver_get_beta(ptr, step));
     return rcpp_result_gen;
 END_RCPP
 }
 // tsolver_get_cp
-NumericVector tsolver_get_cp(XPtr<TSolver_Base> ptr);
+NumericVector tsolver_get_cp(XPtr<TSolverRcpp> ptr);
 RcppExport SEXP _TRexSelector_tsolver_get_cp(SEXP ptrSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
-    Rcpp::traits::input_parameter< XPtr<TSolver_Base> >::type ptr(ptrSEXP);
+    Rcpp::traits::input_parameter< XPtr<TSolverRcpp> >::type ptr(ptrSEXP);
     rcpp_result_gen = Rcpp::wrap(tsolver_get_cp(ptr));
     return rcpp_result_gen;
 END_RCPP
 }
 // tsolver_get_rss
-NumericVector tsolver_get_rss(XPtr<TSolver_Base> ptr);
+NumericVector tsolver_get_rss(XPtr<TSolverRcpp> ptr);
 RcppExport SEXP _TRexSelector_tsolver_get_rss(SEXP ptrSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
-    Rcpp::traits::input_parameter< XPtr<TSolver_Base> >::type ptr(ptrSEXP);
+    Rcpp::traits::input_parameter< XPtr<TSolverRcpp> >::type ptr(ptrSEXP);
     rcpp_result_gen = Rcpp::wrap(tsolver_get_rss(ptr));
     return rcpp_result_gen;
 END_RCPP
 }
 // tsolver_get_r2
-NumericVector tsolver_get_r2(XPtr<TSolver_Base> ptr);
+NumericVector tsolver_get_r2(XPtr<TSolverRcpp> ptr);
 RcppExport SEXP _TRexSelector_tsolver_get_r2(SEXP ptrSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
-    Rcpp::traits::input_parameter< XPtr<TSolver_Base> >::type ptr(ptrSEXP);
+    Rcpp::traits::input_parameter< XPtr<TSolverRcpp> >::type ptr(ptrSEXP);
     rcpp_result_gen = Rcpp::wrap(tsolver_get_r2(ptr));
     return rcpp_result_gen;
 END_RCPP
 }
 // tsolver_get_dof
-NumericVector tsolver_get_dof(XPtr<TSolver_Base> ptr);
+NumericVector tsolver_get_dof(XPtr<TSolverRcpp> ptr);
 RcppExport SEXP _TRexSelector_tsolver_get_dof(SEXP ptrSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
-    Rcpp::traits::input_parameter< XPtr<TSolver_Base> >::type ptr(ptrSEXP);
+    Rcpp::traits::input_parameter< XPtr<TSolverRcpp> >::type ptr(ptrSEXP);
     rcpp_result_gen = Rcpp::wrap(tsolver_get_dof(ptr));
     return rcpp_result_gen;
 END_RCPP
 }
 // tsolver_get_actives
-NumericVector tsolver_get_actives(XPtr<TSolver_Base> ptr);
+NumericVector tsolver_get_actives(XPtr<TSolverRcpp> ptr);
 RcppExport SEXP _TRexSelector_tsolver_get_actives(SEXP ptrSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
-    Rcpp::traits::input_parameter< XPtr<TSolver_Base> >::type ptr(ptrSEXP);
+    Rcpp::traits::input_parameter< XPtr<TSolverRcpp> >::type ptr(ptrSEXP);
     rcpp_result_gen = Rcpp::wrap(tsolver_get_actives(ptr));
     return rcpp_result_gen;
 END_RCPP
 }
 // tsolver_get_inactives
-NumericVector tsolver_get_inactives(XPtr<TSolver_Base> ptr);
+NumericVector tsolver_get_inactives(XPtr<TSolverRcpp> ptr);
 RcppExport SEXP _TRexSelector_tsolver_get_inactives(SEXP ptrSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
-    Rcpp::traits::input_parameter< XPtr<TSolver_Base> >::type ptr(ptrSEXP);
+    Rcpp::traits::input_parameter< XPtr<TSolverRcpp> >::type ptr(ptrSEXP);
     rcpp_result_gen = Rcpp::wrap(tsolver_get_inactives(ptr));
     return rcpp_result_gen;
 END_RCPP
 }
 // tsolver_get_intercept
-double tsolver_get_intercept(XPtr<TSolver_Base> ptr, int step);
+double tsolver_get_intercept(XPtr<TSolverRcpp> ptr, int step);
 RcppExport SEXP _TRexSelector_tsolver_get_intercept(SEXP ptrSEXP, SEXP stepSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
-    Rcpp::traits::input_parameter< XPtr<TSolver_Base> >::type ptr(ptrSEXP);
+    Rcpp::traits::input_parameter< XPtr<TSolverRcpp> >::type ptr(ptrSEXP);
     Rcpp::traits::input_parameter< int >::type step(stepSEXP);
     rcpp_result_gen = Rcpp::wrap(tsolver_get_intercept(ptr, step));
     return rcpp_result_gen;
 END_RCPP
 }
+// tsolver_get_num_steps
+int tsolver_get_num_steps(XPtr<TSolverRcpp> ptr);
+RcppExport SEXP _TRexSelector_tsolver_get_num_steps(SEXP ptrSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< XPtr<TSolverRcpp> >::type ptr(ptrSEXP);
+    rcpp_result_gen = Rcpp::wrap(tsolver_get_num_steps(ptr));
+    return rcpp_result_gen;
+END_RCPP
+}
+// tsolver_get_actions
+List tsolver_get_actions(XPtr<TSolverRcpp> ptr);
+RcppExport SEXP _TRexSelector_tsolver_get_actions(SEXP ptrSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< XPtr<TSolverRcpp> >::type ptr(ptrSEXP);
+    rcpp_result_gen = Rcpp::wrap(tsolver_get_actions(ptr));
+    return rcpp_result_gen;
+END_RCPP
+}
+// tsolver_get_lambda
+NumericVector tsolver_get_lambda(XPtr<TSolverRcpp> ptr);
+RcppExport SEXP _TRexSelector_tsolver_get_lambda(SEXP ptrSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< XPtr<TSolverRcpp> >::type ptr(ptrSEXP);
+    rcpp_result_gen = Rcpp::wrap(tsolver_get_lambda(ptr));
+    return rcpp_result_gen;
+END_RCPP
+}
+// tsolver_get_num_removals
+int tsolver_get_num_removals(XPtr<TSolverRcpp> ptr);
+RcppExport SEXP _TRexSelector_tsolver_get_num_removals(SEXP ptrSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< XPtr<TSolverRcpp> >::type ptr(ptrSEXP);
+    rcpp_result_gen = Rcpp::wrap(tsolver_get_num_removals(ptr));
+    return rcpp_result_gen;
+END_RCPP
+}
+// tsolver_get_cycling_ratio
+double tsolver_get_cycling_ratio(XPtr<TSolverRcpp> ptr);
+RcppExport SEXP _TRexSelector_tsolver_get_cycling_ratio(SEXP ptrSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< XPtr<TSolverRcpp> >::type ptr(ptrSEXP);
+    rcpp_result_gen = Rcpp::wrap(tsolver_get_cycling_ratio(ptr));
+    return rcpp_result_gen;
+END_RCPP
+}
 // tsolver_save
-void tsolver_save(XPtr<TSolver_Base> ptr, const std::string& filename);
+void tsolver_save(XPtr<TSolverRcpp> ptr, const std::string& filename);
 RcppExport SEXP _TRexSelector_tsolver_save(SEXP ptrSEXP, SEXP filenameSEXP) {
 BEGIN_RCPP
     Rcpp::RNGScope rcpp_rngScope_gen;
-    Rcpp::traits::input_parameter< XPtr<TSolver_Base> >::type ptr(ptrSEXP);
+    Rcpp::traits::input_parameter< XPtr<TSolverRcpp> >::type ptr(ptrSEXP);
     Rcpp::traits::input_parameter< const std::string& >::type filename(filenameSEXP);
     tsolver_save(ptr, filename);
     return R_NilValue;
 END_RCPP
 }
 // tsolver_load
-void tsolver_load(XPtr<TSolver_Base> ptr, const std::string& filename);
+void tsolver_load(XPtr<TSolverRcpp> ptr, const std::string& filename);
 RcppExport SEXP _TRexSelector_tsolver_load(SEXP ptrSEXP, SEXP filenameSEXP) {
 BEGIN_RCPP
     Rcpp::RNGScope rcpp_rngScope_gen;
-    Rcpp::traits::input_parameter< XPtr<TSolver_Base> >::type ptr(ptrSEXP);
+    Rcpp::traits::input_parameter< XPtr<TSolverRcpp> >::type ptr(ptrSEXP);
     Rcpp::traits::input_parameter< const std::string& >::type filename(filenameSEXP);
     tsolver_load(ptr, filename);
     return R_NilValue;
@@ -1293,28 +1938,71 @@ static const R_CallMethodDef CallEntries[] = {
     {"_TRexSelector_trex_da_create", (DL_FUNC) &_TRexSelector_trex_da_create, 7},
     {"_TRexSelector_trex_da_mmap_create", (DL_FUNC) &_TRexSelector_trex_da_mmap_create, 7},
     {"_TRexSelector_trex_da_select", (DL_FUNC) &_TRexSelector_trex_da_select, 1},
-    {"_TRexSelector_trex_da_get_results", (DL_FUNC) &_TRexSelector_trex_da_get_results, 1},
-    {"_TRexSelector_trex_da_get_matrices", (DL_FUNC) &_TRexSelector_trex_da_get_matrices, 1},
-    {"_TRexSelector_trex_da_get_selected_indices", (DL_FUNC) &_TRexSelector_trex_da_get_selected_indices, 1},
+    {"_TRexSelector_trex_da_to_base_ptr", (DL_FUNC) &_TRexSelector_trex_da_to_base_ptr, 1},
+    {"_TRexSelector_trex_da_get_rho_thresh", (DL_FUNC) &_TRexSelector_trex_da_get_rho_thresh, 1},
+    {"_TRexSelector_trex_da_get_rho_grid", (DL_FUNC) &_TRexSelector_trex_da_get_rho_grid, 1},
+    {"_TRexSelector_trex_da_get_method_string", (DL_FUNC) &_TRexSelector_trex_da_get_method_string, 1},
+    {"_TRexSelector_trex_da_get_cor_coef", (DL_FUNC) &_TRexSelector_trex_da_get_cor_coef, 1},
+    {"_TRexSelector_trex_da_get_fdp_hat_array_bt", (DL_FUNC) &_TRexSelector_trex_da_get_fdp_hat_array_bt, 1},
+    {"_TRexSelector_trex_da_get_phi_array_bt", (DL_FUNC) &_TRexSelector_trex_da_get_phi_array_bt, 1},
+    {"_TRexSelector_trex_da_get_r_array_bt", (DL_FUNC) &_TRexSelector_trex_da_get_r_array_bt, 1},
     {"_TRexSelector_trex_gvs_create", (DL_FUNC) &_TRexSelector_trex_gvs_create, 7},
     {"_TRexSelector_trex_gvs_mmap_create", (DL_FUNC) &_TRexSelector_trex_gvs_mmap_create, 7},
     {"_TRexSelector_trex_gvs_select", (DL_FUNC) &_TRexSelector_trex_gvs_select, 1},
-    {"_TRexSelector_trex_gvs_get_results", (DL_FUNC) &_TRexSelector_trex_gvs_get_results, 1},
+    {"_TRexSelector_trex_gvs_get_lambda2_used", (DL_FUNC) &_TRexSelector_trex_gvs_get_lambda2_used, 1},
+    {"_TRexSelector_trex_gvs_get_gvs_type", (DL_FUNC) &_TRexSelector_trex_gvs_get_gvs_type, 1},
+    {"_TRexSelector_trex_gvs_get_max_clusters", (DL_FUNC) &_TRexSelector_trex_gvs_get_max_clusters, 1},
     {"_TRexSelector_trex_gvs_get_selected_indices", (DL_FUNC) &_TRexSelector_trex_gvs_get_selected_indices, 1},
     {"_TRexSelector_trex_screening_create", (DL_FUNC) &_TRexSelector_trex_screening_create, 6},
     {"_TRexSelector_trex_screening_mmap_create", (DL_FUNC) &_TRexSelector_trex_screening_mmap_create, 6},
     {"_TRexSelector_trex_screening_select", (DL_FUNC) &_TRexSelector_trex_screening_select, 1},
-    {"_TRexSelector_trex_screening_get_results", (DL_FUNC) &_TRexSelector_trex_screening_get_results, 1},
-    {"_TRexSelector_trex_screening_get_matrices", (DL_FUNC) &_TRexSelector_trex_screening_get_matrices, 1},
+    {"_TRexSelector_trex_screening_get_estimated_fdr", (DL_FUNC) &_TRexSelector_trex_screening_get_estimated_fdr, 1},
+    {"_TRexSelector_trex_screening_get_used_bootstrap", (DL_FUNC) &_TRexSelector_trex_screening_get_used_bootstrap, 1},
+    {"_TRexSelector_trex_screening_get_confidence_level", (DL_FUNC) &_TRexSelector_trex_screening_get_confidence_level, 1},
+    {"_TRexSelector_trex_screening_get_estimated_correlation", (DL_FUNC) &_TRexSelector_trex_screening_get_estimated_correlation, 1},
+    {"_TRexSelector_trex_screening_get_beta_mat", (DL_FUNC) &_TRexSelector_trex_screening_get_beta_mat, 1},
+    {"_TRexSelector_trex_screening_get_dummy_betas", (DL_FUNC) &_TRexSelector_trex_screening_get_dummy_betas, 1},
     {"_TRexSelector_trex_screening_get_selected_indices", (DL_FUNC) &_TRexSelector_trex_screening_get_selected_indices, 1},
     {"_TRexSelector_trex_selector_create", (DL_FUNC) &_TRexSelector_trex_selector_create, 6},
     {"_TRexSelector_trex_selector_mmap_create", (DL_FUNC) &_TRexSelector_trex_selector_mmap_create, 6},
     {"_TRexSelector_trex_selector_select", (DL_FUNC) &_TRexSelector_trex_selector_select, 1},
+    {"_TRexSelector_trex_selector_get_selected_var", (DL_FUNC) &_TRexSelector_trex_selector_get_selected_var, 1},
     {"_TRexSelector_trex_selector_get_selected_indices", (DL_FUNC) &_TRexSelector_trex_selector_get_selected_indices, 1},
-    {"_TRexSelector_tsolver_lars_create", (DL_FUNC) &_TRexSelector_tsolver_lars_create, 3},
-    {"_TRexSelector_tsolver_omp_create", (DL_FUNC) &_TRexSelector_tsolver_omp_create, 3},
-    {"_TRexSelector_tsolver_lars_mmap_create", (DL_FUNC) &_TRexSelector_tsolver_lars_mmap_create, 3},
-    {"_TRexSelector_tsolver_omp_mmap_create", (DL_FUNC) &_TRexSelector_tsolver_omp_mmap_create, 3},
+    {"_TRexSelector_trex_selector_get_voting_threshold", (DL_FUNC) &_TRexSelector_trex_selector_get_voting_threshold, 1},
+    {"_TRexSelector_trex_selector_get_t_stop", (DL_FUNC) &_TRexSelector_trex_selector_get_t_stop, 1},
+    {"_TRexSelector_trex_selector_get_dummy_multiplier_l", (DL_FUNC) &_TRexSelector_trex_selector_get_dummy_multiplier_l, 1},
+    {"_TRexSelector_trex_selector_get_voting_grid", (DL_FUNC) &_TRexSelector_trex_selector_get_voting_grid, 1},
+    {"_TRexSelector_trex_selector_get_fdp_hat_mat", (DL_FUNC) &_TRexSelector_trex_selector_get_fdp_hat_mat, 1},
+    {"_TRexSelector_trex_selector_get_phi_mat", (DL_FUNC) &_TRexSelector_trex_selector_get_phi_mat, 1},
+    {"_TRexSelector_trex_selector_get_r_mat", (DL_FUNC) &_TRexSelector_trex_selector_get_r_mat, 1},
+    {"_TRexSelector_trex_selector_get_phi_prime", (DL_FUNC) &_TRexSelector_trex_selector_get_phi_prime, 1},
+    {"_TRexSelector_trex_selector_get_x_means", (DL_FUNC) &_TRexSelector_trex_selector_get_x_means, 1},
+    {"_TRexSelector_trex_selector_get_x_l2_norms", (DL_FUNC) &_TRexSelector_trex_selector_get_x_l2_norms, 1},
+    {"_TRexSelector_trex_selector_get_y_mean", (DL_FUNC) &_TRexSelector_trex_selector_get_y_mean, 1},
+    {"_TRexSelector_tsolver_lars_create", (DL_FUNC) &_TRexSelector_tsolver_lars_create, 6},
+    {"_TRexSelector_tsolver_omp_create", (DL_FUNC) &_TRexSelector_tsolver_omp_create, 6},
+    {"_TRexSelector_tsolver_lars_mmap_create", (DL_FUNC) &_TRexSelector_tsolver_lars_mmap_create, 6},
+    {"_TRexSelector_tsolver_omp_mmap_create", (DL_FUNC) &_TRexSelector_tsolver_omp_mmap_create, 6},
+    {"_TRexSelector_tsolver_tlasso_create", (DL_FUNC) &_TRexSelector_tsolver_tlasso_create, 6},
+    {"_TRexSelector_tsolver_tstepwise_create", (DL_FUNC) &_TRexSelector_tsolver_tstepwise_create, 6},
+    {"_TRexSelector_tsolver_tenet_create", (DL_FUNC) &_TRexSelector_tsolver_tenet_create, 7},
+    {"_TRexSelector_tsolver_tstagewise_create", (DL_FUNC) &_TRexSelector_tsolver_tstagewise_create, 6},
+    {"_TRexSelector_tsolver_tgp_create", (DL_FUNC) &_TRexSelector_tsolver_tgp_create, 6},
+    {"_TRexSelector_tsolver_tacgp_create", (DL_FUNC) &_TRexSelector_tsolver_tacgp_create, 6},
+    {"_TRexSelector_tsolver_tmp_create", (DL_FUNC) &_TRexSelector_tsolver_tmp_create, 6},
+    {"_TRexSelector_tsolver_tools_create", (DL_FUNC) &_TRexSelector_tsolver_tools_create, 6},
+    {"_TRexSelector_tsolver_tncgmp_create", (DL_FUNC) &_TRexSelector_tsolver_tncgmp_create, 7},
+    {"_TRexSelector_tsolver_tafs_create", (DL_FUNC) &_TRexSelector_tsolver_tafs_create, 7},
+    {"_TRexSelector_tsolver_tlasso_mmap_create", (DL_FUNC) &_TRexSelector_tsolver_tlasso_mmap_create, 6},
+    {"_TRexSelector_tsolver_tstepwise_mmap_create", (DL_FUNC) &_TRexSelector_tsolver_tstepwise_mmap_create, 6},
+    {"_TRexSelector_tsolver_tenet_mmap_create", (DL_FUNC) &_TRexSelector_tsolver_tenet_mmap_create, 7},
+    {"_TRexSelector_tsolver_tstagewise_mmap_create", (DL_FUNC) &_TRexSelector_tsolver_tstagewise_mmap_create, 6},
+    {"_TRexSelector_tsolver_tgp_mmap_create", (DL_FUNC) &_TRexSelector_tsolver_tgp_mmap_create, 6},
+    {"_TRexSelector_tsolver_tacgp_mmap_create", (DL_FUNC) &_TRexSelector_tsolver_tacgp_mmap_create, 6},
+    {"_TRexSelector_tsolver_tmp_mmap_create", (DL_FUNC) &_TRexSelector_tsolver_tmp_mmap_create, 6},
+    {"_TRexSelector_tsolver_tools_mmap_create", (DL_FUNC) &_TRexSelector_tsolver_tools_mmap_create, 6},
+    {"_TRexSelector_tsolver_tncgmp_mmap_create", (DL_FUNC) &_TRexSelector_tsolver_tncgmp_mmap_create, 7},
+    {"_TRexSelector_tsolver_tafs_mmap_create", (DL_FUNC) &_TRexSelector_tsolver_tafs_mmap_create, 7},
     {"_TRexSelector_tsolver_execute_step", (DL_FUNC) &_TRexSelector_tsolver_execute_step, 3},
     {"_TRexSelector_tsolver_get_beta", (DL_FUNC) &_TRexSelector_tsolver_get_beta, 2},
     {"_TRexSelector_tsolver_get_cp", (DL_FUNC) &_TRexSelector_tsolver_get_cp, 1},
@@ -1324,6 +2012,11 @@ static const R_CallMethodDef CallEntries[] = {
     {"_TRexSelector_tsolver_get_actives", (DL_FUNC) &_TRexSelector_tsolver_get_actives, 1},
     {"_TRexSelector_tsolver_get_inactives", (DL_FUNC) &_TRexSelector_tsolver_get_inactives, 1},
     {"_TRexSelector_tsolver_get_intercept", (DL_FUNC) &_TRexSelector_tsolver_get_intercept, 2},
+    {"_TRexSelector_tsolver_get_num_steps", (DL_FUNC) &_TRexSelector_tsolver_get_num_steps, 1},
+    {"_TRexSelector_tsolver_get_actions", (DL_FUNC) &_TRexSelector_tsolver_get_actions, 1},
+    {"_TRexSelector_tsolver_get_lambda", (DL_FUNC) &_TRexSelector_tsolver_get_lambda, 1},
+    {"_TRexSelector_tsolver_get_num_removals", (DL_FUNC) &_TRexSelector_tsolver_get_num_removals, 1},
+    {"_TRexSelector_tsolver_get_cycling_ratio", (DL_FUNC) &_TRexSelector_tsolver_get_cycling_ratio, 1},
     {"_TRexSelector_tsolver_save", (DL_FUNC) &_TRexSelector_tsolver_save, 2},
     {"_TRexSelector_tsolver_load", (DL_FUNC) &_TRexSelector_tsolver_load, 2},
     {"_TRexSelector_rcpp_set_custom_temp_dir", (DL_FUNC) &_TRexSelector_rcpp_set_custom_temp_dir, 1},

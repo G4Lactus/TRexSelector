@@ -6,14 +6,42 @@
 \description{
 Fast variable screening algorithm based on TRex architecture.
 }
+\examples{
+\donttest{
+data(Gauss_data)
+X <- Gauss_data$X
+y <- Gauss_data$y
+sel <- TRexScreeningSelector$new(X, y, verbose = FALSE)
+sel$select()
+sel$selected_indices
+}
+
+}
+\section{Super class}{
+\code{\link[TRexSelector:TRexSelector]{TRexSelector::TRexSelector}} -> \code{TRexScreeningSelector}
+}
+\section{Active bindings}{
+\if{html}{\out{<div class="r6-active-bindings">}}
+\describe{
+\item{\code{estimated_FDR}}{Empirical FDR expectation bounds.}
+
+\item{\code{used_bootstrap}}{Employs bootstrapping.}
+
+\item{\code{confidence_level}}{Bounds the bootstrap estimates.}
+
+\item{\code{estimated_correlation}}{Covariance max value.}
+
+\item{\code{beta_mat}}{Complete variables parameter space.}
+
+\item{\code{dummy_betas}}{Dummy variables parameter space.}
+}
+\if{html}{\out{</div>}}
+}
 \section{Methods}{
 \subsection{Public methods}{
 \itemize{
 \item \href{#method-TRexScreeningSelector-new}{\code{TRexScreeningSelector$new()}}
 \item \href{#method-TRexScreeningSelector-select}{\code{TRexScreeningSelector$select()}}
-\item \href{#method-TRexScreeningSelector-get_selected_indices}{\code{TRexScreeningSelector$get_selected_indices()}}
-\item \href{#method-TRexScreeningSelector-get_results}{\code{TRexScreeningSelector$get_results()}}
-\item \href{#method-TRexScreeningSelector-get_matrices}{\code{TRexScreeningSelector$get_matrices()}}
 \item \href{#method-TRexScreeningSelector-clone}{\code{TRexScreeningSelector$clone()}}
 }
 }
@@ -28,15 +56,8 @@ Create a new TRexScreeningSelector object.
   y,
   seed = -1,
   verbose = TRUE,
-  use_bootstrap_CI = FALSE,
-  R_boot = 1000,
-  ci_grid_step = 0.001,
-  trex_method = "TREX",
-  method = "LARS",
-  use_omp = TRUE,
-  use_memory_mapping = FALSE,
-  max_outer_threads = 1,
-  max_inner_threads = 1
+  screen_control = trex_screen_control(),
+  control = trex_control()
 )}\if{html}{\out{</div>}}
 }
 
@@ -51,23 +72,11 @@ Create a new TRexScreeningSelector object.
 
 \item{\code{verbose}}{Whether to print progress (default: TRUE).}
 
-\item{\code{use_bootstrap_CI}}{Whether to use bootstrap CI screening.}
+\item{\code{screen_control}}{A screen control list from \code{\link{trex_screen_control}()}
+(default: \code{trex_screen_control()}).}
 
-\item{\code{R_boot}}{Number of bootstrap iterations.}
-
-\item{\code{ci_grid_step}}{the grid step sizes for interval calculations}
-
-\item{\code{trex_method}}{Screening method: "TREX", "TREX_DA_AR1", "TREX_DA_EQUI", "TREX_DA_BLOCK_EQUI"}
-
-\item{\code{method}}{The solver method, e.g., "LARS", "TACGP", "TENET" (default: "LARS").}
-
-\item{\code{use_omp}}{Whether to use OpenMP parallelization (default: TRUE).}
-
-\item{\code{use_memory_mapping}}{Use out-of-core memory mapping (default: FALSE).}
-
-\item{\code{max_outer_threads}}{Thread count for K repetitions (default: 1).}
-
-\item{\code{max_inner_threads}}{Thread count for inner solvers (default: 1).}
+\item{\code{control}}{A control list from \code{\link{trex_control}()} (default:
+\code{trex_control()}). The \code{lloop_strategy} field is forced to "STANDARD".}
 }
 \if{html}{\out{</div>}}
 }
@@ -81,45 +90,6 @@ Run the Screening algorithm.
 \if{html}{\out{<div class="r">}}\preformatted{TRexScreeningSelector$select()}\if{html}{\out{</div>}}
 }
 
-}
-\if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-TRexScreeningSelector-get_selected_indices"></a>}}
-\if{latex}{\out{\hypertarget{method-TRexScreeningSelector-get_selected_indices}{}}}
-\subsection{Method \code{get_selected_indices()}}{
-Get the integer indices (1-based) of the selected variables.
-\subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{TRexScreeningSelector$get_selected_indices()}\if{html}{\out{</div>}}
-}
-
-\subsection{Returns}{
-Numeric vector of selected indices.
-}
-}
-\if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-TRexScreeningSelector-get_results"></a>}}
-\if{latex}{\out{\hypertarget{method-TRexScreeningSelector-get_results}{}}}
-\subsection{Method \code{get_results()}}{
-Get generic solver results.
-\subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{TRexScreeningSelector$get_results()}\if{html}{\out{</div>}}
-}
-
-\subsection{Returns}{
-A list containing results.
-}
-}
-\if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-TRexScreeningSelector-get_matrices"></a>}}
-\if{latex}{\out{\hypertarget{method-TRexScreeningSelector-get_matrices}{}}}
-\subsection{Method \code{get_matrices()}}{
-Get solver matrices.
-\subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{TRexScreeningSelector$get_matrices()}\if{html}{\out{</div>}}
-}
-
-\subsection{Returns}{
-A list containing matrices.
-}
 }
 \if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-TRexScreeningSelector-clone"></a>}}

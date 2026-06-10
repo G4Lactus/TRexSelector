@@ -19,3 +19,6 @@ Numeric FDP value.
 \description{
 Compute False Discovery Proportion (FDP) using dense vectors
 }
+\examples{
+compute_fdp_dense(c(1.5, 0, 0.8, 0, 0), c(2.0, 0, 1.0, 0, 0))
+}

@@ -17,3 +17,7 @@ Numeric precision value.
 \description{
 Compute Precision using index sets
 }
+\examples{
+compute_precision(c(1L, 3L, 5L), c(1L, 2L, 3L))
+
+}

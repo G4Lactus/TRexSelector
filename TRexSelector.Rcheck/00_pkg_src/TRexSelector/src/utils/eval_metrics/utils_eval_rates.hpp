@@ -146,6 +146,7 @@ inline double compute_fdp(const Eigen::MatrixBase<Derived1>& beta_hat,
     }
 }
 
+
 /**
  * @brief True Positive Proporiton (TPP)
  *
@@ -241,7 +242,6 @@ inline double compute_recall(
 }
 
 // ===================================================================================
-
 } /* End of namespace trex::utils::eval::rates */
-
-#endif /* UTILS_EVAL_RATES_HPP */
+// ===================================================================================
+#endif /* End of UTILS_EVAL_RATES_HPP */

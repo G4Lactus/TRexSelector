@@ -6,6 +6,51 @@
 \description{
 FDR-controlled variable selection algorithm.
 }
+\examples{
+\donttest{
+data(Gauss_data)
+X <- Gauss_data$X
+y <- Gauss_data$y
+sel <- TRexSelector$new(X, y, tFDR = 0.1, verbose = FALSE)
+sel$select()
+sel$selected_indices
+}
+}
+\section{Active bindings}{
+\if{html}{\out{<div class="r6-active-bindings">}}
+\describe{
+\item{\code{.ptr}}{Get internal pointer.}
+
+\item{\code{.ptr_X}}{internal proxy for data size}
+
+\item{\code{selected_var}}{Logical vector indicating which variables were selected.}
+
+\item{\code{selected_indices}}{Integer vector of selected 1-based indices.}
+
+\item{\code{v_thresh}}{The chosen voting threshold.}
+
+\item{\code{T_stop}}{The length of the path / maximum number of included variables.}
+
+\item{\code{L}}{The number of dummy replications used.}
+
+\item{\code{voting_grid}}{The grid of voters over trials and variables.}
+
+\item{\code{fdp_hat_mat}}{estimated false discovery proportions}
+
+\item{\code{phi_mat}}{probability mass function evaluations}
+
+\item{\code{r_mat}}{empirical CDF computations}
+
+\item{\code{phi_prime}}{smoothed probability masses}
+
+\item{\code{x_means}}{computed means of the predictor variables}
+
+\item{\code{x_l2_norms}}{computed L2 norms of the scaled predictors}
+
+\item{\code{y_mean}}{computed mean of the response sequence}
+}
+\if{html}{\out{</div>}}
+}
 \section{Methods}{
 \subsection{Public methods}{
 \itemize{
@@ -26,22 +71,7 @@ Create a new TRexSelector object.
   tFDR = 0.1,
   seed = -1,
   verbose = TRUE,
-  method = "LARS",
-  K = 20,
-  max_dummy_multiplier = 10,
-  use_max_T_stop = TRUE,
-  opt_threshold = 0.75,
-  lloop_strategy = "HCONCAT",
-  tloop_stagnation_stop = TRUE,
-  tloop_max_stagnant_steps = 5,
-  use_omp = TRUE,
-  use_memory_mapping = FALSE,
-  max_outer_threads = 1,
-  max_inner_threads = 1,
-  tol = 1e-04,
-  lambda2 = 0.1,
-  rho_afs = 0.3,
-  ncgmp_variant = 0
+  control = trex_control()
 )}\if{html}{\out{</div>}}
 }
 
@@ -58,37 +88,8 @@ Create a new TRexSelector object.
 
 \item{\code{verbose}}{Whether to print progress (default: TRUE).}
 
-\item{\code{method}}{The solver method, e.g., "LARS", "TACGP", "TENET" (default: "LARS").}
-
-\item{\code{K}}{Number of random experiments (default: 20).}
-
-\item{\code{max_dummy_multiplier}}{Max dummy features multiplier (default: 10).}
-
-\item{\code{use_max_T_stop}}{Whether to bound max T_stop (default: TRUE).}
-
-\item{\code{opt_threshold}}{Optimization threshold (default: 0.75).}
-
-\item{\code{lloop_strategy}}{Strategy for L-loop (default: "HCONCAT").}
-
-\item{\code{tloop_stagnation_stop}}{Whether to stop early if stagnation (default: TRUE).}
-
-\item{\code{tloop_max_stagnant_steps}}{Steps before stagnation trigger (default: 5).}
-
-\item{\code{use_omp}}{Whether to use OpenMP parallelization (default: TRUE).}
-
-\item{\code{use_memory_mapping}}{Use out-of-core memory mapping (default: FALSE).}
-
-\item{\code{max_outer_threads}}{Thread count for K repetitions (default: 1).}
-
-\item{\code{max_inner_threads}}{Thread count for inner solvers (default: 1).}
-
-\item{\code{tol}}{Tolerance for solver algorithms (default: 1e-4).}
-
-\item{\code{lambda2}}{ENET hyperparameter (default: 0.1).}
-
-\item{\code{rho_afs}}{AFS hyperparameter (default: 0.3).}
-
-\item{\code{ncgmp_variant}}{NCGMP strategy (default: 0).}
+\item{\code{control}}{A control list from \code{\link{trex_control}()} (default:
+\code{trex_control()}).}
 }
 \if{html}{\out{</div>}}
 }
@@ -103,7 +104,7 @@ Run the TRexSelector algorithm.
 }
 
 \subsection{Returns}{
-A list containing results including selected_var, v_thresh, and selected_indices.
+invisible(self)
 }
 }
 \if{html}{\out{<hr>}}

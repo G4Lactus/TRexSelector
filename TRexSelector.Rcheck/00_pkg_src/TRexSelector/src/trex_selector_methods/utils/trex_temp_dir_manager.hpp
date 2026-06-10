@@ -21,6 +21,9 @@
 #include <sstream>
 #include <iostream>
 
+// utils includes
+#include <utils/global_temp_dir.hpp>
+
 // =========================================================================
 
 // Embedding into namespace trex::trex_selector_methods::utils::filesystem
@@ -39,6 +42,7 @@ public:
      */
     static void setCustomTempDir(const std::string& temp_dir) {
         custom_temp_dir = temp_dir;
+        trex::utils::set_global_temp_dir(temp_dir);
     }
 
     /**

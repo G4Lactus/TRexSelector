@@ -6,6 +6,15 @@
 \description{
 Performs explicit K-Fold cross-validation for Ridge Regression model selection.
 }
+\examples{
+set.seed(1)
+X <- matrix(rnorm(50 * 5), 50, 5)
+y <- X[, 1] * 2 + rnorm(50)
+cv <- RidgeCV$new()
+cv$fit(X, y, num_folds = 5)
+cv$cv_min()
+
+}
 \section{Methods}{
 \subsection{Public methods}{
 \itemize{

@@ -241,7 +241,7 @@ protected:
     const bool verbose_;
 
     /** @brief Numerical tolerance. */
-    const double eps_{std::numeric_limits<double>::epsilon()};
+    double eps_{std::numeric_limits<double>::epsilon()};
 
     // ============================================================
     // Data Members — Normalization (via trex_data_normalizer)
@@ -482,10 +482,6 @@ public:
 
     /** @brief Get dummy multiplier L. */
     std::size_t getDummyMultiplierL() const noexcept { return dummy_multiplier_LL_; }
-
-    /** @brief Get stopping time T. */
-    std::size_t getStoppingTimeT() const noexcept { return T_stop_; }
-
 
 protected:
 

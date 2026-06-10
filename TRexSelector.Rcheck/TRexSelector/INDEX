@@ -1,8 +1,19 @@
 DistanceMetric          Distance Metrics
+Gauss_data              Toy data generated from a Gaussian linear model
 LinkageMethod           Linkage Methods
 LpNormScaler            Lp-Norm Scaler
 RidgeCV                 Ridge Regression with Cross-Validation
 RidgeGCV                Ridge Regression with GCV
+TACGPSolver             T-ACGP Solver
+TAFSSolver              T-AFS Solver
+TENETSolver             T-ENET Solver
+TGPSolver               T-GP Solver
+TLARSSolver             T-LARS Solver
+TLASSOSolver            T-LASSO Solver
+TMPSolver               T-MP Solver
+TNCGMPSolver            T-NCGMP Solver
+TOMPSolver              T-OMP Solver
+TOOLSSolver             T-OLS Solver
 TRexBiobankScreeningSelector
                         Biobank Screen T-Rex Selector
 TRexDASelector          Dependency-Aware T-Rex Selector (TRexDA)
@@ -10,7 +21,9 @@ TRexGVSSelector         T-Rex Selector with Group Variable Selection
                         (TRex GVS)
 TRexScreeningSelector   Screen T-Rex Selector
 TRexSelector            T-Rex Selector
-TSolver                 Base T-Solver Class
+TSTEPWISESolver         T-Stepwise Solver
+TSolverBase             Base T-Solver Class
+TStagewiseSolver        T-Stagewise Solver
 ZScoreScaler            Z-Score Scaler
 [.mmap_matrix           Extract block from mmap_matrix
 agglomerative_cluster   Agglomerative Clustering
@@ -29,5 +42,14 @@ convert_to_memory_mapped
                         Convert R Matrix to System Memory Mapped Matrix
 cut_tree                Cut Hierarchical Linkage Matrix
 dim.mmap_matrix         Get mmap_matrix dimensions
+get_ptr                 Get the External Pointer of a
+                        MemoryMappedMatrix
 mmap_matrix             Memory-Mapped Matrix Object
 print.mmap_matrix       Print mmap_matrix
+trex_biobank_control    TRex Biobank Control Parameters
+trex_control            TRex Control Parameters
+trex_da_control         TRex DA Control Parameters
+trex_dummy_distribution
+                        TRex Dummy Variable Distribution
+trex_gvs_control        TRex GVS Control Parameters
+trex_screen_control     TRex Screen Control Parameters

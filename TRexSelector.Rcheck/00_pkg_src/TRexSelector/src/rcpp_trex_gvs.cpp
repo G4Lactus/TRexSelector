@@ -1,6 +1,6 @@
 // [[Rcpp::depends(RcppEigen)]]
 #include <RcppEigen.h>
-#include "rcpp_trex_gvs_wrapper.h"
+#include "rcpp_trex_gvs.h"
 
 using namespace Rcpp;
 using namespace trex::trex_selector_methods::trex_gvs;
@@ -91,27 +91,29 @@ void trex_gvs_select(XPtr<RTRexGVSSelector> r_ptr) {
     r_ptr->select();
 }
 
-//' @title Get TRexGVSSelector Result
+//' @title Get lambda2_used
 //' @noRd
 // [[Rcpp::export]]
-List trex_gvs_get_results(XPtr<RTRexGVSSelector> r_ptr) {
-    auto res = r_ptr->get()->getGVSResult();
-    
-    std::string method_str;
-    switch(res.gvs_type) {
-        case GVSType::EN: method_str = "EN"; break;
-        case GVSType::IEN: method_str = "IEN"; break;
-    }
+double trex_gvs_get_lambda2_used(XPtr<RTRexGVSSelector> r_ptr) {
+    return r_ptr->get()->getGVSResult().lambda2_used;
+}
 
-    return List::create(
-        Named("selected_var")       = res.selected_var,
-        Named("T_stop")             = res.T_stop,
-        Named("v_thresh")           = res.v_thresh,
-        Named("voting_grid")        = res.voting_grid,
-        Named("lambda2_used")       = res.lambda2_used,
-        Named("gvs_type")           = method_str,
-        Named("max_clusters")       = res.max_clusters
-    );
+//' @title Get gvs_type
+//' @noRd
+// [[Rcpp::export]]
+std::string trex_gvs_get_gvs_type(XPtr<RTRexGVSSelector> r_ptr) {
+    switch(r_ptr->get()->getGVSResult().gvs_type) {
+        case GVSType::EN: return "EN";
+        case GVSType::IEN: return "IEN";
+    }
+    return "UNKNOWN";
+}
+
+//' @title Get max_clusters
+//' @noRd
+// [[Rcpp::export]]
+int trex_gvs_get_max_clusters(XPtr<RTRexGVSSelector> r_ptr) {
+    return static_cast<int>(r_ptr->get()->getGVSResult().max_clusters);
 }
 
 //' @title Get Selected Indices
