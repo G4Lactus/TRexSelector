@@ -16,9 +16,4 @@ add_subdirectory(tsolvers)                  # T-Solver libraries based on LARS, 
 # ------ High-level modules (depend on tsolvers, ml_methods, utils) -----
 add_subdirectory(trex_selector_methods)     # T-Rex selector libraries
 
-# ------ Applications (depend on everything above) ------
-if(TREX_BUILD_DEMOS)
-    add_subdirectory(demos)                 # Demo applications (optional)
-endif()
-
 # ------ END OF FILE -----------------------------------------------------

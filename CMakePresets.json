@@ -24,12 +24,11 @@
         {
             "name": "release-libs",
             "displayName": "Release (libraries only, no demos)",
-            "description": "Release build used for packaging and installation — demos excluded",
+            "description": "Release build used for packaging and installation",
             "binaryDir": "${sourceDir}/build/release",
             "cacheVariables": {
                 "CMAKE_BUILD_TYPE": "Release",
-                "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
-                "TREX_BUILD_DEMOS": "OFF"
+                "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
             }
         },
         {
@@ -40,8 +39,7 @@
             "toolchainFile": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
             "cacheVariables": {
                 "CMAKE_BUILD_TYPE": "Release",
-                "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
-                "TREX_BUILD_DEMOS": "OFF"
+                "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
             }
         }
     ],

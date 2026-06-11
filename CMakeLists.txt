@@ -55,7 +55,6 @@ endif()
 # ============================================================================
 # User-configurable options
 # ============================================================================
-option(TREX_BUILD_DEMOS "Build demo executables and optional plotting tools" ON)
 option(TREX_USE_BLAS_LAPACK "Use BLAS/LAPACK backends for Eigen" ON)
 option(TREX_PORTABLE_BUILD "Disable -march=native for portable/wheel builds. Set ON when building for PyPI or CI." OFF)
 
@@ -118,12 +117,6 @@ if(TREX_USE_BLAS_LAPACK)
         find_package(LAPACK REQUIRED)
     endif()
 endif()
-
-# Plotting: Matplot++ (only needed for demo executables)
-if(TREX_BUILD_DEMOS)
-    find_package(Matplot++ REQUIRED)
-endif()
-
 
 # ============================================================================
 # Configuration Summary
@@ -193,16 +186,6 @@ if(LAPACK_FOUND)
     message(STATUS "  - LAPACK: ${LAPACK_LIBRARIES}")
 else()
     message(STATUS "  - LAPACK: NOT FOUND")
-endif()
-#
-if(TREX_BUILD_DEMOS)
-    if(Matplot++_FOUND)
-        message(STATUS "  - Matplot++: ${Matplot++_VERSION}")
-    else()
-        message(STATUS "  - Matplot++: NOT FOUND")
-    endif()
-else()
-    message(STATUS "  - Matplot++: (skipped — TREX_BUILD_DEMOS=OFF)")
 endif()
 message(STATUS "")
 message(STATUS "Output Directories:")

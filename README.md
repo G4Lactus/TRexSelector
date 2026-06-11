@@ -125,22 +125,50 @@ pip install --no-build-isolation -e Python/TRexSelector
 
 ## For C++ Developers
 
-The library exports CMake targets and can be consumed by other C++ projects.
+The library installs CMake package config files and can be consumed by other C++ projects via `find_package(TRexSelector)`.
 
-**Install:**
+**Step 1 — Configure and build:**
 
 ```bash
-cmake --install build/release --prefix /usr/local
+# Debug build (symbols, no optimisation)
+cmake --preset debug
+cmake --build --preset debug-build
+
+# Release build (optimised)
+cmake --preset release
+cmake --build --preset release-build
 ```
 
-**Consume in your project (`CMakeLists.txt`):**
+**Step 2 — Install to a prefix:**
+
+```bash
+cmake --install build/release --prefix /path/to/install
+```
+
+**Step 3 — Consume in your project (`CMakeLists.txt`):**
 
 ```cmake
 find_package(TRexSelector REQUIRED)
-target_link_libraries(my_app PRIVATE trex::trex_selector_methods)
+
+target_link_libraries(my_app PRIVATE
+    TRexSelector::trex_selector_methods   # pulls in everything transitively
+)
 ```
 
-Available targets: `trex::utils`, `trex::ml_methods`, `trex::tsolvers`, `trex::trex_selector_methods`.
+Available targets:
+
+| Target | Contains |
+|--------|----------|
+| `TRexSelector::trex_selector_methods` | All selectors — links tsolvers, ml_methods, utils |
+| `TRexSelector::trex_tsolvers` | T-algorithm solvers only |
+| `TRexSelector::trex_ml_methods` | Standardization, clustering, model selection |
+| `TRexSelector::trex_utils` | Foundational utilities (memmap, serialization, OpenMP, Eigen) |
+
+Point `CMAKE_PREFIX_PATH` at your install prefix so `find_package` can locate the config:
+
+```bash
+cmake -S . -B build -DCMAKE_PREFIX_PATH=/path/to/install
+```
 
 ---
 

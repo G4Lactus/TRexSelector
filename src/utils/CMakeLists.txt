@@ -83,14 +83,14 @@ target_sources(trex_utils PUBLIC
         $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/src>
         $<INSTALL_INTERFACE:include>
     FILES
-        ${CMAKE_CURRENT_SOURCE_DIR}/datageneration/utils_datagen.hpp
         ${CMAKE_CURRENT_SOURCE_DIR}/datageneration/utils_dummygen.hpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/datageneration/utils_noisegen.hpp
         ${CMAKE_CURRENT_SOURCE_DIR}/eval_metrics/utils_eval_cdiagnostics.hpp
         ${CMAKE_CURRENT_SOURCE_DIR}/eval_metrics/utils_eval_composites.hpp
         ${CMAKE_CURRENT_SOURCE_DIR}/eval_metrics/utils_eval_counts.hpp
         ${CMAKE_CURRENT_SOURCE_DIR}/eval_metrics/utils_eval_rates.hpp
         ${CMAKE_CURRENT_SOURCE_DIR}/fp_classify/fp_classify.hpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/global_temp_dir.hpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/logging/logger.hpp
         ${CMAKE_CURRENT_SOURCE_DIR}/memmap/memory_mapped_matrix.hpp
         ${CMAKE_CURRENT_SOURCE_DIR}/openmp/utils_openmp.hpp
         ${CMAKE_CURRENT_SOURCE_DIR}/serialization/utils_cereal_armadillo.hpp

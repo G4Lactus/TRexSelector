@@ -16,9 +16,6 @@ find_package(pybind11 CONFIG REQUIRED)
 # Disable BLAS when wrapping in Python to avoid NumPy threading conflicts
 set(TREX_USE_BLAS_LAPACK OFF CACHE BOOL "Disable BLAS for Python" FORCE)
 
-# Disable Demos to avoid linker errors with executable targets
-set(TREX_BUILD_DEMOS OFF CACHE BOOL "Disable Demos wrapping in Python" FORCE)
-
 # Disable Tests to avoid linker errors with executable targets
 set(TREX_BUILD_TESTS     OFF CACHE BOOL "Disable Tests for Python"  FORCE)
 
