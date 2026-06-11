@@ -3,6 +3,11 @@
 ################################
 *.pptx
 *.DS_Store
+*.tar.gz
+*.Rcheck/
+config.log
+config.status
+.!*
 
 ################################
 ########### FOLDERS ############
@@ -15,6 +20,11 @@ compile_commands.json
 html/
 simulations/
 notes/
+deprecated/
+.cache/
+.mypy_cache/
+.pytest_cache/
+__pycache__/
 
 ################################
 ############ C/C++ #############
