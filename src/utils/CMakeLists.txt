@@ -83,7 +83,9 @@ target_sources(trex_utils PUBLIC
         $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/src>
         $<INSTALL_INTERFACE:include>
     FILES
+        ${CMAKE_CURRENT_SOURCE_DIR}/datageneration/utils_datagen.hpp
         ${CMAKE_CURRENT_SOURCE_DIR}/datageneration/utils_dummygen.hpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/datageneration/utils_noisegen.hpp
         ${CMAKE_CURRENT_SOURCE_DIR}/eval_metrics/utils_eval_cdiagnostics.hpp
         ${CMAKE_CURRENT_SOURCE_DIR}/eval_metrics/utils_eval_composites.hpp
         ${CMAKE_CURRENT_SOURCE_DIR}/eval_metrics/utils_eval_counts.hpp
