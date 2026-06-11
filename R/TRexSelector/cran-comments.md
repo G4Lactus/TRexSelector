@@ -19,12 +19,13 @@ Changes from the previous CRAN version:
 
 There were no ERRORs or WARNINGs.
 
-One NOTE:
+One NOTE (both local and win-builder):
 
 * "New submission" — expected for a first submission of this revised package.
 * The GitHub repository (URL and BugReports fields) is currently private and
-   therefore not yet reachable. It will be made public upon acceptance.
-   The arXiv paper URL (https://doi.org/10.48550/arXiv.2110.06048) is reachable.
+   therefore not yet reachable by the automated URL checker. It will be made
+   public upon acceptance. The published paper DOI
+   (https://doi.org/10.1016/j.sigpro.2025.109894) is reachable.
 
 Compilation NOTE: three -Wunused warnings from RcppEigen/Eigen's own sparse
 matrix headers appear during compilation. These originate in upstream Eigen

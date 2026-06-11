@@ -1,3 +1,6 @@
+#!/usr/bin/env bash
+set -e
+
 # Step 1: Bundle C++ backend into the R package and generate CRAN Makevars
 cd R/TRexSelector && chmod +x bundle_for_cran.sh && ./bundle_for_cran.sh && cd ../..
 

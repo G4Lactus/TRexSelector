@@ -2,9 +2,8 @@
 title: T-Rex Selector Algorithm
 output:
   md_document:
-    variant: markdown_github
+    variant: gfm
   html_document:
-    variant: markdown_github
     keep_md: true
   pdf_document: default
 ---
