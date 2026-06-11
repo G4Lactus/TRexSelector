@@ -41,6 +41,28 @@
                 "CMAKE_BUILD_TYPE": "Release",
                 "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
             }
+        },
+        {
+            "name": "asan-ubsan",
+            "displayName": "Debug + ASan/UBSan",
+            "description": "Debug build with Address and Undefined Behavior sanitizers. Requires Homebrew LLVM (not Apple Clang).",
+            "inherits": "debug",
+            "binaryDir": "${sourceDir}/build/asan-ubsan",
+            "cacheVariables": {
+                "CMAKE_CXX_FLAGS": "-fsanitize=address,undefined -fno-omit-frame-pointer -fno-optimize-sibling-calls",
+                "CMAKE_EXE_LINKER_FLAGS": "-fsanitize=address,undefined",
+                "CMAKE_SHARED_LINKER_FLAGS": "-fsanitize=address,undefined"
+            }
+        },
+        {
+            "name": "tidy",
+            "displayName": "Debug + clang-tidy",
+            "description": "Debug build with clang-tidy static analysis running during compilation. Requires Homebrew LLVM.",
+            "inherits": "debug",
+            "binaryDir": "${sourceDir}/build/tidy",
+            "cacheVariables": {
+                "CMAKE_CXX_CLANG_TIDY": "$env{HOMEBREW_PREFIX}/opt/llvm/bin/clang-tidy"
+            }
         }
     ],
     "buildPresets": [
@@ -63,6 +85,16 @@
             "name": "vcpkg-release-build",
             "displayName": "Release Build (vcpkg)",
             "configurePreset": "vcpkg-release"
+        },
+        {
+            "name": "asan-ubsan-build",
+            "displayName": "ASan/UBSan Build",
+            "configurePreset": "asan-ubsan"
+        },
+        {
+            "name": "tidy-build",
+            "displayName": "Clang-Tidy Build",
+            "configurePreset": "tidy"
         }
     ],
     "workflowPresets": [
@@ -80,6 +112,22 @@
             "steps": [
                 { "type": "configure", "name": "vcpkg-release" },
                 { "type": "build",     "name": "vcpkg-release-build" }
+            ]
+        },
+        {
+            "name": "asan-ubsan",
+            "displayName": "Configure + Build with ASan/UBSan",
+            "steps": [
+                { "type": "configure", "name": "asan-ubsan" },
+                { "type": "build",     "name": "asan-ubsan-build" }
+            ]
+        },
+        {
+            "name": "tidy",
+            "displayName": "Configure + Build with clang-tidy",
+            "steps": [
+                { "type": "configure", "name": "tidy" },
+                { "type": "build",     "name": "tidy-build" }
             ]
         }
     ]
