@@ -2,3 +2,7 @@
 ^src/.*\.o$
 ^src/.*\.so$
 ^LICENSE\.md$
+^tools$
+^TRexSelector\.Rcheck$
+^cran-comments\.md$
+^README\.Rmd$

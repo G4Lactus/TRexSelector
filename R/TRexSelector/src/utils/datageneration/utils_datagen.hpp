@@ -294,6 +294,8 @@ public:
         const dummygen::Distribution& dummy_dist = dummygen::Distribution::Normal(),
         const NoisePolicy& noise_policy = NoisePolicy()
     ) {
+        if (n <= 0) throw std::invalid_argument("n must be positive (got 0)");
+        if (p <= 0) throw std::invalid_argument("p must be positive (got 0)");
         detail::validate_support(support, coefs, p);
 
         unsigned int base_seed = detail::get_base_seed(seed);

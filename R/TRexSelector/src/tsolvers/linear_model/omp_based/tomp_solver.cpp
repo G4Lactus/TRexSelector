@@ -101,7 +101,6 @@ void TOMP_Solver::executeStep(std::size_t T_stop, bool early_stop) {
         // ========================================================
         // STEP 2: Active set update
         // ========================================================
-        currentStep_++;
         actions_.emplace_back(updateActiveSet(new_vars));
         if (actives_.empty() || R_.size() == 0) {
             logWarning("Active set or Cholesky is empty; exiting.");
@@ -111,6 +110,7 @@ void TOMP_Solver::executeStep(std::size_t T_stop, bool early_stop) {
         // ========================================================
         // STEP 3: Beta path and residuals
         // ========================================================
+        currentStep_++;
         updateBetaPath();
         updateResiduals();
 

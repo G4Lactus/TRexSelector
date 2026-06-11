@@ -6,19 +6,52 @@ build-backend = "scikit_build_core.build"
 name = "trex_selector"
 version = "0.1.2"
 description = "Python API for TRexSelector C++ library"
+readme = "README.md"
+license = {text = "GPL-3.0-or-later"}
+authors = [
+    {name = "Fabian Scheidt",      email = "fabian.scheidt@tu-darmstadt.de"},
+    {name = "Arnau Vilella Pique", email = "avp@connect.ust.hk"},
+    {name = "Jasin Machkour",      email = "jasin.machkour@tu-darmstadt.de"},
+    {name = "Daniel P. Palomar",   email = "daniel.p.palomar@gmail.com"},
+    {name = "Michael Muma",        email = "michael.muma@tu-darmstadt.de"},
+]
+keywords = ["variable selection", "FDR control", "high-dimensional statistics", "sparse regression"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: GNU General Public License v3 or later (GPLv3+)",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.8",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: C++",
+    "Topic :: Scientific/Engineering :: Mathematics",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
 requires-python = ">=3.8"
 dependencies = [
     "numpy",
 ]
+
+[project.urls]
+Homepage = "https://github.com/G4Lactus/TRexSelector"
+Repository = "https://github.com/G4Lactus/TRexSelector"
+"Bug Tracker" = "https://github.com/G4Lactus/TRexSelector/issues"
+
+[project.optional-dependencies]
+dev = ["pytest"]
 
 [tool.scikit-build]
 wheel.packages = ["src/trex_selector"]
 cmake.source-dir = "."
 cmake.build-type = "Release"
 
+[tool.scikit-build.cmake.define]
+TREX_PORTABLE_BUILD = "ON"
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "--verbose"
-
-[project.optional-dependencies]
-dev = ["pytest"]

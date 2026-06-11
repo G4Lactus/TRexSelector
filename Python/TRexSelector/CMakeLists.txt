@@ -36,7 +36,8 @@ target_link_libraries(_core PRIVATE
 
 # Optimization flags for the _core binding itself (mirrors library flags)
 target_compile_options(_core PRIVATE
-    -O3 -DNDEBUG -march=native -ffast-math -funroll-loops
+    -O3 -DNDEBUG -ffast-math -funroll-loops
+    $<$<NOT:$<BOOL:${TREX_PORTABLE_BUILD}>>:-march=native>
 )
 
 # Install the extension into the trex_selector package directory

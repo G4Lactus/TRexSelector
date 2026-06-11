@@ -57,6 +57,7 @@ endif()
 # ============================================================================
 option(TREX_BUILD_DEMOS "Build demo executables and optional plotting tools" ON)
 option(TREX_USE_BLAS_LAPACK "Use BLAS/LAPACK backends for Eigen" ON)
+option(TREX_PORTABLE_BUILD "Disable -march=native for portable/wheel builds. Set ON when building for PyPI or CI." OFF)
 
 # C++ Standard
 set(CMAKE_CXX_STANDARD 20)

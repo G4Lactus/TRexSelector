@@ -1041,9 +1041,9 @@ void TRexSelector::runTLoop(
     er::ExperimentStrategy exp_strategy;
     switch (trex_ctrl_.lloop_strategy) {
         case LLoopStrategy::PERMUTATION:
-        case LLoopStrategy::PERMUTATION_DIRECT:
             exp_strategy = er::ExperimentStrategy::Permutation;
             break;
+        case LLoopStrategy::PERMUTATION_DIRECT:
         case LLoopStrategy::DIRECT:
             exp_strategy = er::ExperimentStrategy::Direct;
             break;
@@ -1102,6 +1102,18 @@ void TRexSelector::runTLoop(
             num_selected = (view.Phi.array() > v_star).count();
         }
 
+        // Dynamic capacity growth + accumulate row BEFORE stagnation check
+        // so that Phi_mat_.rows() == T_stop_ even when an early-stop break fires.
+        if (static_cast<std::size_t>(row_idx) >= capacity) {
+            const std::size_t new_capacity =
+                std::min(capacity * 2, max_T);
+            growTAccumulators(capacity, new_capacity);
+            capacity = new_capacity;
+        }
+
+        appendTRow(row_idx, view);
+        ++row_idx;
+
         // Stagnation check
         if (trex_ctrl_.tloop_stagnation_stop && T_stop_ > 1) {
             if (num_selected <= prev_num_selected) {
@@ -1130,17 +1142,6 @@ void TRexSelector::runTLoop(
             }
             printProgress(oss.str());
         }
-
-        // Dynamic capacity growth
-        if (static_cast<std::size_t>(row_idx) >= capacity) {
-            const std::size_t new_capacity =
-                std::min(capacity * 2, max_T);
-            growTAccumulators(capacity, new_capacity);
-            capacity = new_capacity;
-        }
-
-        appendTRow(row_idx, view);
-        ++row_idx;
     }
 
     // Trim

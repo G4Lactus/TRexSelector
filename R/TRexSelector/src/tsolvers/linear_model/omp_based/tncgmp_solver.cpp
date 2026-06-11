@@ -86,7 +86,6 @@ void TNCGMP_Solver::executeStep(std::size_t T_stop, bool early_stop) {
         pruneTiedDummies(new_vars, T_stop, early_stop);
 
         std::size_t j_new = new_vars[0]; // Take the top tied variable
-        currentStep_++;
 
         if (variant_ == NCGMPVariant::LineSearch) {
             // Variant 0: Line Search (Standard MP)
@@ -94,6 +93,8 @@ void TNCGMP_Solver::executeStep(std::size_t T_stop, bool early_stop) {
             // x_{t+1} = x_t + gamma * z_t
             double gamma = correlations_(
                 static_cast<Eigen::Index>(j_new)) / getColumn(j_new).squaredNorm();
+
+            currentStep_++;
 
             // Expand beta path
             Eigen::Index p_tot = static_cast<Eigen::Index>(p_original_ + num_dummies_);
@@ -136,6 +137,7 @@ void TNCGMP_Solver::executeStep(std::size_t T_stop, bool early_stop) {
                 std::erase(inactives_, j_new);
                 if (j_new >= dummy_start_idx_) { count_active_dummies_++; }
             }
+            currentStep_++;
             updateBetaPathAndResiduals();
             updateInactiveSet();
         }

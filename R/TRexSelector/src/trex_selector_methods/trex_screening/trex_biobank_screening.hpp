@@ -112,6 +112,11 @@ struct BiobankScreenTRexControl {
 
     /** @brief Algorithmic control forwarded to both Screen-TRex and the fallback T-Rex. */
     tc::TRexControlParameter trex_ctrl;
+
+    /** @brief Default constructor: sets lloop_strategy to STANDARD for ScreenTRexSelector compatibility. */
+    BiobankScreenTRexControl() {
+        trex_ctrl.lloop_strategy = tc::LLoopStrategy::STANDARD;
+    }
 };
 
 

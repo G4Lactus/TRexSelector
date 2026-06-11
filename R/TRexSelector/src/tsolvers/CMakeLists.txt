@@ -105,7 +105,8 @@ target_compile_definitions(trex_tsolvers PUBLIC
 target_compile_options(trex_tsolvers PRIVATE
     -Wno-deprecated-declarations
     $<$<CONFIG:Debug>:-g -O0 -Wall -Wextra>
-    $<$<CONFIG:Release>:-O3 -DNDEBUG -march=native -ffast-math -funroll-loops>
+    $<$<CONFIG:Release>:-O3 -DNDEBUG -ffast-math -funroll-loops>
+    $<$<AND:$<CONFIG:Release>,$<NOT:$<BOOL:${TREX_PORTABLE_BUILD}>>>:-march=native>
 )
 # ==============================================================================
 
