@@ -10,4 +10,4 @@ Checks: >
   -performance-enum-size
 
 WarningsAsErrors: ''
-HeaderFilterRegex: ''
+HeaderFilterRegex: '^.*/src/.*'
