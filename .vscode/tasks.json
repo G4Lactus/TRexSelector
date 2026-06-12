@@ -88,15 +88,16 @@
             "detail": "Install R package locally (R CMD INSTALL)"
         },
         // Full CRAN-style check (skips PDF manual generation)
+        // cwd is R/ so TRexSelector.Rcheck lands at R/TRexSelector.Rcheck — outside the source tree
         {
             "type": "shell",
             "label": "R: Check",
             "command": "R",
-            "args": ["CMD", "check", "--no-manual", "."],
-            "options": {"cwd": "${workspaceFolder}/R/TRexSelector"},
+            "args": ["CMD", "check", "--no-manual", "TRexSelector"],
+            "options": {"cwd": "${workspaceFolder}/R"},
             "group": {"kind": "test"},
             "problemMatcher": [],
-            "detail": "Run CRAN check (R CMD check --no-manual)"
+            "detail": "Run CRAN check (R CMD check --no-manual); output goes to R/TRexSelector.Rcheck"
         },
         // Run testthat suite via devtools
         {
