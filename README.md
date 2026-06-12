@@ -36,6 +36,7 @@ experiments, a voting threshold is derived that provably bounds the FDR.
 | `TRexGVSSelector` | Grouped variable selection |
 | `TRexScreeningSelector` | Fast FDR-controlled variable pre-screening for large *p* |
 | `TRexBiobankScreeningSelector` | High-throughput genomic / biobank screening |
+| `TRexSparsePCA`| coming soon |
 
 ---
 
@@ -64,7 +65,7 @@ experiments, a voting threshold is derived that provably bounds the FDR.
 **macOS (Homebrew):**
 
 ```bash
-brew install llvm eigen cereal boost openblas libomp
+brew install cmake llvm eigen cereal boost openblas libomp
 ```
 
 *(CMake requires Homebrew LLVM, not Apple Clang, for OpenMP support).*
@@ -72,7 +73,7 @@ brew install llvm eigen cereal boost openblas libomp
 **Ubuntu / Debian:**
 
 ```bash
-sudo apt install libeigen3-dev libcereal-dev libboost-all-dev libopenblas-dev libomp-dev
+sudo apt install cmake libeigen3-dev libcereal-dev libboost-all-dev libopenblas-dev libomp-dev
 ```
 
 **Windows (vcpkg):**
@@ -94,6 +95,21 @@ cmake --preset release
 cmake --build --preset release-build
 ```
 
+**Running the test executables:**
+
+After a successful build, all test executables are placed in `build/{debug,release}/bin/`. Run the full suite via CTest:
+
+```bash
+cd build/debug && ctest --output-on-failure
+```
+
+Or run individual executables directly (e.g. to test the core selector):
+
+```bash
+./build/debug/bin/test_trex_core
+./build/debug/bin/test_tsolvers_execution
+```
+
 ---
 
 ## Language Ecosystems
@@ -101,6 +117,14 @@ cmake --build --preset release-build
 ### R Package
 
 The R bindings live in `R/TRexSelector/` and are implemented with RcppEigen. The C++ backend is compiled automatically on installation.
+
+**Requirements:** R ≥ 2.10, a C++20-capable compiler (GCC ≥ 10, Clang ≥ 12, or MSVC 2019+).
+
+**Install R package prerequisites** (once, from an R session). See `R/TRexSelector/DESCRIPTION` for the full list — the essential ones are:
+
+```r
+install.packages(c("Rcpp", "RcppEigen", "BH", "Rcereal", "R6"))
+```
 
 **Install from source:**
 
@@ -114,11 +138,25 @@ R CMD INSTALL R/TRexSelector
 
 The Python bindings live in `Python/TRexSelector/` and are implemented with pybind11, built via scikit-build-core.
 
-**Install from source:**
-*(Requires CMake ≥ 3.24, a C++20 compiler, and the C++ dependencies above)*
+**Requirements:** Python ≥ 3.8, CMake ≥ 3.24, a C++20 compiler, and the C++ system dependencies listed above (Eigen3, Boost, Cereal, OpenMP).
+
+**User install** — pip fetches build tools automatically into an isolated environment:
 
 ```bash
+pip install Python/TRexSelector
+```
+
+**Developer editable install** — use inside the `trex-dev` conda environment where pybind11 and scikit-build-core are already installed:
+
+```bash
+conda activate trex-dev
 pip install --no-build-isolation -e Python/TRexSelector
+```
+
+Run the test suite:
+
+```bash
+pytest Python/TRexSelector/tests/ -v
 ```
 
 ---
