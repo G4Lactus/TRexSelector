@@ -61,14 +61,14 @@ target_compile_definitions(trex_selector_methods PUBLIC
     EIGEN_USE_BLAS
 )
 
-# NOTE: -ffast-math implies -ffinite-math-only, which breaks std::isnan/isfinite.
+# NOTE: -ffast-math and -march=native are gated behind NOT TREX_PORTABLE_BUILD (wheel/PyPI builds).
 # All correlation sentinels use AUTO_ESTIMATE_CORRELATION (−2.0) instead of NaN.
 # If you add new NaN/isnan usage, use a numeric sentinel or __builtin_isnan.
 target_compile_options(trex_selector_methods PRIVATE
     -Wno-deprecated-declarations
     $<$<CONFIG:Debug>:-g -O0 -Wall -Wextra>
-    $<$<CONFIG:Release>:-O3 -DNDEBUG -ffast-math -funroll-loops>
-    $<$<AND:$<CONFIG:Release>,$<NOT:$<BOOL:${TREX_PORTABLE_BUILD}>>>:-march=native>
+    $<$<CONFIG:Release>:-O3 -DNDEBUG -funroll-loops>
+    $<$<AND:$<CONFIG:Release>,$<NOT:$<BOOL:${TREX_PORTABLE_BUILD}>>>:-march=native -ffast-math>
 )
 # ==================================================================================
 
