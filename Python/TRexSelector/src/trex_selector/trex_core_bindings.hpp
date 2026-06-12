@@ -18,7 +18,7 @@
 
 // Core TRexSelector includes
 #include <trex_selector_methods/trex_core/trex.hpp>
-#include <trex_selector_methods/utils/trex_solver_dispatch.hpp>
+#include <trex_selector_methods/trex_utils/trex_solver_dispatch.hpp>
 #include <utils/datageneration/utils_dummygen.hpp>
 #include <numbers>
 

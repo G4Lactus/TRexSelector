@@ -1,6 +1,6 @@
-# src/trex_selector_methods/utils/CMakeLists.txt
+# src/trex_selector_methods/trex_utils/CMakeLists.txt
 # ==================================================================================
-# CMake configuration for the utils module of T-Rex selector methods.
+# CMake configuration for the trex_utils module of T-Rex selector methods.
 #
 # ==================================================================================
 

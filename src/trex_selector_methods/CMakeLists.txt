@@ -88,13 +88,13 @@ target_sources(trex_selector_methods PUBLIC
         ${CMAKE_CURRENT_SOURCE_DIR}/trex_screening/trex_screening.hpp
         ${CMAKE_CURRENT_SOURCE_DIR}/trex_screening/trex_biobank_screening.hpp
         ${CMAKE_CURRENT_SOURCE_DIR}/trex_sparse_pca/trex_sparse_pca.hpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/utils/trex_data_normalizer.hpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/utils/trex_dummy_generator.hpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/utils/trex_experiment_runner.hpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/utils/trex_memmap_manager.hpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/utils/trex_solver_dispatch.hpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/utils/trex_temp_dir_manager.hpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/utils/trex_warm_start_manager.hpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/trex_utils/trex_data_normalizer.hpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/trex_utils/trex_dummy_generator.hpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/trex_utils/trex_experiment_runner.hpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/trex_utils/trex_memmap_manager.hpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/trex_utils/trex_solver_dispatch.hpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/trex_utils/trex_temp_dir_manager.hpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/trex_utils/trex_warm_start_manager.hpp
 )
 # ==================================================================================
 
@@ -102,7 +102,7 @@ target_sources(trex_selector_methods PUBLIC
 # ==================================================================================
 # 5. Subdirectories
 # ==================================================================================
-add_subdirectory(utils)
+add_subdirectory(trex_utils)
 add_subdirectory(trex_core)
 add_subdirectory(trex_da)
 add_subdirectory(trex_gvs)

@@ -49,7 +49,7 @@
 #include <utils/datageneration/utils_dummygen.hpp>
 
 // Data normalizer (for center + L2 normalize)
-#include <trex_selector_methods/utils/trex_data_normalizer.hpp>
+#include <trex_selector_methods/trex_utils/trex_data_normalizer.hpp>
 
 // ===================================================================================
 

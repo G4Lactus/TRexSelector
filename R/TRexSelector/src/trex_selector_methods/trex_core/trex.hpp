@@ -25,12 +25,12 @@
 #include <utils/openmp/utils_openmp.hpp>
 
 // TRex includes
-#include <trex_selector_methods/utils/trex_data_normalizer.hpp>
-#include <trex_selector_methods/utils/trex_solver_dispatch.hpp>
-#include <trex_selector_methods/utils/trex_warm_start_manager.hpp>
-#include <trex_selector_methods/utils/trex_memmap_manager.hpp>
-#include <trex_selector_methods/utils/trex_dummy_generator.hpp>
-#include <trex_selector_methods/utils/trex_experiment_runner.hpp>
+#include <trex_selector_methods/trex_utils/trex_data_normalizer.hpp>
+#include <trex_selector_methods/trex_utils/trex_solver_dispatch.hpp>
+#include <trex_selector_methods/trex_utils/trex_warm_start_manager.hpp>
+#include <trex_selector_methods/trex_utils/trex_memmap_manager.hpp>
+#include <trex_selector_methods/trex_utils/trex_dummy_generator.hpp>
+#include <trex_selector_methods/trex_utils/trex_experiment_runner.hpp>
 
 // Dummy generation distribution type
 #include <utils/datageneration/utils_dummygen.hpp>

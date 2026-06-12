@@ -22,7 +22,7 @@
 #include <utils/eval_metrics/utils_eval_rates.hpp>
 
 // Include the TempDirManager
-#include <trex_selector_methods/utils/trex_temp_dir_manager.hpp>
+#include <trex_selector_methods/trex_utils/trex_temp_dir_manager.hpp>
 
 // ========================================================================================
 

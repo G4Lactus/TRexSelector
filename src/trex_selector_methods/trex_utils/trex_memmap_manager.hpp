@@ -20,7 +20,7 @@
 #include <filesystem>
 
 // trex_selector_methods includes
-#include <trex_selector_methods/utils/trex_temp_dir_manager.hpp>
+#include <trex_selector_methods/trex_utils/trex_temp_dir_manager.hpp>
 
 // utils includes
 #include <utils/memmap/memory_mapped_matrix.hpp>

@@ -42,10 +42,10 @@
 #include <utils/openmp/utils_openmp.hpp>
 
 // TRex helper modules
-#include <trex_selector_methods/utils/trex_solver_dispatch.hpp>
-#include <trex_selector_methods/utils/trex_warm_start_manager.hpp>
-#include <trex_selector_methods/utils/trex_memmap_manager.hpp>
-#include <trex_selector_methods/utils/trex_dummy_generator.hpp>
+#include <trex_selector_methods/trex_utils/trex_solver_dispatch.hpp>
+#include <trex_selector_methods/trex_utils/trex_warm_start_manager.hpp>
+#include <trex_selector_methods/trex_utils/trex_memmap_manager.hpp>
+#include <trex_selector_methods/trex_utils/trex_dummy_generator.hpp>
 
 // ===================================================================================
 

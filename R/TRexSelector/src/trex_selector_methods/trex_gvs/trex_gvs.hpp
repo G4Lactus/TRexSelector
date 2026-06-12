@@ -99,7 +99,7 @@
 #include <trex_selector_methods/trex_core/trex.hpp>
 
 // Solver dispatch (constants + SolverConfig)
-#include <trex_selector_methods/utils/trex_solver_dispatch.hpp>
+#include <trex_selector_methods/trex_utils/trex_solver_dispatch.hpp>
 
 // Hierarchical clustering (Route 2 -- auto-cluster from |cor(X)|)
 #include <ml_methods/clustering/hierarchical/agglomerative/agglomerative_dispatcher.hpp>

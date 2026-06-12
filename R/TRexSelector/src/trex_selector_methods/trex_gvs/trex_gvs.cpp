@@ -34,10 +34,10 @@
 #include <ml_methods/model_selection/ridge_cv.hpp>
 
 // Data normalization helpers
-#include <trex_selector_methods/utils/trex_data_normalizer.hpp>
+#include <trex_selector_methods/trex_utils/trex_data_normalizer.hpp>
 
 // Solver dispatch
-#include <trex_selector_methods/utils/trex_solver_dispatch.hpp>
+#include <trex_selector_methods/trex_utils/trex_solver_dispatch.hpp>
 
 // Concrete solver types (for direct in-memory warm-start)
 #include <tsolvers/linear_model/lars_based/tenet_solver.hpp>
