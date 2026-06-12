@@ -56,6 +56,93 @@
             "group": {"kind": "build"},
             "problemMatcher": ["$gcc"],
             "detail": "CMake configure and build (Release, separate directory)"
+        },
+
+        // -----------------------------------------------------------------------
+        // R Package (R/TRexSelector/)
+        // -----------------------------------------------------------------------
+
+        // Regenerate NAMESPACE and man/ from roxygen2 comments
+        {
+            "type": "shell",
+            "label": "R: Document",
+            "command": "Rscript",
+            "args": ["-e", "devtools::document()"],
+            "options": {"cwd": "${workspaceFolder}/R/TRexSelector"},
+            "group": {"kind": "build"},
+            "problemMatcher": [],
+            "detail": "Regenerate NAMESPACE and man/ via devtools::document()"
+        },
+        // Install package locally (triggers configure + Rcpp compilation)
+        {
+            "type": "shell",
+            "label": "R: Install",
+            "command": "R",
+            "args": ["CMD", "INSTALL", "."],
+            "options": {"cwd": "${workspaceFolder}/R/TRexSelector"},
+            "group": {"kind": "build"},
+            "problemMatcher": [],
+            "detail": "Install R package locally (R CMD INSTALL)"
+        },
+        // Full CRAN-style check (skips PDF manual generation)
+        {
+            "type": "shell",
+            "label": "R: Check",
+            "command": "R",
+            "args": ["CMD", "check", "--no-manual", "."],
+            "options": {"cwd": "${workspaceFolder}/R/TRexSelector"},
+            "group": {"kind": "test"},
+            "problemMatcher": [],
+            "detail": "Run CRAN check (R CMD check --no-manual)"
+        },
+        // Run testthat suite via devtools
+        {
+            "type": "shell",
+            "label": "R: Test",
+            "command": "Rscript",
+            "args": ["-e", "devtools::test()"],
+            "options": {"cwd": "${workspaceFolder}/R/TRexSelector"},
+            "group": {"kind": "test"},
+            "problemMatcher": [],
+            "detail": "Run testthat suite via devtools::test()"
+        },
+
+        // -----------------------------------------------------------------------
+        // Python Package (Python/TRexSelector/)
+        // -----------------------------------------------------------------------
+
+        // Editable install: builds the pybind11/CMake C++ extension in-place
+        {
+            "type": "shell",
+            "label": "Python: Install (Editable)",
+            "command": "pip",
+            "args": ["install", "-e", ".[dev]"],
+            "options": {"cwd": "${workspaceFolder}/Python/TRexSelector"},
+            "group": {"kind": "build"},
+            "problemMatcher": [],
+            "detail": "Editable install with dev deps; builds C++ extension via scikit-build-core"
+        },
+        // Build a distributable wheel (Release, via scikit-build-core)
+        {
+            "type": "shell",
+            "label": "Python: Build (Wheel)",
+            "command": "pip",
+            "args": ["wheel", ".", "-w", "dist/"],
+            "options": {"cwd": "${workspaceFolder}/Python/TRexSelector"},
+            "group": {"kind": "build"},
+            "problemMatcher": [],
+            "detail": "Build distributable wheel (pip wheel . -w dist/)"
+        },
+        // Run pytest suite
+        {
+            "type": "shell",
+            "label": "Python: Test",
+            "command": "pytest",
+            "args": ["tests/", "-v"],
+            "options": {"cwd": "${workspaceFolder}/Python/TRexSelector"},
+            "group": {"kind": "test"},
+            "problemMatcher": [],
+            "detail": "Run pytest test suite"
         }
     ]
 }

@@ -40,6 +40,46 @@
         "windows": {
             "MIMode": "gdb"
         }
+    },
+
+    // -----------------------------------------------------------------------
+    // Python Package (Python/TRexSelector/)
+    // -----------------------------------------------------------------------
+
+    // Debug the full pytest suite (requires Python: Install (Editable) first)
+    {
+        "name": "Python: Debug pytest",
+        "type": "debugpy",
+        "request": "launch",
+        "module": "pytest",
+        "args": ["tests/", "-v"],
+        "cwd": "${workspaceFolder}/Python/TRexSelector",
+        // Set false to step into C extension / pybind11 code via mixed-mode debugging
+        "justMyCode": true
+    },
+
+    // -----------------------------------------------------------------------
+    // R Package (R/TRexSelector/)
+    // Requires the "vscode-r-debugger" VS Code extension (RDebugger)
+    // -----------------------------------------------------------------------
+
+    // Debug the currently active R file
+    {
+        "name": "R: Debug Active File",
+        "type": "R-Debugger",
+        "request": "launch",
+        "debugMode": "file",
+        "workingDirectory": "${workspaceFolder}/R/TRexSelector",
+        "file": "${file}"
+    },
+    // Run the testthat suite under the R debugger
+    {
+        "name": "R: Debug Tests",
+        "type": "R-Debugger",
+        "request": "launch",
+        "debugMode": "testthat",
+        "workingDirectory": "${workspaceFolder}/R/TRexSelector",
+        "packagePath": "${workspaceFolder}/R/TRexSelector"
     }
   ]
 }
