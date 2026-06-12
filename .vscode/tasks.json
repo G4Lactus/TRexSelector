@@ -1,6 +1,9 @@
 {
     "version": "2.0.0",
     "tasks": [
+        // -----------------------------------------------------------------------
+        // C++ Executable (CMake build)
+        // -----------------------------------------------------------------------
         // Debug profile: Configure and build in separate debug directory
         {
             "type": "shell",

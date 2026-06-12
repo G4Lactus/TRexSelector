@@ -1,6 +1,9 @@
 {
   "version": "0.2.0",
   "configurations": [
+    // -----------------------------------------------------------------------
+    // C++ Executable (CMake build)
+    // -----------------------------------------------------------------------
     // Setup profile for debugging: replace XXX with your executable name
     {
         "name": "Debug",
