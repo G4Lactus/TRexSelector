@@ -1,4 +1,4 @@
-# THE T-REX SELECTOR
+# T-REX SELECTOR
 
 **FDR-controlled variable selection in high-dimensional regression and classification. A
 C++20 library with R and Python bindings.**
