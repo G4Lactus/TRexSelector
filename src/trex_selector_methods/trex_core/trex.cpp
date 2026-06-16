@@ -811,7 +811,8 @@ void TRexSelector::runLLoopCalibration_SKIPL(
     prepareDummiesForLStep(lctx);
 
     // Per-step body via virtual hook (subclasses may inject deflation).
-    StepView view = evaluateStep(num_dummies_, T_stop_, /*use_warm_start=*/false,
+    StepView view = evaluateStep(num_dummies_, T_stop_,
+                                 /*use_warm_start=*/false,
                                  er::ExperimentStrategy::Standard,
                                  /*seed_factor=*/0,
                                  /*existing_on_disk=*/0);
