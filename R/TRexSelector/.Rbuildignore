@@ -6,3 +6,5 @@
 ^TRexSelector\.Rcheck$
 ^cran-comments\.md$
 ^README\.Rmd$
+^autom4te\.cache$
+^configure~$

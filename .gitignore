@@ -161,3 +161,7 @@ ipch/
 
 # Visual Studio Trace Files
 *.e2e
+
+# autoconf side-effects
+autom4te.cache/
+configure~
