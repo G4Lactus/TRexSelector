@@ -12,18 +12,19 @@ convert_to_memory_mapped(mat, filename)
 \item{filename}{String destination file path.}
 }
 \value{
-NULL invisibly mapped.
+A \code{MemoryMappedMatrix} / \code{mmap_matrix} object backed by \code{filename}.
 }
 \description{
-Maps a given R numeric matrix into a binary formatted memory-mapped file on disk
-efficiently.
+Writes a numeric matrix to a binary memory-mapped file on disk and returns
+a \code{MemoryMappedMatrix} handle pointing to it.
 }
 \examples{
 \donttest{
 mat <- matrix(as.double(1:20), nrow = 4, ncol = 5)
 f <- tempfile(fileext = ".bin")
 on.exit(unlink(f), add = TRUE)
-convert_to_memory_mapped(mat, f)
+mm <- convert_to_memory_mapped(mat, f)
+print(mm)
 }
 
 }

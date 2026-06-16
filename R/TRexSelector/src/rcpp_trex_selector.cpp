@@ -90,8 +90,8 @@ TRexControlParameter parse_control_parameter(const Rcpp::List& control) {
     }
 
     // Solver Type mapping
-    if (control.containsElementNamed("method")) {
-        std::string method = control["method"];
+    if (control.containsElementNamed("solver")) {
+        std::string solver = control["solver"];
 
         static const std::unordered_map<std::string, SolverTypeForTRex> solver_map = {
             {"TLARS",      SolverTypeForTRex::TLARS},
@@ -108,11 +108,11 @@ TRexControlParameter parse_control_parameter(const Rcpp::List& control) {
             {"TAFS",      SolverTypeForTRex::TAFS}
         };
 
-        auto it = solver_map.find(method);
+        auto it = solver_map.find(solver);
         if (it != solver_map.end()) {
             params.solver_type = it->second;
         } else {
-            Rcpp::stop("Unknown TRex selector method: " + method);
+            Rcpp::stop("Unknown TRex selector solver: " + solver);
         }
     }
 

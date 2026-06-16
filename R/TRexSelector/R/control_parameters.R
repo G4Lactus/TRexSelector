@@ -15,11 +15,11 @@
 #'
 #' @description Build a control list for TRex selector algorithms.
 #'
-#' @param method Solver method: "TLARS", "TLASSO", "TENET", "TSTAGEWISE", "TSTEPWISE",
+#' @param solver Solver algorithm: "TLARS", "TLASSO", "TENET", "TSTAGEWISE", "TSTEPWISE",
 #'   "TOMP", "TGP", "TACGP", "TMP", "TNCGMP", "TOOLS", "TAFS" (default: "TLARS").
 #' @param K Number of random experiments (default: 20).
 #' @param tloop_stagnation_stop Whether to stop T-loop on stagnation. NULL (default) enables
-#'   auto-detection: FALSE for non-greedy methods (TLARS, TLASSO, TENET), TRUE for all others.
+#'   auto-detection: FALSE for non-greedy solvers (TLARS, TLASSO, TENET), TRUE for all others.
 #' @param tloop_max_stagnant_steps Steps before stagnation trigger (default: 5).
 #' @param use_openmp Whether to use OpenMP parallelization (default: FALSE).
 #' @param use_memory_mapping Use out-of-core memory mapping (default: FALSE).
@@ -40,10 +40,10 @@
 #'
 #' @examples
 #' trex_control()
-#' trex_control(method = "TLASSO", K = 10)
+#' trex_control(solver = "TLASSO", K = 10)
 #'
 #' @export
-trex_control <- function(method = "TLARS",
+trex_control <- function(solver = "TLARS",
                          K = 20,
                          tloop_stagnation_stop = NULL,
                          tloop_max_stagnant_steps = 5,
@@ -74,13 +74,13 @@ trex_control <- function(method = "TLARS",
     stop("max_inner_threads must be >= 1. Got: ", max_inner_threads)
   }
 
-  non_greedy_methods <- c("TLARS", "TLASSO", "TENET")
+  non_greedy_solvers <- c("TLARS", "TLASSO", "TENET")
   if (is.null(tloop_stagnation_stop)) {
-    tloop_stagnation_stop <- !(method %in% non_greedy_methods)
+    tloop_stagnation_stop <- !(solver %in% non_greedy_solvers)
   }
 
   list(
-    method                  = method,
+    solver                  = solver,
     K                       = K,
     max_dummy_multiplier    = max_dummy_multiplier,
     use_max_T_stop          = use_max_T_stop,
@@ -144,7 +144,7 @@ trex_da_control <- function(da_method = "BT",
 #' @description Build a control list for group variable selection augmentation policy in
 #'   TRexGVSSelector. The solver is determined automatically from \code{gvs_type}:
 #'   "EN" uses the T-Elastic-Net (TENET) solver; "IEN" uses the T-LASSO (TLASSO) solver.
-#'   The \code{method} field in \code{\link{trex_control}} is ignored by TRexGVSSelector.
+#'   The \code{solver} field in \code{\link{trex_control}} is ignored by TRexGVSSelector.
 #'
 #' @param gvs_type Augmentation policy: "EN" (Elastic Net) or "IEN" (Informed Elastic Net)
 #'   (default: "EN").

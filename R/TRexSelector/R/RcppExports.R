@@ -12,6 +12,7 @@
 #' @param use_mmap Boolean flag for memory mapping
 #'
 #' @return A linkage matrix
+#'
 #' @noRd
 rcpp_agglomerative_cluster <- function(data, method_idx, metric_idx, use_mmap = FALSE) {
     .Call(`_TRexSelector_rcpp_agglomerative_cluster`, data, method_idx, metric_idx, use_mmap)
@@ -26,6 +27,7 @@ rcpp_agglomerative_cluster <- function(data, method_idx, metric_idx, use_mmap = 
 #' @param num_clusters Desired number of flat clusters
 #'
 #' @return Integer vector of cluster indices
+#'
 #' @noRd
 rcpp_cut_tree <- function(linkage, num_orig_objs, num_clusters) {
     .Call(`_TRexSelector_rcpp_cut_tree`, linkage, num_orig_objs, num_clusters)

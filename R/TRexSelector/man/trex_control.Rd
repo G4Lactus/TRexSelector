@@ -5,7 +5,7 @@
 \title{TRex Control Parameters}
 \usage{
 trex_control(
-  method = "TLARS",
+  solver = "TLARS",
   K = 20,
   tloop_stagnation_stop = NULL,
   tloop_max_stagnant_steps = 5,
@@ -25,13 +25,13 @@ trex_control(
 )
 }
 \arguments{
-\item{method}{Solver method: "TLARS", "TLASSO", "TENET", "TSTAGEWISE", "TSTEPWISE",
+\item{solver}{Solver algorithm: "TLARS", "TLASSO", "TENET", "TSTAGEWISE", "TSTEPWISE",
 "TOMP", "TGP", "TACGP", "TMP", "TNCGMP", "TOOLS", "TAFS" (default: "TLARS").}
 
 \item{K}{Number of random experiments (default: 20).}
 
 \item{tloop_stagnation_stop}{Whether to stop T-loop on stagnation. NULL (default) enables
-auto-detection: FALSE for non-greedy methods (TLARS, TLASSO, TENET), TRUE for all others.}
+auto-detection: FALSE for non-greedy solvers (TLARS, TLASSO, TENET), TRUE for all others.}
 
 \item{tloop_max_stagnant_steps}{Steps before stagnation trigger (default: 5).}
 
@@ -70,6 +70,6 @@ Build a control list for TRex selector algorithms.
 }
 \examples{
 trex_control()
-trex_control(method = "TLASSO", K = 10)
+trex_control(solver = "TLASSO", K = 10)
 
 }

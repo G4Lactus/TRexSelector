@@ -32,7 +32,7 @@ A named list for use in TRexGVSSelector.
 Build a control list for group variable selection augmentation policy in
 TRexGVSSelector. The solver is determined automatically from \code{gvs_type}:
 "EN" uses the T-Elastic-Net (TENET) solver; "IEN" uses the T-LASSO (TLASSO) solver.
-The \code{method} field in \code{\link{trex_control}} is ignored by TRexGVSSelector.
+The \code{solver} field in \code{\link{trex_control}} is ignored by TRexGVSSelector.
 }
 \examples{
 trex_gvs_control()

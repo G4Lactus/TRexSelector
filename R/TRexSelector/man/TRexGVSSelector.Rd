@@ -71,12 +71,12 @@ Create a new TRexGVSSelector object.
 \item{\code{verbose}}{Whether to print progress (default: TRUE).}
 
 \item{\code{gvs_control}}{A GVS control list from \code{\link{trex_gvs_control}()} (default:
-\code{trex_gvs_control()}). The solver method is derived from \code{gvs_type}:
-"EN" uses TENET, "IEN" uses TLASSO. The \code{method} field in \code{control}
+\code{trex_gvs_control()}). The solver is derived from \code{gvs_type}:
+"EN" uses TENET, "IEN" uses TLASSO. The \code{solver} field in \code{control}
 is ignored.}
 
 \item{\code{control}}{A control list from \code{\link{trex_control}()} (default:
-\code{trex_control()}). The \code{method} field is overridden by \code{gvs_type}.}
+\code{trex_control()}). The \code{solver} field is overridden by \code{gvs_type}.}
 }
 \if{html}{\out{</div>}}
 }

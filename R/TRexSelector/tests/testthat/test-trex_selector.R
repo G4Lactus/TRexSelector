@@ -148,7 +148,7 @@ test_that("TRexSelector multiple solver methods return 1-based indices consisten
 
   for (method in c("TLARS", "TLASSO", "TOMP")) {
     sel <- TRexSelector$new(X, y, tFDR = 0.1, verbose = FALSE,
-                            control = trex_control(K = 20, method = method))
+                            control = trex_control(K = 20, solver = method))
     sel$select()
 
     idx <- sel$selected_indices

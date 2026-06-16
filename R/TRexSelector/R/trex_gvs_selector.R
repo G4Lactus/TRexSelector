@@ -29,11 +29,11 @@ TRexGVSSelector <- R6::R6Class("TRexGVSSelector",
     #' @param seed Random seed (default: -1).
     #' @param verbose Whether to print progress (default: TRUE).
     #' @param gvs_control A GVS control list from \code{\link{trex_gvs_control}()} (default:
-    #'   \code{trex_gvs_control()}). The solver method is derived from \code{gvs_type}:
-    #'   "EN" uses TENET, "IEN" uses TLASSO. The \code{method} field in \code{control}
+    #'   \code{trex_gvs_control()}). The solver is derived from \code{gvs_type}:
+    #'   "EN" uses TENET, "IEN" uses TLASSO. The \code{solver} field in \code{control}
     #'   is ignored.
     #' @param control A control list from \code{\link{trex_control}()} (default:
-    #'   \code{trex_control()}). The \code{method} field is overridden by \code{gvs_type}.
+    #'   \code{trex_control()}). The \code{solver} field is overridden by \code{gvs_type}.
     initialize = function(X, y,
                           tFDR = 0.1,
                           seed = -1,
@@ -43,8 +43,8 @@ TRexGVSSelector <- R6::R6Class("TRexGVSSelector",
 
       private$refs <- list(X = X, y = y)
 
-      # Derive solver from gvs_type; overrides any user-specified control$method
-      control$method <- if (gvs_control$gvs_type == "IEN") "TLASSO" else "TENET"
+      # Derive solver from gvs_type; overrides any user-specified control$solver
+      control$solver <- if (gvs_control$gvs_type == "IEN") "TLASSO" else "TENET"
 
       if (inherits(X, "MemoryMappedMatrix")) {
         private$ptr <- trex_gvs_mmap_create(

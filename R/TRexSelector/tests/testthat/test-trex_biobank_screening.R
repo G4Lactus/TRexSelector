@@ -130,13 +130,19 @@ test_that("TRexBiobankScreeningSelector protects against invalid framework strin
 
   # Invalid solver fallback
   expect_error(
-    TRexBiobankScreeningSelector$new(X, y, control = trex_control(method = "UNKNOWN_SOLVER"), verbose = FALSE),
-    "Unknown TRex selector method"
+    TRexBiobankScreeningSelector$new(X, y,
+                                     control = trex_control(solver = "UNKNOWN_SOLVER"),
+                                     verbose = FALSE),
+    "Unknown TRex selector solver"
   )
 
   # Invalid core screening method parameter mapping
   expect_error(
-    TRexBiobankScreeningSelector$new(X, y, screen_control = trex_screen_control(trex_method = "UNKNOWN_VARIANT"), verbose = FALSE),
+    TRexBiobankScreeningSelector$new(X, y,
+                                     screen_control = trex_screen_control(
+                                       trex_method = "UNKNOWN_VARIANT"
+                                     ),
+                                     verbose = FALSE),
     "Unknown ScreenTRexMethod"
   )
 })
@@ -181,6 +187,7 @@ test_that("TRexBiobankScreeningSelector 1D result has 1-based indices in [1, p]"
 
 
 test_that("TRexBiobankScreeningSelector 2D result has 1-based phenotype_index and per-phenotype indices", {
+
   set.seed(42)
   n <- 50
   p <- 15

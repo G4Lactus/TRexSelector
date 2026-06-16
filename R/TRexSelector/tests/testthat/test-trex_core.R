@@ -26,16 +26,17 @@ test_that("TRexSelector correctly guards against invalid backend parameters", {
   )
 
 
-  # Invalid selector method enum matching
+  # Invalid selector solver enum matching
   expect_error(
-    TRexSelector$new(X, y, verbose = FALSE, control = trex_control(method = "INVALID_METHOD")),
-    "Unknown TRex selector method:"
+    TRexSelector$new(X, y, verbose = FALSE, control = trex_control(solver = "INVALID_METHOD")),
+    "Unknown TRex selector solver:"
   )
 
 
   # Invalid LLoop strategy enum matching
   expect_error(
-    TRexSelector$new(X, y, verbose = FALSE, control = trex_control(method = "SCREEN", lloop_strategy = "INVALID")),
+    TRexSelector$new(X, y, verbose = FALSE,
+                     control = trex_control(solver = "SCREEN", lloop_strategy = "INVALID")),
     "Unknown LLoopStrategy:"
   )
 
@@ -55,7 +56,8 @@ test_that("TRexSelector handles concurrent execution properly (OpenMP)", {
 
   # Ensure the object can be created and bound appropriately with concurrency settings
   selector_openmp <- expect_no_error(
-    TRexSelector$new(X, y, verbose = FALSE, control = trex_control(use_openmp = TRUE, max_outer_threads = 2))
+    TRexSelector$new(X, y, verbose = FALSE,
+                     control = trex_control(use_openmp = TRUE, max_outer_threads = 2))
   )
 
   # Run the algorithm targeting out threaded branches in C++ and falls back cleanly
@@ -135,10 +137,10 @@ test_that("TRexSelector correctly guards against edge-case hyperparameter inputs
     "ncgmp_variant"
   )
 
-  # Explicitly unsupported method variants
+  # Explicitly unsupported solver variants
   expect_error(
-    TRexSelector$new(X, y, verbose = FALSE, control = trex_control(method = "UNKNOWN_SOLVER")),
-    "Unknown TRex selector method"
+    TRexSelector$new(X, y, verbose = FALSE, control = trex_control(solver = "UNKNOWN_SOLVER")),
+    "Unknown TRex selector solver"
   )
 })
 
@@ -191,8 +193,10 @@ test_that("TRexSelector runs with Rademacher dummy distribution", {
   X <- matrix(rnorm(n * p), n, p)
   y <- X[, 1] + X[, 2] + rnorm(n)
   sel <- TRexSelector$new(X, y, tFDR = 0.2, verbose = FALSE,
-                          control = trex_control(K = 5,
-                            dummy_distribution = trex_dummy_distribution("Rademacher")))
+                          control = trex_control(
+                            K = 5,
+                            dummy_distribution = trex_dummy_distribution("Rademacher")
+                          ))
   result <- sel$select()
   expect_type(result$selected_var, "logical")
   expect_length(result$selected_var, p)
@@ -205,8 +209,10 @@ test_that("TRexSelector runs with StudentT dummy distribution (df=3)", {
   X <- matrix(rnorm(n * p), n, p)
   y <- X[, 1] + X[, 2] + rnorm(n)
   sel <- TRexSelector$new(X, y, tFDR = 0.2, verbose = FALSE,
-                          control = trex_control(K = 5,
-                            dummy_distribution = trex_dummy_distribution("StudentT", df = 3)))
+                          control = trex_control(
+                            K = 5,
+                            dummy_distribution = trex_dummy_distribution("StudentT", df = 3)
+                          ))
   result <- sel$select()
   expect_type(result$selected_var, "logical")
   expect_length(result$selected_var, p)

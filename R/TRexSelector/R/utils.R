@@ -8,20 +8,21 @@ NULL
 
 #' @title Convert R Matrix to System Memory Mapped Matrix
 #'
-#' @description Maps a given R numeric matrix into a binary formatted memory-mapped file on disk
-#'              efficiently.
+#' @description Writes a numeric matrix to a binary memory-mapped file on disk and returns
+#'              a \code{MemoryMappedMatrix} handle pointing to it.
 #'
 #' @param mat A \code{numeric} \code{matrix}.
 #' @param filename String destination file path.
 #'
-#' @return NULL invisibly mapped.
+#' @return A \code{MemoryMappedMatrix} / \code{mmap_matrix} object backed by \code{filename}.
 #'
 #' @examples
 #' \donttest{
 #' mat <- matrix(as.double(1:20), nrow = 4, ncol = 5)
 #' f <- tempfile(fileext = ".bin")
 #' on.exit(unlink(f), add = TRUE)
-#' convert_to_memory_mapped(mat, f)
+#' mm <- convert_to_memory_mapped(mat, f)
+#' print(mm)
 #' }
 #'
 #' @export
@@ -34,7 +35,7 @@ convert_to_memory_mapped <- function(mat, filename) {
   }
 
   convert_to_memory_mapped_matrix(mat, filename)
-  invisible(NULL)
+  mmap_matrix(filename, nrow(mat), ncol(mat))
 }
 
 
