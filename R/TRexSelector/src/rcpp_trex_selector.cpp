@@ -139,24 +139,32 @@ TRexControlParameter parse_control_parameter(const Rcpp::List& control) {
         if (type_str == "Normal") {
             params.dummy_distribution = Distribution::Normal();
         } else if (type_str == "Uniform") {
-            double a = dd.containsElementNamed("a") ? (double)dd["a"] : std::sqrt(3.0);
+            double a = dd.containsElementNamed("a") ?
+                            (double)dd["a"] : std::sqrt(3.0);
             params.dummy_distribution = Distribution::Uniform(a);
         } else if (type_str == "Rademacher") {
             params.dummy_distribution = Distribution::Rademacher();
         } else if (type_str == "StudentT") {
-            double df = dd.containsElementNamed("df") ? (double)dd["df"] : 5.0;
+            double df = dd.containsElementNamed("df") ?
+                            (double)dd["df"] : 5.0;
             params.dummy_distribution = Distribution::StudentT(df);
         } else if (type_str == "Laplace") {
-            double loc   = dd.containsElementNamed("location") ? (double)dd["location"] : 0.0;
-            double scale = dd.containsElementNamed("scale")    ? (double)dd["scale"]    : 1.0 / std::sqrt(2.0);
+            double loc   = dd.containsElementNamed("location") ?
+                            (double)dd["location"] : 0.0;
+            double scale = dd.containsElementNamed("scale")    ?
+                            (double)dd["scale"]    : 1.0 / std::sqrt(2.0);
             params.dummy_distribution = Distribution::Laplace(loc, scale);
         } else if (type_str == "Gumbel") {
-            double loc   = dd.containsElementNamed("location") ? (double)dd["location"] : 0.0;
-            double scale = dd.containsElementNamed("scale")    ? (double)dd["scale"]    : 1.0;
+            double loc   = dd.containsElementNamed("location") ?
+                            (double)dd["location"] : 0.0;
+            double scale = dd.containsElementNamed("scale")    ?
+                            (double)dd["scale"]    : 1.0;
             params.dummy_distribution = Distribution::Gumbel(loc, scale);
         } else if (type_str == "Holtsmark") {
-            double loc   = dd.containsElementNamed("location") ? (double)dd["location"] : 0.0;
-            double scale = dd.containsElementNamed("scale")    ? (double)dd["scale"]    : 1.0;
+            double loc   = dd.containsElementNamed("location") ?
+                            (double)dd["location"] : 0.0;
+            double scale = dd.containsElementNamed("scale")    ?
+                            (double)dd["scale"]    : 1.0;
             params.dummy_distribution = Distribution::Holtsmark(loc, scale);
         } else if (type_str == "Triangle") {
             double a = dd.containsElementNamed("a") ? (double)dd["a"] : -std::sqrt(6.0);
@@ -172,8 +180,10 @@ TRexControlParameter parse_control_parameter(const Rcpp::List& control) {
             double s = dd.containsElementNamed("s") ? (double)dd["s"] : 0.1;
             params.dummy_distribution = Distribution::ConstrainedSparseRademacher(s);
         } else if (type_str == "Logistic") {
-            double loc   = dd.containsElementNamed("location") ? (double)dd["location"] : 0.0;
-            double scale = dd.containsElementNamed("scale")    ? (double)dd["scale"]    : std::sqrt(3.0) / std::numbers::pi;
+            double loc   = dd.containsElementNamed("location") ?
+                            (double)dd["location"] : 0.0;
+            double scale = dd.containsElementNamed("scale")    ?
+                            (double)dd["scale"]    : std::sqrt(3.0) / std::numbers::pi;
             params.dummy_distribution = Distribution::Logistic(loc, scale);
         } else {
             Rcpp::stop("Unknown dummy distribution type: " + type_str);
@@ -264,7 +274,7 @@ LogicalVector trex_selector_get_selected_var(
     auto var = r_ptr->getSelectedVar();
     LogicalVector res(static_cast<int>(var.size()));
     for (size_t i = 0; i < var.size(); ++i) {
-        res[static_cast<int>(i)] = static_cast<bool>(var[i]);
+        res[static_cast<int>(i)] = static_cast<bool>(var[static_cast<int>(i)]);
     }
     return res;
 }
