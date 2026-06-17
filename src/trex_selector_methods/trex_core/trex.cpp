@@ -673,9 +673,12 @@ void TRexSelector::prepareDummiesForLStep(LStepContext& ctx) {
     switch (ctx.strategy) {
         case LLoopStrategy::SKIPL: {
             // One-shot: generate K dummy matrices sized L_max * p.
+            // Use ctx.L_iter (= max_dummy_multiplier) as seed_factor so that
+            // seeding is equivalent to STANDARD run at the same LL level
+            // (mix_seed(k, L) instead of the linear k-only path).
             dummy_gen_.generateAndStore(trex_ctrl_.K,
                                         ctx.num_dummies,
-                                        /*seed_factor=*/0);
+                                        /*seed_factor=*/ctx.L_iter);
             break;
         }
         case LLoopStrategy::STANDARD: {
@@ -814,10 +817,14 @@ void TRexSelector::runLLoopCalibration_SKIPL(
     StepView view = evaluateStep(num_dummies_, T_stop_,
                                  /*use_warm_start=*/false,
                                  er::ExperimentStrategy::Standard,
-                                 /*seed_factor=*/0,
+                                 /*seed_factor=*/trex_ctrl_.max_dummy_multiplier,
                                  /*existing_on_disk=*/0);
     exp_results = std::move(view.exp_results);
     FDP_hat     = std::move(view.FDP_hat);
+
+    // Set dummy_multiplier_LL_ so the T-loop uses the same seed_factor as the
+    // initial generation (rather than inheriting the 0-initialised default).
+    dummy_multiplier_LL_ = trex_ctrl_.max_dummy_multiplier;
 }
 
 
@@ -843,7 +850,8 @@ void TRexSelector::runLLoopCalibration(
             ctx.seed_factor_uses_LL ? dummy_multiplier_LL_ : 0;
 
         // Per-step body via virtual hook (subclasses may inject deflation).
-        StepView view = evaluateStep(num_dummies_, T_stop_, /*use_warm_start=*/false,
+        StepView view = evaluateStep(num_dummies_, T_stop_,
+                                     /*use_warm_start=*/false,
                                      ctx.strategy, seed_factor, existing_on_disk);
         exp_results = std::move(view.exp_results);
         FDP_hat     = std::move(view.FDP_hat);
