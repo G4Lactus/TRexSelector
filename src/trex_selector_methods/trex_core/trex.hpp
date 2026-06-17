@@ -240,8 +240,11 @@ protected:
     /** @brief Verbose output flag. */
     const bool verbose_;
 
-    /** @brief Numerical tolerance. */
-    double eps_{std::numeric_limits<double>::epsilon()};
+    /** @brief Numerical tolerance.
+     *  @note  Initialized to 0 here; the constructor always overwrites this
+     *         with `solver_params.tol` (default 1e-6) or, when tol <= 0,
+     *         with `std::numeric_limits<double>::epsilon()`. */
+    double eps_{0.0};
 
     // ============================================================
     // Data Members — Normalization (via trex_data_normalizer)

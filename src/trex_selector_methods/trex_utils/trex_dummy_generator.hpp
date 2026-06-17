@@ -574,6 +574,18 @@ private:
     /**
      * @brief Derive a seed for experiment k from the base seed.
      *
+     * @details Uses `mix_seed(base, experiment_id)` (MurmurHash3 finalizer) rather
+     *          than the naive linear formula `base + experiment_id`.  Linear seeds
+     *          give consecutive values (s, s+1, …, s+K-1) for a fixed base, which
+     *          means the per-experiment seeds share a structural relationship that
+     *          can produce mildly correlated dummy matrices when K is small.
+     *          Hash-based mixing decorrelates the K seeds regardless of whether the
+     *          base comes from a fixed integer or from `std::random_device`.
+     *
+     *          For Monte Carlo FDR sweeps the caller should pass `seed = -1` so that
+     *          every invocation draws a fresh hardware-entropy base; a fixed integer
+     *          seed is suitable only for exact reproducibility of a single run.
+     *
      * @param experiment_id  Experiment index k (or other unique identifier).
      *
      * @return Derived seed for this experiment.
@@ -585,7 +597,7 @@ private:
         } else {
             base = std::random_device{}();
         }
-        return base + static_cast<unsigned int>(experiment_id);
+        return dummygen::mix_seed(base, experiment_id);
     }
 
 
