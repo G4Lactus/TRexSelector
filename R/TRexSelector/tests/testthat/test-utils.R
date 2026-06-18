@@ -127,3 +127,72 @@ test_that("metric functions return values in [0, 1]", {
   expect_gte(compute_recall(selected, support), 0.0)
   expect_lte(compute_recall(selected, support), 1.0)
 })
+
+
+# =======================================================================================
+# mmap_matrix - Element access (read) and write tests
+# =======================================================================================
+
+test_that("mmap_matrix single element read returns plain scalar", {
+  mat <- matrix(as.double(1:20), nrow = 4, ncol = 5)
+  f <- tempfile(fileext = ".bin")
+  on.exit(unlink(f), add = TRUE)
+  mm <- convert_to_memory_mapped(mat, f)
+
+  # Must return a plain numeric, not a 1x1 matrix
+  val <- mm[2, 3]
+  expect_type(val, "double")
+  expect_false(is.matrix(val))
+  expect_equal(val, mat[2, 3])
+})
+
+
+test_that("mmap_matrix single element write round-trips correctly", {
+  mat <- matrix(as.double(1:20), nrow = 4, ncol = 5)
+  f <- tempfile(fileext = ".bin")
+  on.exit(unlink(f), add = TRUE)
+  mm <- convert_to_memory_mapped(mat, f)
+
+  mm[2, 3] <- 99.0
+  expect_equal(mm[2, 3], 99.0)
+  # Neighbouring elements untouched
+  expect_equal(mm[1, 3], mat[1, 3])
+  expect_equal(mm[2, 4], mat[2, 4])
+})
+
+
+test_that("mmap_matrix block write round-trips correctly", {
+  mat <- matrix(as.double(0), nrow = 4, ncol = 5)
+  f <- tempfile(fileext = ".bin")
+  on.exit(unlink(f), add = TRUE)
+  mm <- convert_to_memory_mapped(mat, f)
+
+  block <- matrix(as.double(1:6), nrow = 2, ncol = 3)
+  mm[1:2, 2:4] <- block
+  expect_equal(mm[1:2, 2:4], block)
+  # Untouched region remains zero
+  expect_equal(mm[3, 1], 0.0)
+})
+
+
+test_that("mmap_matrix write on readonly matrix raises error", {
+  mat <- matrix(as.double(1:12), nrow = 3, ncol = 4)
+  f <- tempfile(fileext = ".bin")
+  on.exit(unlink(f), add = TRUE)
+  convert_to_memory_mapped(mat, f)
+  mm_ro <- mmap_matrix(f, rows = 3, cols = 4, mode = "readonly")
+  expect_error(mm_ro[1, 1] <- 0.0, regexp = "read-only")
+})
+
+
+test_that("mmap_matrix element access respects bounds", {
+  mat <- matrix(as.double(1:6), nrow = 2, ncol = 3)
+  f <- tempfile(fileext = ".bin")
+  on.exit(unlink(f), add = TRUE)
+  mm <- convert_to_memory_mapped(mat, f)
+
+  expect_error(mm[3, 1])  # row out of bounds
+  expect_error(mm[1, 4])  # col out of bounds
+  expect_error(mm[3, 1] <- 0.0)
+  expect_error(mm[1, 4] <- 0.0)
+})

@@ -155,6 +155,38 @@ const Scalar* MemoryMappedMatrix<Scalar>::data() const {
     return reinterpret_cast<const Scalar*>(mapped_region_->get_address());
 }
 
+
+// ===============================================
+// Element Access
+// ===============================================
+
+template<typename Scalar>
+Scalar& MemoryMappedMatrix<Scalar>::operator()(std::size_t row, std::size_t col) {
+    if (mode_ == AccessMode::ReadOnly) {
+        throw std::runtime_error("Cannot write element: matrix is in ReadOnly mode");
+    }
+    if (row >= rows_ || col >= cols_) {
+        throw std::out_of_range(
+            "MemoryMappedMatrix: element (" + std::to_string(row) +
+            ", " + std::to_string(col) + ") out of bounds [" +
+            std::to_string(rows_) + " x " + std::to_string(cols_) + "]"
+        );
+    }
+    return data()[col * rows_ + row];
+}
+
+template<typename Scalar>
+Scalar MemoryMappedMatrix<Scalar>::operator()(std::size_t row, std::size_t col) const {
+    if (row >= rows_ || col >= cols_) {
+        throw std::out_of_range(
+            "MemoryMappedMatrix: element (" + std::to_string(row) +
+            ", " + std::to_string(col) + ") out of bounds [" +
+            std::to_string(rows_) + " x " + std::to_string(cols_) + "]"
+        );
+    }
+    return data()[col * rows_ + row];
+}
+
 // Explicit Instantiations
 template class MemoryMappedMatrix<char>;
 template class MemoryMappedMatrix<unsigned char>;

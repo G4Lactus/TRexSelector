@@ -1201,6 +1201,45 @@ mmap_matrix_read_range <- function(ptr, row_start, row_count, col_start, col_cou
     .Call(`_TRexSelector_mmap_matrix_read_range`, ptr, row_start, row_count, col_start, col_count)
 }
 
+#' @title Get Single Element from Memory Mapped Matrix
+#'
+#' @param ptr XPtr to MemoryMappedMatrix
+#' @param row Row index (0-based)
+#' @param col Column index (0-based)
+#'
+#' @return Scalar double value
+#'
+#' @noRd
+mmap_matrix_get_element <- function(ptr, row, col) {
+    .Call(`_TRexSelector_mmap_matrix_get_element`, ptr, row, col)
+}
+
+#' @title Set Single Element in Memory Mapped Matrix
+#'
+#' @param ptr XPtr to MemoryMappedMatrix
+#' @param row Row index (0-based)
+#' @param col Column index (0-based)
+#' @param value Value to write
+#'
+#' @noRd
+mmap_matrix_set_element <- function(ptr, row, col, value) {
+    invisible(.Call(`_TRexSelector_mmap_matrix_set_element`, ptr, row, col, value))
+}
+
+#' @title Write Block to Memory Mapped Matrix
+#'
+#' @param ptr XPtr to MemoryMappedMatrix
+#' @param row_start Start row index (0-based)
+#' @param row_count Number of rows
+#' @param col_start Start column index (0-based)
+#' @param col_count Number of columns
+#' @param values NumericMatrix with values to write
+#'
+#' @noRd
+mmap_matrix_write_range <- function(ptr, row_start, row_count, col_start, col_count, values) {
+    invisible(.Call(`_TRexSelector_mmap_matrix_write_range`, ptr, row_start, row_count, col_start, col_count, values))
+}
+
 #' @title Compute FDP from sets
 #'
 #' @param selected_indices Selected indices

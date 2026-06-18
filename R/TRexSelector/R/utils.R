@@ -204,7 +204,83 @@ dim.mmap_matrix <- function(x) {
     j_count <- length(j)
   }
 
+  # Scalar path: return a plain double, not a 1x1 matrix
+  if (i_count == 1L && j_count == 1L) {
+    return(mmap_matrix_get_element(x, i_start, j_start))
+  }
+
   mmap_matrix_read_range(x, i_start, i_count, j_start, j_count)
+}
+
+
+#' @title Assign elements or blocks in an mmap_matrix
+#'
+#' @description Writes a scalar or a numeric matrix block into the memory-mapped file.
+#'   The object must be open in \code{"readwrite"} mode.
+#'
+#' @param x mmap_matrix object (must be in \code{"readwrite"} mode)
+#' @param i Row index or contiguous range (1-based)
+#' @param j Column index or contiguous range (1-based)
+#' @param value A scalar or numeric matrix whose dimensions match the selected block
+#'
+#' @return \code{x} invisibly (required by R's replacement function protocol)
+#'
+#' @examples
+#' \donttest{
+#' mat <- matrix(as.double(1:20), nrow = 4, ncol = 5)
+#' f <- tempfile(fileext = ".bin")
+#' on.exit(unlink(f), add = TRUE)
+#' mm <- convert_to_memory_mapped(mat, f)
+#' mm[2, 3] <- 99.0
+#' mm[1:2, 1:3] <- matrix(as.double(1:6), nrow = 2, ncol = 3)
+#' }
+#'
+#' @export
+`[<-.mmap_matrix` <- function(x, i, j, value) {
+  if (attr(x, "mode") != "readwrite") {
+    stop("Cannot write to a read-only mmap_matrix.")
+  }
+
+  rows <- mmap_matrix_rows(x)
+  cols <- mmap_matrix_cols(x)
+
+  # Normalize row indices
+  if (missing(i)) {
+    i_start <- 0L
+    i_count <- rows
+  } else {
+    i <- as.integer(i)
+    if (any(i <= 0L | i > rows)) stop("Row indices out of bounds")
+    if (length(i) > 1L && !all(diff(i) == 1L)) {
+      stop("Non-contiguous row slices are not currently supported by mmap_matrix")
+    }
+    i_start <- i[1L] - 1L
+    i_count <- length(i)
+  }
+
+  # Normalize column indices
+  if (missing(j)) {
+    j_start <- 0L
+    j_count <- cols
+  } else {
+    j <- as.integer(j)
+    if (any(j <= 0L | j > cols)) stop("Column indices out of bounds")
+    if (length(j) > 1L && !all(diff(j) == 1L)) {
+      stop("Non-contiguous col slices are not currently supported by mmap_matrix")
+    }
+    j_start <- j[1L] - 1L
+    j_count <- length(j)
+  }
+
+  # Dispatch: single element or block
+  if (i_count == 1L && j_count == 1L) {
+    mmap_matrix_set_element(x, i_start, j_start, as.double(value))
+  } else {
+    value <- matrix(as.double(value), nrow = i_count, ncol = j_count)
+    mmap_matrix_write_range(x, i_start, i_count, j_start, j_count, value)
+  }
+
+  invisible(x)
 }
 
 

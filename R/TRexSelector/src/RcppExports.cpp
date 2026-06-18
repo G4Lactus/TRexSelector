@@ -1820,6 +1820,47 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// mmap_matrix_get_element
+double mmap_matrix_get_element(XPtr<MemoryMappedMatrix<double>> ptr, int row, int col);
+RcppExport SEXP _TRexSelector_mmap_matrix_get_element(SEXP ptrSEXP, SEXP rowSEXP, SEXP colSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< XPtr<MemoryMappedMatrix<double>> >::type ptr(ptrSEXP);
+    Rcpp::traits::input_parameter< int >::type row(rowSEXP);
+    Rcpp::traits::input_parameter< int >::type col(colSEXP);
+    rcpp_result_gen = Rcpp::wrap(mmap_matrix_get_element(ptr, row, col));
+    return rcpp_result_gen;
+END_RCPP
+}
+// mmap_matrix_set_element
+void mmap_matrix_set_element(XPtr<MemoryMappedMatrix<double>> ptr, int row, int col, double value);
+RcppExport SEXP _TRexSelector_mmap_matrix_set_element(SEXP ptrSEXP, SEXP rowSEXP, SEXP colSEXP, SEXP valueSEXP) {
+BEGIN_RCPP
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< XPtr<MemoryMappedMatrix<double>> >::type ptr(ptrSEXP);
+    Rcpp::traits::input_parameter< int >::type row(rowSEXP);
+    Rcpp::traits::input_parameter< int >::type col(colSEXP);
+    Rcpp::traits::input_parameter< double >::type value(valueSEXP);
+    mmap_matrix_set_element(ptr, row, col, value);
+    return R_NilValue;
+END_RCPP
+}
+// mmap_matrix_write_range
+void mmap_matrix_write_range(XPtr<MemoryMappedMatrix<double>> ptr, int row_start, int row_count, int col_start, int col_count, NumericMatrix values);
+RcppExport SEXP _TRexSelector_mmap_matrix_write_range(SEXP ptrSEXP, SEXP row_startSEXP, SEXP row_countSEXP, SEXP col_startSEXP, SEXP col_countSEXP, SEXP valuesSEXP) {
+BEGIN_RCPP
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< XPtr<MemoryMappedMatrix<double>> >::type ptr(ptrSEXP);
+    Rcpp::traits::input_parameter< int >::type row_start(row_startSEXP);
+    Rcpp::traits::input_parameter< int >::type row_count(row_countSEXP);
+    Rcpp::traits::input_parameter< int >::type col_start(col_startSEXP);
+    Rcpp::traits::input_parameter< int >::type col_count(col_countSEXP);
+    Rcpp::traits::input_parameter< NumericMatrix >::type values(valuesSEXP);
+    mmap_matrix_write_range(ptr, row_start, row_count, col_start, col_count, values);
+    return R_NilValue;
+END_RCPP
+}
 // rcpp_compute_fdp
 double rcpp_compute_fdp(const std::vector<std::size_t>& selected_indices, const std::vector<std::size_t>& true_support);
 RcppExport SEXP _TRexSelector_rcpp_compute_fdp(SEXP selected_indicesSEXP, SEXP true_supportSEXP) {
@@ -2041,6 +2082,9 @@ static const R_CallMethodDef CallEntries[] = {
     {"_TRexSelector_mmap_matrix_cols", (DL_FUNC) &_TRexSelector_mmap_matrix_cols, 1},
     {"_TRexSelector_mmap_matrix_size", (DL_FUNC) &_TRexSelector_mmap_matrix_size, 1},
     {"_TRexSelector_mmap_matrix_read_range", (DL_FUNC) &_TRexSelector_mmap_matrix_read_range, 5},
+    {"_TRexSelector_mmap_matrix_get_element", (DL_FUNC) &_TRexSelector_mmap_matrix_get_element, 3},
+    {"_TRexSelector_mmap_matrix_set_element", (DL_FUNC) &_TRexSelector_mmap_matrix_set_element, 4},
+    {"_TRexSelector_mmap_matrix_write_range", (DL_FUNC) &_TRexSelector_mmap_matrix_write_range, 6},
     {"_TRexSelector_rcpp_compute_fdp", (DL_FUNC) &_TRexSelector_rcpp_compute_fdp, 2},
     {"_TRexSelector_rcpp_compute_tpp", (DL_FUNC) &_TRexSelector_rcpp_compute_tpp, 2},
     {"_TRexSelector_rcpp_compute_precision", (DL_FUNC) &_TRexSelector_rcpp_compute_precision, 2},

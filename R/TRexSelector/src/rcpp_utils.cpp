@@ -206,6 +206,79 @@ NumericMatrix mmap_matrix_read_range(
 }
 
 
+//' @title Get Single Element from Memory Mapped Matrix
+//'
+//' @param ptr XPtr to MemoryMappedMatrix
+//' @param row Row index (0-based)
+//' @param col Column index (0-based)
+//'
+//' @return Scalar double value
+//'
+//' @noRd
+// [[Rcpp::export]]
+double mmap_matrix_get_element(
+    XPtr<MemoryMappedMatrix<double>> ptr, // NOLINT(performance-unnecessary-value-param)
+    int row,
+    int col
+) {
+    return (*ptr)(static_cast<std::size_t>(row), static_cast<std::size_t>(col));
+}
+
+
+//' @title Set Single Element in Memory Mapped Matrix
+//'
+//' @param ptr XPtr to MemoryMappedMatrix
+//' @param row Row index (0-based)
+//' @param col Column index (0-based)
+//' @param value Value to write
+//'
+//' @noRd
+// [[Rcpp::export]]
+void mmap_matrix_set_element(
+    XPtr<MemoryMappedMatrix<double>> ptr, // NOLINT(performance-unnecessary-value-param)
+    int row,
+    int col,
+    double value
+) {
+    (*ptr)(static_cast<std::size_t>(row), static_cast<std::size_t>(col)) = value;
+}
+
+
+//' @title Write Block to Memory Mapped Matrix
+//'
+//' @param ptr XPtr to MemoryMappedMatrix
+//' @param row_start Start row index (0-based)
+//' @param row_count Number of rows
+//' @param col_start Start column index (0-based)
+//' @param col_count Number of columns
+//' @param values NumericMatrix with values to write
+//'
+//' @noRd
+// [[Rcpp::export]]
+void mmap_matrix_write_range(
+    XPtr<MemoryMappedMatrix<double>> ptr, // NOLINT(performance-unnecessary-value-param)
+    int row_start, int row_count,
+    int col_start, int col_count,
+    NumericMatrix values // NOLINT(performance-unnecessary-value-param)
+) {
+    auto map = ptr->getMap();
+
+    // Bounds checking
+    if (row_start < 0 || col_start < 0 || row_count < 0 || col_count < 0 ||
+        row_start + row_count > map.rows() || col_start + col_count > map.cols()) {
+        stop("MemoryMappedMatrix: write block out of bounds");
+    }
+    if (values.nrow() != row_count || values.ncol() != col_count) {
+        stop("MemoryMappedMatrix: value matrix dimensions do not match block size");
+    }
+
+    Eigen::Map<Eigen::MatrixXd> val_map(REAL(values),
+                                        static_cast<Eigen::Index>(row_count),
+                                        static_cast<Eigen::Index>(col_count));
+    map.block(row_start, col_start, row_count, col_count) = val_map;
+}
+
+
 // ========================================================================================
 // Utils: Evaluation Metrics
 // ========================================================================================

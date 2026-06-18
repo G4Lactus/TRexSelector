@@ -113,6 +113,13 @@ public:
     /** @brief Get total size (rows * columns) */
     std::size_t size() const { return rows_ * cols_; }
 
+    // Element Access (Eigen-like interface)
+    /** @brief Read/write element access (ReadWrite mode only) — Eigen-like interface */
+    Scalar& operator()(std::size_t row, std::size_t col);
+
+    /** @brief Read-only element access — Eigen-like interface */
+    Scalar operator()(std::size_t row, std::size_t col) const;
+
 
 private:
     // =================================================
