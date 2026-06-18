@@ -20,6 +20,9 @@
 #include "ml_methods/clustering/hierarchical/agglomerative/dendrogram_utils.hpp"
 #include "ml_methods/clustering/hierarchical/agglomerative/distance_policy.hpp"
 
+// Memory-mapped matrix support
+#include <utils/memmap/memory_mapped_matrix.hpp>
+
 // ========================================================================================
 
 using namespace Rcpp;
@@ -181,6 +184,67 @@ NumericMatrix rcpp_agglomerative_cluster(
         case DistanceMetric::Correlation_LSH_Approx:
             merges = internal_dispatch_linkage<TransposedType,
                             DistanceMetric::Correlation_LSH_Approx>(transposed, method, use_mmap);
+            break;
+        default:
+            stop("Unknown DistanceMetric specified.");
+    }
+
+    Eigen::MatrixXd res = rcpp_merge_steps_to_linkage(merges);
+    return wrap(res);
+}
+
+
+//' @title Rcpp Agglomerative Clustering (memory-mapped input)
+//'
+//' @description Perform agglomerative clustering on a memory-mapped input matrix.
+//'              The intermediate distance storage is also disk-backed (use_mmap = true).
+//'
+//' @param data_ptr XPtr to a MemoryMappedMatrix<double> of shape (N, Features).
+//' @param method_idx Linkage method index (0=Ward, 1=Average, 2=Complete, 3=Single, 4=WPGMA,
+//'                      5=Median, 6=Centroid)
+//' @param metric_idx Distance metric index (0=Euclid, 1=Corr, 2=Manhattan, 3=CorrLSHF, 4=CorrLSHA)
+//'
+//' @return A linkage matrix
+//'
+//' @noRd
+// [[Rcpp::export]]
+NumericMatrix rcpp_agglomerative_cluster_mmap(
+    XPtr<trex::utils::memmap::MemoryMappedMatrix<double>> data_ptr,
+    int method_idx,
+    int metric_idx) {
+
+    const Eigen::Map<Eigen::MatrixXd>& data = data_ptr->getMap();
+
+    // Cast integers back to C++ enums for dispatch
+    LinkageMethod method = static_cast<LinkageMethod>(method_idx);
+    DistanceMetric metric = static_cast<DistanceMetric>(metric_idx);
+
+    // Engine expects columns to be objects, so transpose
+    auto transposed = data.transpose();
+    using TransposedType = decltype(transposed);
+
+    std::vector<MergeStep> merges;
+
+    switch (metric) {
+        case DistanceMetric::Euclidean:
+            merges = internal_dispatch_linkage<TransposedType,
+                                DistanceMetric::Euclidean>(transposed, method, /*use_mmap=*/true);
+            break;
+        case DistanceMetric::Correlation:
+            merges = internal_dispatch_linkage<TransposedType,
+                                DistanceMetric::Correlation>(transposed, method, /*use_mmap=*/true);
+            break;
+        case DistanceMetric::Manhattan:
+            merges = internal_dispatch_linkage<TransposedType,
+                                DistanceMetric::Manhattan>(transposed, method, /*use_mmap=*/true);
+            break;
+        case DistanceMetric::Correlation_LSH_Filter:
+            merges = internal_dispatch_linkage<TransposedType,
+                            DistanceMetric::Correlation_LSH_Filter>(transposed, method, /*use_mmap=*/true);
+            break;
+        case DistanceMetric::Correlation_LSH_Approx:
+            merges = internal_dispatch_linkage<TransposedType,
+                            DistanceMetric::Correlation_LSH_Approx>(transposed, method, /*use_mmap=*/true);
             break;
         default:
             stop("Unknown DistanceMetric specified.");

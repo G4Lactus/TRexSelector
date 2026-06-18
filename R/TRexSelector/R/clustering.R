@@ -64,11 +64,13 @@ DistanceMetric <- list(
 #'
 #' @description Performs hierarchical agglomerative clustering on a numeric matrix.
 #'
-#' @param data   A numeric matrix.
+#' @param data   A numeric matrix, or an \code{mmap_matrix} created by
+#'               \code{\link{convert_to_memory_mapped}}.
 #' @param method A value from `LinkageMethod` (e.g. `LinkageMethod$Ward`).
 #' @param metric A value from `DistanceMetric` (e.g. `DistanceMetric$Euclidean`).
 #'               Default is Euclidean.
-#' @param use_mmap Whether to use memory mapping files internally. Default is FALSE.
+#' @param use_mmap Whether to use memory mapping files for intermediate storage. Default is FALSE.
+#'                 Ignored when \code{data} is already an \code{mmap_matrix} (always \code{TRUE}).
 #'
 #' @return A numeric matrix representing the computed hierarchical linkage.
 #'
@@ -81,12 +83,17 @@ agglomerative_cluster <- function(data,
                                   method = LinkageMethod$Ward,
                                   metric = DistanceMetric$Euclidean,
                                   use_mmap = FALSE) {
-  if (!is.matrix(data) || !is.numeric(data)) {
-    stop("Input 'data' must be a numeric matrix.")
+  is_mmap <- inherits(data, "mmap_matrix")
+  if (!is_mmap && (!is.matrix(data) || !is.numeric(data))) {
+    stop("Input 'data' must be a numeric matrix or mmap_matrix.")
   }
 
   # Delegate to Rcpp layer
-  result <- rcpp_agglomerative_cluster(data, method, metric, use_mmap)
+  if (is_mmap) {
+    result <- rcpp_agglomerative_cluster_mmap(data, method, metric)
+  } else {
+    result <- rcpp_agglomerative_cluster(data, method, metric, use_mmap)
+  }
   # convert 0-based Cpp cluster IDs to 1-based R convention
   result[, 1:2] <- result[, 1:2] + 1L
   result

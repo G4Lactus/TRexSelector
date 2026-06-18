@@ -26,6 +26,19 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// rcpp_agglomerative_cluster_mmap
+NumericMatrix rcpp_agglomerative_cluster_mmap(XPtr<trex::utils::memmap::MemoryMappedMatrix<double>> data_ptr, int method_idx, int metric_idx);
+RcppExport SEXP _TRexSelector_rcpp_agglomerative_cluster_mmap(SEXP data_ptrSEXP, SEXP method_idxSEXP, SEXP metric_idxSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< XPtr<trex::utils::memmap::MemoryMappedMatrix<double>> >::type data_ptr(data_ptrSEXP);
+    Rcpp::traits::input_parameter< int >::type method_idx(method_idxSEXP);
+    Rcpp::traits::input_parameter< int >::type metric_idx(metric_idxSEXP);
+    rcpp_result_gen = Rcpp::wrap(rcpp_agglomerative_cluster_mmap(data_ptr, method_idx, metric_idx));
+    return rcpp_result_gen;
+END_RCPP
+}
 // rcpp_cut_tree
 IntegerVector rcpp_cut_tree(const Eigen::Map<Eigen::MatrixXd>& linkage, int num_orig_objs, int num_clusters);
 RcppExport SEXP _TRexSelector_rcpp_cut_tree(SEXP linkageSEXP, SEXP num_orig_objsSEXP, SEXP num_clustersSEXP) {
@@ -1884,6 +1897,7 @@ END_RCPP
 
 static const R_CallMethodDef CallEntries[] = {
     {"_TRexSelector_rcpp_agglomerative_cluster", (DL_FUNC) &_TRexSelector_rcpp_agglomerative_cluster, 4},
+    {"_TRexSelector_rcpp_agglomerative_cluster_mmap", (DL_FUNC) &_TRexSelector_rcpp_agglomerative_cluster_mmap, 3},
     {"_TRexSelector_rcpp_cut_tree", (DL_FUNC) &_TRexSelector_rcpp_cut_tree, 3},
     {"_TRexSelector_zscore_scaler_create", (DL_FUNC) &_TRexSelector_zscore_scaler_create, 2},
     {"_TRexSelector_zscore_scaler_fit", (DL_FUNC) &_TRexSelector_zscore_scaler_fit, 3},

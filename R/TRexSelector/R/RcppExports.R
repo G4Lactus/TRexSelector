@@ -18,6 +18,23 @@ rcpp_agglomerative_cluster <- function(data, method_idx, metric_idx, use_mmap = 
     .Call(`_TRexSelector_rcpp_agglomerative_cluster`, data, method_idx, metric_idx, use_mmap)
 }
 
+#' @title Rcpp Agglomerative Clustering (memory-mapped input)
+#'
+#' @description Perform agglomerative clustering on a memory-mapped input matrix.
+#'              The intermediate distance storage is also disk-backed (use_mmap = true).
+#'
+#' @param data_ptr XPtr to a MemoryMappedMatrix<double> of shape (N, Features).
+#' @param method_idx Linkage method index (0=Ward, 1=Average, 2=Complete, 3=Single, 4=WPGMA,
+#'                      5=Median, 6=Centroid)
+#' @param metric_idx Distance metric index (0=Euclid, 1=Corr, 2=Manhattan, 3=CorrLSHF, 4=CorrLSHA)
+#'
+#' @return A linkage matrix
+#'
+#' @noRd
+rcpp_agglomerative_cluster_mmap <- function(data_ptr, method_idx, metric_idx) {
+    .Call(`_TRexSelector_rcpp_agglomerative_cluster_mmap`, data_ptr, method_idx, metric_idx)
+}
+
 #' @title Rcpp Cut Tree
 #'
 #' @description Cut a linkage matrix into flat clusters
