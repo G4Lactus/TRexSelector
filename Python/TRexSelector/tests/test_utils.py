@@ -66,6 +66,46 @@ def test_numpy_to_memmap_rejects_3d(tmp_path):
 
 
 # ---------------------------------------------------------------------------
+# MemoryMappedMatrix element access: __getitem__ / __setitem__
+# ---------------------------------------------------------------------------
+
+def test_memmap_getitem_returns_correct_value(tmp_path):
+    X = np.arange(12.0, dtype=np.float64).reshape(3, 4)
+    mmap = numpy_to_memmap(str(tmp_path / "getitem.bin"), X)
+    assert mmap[0, 0] == pytest.approx(X[0, 0])
+    assert mmap[1, 2] == pytest.approx(X[1, 2])
+    assert mmap[2, 3] == pytest.approx(X[2, 3])
+
+
+def test_memmap_setitem_modifies_element(tmp_path):
+    X = np.zeros((4, 3), dtype=np.float64)
+    mmap = numpy_to_memmap(str(tmp_path / "setitem.bin"), X)
+    mmap[1, 2] = 99.0
+    assert mmap.to_numpy()[1, 2] == pytest.approx(99.0)
+    # Neighbours untouched
+    assert mmap.to_numpy()[0, 2] == pytest.approx(0.0)
+    assert mmap.to_numpy()[1, 1] == pytest.approx(0.0)
+
+
+def test_memmap_setitem_readonly_raises(tmp_path):
+    X = np.ones((3, 3), dtype=np.float64)
+    filename = str(tmp_path / "ro_write.bin")
+    numpy_to_memmap(filename, X)
+    mmap_ro = MemoryMappedMatrix(filename, 3, 3, AccessMode.ReadOnly)
+    with pytest.raises(Exception):
+        mmap_ro[0, 0] = 5.0
+
+
+def test_memmap_getitem_out_of_bounds(tmp_path):
+    X = np.zeros((3, 3), dtype=np.float64)
+    mmap = numpy_to_memmap(str(tmp_path / "bounds.bin"), X)
+    with pytest.raises(Exception):
+        _ = mmap[3, 0]  # row == rows (0-based)
+    with pytest.raises(Exception):
+        _ = mmap[0, 3]  # col == cols (0-based)
+
+
+# ---------------------------------------------------------------------------
 # compute_fdp
 # ---------------------------------------------------------------------------
 

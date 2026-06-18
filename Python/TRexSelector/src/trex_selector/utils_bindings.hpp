@@ -62,7 +62,25 @@ inline void bind_utils_module(py::module& m) {
                 map.data(),                                                // pointer to data
                 py::cast(&mmap_mat)                                // base object to tied lifecycle
             );
-        }, "Returns a zero-copy NumPy array view of the memory-mapped matrix.");
+        }, "Returns a zero-copy NumPy array view of the memory-mapped matrix.")
+
+        // Element access (Eigen-like interface): mmap[row, col]
+        .def("__getitem__",
+             [](const MemoryMappedMatrix<double>& self,
+                std::pair<std::size_t, std::size_t> idx) {
+                 return self(idx.first, idx.second);
+             },
+             py::arg("idx"),
+             "Read single element at (row, col) — 0-based indices.")
+
+        .def("__setitem__",
+             [](MemoryMappedMatrix<double>& self,
+                std::pair<std::size_t, std::size_t> idx,
+                double value) {
+                 self(idx.first, idx.second) = value;
+             },
+             py::arg("idx"), py::arg("value"),
+             "Write single element at (row, col) — 0-based indices. Requires ReadWrite mode.");
 
     m.def("convert_to_memory_mapped",
           [](py::array_t<double>& arr, const std::string& filename) {
