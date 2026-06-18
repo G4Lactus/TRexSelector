@@ -68,6 +68,17 @@ A named list suitable for passing to TRex selector constructors.
 \description{
 Build a control list for TRex selector algorithms.
 }
+\note{
+\strong{Seed recommendation for Monte Carlo FDR simulations:} always pass
+\code{seed = -1} (the default) to \code{TRexSelector$new()} or any other
+selector constructor when running repeated trials. A fixed integer seed
+causes every trial to draw K per-experiment dummy seeds as
+\code{mix_seed(fixed, 0), mix_seed(fixed, 1), \ldots} — deterministic but
+structurally correlated across trials — which can inflate the empirical FDR
+in a sweep. With \code{seed = -1} each of the K experiments independently
+draws hardware entropy via \code{std::random_device}, matching the
+behaviour of the standalone C++ demo.
+}
 \examples{
 trex_control()
 trex_control(solver = "TLASSO", K = 10)

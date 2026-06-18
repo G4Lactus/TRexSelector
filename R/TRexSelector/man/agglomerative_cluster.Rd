@@ -12,14 +12,16 @@ agglomerative_cluster(
 )
 }
 \arguments{
-\item{data}{A numeric matrix.}
+\item{data}{A numeric matrix, or an \code{mmap_matrix} created by
+\code{\link{convert_to_memory_mapped}}.}
 
 \item{method}{A value from \code{LinkageMethod} (e.g. \code{LinkageMethod$Ward}).}
 
 \item{metric}{A value from \code{DistanceMetric} (e.g. \code{DistanceMetric$Euclidean}).
 Default is Euclidean.}
 
-\item{use_mmap}{Whether to use memory mapping files internally. Default is FALSE.}
+\item{use_mmap}{Whether to use memory mapping files for intermediate storage. Default is FALSE.
+Ignored when \code{data} is already an \code{mmap_matrix} (always \code{TRUE}).}
 }
 \value{
 A numeric matrix representing the computed hierarchical linkage.

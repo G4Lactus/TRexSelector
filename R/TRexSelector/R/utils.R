@@ -235,6 +235,7 @@ dim.mmap_matrix <- function(x) {
 #' mm[1:2, 1:3] <- matrix(as.double(1:6), nrow = 2, ncol = 3)
 #' }
 #'
+#' @method "[<-" mmap_matrix
 #' @export
 `[<-.mmap_matrix` <- function(x, i, j, value) {
   if (attr(x, "mode") != "readwrite") {
