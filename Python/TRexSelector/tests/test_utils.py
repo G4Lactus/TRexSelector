@@ -106,6 +106,74 @@ def test_memmap_getitem_out_of_bounds(tmp_path):
 
 
 # ---------------------------------------------------------------------------
+# MemoryMappedMatrix block write: __setitem__ (slice) and write_block()
+# ---------------------------------------------------------------------------
+
+def test_memmap_setitem_block_roundtrip(tmp_path):
+    X = np.zeros((6, 8), dtype=np.float64)
+    mmap = numpy_to_memmap(str(tmp_path / "block.bin"), X)
+    block = np.arange(12.0, dtype=np.float64).reshape(3, 4)
+    mmap[0:3, 1:5] = block
+    result = mmap.to_numpy()[0:3, 1:5]
+    assert np.allclose(result, block)
+    # Neighbouring region must be untouched
+    assert np.allclose(mmap.to_numpy()[3:, :], 0.0)
+    assert np.allclose(mmap.to_numpy()[:, 0:1], 0.0)
+
+
+def test_memmap_setitem_mixed_int_slice(tmp_path):
+    X = np.zeros((5, 6), dtype=np.float64)
+    mmap = numpy_to_memmap(str(tmp_path / "mixed.bin"), X)
+    # Single row written as 1-row block (int index treated as degenerate slice)
+    row_data = np.arange(6.0, dtype=np.float64).reshape(1, 6)
+    mmap[2:3, 0:6] = row_data
+    assert np.allclose(mmap.to_numpy()[2:3, :], row_data)
+    # Single column written as 1-col block
+    col_data = np.arange(5.0, dtype=np.float64).reshape(5, 1)
+    mmap[0:5, 3:4] = col_data
+    assert np.allclose(mmap.to_numpy()[:, 3:4], col_data)
+
+
+def test_memmap_setitem_block_readonly_raises(tmp_path):
+    X = np.ones((4, 4), dtype=np.float64)
+    filename = str(tmp_path / "ro_block.bin")
+    numpy_to_memmap(filename, X)
+    mmap_ro = MemoryMappedMatrix(filename, 4, 4, AccessMode.ReadOnly)
+    with pytest.raises(RuntimeError):
+        mmap_ro[0:2, 0:2] = np.zeros((2, 2), dtype=np.float64)
+
+
+def test_memmap_setitem_block_shape_mismatch(tmp_path):
+    X = np.zeros((5, 5), dtype=np.float64)
+    mmap = numpy_to_memmap(str(tmp_path / "mismatch.bin"), X)
+    with pytest.raises(ValueError):
+        mmap[0:3, 0:3] = np.zeros((2, 3), dtype=np.float64)  # wrong row count
+    with pytest.raises(ValueError):
+        mmap[0:3, 0:3] = np.zeros((3, 2), dtype=np.float64)  # wrong col count
+
+
+def test_memmap_setitem_block_out_of_bounds(tmp_path):
+    X = np.zeros((4, 4), dtype=np.float64)
+    mmap = numpy_to_memmap(str(tmp_path / "oob_block.bin"), X)
+    with pytest.raises(Exception):
+        mmap[2:5, 0:2] = np.zeros((3, 2), dtype=np.float64)  # row slice exceeds dims
+    with pytest.raises(Exception):
+        mmap[0:2, 3:6] = np.zeros((2, 3), dtype=np.float64)  # col slice exceeds dims
+
+
+def test_memmap_write_block_method_roundtrip(tmp_path):
+    X = np.zeros((6, 8), dtype=np.float64)
+    mmap = numpy_to_memmap(str(tmp_path / "wblock.bin"), X)
+    block = np.arange(12.0, dtype=np.float64).reshape(3, 4)
+    mmap.write_block(0, 3, 1, 4, block)
+    result = mmap.to_numpy()[0:3, 1:5]
+    assert np.allclose(result, block)
+    # Neighbouring region must be untouched
+    assert np.allclose(mmap.to_numpy()[3:, :], 0.0)
+    assert np.allclose(mmap.to_numpy()[:, 0:1], 0.0)
+
+
+# ---------------------------------------------------------------------------
 # compute_fdp
 # ---------------------------------------------------------------------------
 
