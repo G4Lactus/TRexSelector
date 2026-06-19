@@ -158,9 +158,14 @@ NumericMatrix rcpp_agglomerative_cluster(
     LinkageMethod method = static_cast<LinkageMethod>(method_idx);
     DistanceMetric metric = static_cast<DistanceMetric>(metric_idx);
 
-    // Engine expects columns to be objects, so transpose
-    auto transposed = data.transpose();
-    using TransposedType = decltype(transposed);
+    // Engine expects columns to be objects, so transpose.
+    // Force evaluation into a concrete MatrixXd — passing a lazy
+    // Eigen::Transpose<const Eigen::Map<>> as the MatrixType template parameter
+    // causes UB for Average+LSH_Approx (ProjectedGeometricUpdatePolicy) while
+    // Ward's different merge ordering happens to avoid the faulty codepath.
+    // Using a concrete type mirrors what the C++ demo does with Eigen::Map.
+    Eigen::MatrixXd transposed = data.transpose();
+    using TransposedType = Eigen::MatrixXd;
 
     std::vector<MergeStep> merges;
 
@@ -228,23 +233,33 @@ NumericMatrix rcpp_agglomerative_cluster_mmap(
     switch (metric) {
         case DistanceMetric::Euclidean:
             merges = internal_dispatch_linkage<TransposedType,
-                                DistanceMetric::Euclidean>(transposed, method, /*use_mmap=*/true);
+                        DistanceMetric::Euclidean>(
+                            transposed, method, /*use_mmap=*/true
+                        );
             break;
         case DistanceMetric::Correlation:
             merges = internal_dispatch_linkage<TransposedType,
-                                DistanceMetric::Correlation>(transposed, method, /*use_mmap=*/true);
+                        DistanceMetric::Correlation>(
+                            transposed, method, /*use_mmap=*/true
+                        );
             break;
         case DistanceMetric::Manhattan:
             merges = internal_dispatch_linkage<TransposedType,
-                                DistanceMetric::Manhattan>(transposed, method, /*use_mmap=*/true);
+                        DistanceMetric::Manhattan>(
+                            transposed, method, /*use_mmap=*/true
+                        );
             break;
         case DistanceMetric::Correlation_LSH_Filter:
             merges = internal_dispatch_linkage<TransposedType,
-                            DistanceMetric::Correlation_LSH_Filter>(transposed, method, /*use_mmap=*/true);
+                        DistanceMetric::Correlation_LSH_Filter>(
+                            transposed, method, /*use_mmap=*/true
+                        );
             break;
         case DistanceMetric::Correlation_LSH_Approx:
             merges = internal_dispatch_linkage<TransposedType,
-                            DistanceMetric::Correlation_LSH_Approx>(transposed, method, /*use_mmap=*/true);
+                            DistanceMetric::Correlation_LSH_Approx>(
+                                transposed, method, /*use_mmap=*/true
+                            );
             break;
         default:
             stop("Unknown DistanceMetric specified.");

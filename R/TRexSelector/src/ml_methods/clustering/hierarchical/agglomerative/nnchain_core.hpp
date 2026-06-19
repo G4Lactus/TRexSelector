@@ -176,6 +176,20 @@ public:
                 } else {
                     // Step 5: Not an RNN, push 'd' onto the chain and continue
                     chain.push_back(d);
+
+                    // Safety guard: a proper NN-chain terminates within at most N steps
+                    // per outer iteration for any distance satisfying the reducibility
+                    // property. Exceeding 3*N indicates a cycle (A->B->C->A) caused by
+                    // an update strategy that violates reducibility — throw instead of
+                    // looping forever or corrupting memory.
+                    if (chain.size() > static_cast<std::size_t>(3 * num_objects_)) {
+                        throw std::invalid_argument(
+                            "NNChain: chain exceeded 3*N — nearest-neighbor cycle detected. "
+                            "The distance update strategy is not consistent with the reducibility "
+                            "property required by the NN-chain algorithm. "
+                            "Consider switching to a metric-consistent linkage/metric pair."
+                        );
+                    }
                 }
             }
         }

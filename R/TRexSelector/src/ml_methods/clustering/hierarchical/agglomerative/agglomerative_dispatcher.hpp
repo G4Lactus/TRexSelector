@@ -84,15 +84,21 @@ public:
         // -----------------------------------------------------------------------
         else if constexpr (Method == LinkageMethod::Average || Method == LinkageMethod::Ward) {
 
-            if constexpr (DistancePolicyType::Metric == DistanceMetric::Correlation_LSH_Approx) {
-                // If using LSH, intercept and route to the ultra-fast 64D RAM Projected Engine!
+            if constexpr (DistancePolicyType::Metric == DistanceMetric::Correlation_LSH_Approx
+                          && Method == LinkageMethod::Ward) {
+                // Ward + LSH_Approx ONLY: Ward distance is a function of centroids, so the
+                // geometric centroid update in 64D SimHash space is mathematically valid.
+                // Do NOT add Average here — the geometric centroid update does NOT implement
+                // the Lance-Williams UPGMA formula and violates reducibility, causing NNChain
+                // cycles for non-perfectly-separated data.
                 using Policy = ProjectedGeometricUpdatePolicy<MatrixType, DistancePolicyType, Method>;
                 NNChain<MatrixType, Policy> nnchain(data, use_mmap);
                 nnchain.cluster();
                 return DendrogramUtils::format_nnchain_merges(nnchain.get_merges(), num_objs);
             }
             else {
-                // If Exact Distance, route to the Lance-Williams Matrix Engine
+                // Average (all metrics), or Ward with non-LSH_Approx metrics:
+                // use the exact Lance-Williams Matrix Engine.
                 using Policy = BlockTiledMatrixPolicy<MatrixType, DistancePolicyType, Method>;
                 NNChain<MatrixType, Policy> nnchain(data, use_mmap);
                 nnchain.cluster();
