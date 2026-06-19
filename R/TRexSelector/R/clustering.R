@@ -88,6 +88,40 @@ agglomerative_cluster <- function(data,
     stop("Input 'data' must be a numeric matrix or mmap_matrix.")
   }
 
+  # Euclidean-geometry methods require Euclidean distances. Ward, Median, and
+  # Centroid are all centroid-based and their Lance-Williams update formulas
+  # are derived from the law of cosines in Euclidean space. Applying them to
+  # correlation or Manhattan distances produces a mathematically invalid
+  # dendrogram without any runtime error (consistent with SciPy's behaviour,
+  # but disallowed here following scikit-learn's stricter convention).
+  #
+  # Exception: Ward + Correlation_LSH_Approx is a defined approximate operation
+  # — the dispatcher routes it to a 64-dimensional SimHash-projected Euclidean
+  # space (ProjectedGeometricUpdatePolicy), so it is permitted.
+  euclidean_only_methods <- c(LinkageMethod$Ward, LinkageMethod$Median, LinkageMethod$Centroid)
+  ward_lsh_approx_exception <- (method == LinkageMethod$Ward &&
+                                  metric == DistanceMetric$Correlation_LSH_Approx)
+
+  if (method %in% euclidean_only_methods &&
+        metric  != DistanceMetric$Euclidean  &&
+        !ward_lsh_approx_exception) {
+
+    method_name <- switch(as.character(method),
+      "0" = "Ward",
+      "5" = "Median",
+      "6" = "Centroid",
+      paste0("LinkageMethod index ", method)
+    )
+    stop(sprintf(
+      paste0("'%s' linkage requires Euclidean distances because its merge criterion\n",
+             "is defined in terms of Euclidean centroids (law of cosines).\n",
+             "Use LinkageMethod$Average, $Complete, $Single, or $WPGMA for non-Euclidean metrics.\n",
+             "Exception: Ward + DistanceMetric$Correlation_LSH_Approx is permitted\n",
+             "(Ward is performed in a 64-dimensional SimHash-projected Euclidean space)."),
+      method_name
+    ))
+  }
+
   # Delegate to Rcpp layer
   if (is_mmap) {
     result <- rcpp_agglomerative_cluster_mmap(data, method, metric)
