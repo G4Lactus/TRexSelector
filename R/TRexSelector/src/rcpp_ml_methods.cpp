@@ -3,21 +3,27 @@
 #include <ml_methods/standardization/lp_norm_scaler.hpp>
 #include <ml_methods/model_selection/ridge_cv.hpp>
 #include <ml_methods/model_selection/ridge_gcv.hpp>
+#include <ml_methods/svd/svd.hpp>
+#include <ml_methods/pca/pca.hpp>
+#include <ml_methods/ridge_regression/ridge.hpp>
 
 // [[Rcpp::plugins(cpp20)]]
 // [[Rcpp::depends(RcppEigen)]]
 
 using namespace trex::ml_methods::standardization;
 using namespace trex::ml_methods::model_selection;
+using namespace trex::ml_methods::svd;
+using namespace trex::ml_methods::pca;
+using namespace trex::ml_methods::ridge;
 using namespace Rcpp;
 
 // =================================================================================
 
 /*
  * Note on Roxygen Documentation:
- * All functions exported via Rcpp in this file are documented using standard Roxygen tags 
- * but strictly include the `@noRd` tag. These are internal C++ bindings that are wrapped 
- * by user-friendly R6 classes and R functions in the package namespace. Generating `.Rd` 
+ * All functions exported via Rcpp in this file are documented using standard Roxygen tags
+ * but strictly include the `@noRd` tag. These are internal C++ bindings that are wrapped
+ * by user-friendly R6 classes and R functions in the package namespace. Generating `.Rd`
  * manuals for these endpoints would clutter the public API.
  */
 
@@ -636,4 +642,161 @@ Eigen::VectorXd ridge_cv_get_cv_std(
     XPtr<ridge_cv> ptr // NOLINT(performance-unnecessary-value-param)
 ) {
     return ptr->cv_sem();
+}
+
+// =================================================================================
+// SVD Solver
+// =================================================================================
+
+//' @title Compute SVD
+//'
+//' @description Computes the top-M SVD of a matrix, dispatching between direct,
+//'   Gram, and randomized paths based on matrix shape.
+//'
+//' @param X Numeric matrix (n x p).
+//' @param M Integer, number of singular components to compute.
+//'
+//' @return Named list with elements \code{U} (n x M), \code{S} (M),
+//'   and \code{V} (p x M).
+//' @noRd
+// [[Rcpp::export]]
+Rcpp::List svd_compute(const Eigen::MatrixXd& X, int M) {
+    SVDResult res = SVDSolver{}.compute(X, static_cast<Eigen::Index>(M));
+    return Rcpp::List::create(
+        Rcpp::Named("U") = res.U,
+        Rcpp::Named("S") = res.S,
+        Rcpp::Named("V") = res.V
+    );
+}
+
+
+// =================================================================================
+// PCA
+// =================================================================================
+
+//' @title Create PCA object
+//'
+//' @param center Logical, whether to center X in-place during \code{fit()}.
+//'
+//' @return XPtr to a PCA instance.
+//' @noRd
+// [[Rcpp::export]]
+Rcpp::XPtr<PCA> pca_create(bool center = true) {
+    return Rcpp::XPtr<PCA>(new PCA(center));
+}
+
+//' @title Fit PCA
+//'
+//' @description Fits PCA to \code{X}, retaining \code{M} components. When
+//'   \code{center = TRUE}, \code{X} is modified in-place (column means subtracted);
+//'   the original values are restored when the PCA object is garbage-collected or
+//'   \code{pca_restore()} is called explicitly.
+//'
+//' @param ptr XPtr to PCA.
+//' @param X Numeric matrix (n x p). Modified in-place when center = TRUE.
+//' @param M Integer number of principal components.
+//'
+//' @return Named list with \code{Z} (n x M scores), \code{V} (p x M loadings),
+//'   and \code{explained_variance} (M-vector).
+//' @noRd
+// [[Rcpp::export]]
+Rcpp::List pca_fit(
+    Rcpp::XPtr<PCA> ptr, // NOLINT(performance-unnecessary-value-param)
+    Eigen::Map<Eigen::MatrixXd> X,
+    int M
+) {
+    PCAResult res = ptr->fit(X, static_cast<Eigen::Index>(M));
+    return Rcpp::List::create(
+        Rcpp::Named("Z")                  = res.Z,
+        Rcpp::Named("V")                  = res.V,
+        Rcpp::Named("explained_variance") = res.explained_variance
+    );
+}
+
+//' @title Restore X after PCA centering
+//'
+//' @param ptr XPtr to PCA.
+//' @noRd
+// [[Rcpp::export]]
+void pca_restore(
+    Rcpp::XPtr<PCA> ptr // NOLINT(performance-unnecessary-value-param)
+) {
+    ptr->restore();
+}
+
+//' @title Transform new data with fitted PCA
+//'
+//' @param ptr XPtr to PCA.
+//' @param X_new Numeric matrix (n_new x p).
+//'
+//' @return Score matrix (n_new x M).
+//' @noRd
+// [[Rcpp::export]]
+Eigen::MatrixXd pca_transform(
+    Rcpp::XPtr<PCA> ptr, // NOLINT(performance-unnecessary-value-param)
+    const Eigen::MatrixXd& X_new
+) {
+    return ptr->transform(X_new);
+}
+
+//' @title Get PCA column means
+//'
+//' @param ptr XPtr to PCA.
+//' @return Row vector of column means (zero-vector when center = FALSE).
+//' @noRd
+// [[Rcpp::export]]
+Eigen::VectorXd pca_get_mean(
+    Rcpp::XPtr<PCA> ptr // NOLINT(performance-unnecessary-value-param)
+) {
+    return ptr->getMean().transpose();
+}
+
+//' @title Get PCA loadings
+//'
+//' @param ptr XPtr to PCA.
+//' @return Loading matrix (p x M).
+//' @noRd
+// [[Rcpp::export]]
+Eigen::MatrixXd pca_get_loadings(
+    Rcpp::XPtr<PCA> ptr // NOLINT(performance-unnecessary-value-param)
+) {
+    return ptr->getLoadings();
+}
+
+//' @title Get PCA explained variance
+//'
+//' @param ptr XPtr to PCA.
+//' @return Numeric vector of explained variance per component.
+//' @noRd
+// [[Rcpp::export]]
+Eigen::VectorXd pca_get_explained_variance(
+    Rcpp::XPtr<PCA> ptr // NOLINT(performance-unnecessary-value-param)
+) {
+    return ptr->getExplainedVariance();
+}
+
+
+// =================================================================================
+// Ridge Regression (standalone solver)
+// =================================================================================
+
+//' @title Solve Ridge Regression
+//'
+//' @description Solves \eqn{\min \|y - X\beta\|^2 + \lambda\|\beta\|^2} for a
+//'   single regularization value, dispatching between primal (n >= p) and dual
+//'   (n < p) Cholesky solvers automatically.
+//'
+//' @param X Numeric matrix (n x p).
+//' @param y Numeric response vector (n).
+//' @param lambda Non-negative regularization parameter.
+//'
+//' @return Coefficient vector of length p.
+//' @noRd
+// [[Rcpp::export]]
+Eigen::VectorXd ridge_solve(
+    const Eigen::MatrixXd& X,
+    const Eigen::VectorXd& y,
+    double lambda
+) {
+    return RidgeSolver::solve(X, y, lambda);
 }

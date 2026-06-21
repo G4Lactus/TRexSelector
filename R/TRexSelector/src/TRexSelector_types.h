@@ -32,6 +32,9 @@ class RTRexBiobankScreeningSelector;
 #include <ml_methods/standardization/lp_norm_scaler.hpp>
 #include <ml_methods/model_selection/ridge_cv.hpp>
 #include <ml_methods/model_selection/ridge_gcv.hpp>
+#include <ml_methods/svd/svd.hpp>
+#include <ml_methods/pca/pca.hpp>
+#include <ml_methods/ridge_regression/ridge.hpp>
 #include <tsolvers/tsolver_base.hpp>
 #include <utils/memmap/memory_mapped_matrix.hpp>
 
@@ -64,6 +67,9 @@ struct TSolverRcpp {
 
 using namespace trex::ml_methods::standardization;
 using namespace trex::ml_methods::model_selection;
+using namespace trex::ml_methods::svd;
+using namespace trex::ml_methods::pca;
+using namespace trex::ml_methods::ridge;
 using namespace trex::tsolvers;
 using namespace trex::utils::memmap;
 

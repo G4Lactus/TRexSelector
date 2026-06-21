@@ -483,6 +483,111 @@ ridge_cv_get_cv_std <- function(ptr) {
     .Call(`_TRexSelector_ridge_cv_get_cv_std`, ptr)
 }
 
+#' @title Compute SVD
+#'
+#' @description Computes the top-M SVD of a matrix, dispatching between direct,
+#'   Gram, and randomized paths based on matrix shape.
+#'
+#' @param X Numeric matrix (n x p).
+#' @param M Integer, number of singular components to compute.
+#'
+#' @return Named list with elements \code{U} (n x M), \code{S} (M),
+#'   and \code{V} (p x M).
+#' @noRd
+svd_compute <- function(X, M) {
+    .Call(`_TRexSelector_svd_compute`, X, M)
+}
+
+#' @title Create PCA object
+#'
+#' @param center Logical, whether to center X in-place during \code{fit()}.
+#'
+#' @return XPtr to a PCA instance.
+#' @noRd
+pca_create <- function(center = TRUE) {
+    .Call(`_TRexSelector_pca_create`, center)
+}
+
+#' @title Fit PCA
+#'
+#' @description Fits PCA to \code{X}, retaining \code{M} components. When
+#'   \code{center = TRUE}, \code{X} is modified in-place (column means subtracted);
+#'   the original values are restored when the PCA object is garbage-collected or
+#'   \code{pca_restore()} is called explicitly.
+#'
+#' @param ptr XPtr to PCA.
+#' @param X Numeric matrix (n x p). Modified in-place when center = TRUE.
+#' @param M Integer number of principal components.
+#'
+#' @return Named list with \code{Z} (n x M scores), \code{V} (p x M loadings),
+#'   and \code{explained_variance} (M-vector).
+#' @noRd
+pca_fit <- function(ptr, X, M) {
+    .Call(`_TRexSelector_pca_fit`, ptr, X, M)
+}
+
+#' @title Restore X after PCA centering
+#'
+#' @param ptr XPtr to PCA.
+#' @noRd
+pca_restore <- function(ptr) {
+    invisible(.Call(`_TRexSelector_pca_restore`, ptr))
+}
+
+#' @title Transform new data with fitted PCA
+#'
+#' @param ptr XPtr to PCA.
+#' @param X_new Numeric matrix (n_new x p).
+#'
+#' @return Score matrix (n_new x M).
+#' @noRd
+pca_transform <- function(ptr, X_new) {
+    .Call(`_TRexSelector_pca_transform`, ptr, X_new)
+}
+
+#' @title Get PCA column means
+#'
+#' @param ptr XPtr to PCA.
+#' @return Row vector of column means (zero-vector when center = FALSE).
+#' @noRd
+pca_get_mean <- function(ptr) {
+    .Call(`_TRexSelector_pca_get_mean`, ptr)
+}
+
+#' @title Get PCA loadings
+#'
+#' @param ptr XPtr to PCA.
+#' @return Loading matrix (p x M).
+#' @noRd
+pca_get_loadings <- function(ptr) {
+    .Call(`_TRexSelector_pca_get_loadings`, ptr)
+}
+
+#' @title Get PCA explained variance
+#'
+#' @param ptr XPtr to PCA.
+#' @return Numeric vector of explained variance per component.
+#' @noRd
+pca_get_explained_variance <- function(ptr) {
+    .Call(`_TRexSelector_pca_get_explained_variance`, ptr)
+}
+
+#' @title Solve Ridge Regression
+#'
+#' @description Solves \eqn{\min \|y - X\beta\|^2 + \lambda\|\beta\|^2} for a
+#'   single regularization value, dispatching between primal (n >= p) and dual
+#'   (n < p) Cholesky solvers automatically.
+#'
+#' @param X Numeric matrix (n x p).
+#' @param y Numeric response vector (n).
+#' @param lambda Non-negative regularization parameter.
+#'
+#' @return Coefficient vector of length p.
+#' @noRd
+ridge_solve <- function(X, y, lambda) {
+    .Call(`_TRexSelector_ridge_solve`, X, y, lambda)
+}
+
 #' @title Create RTRexBiobankScreeningSelector 1D
 #' @noRd
 trex_biobank_screening_1d_create <- function(X, y, biobank_control_list, screen_control_list, trex_control_list, seed, verbose) {
@@ -830,6 +935,31 @@ trex_selector_get_x_l2_norms <- function(r_ptr) {
 #' @noRd
 trex_selector_get_y_mean <- function(r_ptr) {
     .Call(`_TRexSelector_trex_selector_get_y_mean`, r_ptr)
+}
+
+#' @title Run T-Rex Sparse PCA selection
+#'
+#' @description Orchestrates M rounds of ordinary PCA, T-Rex FDR-controlled
+#'   variable selection, and sparse loading assembly to produce sparse principal
+#'   components.
+#'
+#' @param X Design matrix (n x p). Column-centered internally; restored on return.
+#' @param M Integer, number of sparse PCs to extract.
+#' @param tFDR Numeric, target false discovery rate in (0, 1).
+#' @param spca_ctrl_list Named R list of control parameters (mode, lambda2, seed,
+#'   K, max_dummy_multiplier).
+#'
+#' @return Named list:
+#'   \itemize{
+#'     \item \code{Z} Score matrix (n x M).
+#'     \item \code{V} Loading matrix (p x M).
+#'     \item \code{active_sets} List of M integer vectors (1-based indices).
+#'     \item \code{adjusted_ev} Numeric vector of adjusted explained variance (M).
+#'     \item \code{cumulative_ev} Numeric vector of cumulative explained variance (M).
+#'   }
+#' @noRd
+trex_spca_select <- function(X, M, tFDR, spca_ctrl_list) {
+    .Call(`_TRexSelector_trex_spca_select`, X, M, tFDR, spca_ctrl_list)
 }
 
 #' @title Create LARS Solver

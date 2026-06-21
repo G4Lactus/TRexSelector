@@ -7,7 +7,9 @@
 /**
  * @file ridge_gcv.hpp
  *
- * @brief Ridge regression with Generalized Cross-Validation (GCV) for model selection.
+ * @brief Ridge regression with Generalized Cross-Validation (GCV) for model
+ *        selection. "SVD-based multi-λ solver. For single-λ use without amortization,
+ *        see ridge_regression/ridge.hpp."
  */
 // ===================================================================================
 

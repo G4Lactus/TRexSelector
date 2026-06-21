@@ -577,6 +577,110 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// svd_compute
+Rcpp::List svd_compute(const Eigen::MatrixXd& X, int M);
+RcppExport SEXP _TRexSelector_svd_compute(SEXP XSEXP, SEXP MSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< const Eigen::MatrixXd& >::type X(XSEXP);
+    Rcpp::traits::input_parameter< int >::type M(MSEXP);
+    rcpp_result_gen = Rcpp::wrap(svd_compute(X, M));
+    return rcpp_result_gen;
+END_RCPP
+}
+// pca_create
+Rcpp::XPtr<PCA> pca_create(bool center);
+RcppExport SEXP _TRexSelector_pca_create(SEXP centerSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< bool >::type center(centerSEXP);
+    rcpp_result_gen = Rcpp::wrap(pca_create(center));
+    return rcpp_result_gen;
+END_RCPP
+}
+// pca_fit
+Rcpp::List pca_fit(Rcpp::XPtr<PCA> ptr, Eigen::Map<Eigen::MatrixXd> X, int M);
+RcppExport SEXP _TRexSelector_pca_fit(SEXP ptrSEXP, SEXP XSEXP, SEXP MSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< Rcpp::XPtr<PCA> >::type ptr(ptrSEXP);
+    Rcpp::traits::input_parameter< Eigen::Map<Eigen::MatrixXd> >::type X(XSEXP);
+    Rcpp::traits::input_parameter< int >::type M(MSEXP);
+    rcpp_result_gen = Rcpp::wrap(pca_fit(ptr, X, M));
+    return rcpp_result_gen;
+END_RCPP
+}
+// pca_restore
+void pca_restore(Rcpp::XPtr<PCA> ptr);
+RcppExport SEXP _TRexSelector_pca_restore(SEXP ptrSEXP) {
+BEGIN_RCPP
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< Rcpp::XPtr<PCA> >::type ptr(ptrSEXP);
+    pca_restore(ptr);
+    return R_NilValue;
+END_RCPP
+}
+// pca_transform
+Eigen::MatrixXd pca_transform(Rcpp::XPtr<PCA> ptr, const Eigen::MatrixXd& X_new);
+RcppExport SEXP _TRexSelector_pca_transform(SEXP ptrSEXP, SEXP X_newSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< Rcpp::XPtr<PCA> >::type ptr(ptrSEXP);
+    Rcpp::traits::input_parameter< const Eigen::MatrixXd& >::type X_new(X_newSEXP);
+    rcpp_result_gen = Rcpp::wrap(pca_transform(ptr, X_new));
+    return rcpp_result_gen;
+END_RCPP
+}
+// pca_get_mean
+Eigen::VectorXd pca_get_mean(Rcpp::XPtr<PCA> ptr);
+RcppExport SEXP _TRexSelector_pca_get_mean(SEXP ptrSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< Rcpp::XPtr<PCA> >::type ptr(ptrSEXP);
+    rcpp_result_gen = Rcpp::wrap(pca_get_mean(ptr));
+    return rcpp_result_gen;
+END_RCPP
+}
+// pca_get_loadings
+Eigen::MatrixXd pca_get_loadings(Rcpp::XPtr<PCA> ptr);
+RcppExport SEXP _TRexSelector_pca_get_loadings(SEXP ptrSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< Rcpp::XPtr<PCA> >::type ptr(ptrSEXP);
+    rcpp_result_gen = Rcpp::wrap(pca_get_loadings(ptr));
+    return rcpp_result_gen;
+END_RCPP
+}
+// pca_get_explained_variance
+Eigen::VectorXd pca_get_explained_variance(Rcpp::XPtr<PCA> ptr);
+RcppExport SEXP _TRexSelector_pca_get_explained_variance(SEXP ptrSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< Rcpp::XPtr<PCA> >::type ptr(ptrSEXP);
+    rcpp_result_gen = Rcpp::wrap(pca_get_explained_variance(ptr));
+    return rcpp_result_gen;
+END_RCPP
+}
+// ridge_solve
+Eigen::VectorXd ridge_solve(const Eigen::MatrixXd& X, const Eigen::VectorXd& y, double lambda);
+RcppExport SEXP _TRexSelector_ridge_solve(SEXP XSEXP, SEXP ySEXP, SEXP lambdaSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< const Eigen::MatrixXd& >::type X(XSEXP);
+    Rcpp::traits::input_parameter< const Eigen::VectorXd& >::type y(ySEXP);
+    Rcpp::traits::input_parameter< double >::type lambda(lambdaSEXP);
+    rcpp_result_gen = Rcpp::wrap(ridge_solve(X, y, lambda));
+    return rcpp_result_gen;
+END_RCPP
+}
 // trex_biobank_screening_1d_create
 XPtr<RTRexBiobankScreeningSelector> trex_biobank_screening_1d_create(Eigen::Map<Eigen::MatrixXd> X, Eigen::Map<Eigen::VectorXd> y, Rcpp::List biobank_control_list, Rcpp::List screen_control_list, Rcpp::List trex_control_list, int seed, bool verbose);
 RcppExport SEXP _TRexSelector_trex_biobank_screening_1d_create(SEXP XSEXP, SEXP ySEXP, SEXP biobank_control_listSEXP, SEXP screen_control_listSEXP, SEXP trex_control_listSEXP, SEXP seedSEXP, SEXP verboseSEXP) {
@@ -1154,6 +1258,20 @@ BEGIN_RCPP
     Rcpp::RNGScope rcpp_rngScope_gen;
     Rcpp::traits::input_parameter< XPtr<RTRexSelector> >::type r_ptr(r_ptrSEXP);
     rcpp_result_gen = Rcpp::wrap(trex_selector_get_y_mean(r_ptr));
+    return rcpp_result_gen;
+END_RCPP
+}
+// trex_spca_select
+Rcpp::List trex_spca_select(Eigen::Map<Eigen::MatrixXd> X, int M, double tFDR, Rcpp::List spca_ctrl_list);
+RcppExport SEXP _TRexSelector_trex_spca_select(SEXP XSEXP, SEXP MSEXP, SEXP tFDRSEXP, SEXP spca_ctrl_listSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< Eigen::Map<Eigen::MatrixXd> >::type X(XSEXP);
+    Rcpp::traits::input_parameter< int >::type M(MSEXP);
+    Rcpp::traits::input_parameter< double >::type tFDR(tFDRSEXP);
+    Rcpp::traits::input_parameter< Rcpp::List >::type spca_ctrl_list(spca_ctrl_listSEXP);
+    rcpp_result_gen = Rcpp::wrap(trex_spca_select(X, M, tFDR, spca_ctrl_list));
     return rcpp_result_gen;
 END_RCPP
 }
@@ -1986,6 +2104,15 @@ static const R_CallMethodDef CallEntries[] = {
     {"_TRexSelector_ridge_cv_get_lambdas", (DL_FUNC) &_TRexSelector_ridge_cv_get_lambdas, 1},
     {"_TRexSelector_ridge_cv_get_cv_errors", (DL_FUNC) &_TRexSelector_ridge_cv_get_cv_errors, 1},
     {"_TRexSelector_ridge_cv_get_cv_std", (DL_FUNC) &_TRexSelector_ridge_cv_get_cv_std, 1},
+    {"_TRexSelector_svd_compute", (DL_FUNC) &_TRexSelector_svd_compute, 2},
+    {"_TRexSelector_pca_create", (DL_FUNC) &_TRexSelector_pca_create, 1},
+    {"_TRexSelector_pca_fit", (DL_FUNC) &_TRexSelector_pca_fit, 3},
+    {"_TRexSelector_pca_restore", (DL_FUNC) &_TRexSelector_pca_restore, 1},
+    {"_TRexSelector_pca_transform", (DL_FUNC) &_TRexSelector_pca_transform, 2},
+    {"_TRexSelector_pca_get_mean", (DL_FUNC) &_TRexSelector_pca_get_mean, 1},
+    {"_TRexSelector_pca_get_loadings", (DL_FUNC) &_TRexSelector_pca_get_loadings, 1},
+    {"_TRexSelector_pca_get_explained_variance", (DL_FUNC) &_TRexSelector_pca_get_explained_variance, 1},
+    {"_TRexSelector_ridge_solve", (DL_FUNC) &_TRexSelector_ridge_solve, 3},
     {"_TRexSelector_trex_biobank_screening_1d_create", (DL_FUNC) &_TRexSelector_trex_biobank_screening_1d_create, 7},
     {"_TRexSelector_trex_biobank_screening_2d_create", (DL_FUNC) &_TRexSelector_trex_biobank_screening_2d_create, 7},
     {"_TRexSelector_trex_biobank_screening_screen_phenotype", (DL_FUNC) &_TRexSelector_trex_biobank_screening_screen_phenotype, 1},
@@ -2034,6 +2161,7 @@ static const R_CallMethodDef CallEntries[] = {
     {"_TRexSelector_trex_selector_get_x_means", (DL_FUNC) &_TRexSelector_trex_selector_get_x_means, 1},
     {"_TRexSelector_trex_selector_get_x_l2_norms", (DL_FUNC) &_TRexSelector_trex_selector_get_x_l2_norms, 1},
     {"_TRexSelector_trex_selector_get_y_mean", (DL_FUNC) &_TRexSelector_trex_selector_get_y_mean, 1},
+    {"_TRexSelector_trex_spca_select", (DL_FUNC) &_TRexSelector_trex_spca_select, 4},
     {"_TRexSelector_tsolver_lars_create", (DL_FUNC) &_TRexSelector_tsolver_lars_create, 6},
     {"_TRexSelector_tsolver_omp_create", (DL_FUNC) &_TRexSelector_tsolver_omp_create, 6},
     {"_TRexSelector_tsolver_lars_mmap_create", (DL_FUNC) &_TRexSelector_tsolver_lars_mmap_create, 6},

@@ -514,3 +514,196 @@ RidgeCV <- R6::R6Class("RidgeCV",
     }
   )
 )
+
+
+# ==============================================================================
+# SVDSolver
+# ==============================================================================
+
+#' @title SVD Solver
+#'
+#' @description Computes the top-M truncated SVD of a matrix. Dispatches
+#'   internally between a direct (tall matrices), Gram (wide matrices), and
+#'   randomized path based on the shape of \code{X}.
+#'
+#' @details Wraps the C++ \code{SVDSolver::compute(X, M)} static method.
+#'
+#' @examples
+#' set.seed(42)
+#' X <- matrix(rnorm(50 * 10), 50, 10)
+#' solver <- SVDSolver$new()
+#' res <- solver$compute(X, M = 3)
+#' dim(res$U)  # 50 x 3
+#'
+#' @export
+SVDSolver <- R6::R6Class("SVDSolver",
+  public = list(
+
+    #' @description Compute top-M singular value decomposition of \code{X}.
+    #'
+    #' @param X A numeric matrix (n x p).
+    #' @param M Integer, number of singular components to retain.
+    #'
+    #' @return Named list with:
+    #'   \itemize{
+    #'     \item \code{U} Left singular vectors (n x M).
+    #'     \item \code{S} Singular values (M).
+    #'     \item \code{V} Right singular vectors (p x M).
+    #'   }
+    compute = function(X, M) {
+      if (!is.matrix(X)) X <- as.matrix(X)
+      stopifnot(is.numeric(X), is.numeric(M), M >= 1L, M <= min(nrow(X), ncol(X)))
+      svd_compute(X, as.integer(M))
+    }
+  )
+)
+
+
+# ==============================================================================
+# PCA
+# ==============================================================================
+
+#' @title Principal Component Analysis
+#'
+#' @description Fits PCA to a data matrix, retaining the top-M principal
+#'   components. Optionally centers \code{X} in-place during \code{fit()} and
+#'   restores it on \code{restore()} or when the object is garbage-collected.
+#'
+#' @details Wraps the C++ \code{PCA} class with RAII centering semantics.
+#'   The fit result is cached internally; use the \code{get_*()} accessors or
+#'   pass \code{X_new} to \code{transform()} for out-of-sample scoring.
+#'
+#' @examples
+#' set.seed(42)
+#' X <- matrix(rnorm(50 * 8), 50, 8)
+#' pca <- PCA$new(center = TRUE)
+#' pca$fit(X, M = 3)
+#' pca$get_explained_variance()
+#' X_new <- matrix(rnorm(10 * 8), 10, 8)
+#' pca$transform(X_new)
+#' pca$restore()
+#'
+#' @export
+PCA <- R6::R6Class("PCA",
+  private = list(
+    cpp_ptr = NULL,
+    result_  = NULL
+  ),
+  public = list(
+
+    #' @description Initialize PCA.
+    #'
+    #' @param center Logical, whether to center \code{X} in-place during
+    #'   \code{fit()} (default: \code{TRUE}).
+    initialize = function(center = TRUE) {
+      private$cpp_ptr <- pca_create(as.logical(center))
+    },
+
+    #' @description Fit PCA to \code{X}, retaining the top \code{M} components.
+    #'
+    #' @details When \code{center = TRUE}, \code{X} is modified in-place (column
+    #'   means subtracted). Call \code{restore()} to undo this.
+    #'
+    #' @param X A numeric matrix (n x p). Modified in-place when centering.
+    #' @param M Integer, number of principal components.
+    #'
+    #' @return Invisible \code{self} for method chaining.
+    fit = function(X, M) {
+      if (!is.matrix(X)) X <- as.matrix(X)
+      stopifnot(is.numeric(X), is.numeric(M), M >= 1L, M <= min(nrow(X), ncol(X)))
+      private$result_ <- pca_fit(private$cpp_ptr, X, as.integer(M))
+      invisible(self)
+    },
+
+    #' @description Project new data onto the fitted principal subspace.
+    #'
+    #' @param X_new A numeric matrix (n_new x p). Column means are subtracted
+    #'   using the stored training mean before projection.
+    #'
+    #' @return Score matrix (n_new x M).
+    transform = function(X_new) {
+      if (!is.matrix(X_new)) X_new <- as.matrix(X_new)
+      stopifnot(!is.null(private$result_), is.numeric(X_new))
+      pca_transform(private$cpp_ptr, X_new)
+    },
+
+    #' @description Restore \code{X} to its original values (un-center).
+    #'
+    #' @return Invisible \code{self}.
+    restore = function() {
+      pca_restore(private$cpp_ptr)
+      invisible(self)
+    },
+
+    #' @description Get the PC score matrix from the last \code{fit()} call.
+    #'
+    #' @return Score matrix (n x M), or \code{NULL} if \code{fit()} not yet called.
+    get_scores = function() {
+      private$result_$Z
+    },
+
+    #' @description Get loading matrix from the last \code{fit()} call.
+    #'
+    #' @return Loading matrix (p x M), or \code{NULL} if \code{fit()} not yet called.
+    get_loadings = function() {
+      private$result_$V
+    },
+
+    #' @description Get explained variance per component from the last \code{fit()} call.
+    #'
+    #' @return Numeric vector of length M, or \code{NULL} if \code{fit()} not yet called.
+    get_explained_variance = function() {
+      private$result_$explained_variance
+    },
+
+    #' @description Get the column means used for centering.
+    #'
+    #' @return Numeric vector of length p. Zero-vector when \code{center = FALSE}.
+    get_mean = function() {
+      pca_get_mean(private$cpp_ptr)
+    }
+  )
+)
+
+
+# ==============================================================================
+# RidgeSolver
+# ==============================================================================
+
+#' @title Ridge Regression Solver
+#'
+#' @description Solves the ridge regression problem
+#'   \eqn{\min_\beta \|y - X\beta\|^2 + \lambda \|\beta\|^2}
+#'   for a single regularization value. Dispatches internally between primal
+#'   (\eqn{n \ge p}) and dual (\eqn{n < p}) Cholesky paths.
+#'
+#' @details Wraps the C++ \code{RidgeSolver::solve(X, y, lambda)} static method.
+#'
+#' @examples
+#' set.seed(42)
+#' n <- 40; p <- 5
+#' X <- matrix(rnorm(n * p), n, p)
+#' beta_true <- c(1, -2, 0, 0.5, 0)
+#' y <- X %*% beta_true + rnorm(n, sd = 0.1)
+#' solver <- RidgeSolver$new()
+#' beta_hat <- solver$solve(X, y, lambda = 0.01)
+#'
+#' @export
+RidgeSolver <- R6::R6Class("RidgeSolver",
+  public = list(
+
+    #' @description Solve ridge regression for a single \code{lambda}.
+    #'
+    #' @param X A numeric matrix (n x p).
+    #' @param y Numeric response vector of length n.
+    #' @param lambda Non-negative regularization parameter.
+    #'
+    #' @return Coefficient vector of length p.
+    solve = function(X, y, lambda) {
+      if (!is.matrix(X)) X <- as.matrix(X)
+      stopifnot(is.numeric(X), is.numeric(y), nrow(X) == length(y),
+                is.numeric(lambda), lambda >= 0)
+      ridge_solve(X, as.numeric(y), as.numeric(lambda))
+    }
+  )
+)

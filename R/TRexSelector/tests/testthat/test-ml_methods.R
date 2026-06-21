@@ -492,3 +492,240 @@ test_that("RidgeCV rejects num_folds > n", {
   m <- RidgeCV$new()
   expect_error(m$fit(X, y, num_folds = 25L))
 })
+
+
+# =============================================================================
+# Group 15: SVDSolver — compute top-M SVD
+# =============================================================================
+
+test_that("SVDSolver compute returns correct dimensions (tall matrix)", {
+  set.seed(42)
+  X <- matrix(rnorm(40 * 8), 40, 8)
+  M <- 3L
+  res <- SVDSolver$new()$compute(X, M)
+
+  expect_named(res, c("U", "S", "V"))
+  expect_equal(dim(res$U), c(40L, M))
+  expect_equal(length(res$S), M)
+  expect_equal(dim(res$V), c(8L, M))
+})
+
+test_that("SVDSolver compute returns correct dimensions (wide matrix)", {
+  set.seed(42)
+  X <- matrix(rnorm(10 * 30), 10, 30)
+  M <- 4L
+  res <- SVDSolver$new()$compute(X, M)
+
+  expect_equal(dim(res$U), c(10L, M))
+  expect_equal(length(res$S), M)
+  expect_equal(dim(res$V), c(30L, M))
+})
+
+test_that("SVDSolver singular values are non-negative and non-increasing", {
+  set.seed(7)
+  X <- matrix(rnorm(30 * 10), 30, 10)
+  res <- SVDSolver$new()$compute(X, M = 5L)
+
+  expect_true(all(res$S >= 0))
+  expect_true(all(diff(res$S) <= 0))
+})
+
+test_that("SVDSolver U columns are orthonormal", {
+  set.seed(3)
+  X  <- matrix(rnorm(40 * 8), 40, 8)
+  U  <- SVDSolver$new()$compute(X, M = 4L)$U
+  UtU <- t(U) %*% U
+  expect_equal(UtU, diag(4L), tolerance = 1e-10)
+})
+
+test_that("SVDSolver V columns are orthonormal", {
+  set.seed(5)
+  X  <- matrix(rnorm(40 * 8), 40, 8)
+  V  <- SVDSolver$new()$compute(X, M = 4L)$V
+  VtV <- t(V) %*% V
+  expect_equal(VtV, diag(4L), tolerance = 1e-10)
+})
+
+test_that("SVDSolver low-rank reconstruction is accurate (full rank)", {
+  # For full-rank M, X = U diag(S) t(V) should be exact.
+  set.seed(9)
+  n <- 8; p <- 6; M <- 6L
+  X   <- matrix(rnorm(n * p), n, p)
+  res <- SVDSolver$new()$compute(X, M)
+  X_rec <- res$U %*% diag(res$S) %*% t(res$V)
+  expect_equal(X_rec, X, tolerance = 1e-8)
+})
+
+test_that("SVDSolver rejects M = 0", {
+  expect_error(SVDSolver$new()$compute(matrix(rnorm(20), 5, 4), M = 0L))
+})
+
+test_that("SVDSolver rejects M > min(n, p)", {
+  expect_error(SVDSolver$new()$compute(matrix(rnorm(20), 5, 4), M = 5L))
+})
+
+
+# =============================================================================
+# Group 16: PCA — fit, transform, getters, RAII restore
+# =============================================================================
+
+test_that("PCA fit returns correct score and loading dimensions", {
+  set.seed(42)
+  X <- matrix(rnorm(30 * 8), 30, 8)
+  M <- 3L
+  pca <- PCA$new(center = TRUE)
+  pca$fit(X, M)
+
+  expect_equal(dim(pca$get_scores()),   c(30L, M))
+  expect_equal(dim(pca$get_loadings()), c(8L, M))
+  expect_equal(length(pca$get_explained_variance()), M)
+})
+
+test_that("PCA loadings are orthonormal", {
+  set.seed(1)
+  X <- matrix(rnorm(40 * 6), 40, 6)
+  pca <- PCA$new()
+  pca$fit(X, M = 4L)
+  V   <- pca$get_loadings()
+  VtV <- t(V) %*% V
+  expect_equal(VtV, diag(4L), tolerance = 1e-10)
+})
+
+test_that("PCA explained variance is non-negative and non-increasing", {
+  set.seed(2)
+  X <- matrix(rnorm(50 * 10), 50, 10)
+  pca <- PCA$new()
+  pca$fit(X, M = 6L)
+  ev <- pca$get_explained_variance()
+
+  expect_true(all(ev >= 0))
+  expect_true(all(diff(ev) <= 1e-10))
+})
+
+test_that("PCA get_mean stores column means when center = TRUE", {
+  set.seed(3)
+  X <- matrix(rnorm(20 * 4), 20, 4)
+  # Capture column means before fit() centers X in-place.
+  col_means <- colMeans(X)
+  pca <- PCA$new(center = TRUE)
+  pca$fit(X, M = 2L)
+  expect_equal(pca$get_mean(), col_means, tolerance = 1e-12)
+})
+
+test_that("PCA get_mean is zero when center = FALSE", {
+  set.seed(4)
+  X <- matrix(rnorm(20 * 4), 20, 4)
+  pca <- PCA$new(center = FALSE)
+  pca$fit(X, M = 2L)
+  expect_equal(pca$get_mean(), rep(0.0, 4L), tolerance = 1e-12)
+})
+
+test_that("PCA transform scores match fit scores for training data", {
+  set.seed(5)
+  n <- 30; p <- 6; M <- 3L
+  X <- matrix(rnorm(n * p), n, p)
+  pca <- PCA$new(center = TRUE)
+  pca$fit(X, M)
+  # X is now centered in-place; restore brings it back to the original values.
+  # transform() on the restored original X must reproduce the fit scores.
+  pca$restore()
+  Z_transform <- pca$transform(X)
+  expect_equal(Z_transform, pca$get_scores(), tolerance = 1e-10)
+})
+
+test_that("PCA transform held-out data has correct shape", {
+  set.seed(6)
+  X     <- matrix(rnorm(30 * 6), 30, 6)
+  X_new <- matrix(rnorm(10 * 6), 10, 6)
+  pca <- PCA$new()
+  pca$fit(X, M = 3L)
+  Z_new <- pca$transform(X_new)
+  expect_equal(dim(Z_new), c(10L, 3L))
+})
+
+test_that("PCA restore un-centers X", {
+  set.seed(7)
+  X <- matrix(rnorm(20 * 4), 20, 4)
+  # `X * 1.0` forces a deep copy; R's COW does not protect against direct
+  # Rcpp/Eigen writes to the underlying SEXP memory.
+  X_orig <- X * 1.0
+  pca <- PCA$new(center = TRUE)
+  pca$fit(X, M = 2L)
+  # X is now centered in-place; restore should undo that
+  pca$restore()
+  expect_equal(X, X_orig, tolerance = 1e-12)
+})
+
+test_that("PCA rejects M > min(n, p)", {
+  pca <- PCA$new()
+  expect_error(pca$fit(matrix(rnorm(20), 5, 4), M = 5L))
+})
+
+
+# =============================================================================
+# Group 17: RidgeSolver — primal/dual dispatch and coefficient recovery
+# =============================================================================
+
+test_that("RidgeSolver solve returns correct length (tall: n > p)", {
+  set.seed(10)
+  X <- matrix(rnorm(40 * 5), 40, 5)
+  y <- rnorm(40)
+  beta <- RidgeSolver$new()$solve(X, y, lambda = 0.1)
+  expect_equal(length(beta), 5L)
+})
+
+test_that("RidgeSolver solve returns correct length (wide: n < p)", {
+  set.seed(11)
+  X <- matrix(rnorm(10 * 20), 10, 20)
+  y <- rnorm(10)
+  beta <- RidgeSolver$new()$solve(X, y, lambda = 1.0)
+  expect_equal(length(beta), 20L)
+})
+
+test_that("RidgeSolver satisfies KKT condition (normal equations)", {
+  # KKT: (X'X + lambda I) beta == X' y
+  set.seed(12)
+  n <- 20; p <- 5
+  X <- matrix(sin(outer(seq_len(n), seq_len(p))), n, p)
+  y <- X %*% c(1, -2, 0, 0.5, -1) + rnorm(n, sd = 0.01)
+  lam <- 0.5
+  beta <- RidgeSolver$new()$solve(X, y, lambda = lam)
+  lhs <- t(X) %*% X %*% beta + lam * beta
+  rhs <- t(X) %*% y
+  expect_equal(as.numeric(lhs), as.numeric(rhs), tolerance = 1e-8)
+})
+
+test_that("RidgeSolver dual path satisfies KKT (n < p)", {
+  set.seed(13)
+  n <- 8; p <- 15
+  X   <- matrix(cos(outer(seq_len(n), seq_len(p))), n, p)
+  y   <- rnorm(n)
+  lam <- 1.0
+  beta <- RidgeSolver$new()$solve(X, y, lambda = lam)
+  lhs  <- t(X) %*% X %*% beta + lam * beta
+  rhs  <- t(X) %*% y
+  expect_equal(as.numeric(lhs), as.numeric(rhs), tolerance = 1e-8)
+})
+
+test_that("RidgeSolver shrinks coefficients toward zero as lambda increases", {
+  set.seed(14)
+  X <- matrix(rnorm(30 * 5), 30, 5)
+  y <- X %*% rep(1, 5) + rnorm(30, sd = 0.1)
+  beta_small <- RidgeSolver$new()$solve(X, y, lambda = 1e-4)
+  beta_large <- RidgeSolver$new()$solve(X, y, lambda = 1e4)
+  expect_gt(sqrt(sum(beta_small^2)), sqrt(sum(beta_large^2)))
+})
+
+test_that("RidgeSolver is deterministic", {
+  set.seed(99)
+  X <- matrix(rnorm(20 * 4), 20, 4)
+  y <- rnorm(20)
+  b1 <- RidgeSolver$new()$solve(X, y, lambda = 0.1)
+  b2 <- RidgeSolver$new()$solve(X, y, lambda = 0.1)
+  expect_equal(b1, b2)
+})
+
+test_that("RidgeSolver rejects negative lambda", {
+  expect_error(RidgeSolver$new()$solve(matrix(rnorm(20), 5, 4), rnorm(5),
+                                        lambda = -1))
+})
