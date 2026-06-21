@@ -94,6 +94,9 @@ target_sources(trex_ml_methods PUBLIC
         ${CMAKE_CURRENT_SOURCE_DIR}/clustering/hierarchical/agglomerative/slink_core.hpp
         ${CMAKE_CURRENT_SOURCE_DIR}/model_selection/ridge_cv.hpp
         ${CMAKE_CURRENT_SOURCE_DIR}/model_selection/ridge_gcv.hpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/pca/pca.hpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/ridge_regression/ridge.hpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/svd/svd.hpp
         ${CMAKE_CURRENT_SOURCE_DIR}/standardization/data_transformer.hpp
         ${CMAKE_CURRENT_SOURCE_DIR}/standardization/lp_norm_scaler.hpp
         ${CMAKE_CURRENT_SOURCE_DIR}/standardization/z_score_scaler.hpp
@@ -108,6 +111,9 @@ target_sources(trex_ml_methods PUBLIC
 add_subdirectory(standardization)
 add_subdirectory(clustering)
 add_subdirectory(model_selection)
+add_subdirectory(pca)
+add_subdirectory(svd)
+add_subdirectory(ridge_regression)
 # ==================================================================================
 
 
