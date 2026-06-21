@@ -8,11 +8,12 @@
  * @file ridge.hpp
  *
  * @brief Standalone Ridge Regression solver optimized for single-lambda solves.
+ *        Single-λ Cholesky solver. For multi-λ or GCV model selection, see
+ *        model_selection/ridge_gcv.hpp."
  */
 // ===================================================================================
 
 // std includes
-#include <algorithm>
 #include <stdexcept>
 
 // Eigen includes
@@ -47,8 +48,9 @@ public:
      * @return The coefficient vector (n_features).
      */
     static Eigen::VectorXd solve(const Eigen::Ref<const Eigen::MatrixXd>& X,
-                          const Eigen::Ref<const Eigen::VectorXd>& y,
-                          double lambda) {
+                                 const Eigen::Ref<const Eigen::VectorXd>& y,
+                                 double lambda) {
+
         Eigen::Index n = X.rows();
         Eigen::Index p = X.cols();
 
