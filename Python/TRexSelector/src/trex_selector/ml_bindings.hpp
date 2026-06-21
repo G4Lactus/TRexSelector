@@ -7,13 +7,18 @@
 /**
  * @file ml_bindings.hpp
  *
- * @brief Pybind11 bindings for machine learning utilities used in the T-Rex Selector package.
+ * @brief Pybind11 bindings for machine learning utilities used in the T-Rex Selector
+ *        package.
  *
- * @details This file defines pybind11 bindings for various machine learning utilities that are
- *          used across different components of the T-Rex Selector, such as data standardization
- *          and ridge regression model selection. The bindings are organized into a function
- *          `bind_ml_methods` that can be called from the main binding module to expose these
- *          utilities to Python.
+ * @details This file defines pybind11 bindings for various machine learning utilities
+ *          that are used across different components of the T-Rex Selector, such as:
+ *          - Data standardization
+ *          - Ridge regression model selection
+ *          - Singular value decomposition (SVD)
+ *          - Principal component analysis (PCA)
+ *          - Ridge regression
+ *          The bindings are organized into a function `bind_ml_methods` that can be
+ *          called from the main binding module to expose these utilities to Python.
  */
 // =====================================================================================
 
@@ -49,13 +54,13 @@ inline void bind_ml_methods(py::module& m) {
     // =================================================================================
     using namespace trex::ml_methods::standardization;
 
-    // We can't bind abstract DataTransformer easily without trampoline class,
-    // so we bind the concrete classes directly.
+    // Abstract DataTransformer can't bind easily without trampoline class.
 
     /**
      * @brief Standardizes features by removing the mean and scaling to unit variance.
      *
-     * @details This scaler provides similar functionality to `sklearn.preprocessing.StandardScaler`.
+     * @details This scaler provides similar functionality to
+     *          `sklearn.preprocessing.StandardScaler`.
      *          It computes the mean and standard deviation on a training set so they can be
      *          later applied to a validation or test set via `transform_inplace`.
      */
@@ -89,6 +94,7 @@ inline void bind_ml_methods(py::module& m) {
         .def("save", &ZScoreScaler::save, py::arg("filename"))
         .def("load", &ZScoreScaler::load, py::arg("filename"));
 
+
     /**
      * @brief Defines the type of mathematical norm used for Lp-normalization.
      *
@@ -99,6 +105,7 @@ inline void bind_ml_methods(py::module& m) {
         .value("L2", LpNormScaler::NormType::L2)
         .export_values();
 
+
     /**
      * @brief Scales input features to unit norm based on the chosen L1 or L2 formulation.
      *
@@ -108,18 +115,22 @@ inline void bind_ml_methods(py::module& m) {
      */
     py::class_<LpNormScaler>(m, "LpNormScaler")
         .def(py::init<LpNormScaler::NormType, bool>(),
-             py::arg("norm_type") = LpNormScaler::NormType::L2, py::arg("with_mean") = true)
-        .def("fit", [](LpNormScaler& self, Eigen::MatrixXd& X, double threshold) {
-            Eigen::Map<Eigen::MatrixXd> X_map(X.data(), X.rows(), X.cols());
-            self.fit(X_map, threshold);
-            return &self;
+             py::arg("norm_type") = LpNormScaler::NormType::L2,
+             py::arg("with_mean") = true)
+        .def("fit", [](LpNormScaler& self,
+            Eigen::MatrixXd& X, double threshold) {
+                Eigen::Map<Eigen::MatrixXd> X_map(X.data(), X.rows(), X.cols());
+                self.fit(X_map, threshold);
+                return &self;
         }, py::arg("X"), py::arg("threshold") = 1e-12)
-        .def("transform_inplace", [](LpNormScaler& self, Eigen::MatrixXd& X) {
+        .def("transform_inplace",
+             [](LpNormScaler& self, Eigen::MatrixXd& X) {
             Eigen::Map<Eigen::MatrixXd> X_map(X.data(), X.rows(), X.cols());
             self.transform_inplace(X_map);
             return X; // Return modified matrix for convenience
         }, py::arg("X"))
-        .def("inverse_transform_inplace", [](const LpNormScaler& self, Eigen::MatrixXd& X) {
+        .def("inverse_transform_inplace",
+             [](const LpNormScaler& self, Eigen::MatrixXd& X) {
             Eigen::Map<Eigen::MatrixXd> X_map(X.data(), X.rows(), X.cols());
             self.inverse_transform_inplace(X_map);
             return X; // Return modified matrix for convenience
@@ -159,7 +170,8 @@ inline void bind_ml_methods(py::module& m) {
         .def_readwrite("best_index", &ridge_path::best_index);
 
     /**
-     * @brief Efficiently solves Ridge Regression while computing Generalized Cross-Validation (GCV).
+     * @brief Efficiently solves Ridge Regression while computing Generalized Cross-Validation (
+     *        GCV).
      *
      * @details Utilizing an SVD-based backend, this class provides a highly optimized mechanism
      *          to perform ridge regression across a multitude of lambda penalty values. Instead
@@ -196,6 +208,7 @@ inline void bind_ml_methods(py::module& m) {
         .def("n_samples", &ridge_gcv::n_samples)
         .def("n_features", &ridge_gcv::n_features)
         .def("rank", &ridge_gcv::rank);
+
 
     /**
      * @brief Performs explicit K-Fold cross-validation for Ridge Regression model selection.
@@ -256,7 +269,7 @@ inline void bind_ml_methods(py::module& m) {
         .def(py::init<>())
         .def("compute",
             [](SVDSolver& self,
-               Eigen::Ref<const Eigen::MatrixXd> X,
+               Eigen::Ref<const Eigen::MatrixXd> X, // NOLINT(performance-unnecessary-value-param)
                Eigen::Index M) {
                 return self.compute(X, M);
             },
@@ -295,7 +308,8 @@ inline void bind_ml_methods(py::module& m) {
             py::arg("X"), py::arg("M"))
         .def("transform",
             [](PCA& self,
-               Eigen::Ref<const Eigen::MatrixXd> X_new) {
+               Eigen::Ref<const Eigen::MatrixXd> X_new // NOLINT(performance-unnecessary-value-param)
+            ) {
                 return self.transform(X_new);
             },
             py::arg("X_new"))
@@ -318,8 +332,8 @@ inline void bind_ml_methods(py::module& m) {
     py::class_<RidgeSolver>(m, "RidgeSolver")
         .def(py::init<>())
         .def_static("solve",
-            [](Eigen::Ref<const Eigen::MatrixXd> X,
-               Eigen::Ref<const Eigen::VectorXd> y,
+            [](Eigen::Ref<const Eigen::MatrixXd> X, // NOLINT(performance-unnecessary-value-param)
+               Eigen::Ref<const Eigen::VectorXd> y, // NOLINT(performance-unnecessary-value-param)
                double lambda) {
                 return RidgeSolver::solve(X, y, lambda);
             },
@@ -328,5 +342,6 @@ inline void bind_ml_methods(py::module& m) {
 
 // =====================================================================================
 }
+
 // =====================================================================================
 #endif /* End of TREX_PYTHON_ML_BINDINGS_HPP */
