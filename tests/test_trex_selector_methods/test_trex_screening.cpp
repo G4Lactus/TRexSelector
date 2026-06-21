@@ -19,6 +19,9 @@
 
 // ========================================================================================
 
+// Embed into test namespace
+namespace trex::test::trex_selector_methods::trex_screening {
+
 // Namespace aliases for convenience
 using namespace trex::trex_selector_methods::trex_screening;
 using namespace trex::trex_selector_methods::trex_core;
@@ -109,3 +112,6 @@ TEST_F(TRexScreeningTest, Execution_BootstrapScreenTRexDoesNotThrow) {
         selector.select();
     });
 }
+
+/// ========================================================================================
+} /* End of namespace trex::test::trex_selector_methods::trex_screening */

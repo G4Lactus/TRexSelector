@@ -42,6 +42,9 @@ add_trex_test(test_ml_methods_standardization test_ml_methods/test_ml_methods_st
 add_trex_test(test_ml_methods_model_selection test_ml_methods/test_ml_methods_model_selection.cpp)
 add_trex_test(test_ml_methods_agglomerative_cores test_ml_methods/test_ml_methods_agglomerative_cores.cpp)
 add_trex_test(test_ml_methods_agglomerative_dispatcher test_ml_methods/test_ml_methods_agglomerative_dispatcher.cpp)
+add_trex_test(test_ml_methods_svd test_ml_methods/test_ml_methods_svd.cpp)
+add_trex_test(test_ml_methods_pca test_ml_methods/test_ml_methods_pca.cpp)
+add_trex_test(test_ml_methods_ridge test_ml_methods/test_ml_methods_ridge.cpp)
 
 # 4. Add tests for TSolvers
 add_trex_test(test_tsolvers_initialization test_tsolvers/test_tsolvers_initialization.cpp)
@@ -57,3 +60,4 @@ add_trex_test(test_trex_da test_trex_selector_methods/test_trex_da.cpp)
 add_trex_test(test_trex_gvs test_trex_selector_methods/test_trex_gvs.cpp)
 add_trex_test(test_trex_screening test_trex_selector_methods/test_trex_screening.cpp)
 add_trex_test(test_trex_biobank_screening test_trex_selector_methods/test_trex_biobank_screening.cpp)
+add_trex_test(test_trex_spca test_trex_selector_methods/test_trex_spca.cpp)

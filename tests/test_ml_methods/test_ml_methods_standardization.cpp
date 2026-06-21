@@ -14,6 +14,11 @@
 #include <ml_methods/standardization/z_score_scaler.hpp>
 #include <ml_methods/standardization/lp_norm_scaler.hpp>
 
+// ========================================================================================
+
+// Embed into test namespace
+namespace trex::test::ml_methods::standardization {
+
 using namespace trex::ml_methods::standardization;
 
 // ========================================================================================
@@ -275,3 +280,6 @@ TEST(StandardizationTest, LpNormScalerSerialization) {
     EXPECT_EQ(original_scaler.get_scales(), restored_scaler.get_scales());
     EXPECT_EQ(original_scaler.get_dropped_indices(), restored_scaler.get_dropped_indices());
 }
+
+// ========================================================================================
+} /* End of namespace trex::test::ml_methods::standardization */

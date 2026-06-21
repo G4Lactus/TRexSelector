@@ -18,6 +18,9 @@
 
 // ===================================================================================
 
+// Embed into test namespace
+namespace trex::test::trex_selector_methods::trex_biobank_screening {
+
 // Namespace aliases for convenience
 using namespace trex::trex_selector_methods::trex_core;
 using namespace trex::trex_selector_methods::trex_screening;
@@ -95,3 +98,6 @@ TEST_F(TRexBiobankScreeningTest, Execution_FallbackLogicActivation) {
     EXPECT_EQ(result.method_used, "T-Rex (fallback)");
     EXPECT_TRUE(result.used_fallback_trex);
 }
+
+// ===================================================================================
+} /* End of namespace trex::test::trex_selector_methods::trex_biobank_screening */

@@ -41,6 +41,9 @@
 
 // ========================================================================================
 
+// Embed into test namespace
+namespace trex::test::tsolvers::linear_model {
+
 // namespaces
 using namespace trex::tsolvers::linear_model::lars_based;
 using namespace trex::tsolvers::linear_model::omp_based;
@@ -94,8 +97,12 @@ protected:
     std::unique_ptr<SyntheticData> data;
 };
 
+
+/** @brief Test suite for all solvers. */
 TYPED_TEST_SUITE(TSolverPolymorphicTest, AllSolvers);
 
+
+/** @brief Test to verify that the solver executes `executeStep` without errors. */
 TYPED_TEST(TSolverPolymorphicTest, ExecutionSmokeTest) {
     auto X = this->data->getX();
     auto D = this->data->getD();
@@ -117,6 +124,10 @@ TYPED_TEST(TSolverPolymorphicTest, ExecutionSmokeTest) {
     }
 }
 
+
+/** @brief Test to verify that serialization and deserialization of the solver
+           maintains equivalence.
+*/
 TYPED_TEST(TSolverPolymorphicTest, SerializationEquivalence) {
     auto X = this->data->getX();
     auto D = this->data->getD();
@@ -159,3 +170,6 @@ TYPED_TEST(TSolverPolymorphicTest, SerializationEquivalence) {
     // Cleanup
     fs::remove(checkpoint);
 }
+
+// ========================================================================================
+} /* End of namespace trex::test::tsolvers::linear_model */

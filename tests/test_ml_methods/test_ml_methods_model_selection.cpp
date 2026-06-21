@@ -21,11 +21,13 @@
 
 // ==================================================================================
 
-// anonymous namespace to avoid symbol clashes in tests
-namespace {
+// Embed into test namespace
+namespace trex::test::ml_methods::model_selection {
 
 // Namespace includes for convenience
 using namespace trex::ml_methods::model_selection;
+
+// ========================================================================================
 
 // Helper to create synthetic data for regression
 auto create_synthetic_data(
@@ -184,6 +186,6 @@ TEST(RidgeCVTest, EdgeCases) {
     EXPECT_THROW(model.fit(X, y, 25), std::invalid_argument); // > n
 }
 
-// -----------------------------------------------------------------------------------
-} /* End of anonymous namespace */
-// -----------------------------------------------------------------------------------
+// ==================================================================================
+} /* End of namespace trex::test::ml_methods::model_selection */
+// ==================================================================================

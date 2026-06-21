@@ -19,6 +19,11 @@
 
 // ========================================================================================
 
+// Embed into test namespace
+namespace trex::test::utils::memmap {
+
+// =========================================================================================
+
 /** @brief Test for writing and reading a memory-mapped matrix */
 TEST(MemMapTest, WriteAndRead) {
     std::string temp_file = "test_memory_mapped_matrix.bin";
@@ -147,3 +152,6 @@ TEST(MemMapTest, SafeDeletion) {
     EXPECT_TRUE(removed) << "File was not correctly removed, it may still be locked.";
     EXPECT_FALSE(std::filesystem::exists(temp_file));
 }
+
+// =========================================================================================
+} /* End of namespace trex::test::utils::memmap */

@@ -14,7 +14,6 @@
 // std includes
 #include <filesystem>
 
-namespace fs = std::filesystem;
 
 // Eigen includes
 #include <Eigen/Dense>
@@ -27,12 +26,16 @@ namespace fs = std::filesystem;
 
 // ========================================================================================
 
+// Embed into test namespace
+namespace trex::test::tsolvers::linear_model {
+namespace fs = std::filesystem;
+
 using namespace trex::tsolvers::linear_model::lars_based;
 using namespace trex::utils::datageneration::datagen;
 
 // ========================================================================================
 
-/** @brief Verify that memory-mapped data is correctly mutated by the solver */
+/** @brief Test to verify that memory-mapped data is correctly mutated by the solver */
 TEST(TSolverMmapTest, ValidateMapMutation) {
     SyntheticData data(
         100, 20, 20,
@@ -69,7 +72,7 @@ TEST(TSolverMmapTest, ValidateMapMutation) {
 // ========================================================================================
 
 
-/** @brief Verify that execution over disk-mapped data succeeds correctly */
+/** @brief Test to verify that execution over disk-mapped data succeeds correctly */
 TEST(TSolverMmapTest, ValidateDiskMappedDataExecution) {
     const std::string X_file = "test_tsolvers_mmap_X.bin";
     const std::string D_file = "test_tsolvers_mmap_D.bin";
@@ -112,3 +115,6 @@ TEST(TSolverMmapTest, ValidateDiskMappedDataExecution) {
     EXPECT_TRUE(fs::remove(D_file));
     EXPECT_TRUE(fs::remove(y_file));
 }
+
+// ========================================================================================
+} /* End of namespace trex::test::tsolvers::linear_model */

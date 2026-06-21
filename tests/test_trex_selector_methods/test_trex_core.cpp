@@ -20,6 +20,9 @@
 
 // ========================================================================================
 
+// Embed into test namespace
+namespace trex::test::trex_selector_methods::trex_core {
+
 // Namespace aliases for convenience
 using namespace trex::trex_selector_methods::trex_core;
 using namespace trex::utils::datageneration::datagen;
@@ -173,3 +176,6 @@ TEST(TRexCoreTest, Exceptions_InvalidParameters) {
     EXPECT_THROW(TRexSelector(X_map, y_map, 0.1, trex_ctrl),
                  std::invalid_argument);
 }
+
+// ========================================================================================
+} /* End of namespace trex::test::trex_selector_methods::trex_core */

@@ -17,6 +17,9 @@
 
 // ========================================================================================
 
+// Embed into test namespace
+namespace trex::test::utils::datageneration {
+
 // Namespace alias for convenience
 using namespace trex::utils::datageneration::noisegen;
 
@@ -93,3 +96,6 @@ TEST(NoiseGenTest, AddNoiseThrowsOnNegativeStd) {
     EXPECT_THROW(add_noise(y, 5, 0.0, noise_policy::Normal(), 123),
                  std::invalid_argument);
 }
+
+// ========================================================================================
+} /* End of namespace trex::test::utils::datageneration */

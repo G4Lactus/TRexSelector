@@ -14,6 +14,9 @@
 
 // ========================================================================================
 
+// Embed into test namespace
+namespace trex::test::utils::openmp {
+
 /**
  * @brief Test that the wrapper functions complete successfully without crashing, both in
  *        OpenMP-enabled and disabled environments.
@@ -55,3 +58,6 @@ TEST(OpenMPTest, UtilsNamespace) {
     // Should not crash
     trex::utils::openmp::print_info();
 }
+
+// ========================================================================================
+} /* End ofnamespace trex::test::utils::openmp */

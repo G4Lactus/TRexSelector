@@ -9,18 +9,29 @@
  */
 // ========================================================================================
 
+// google test includes
 #include <gtest/gtest.h>
+
+// Eigen includes
 #include <Eigen/Dense>
 
+// tsolvers includes
 #include <tsolvers/linear_model/lars_based/tlars_solver.hpp>
+
+// utils includes
 #include <utils/datageneration/utils_datagen.hpp>
+
+// ========================================================================================
+
+// Embed into test namespace
+namespace trex::test::tsolvers::linear_model {
 
 using namespace trex::tsolvers::linear_model::lars_based;
 using namespace trex::utils::datageneration::datagen;
 
 // ========================================================================================
 
-/** @brief Verify extraction of specific iteration path coefficients */
+/** @brief Test to verify extraction of specific iteration path coefficients */
 TEST(TSolverGettersTest, ValidateCoefficientPathExtraction) {
     SyntheticData data(
         100, 20, 20,
@@ -59,3 +70,6 @@ TEST(TSolverGettersTest, ValidateCoefficientPathExtraction) {
         EXPECT_TRUE(beta_path.col(step).isApprox(beta_at_step, 1e-10));
     }
 }
+
+// ========================================================================================
+} /* End of namespace trex::test::tsolvers::linear_model */

@@ -17,6 +17,9 @@
 
 // ========================================================================================
 
+// Embed into test namespace
+namespace trex::test::utils::datageneration {
+
 // Namespace alias for convenience
 using namespace trex::utils::datageneration::datagen;
 using namespace trex::utils::datageneration;
@@ -168,3 +171,6 @@ TEST(DataGenTest, AR1CorrelationTest) {
     // 10000 samples is well enough to hit Within 0.05
     EXPECT_NEAR(correlation, 0.9, 0.05);
 }
+
+// ========================================================================================
+} /* End of namespace trex::test::utils::datageneration */

@@ -20,6 +20,9 @@
 
 // =================================================================================
 
+// Embed into test namespace
+namespace trex::test::trex_selector_methods::trex_gvs {
+
 // Namespace aliases for convenience
 using namespace trex::trex_selector_methods::trex_gvs;
 using namespace trex::trex_selector_methods::trex_core;
@@ -132,3 +135,6 @@ TEST_F(TRexGVSTest, Validation_ThrowsOnUnsupportedSolver_TLARS) {
                                 tc_params);
     }, std::invalid_argument);
 }
+
+// ========================================================================================
+} /* End of namespace trex::test::trex_selector_methods::trex_gvs */

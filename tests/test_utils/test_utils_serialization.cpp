@@ -21,6 +21,9 @@
 
 // ===================================================================================
 
+// Embed into test namespace
+namespace trex::test::utils::serialization {
+
 /** @brief Test serialization and deserialization of Eigen dense matrices. */
 TEST(SerializationTest, DenseMatrix) {
     // Create an Eigen matrix and populate it
@@ -78,3 +81,6 @@ TEST(SerializationTest, SparseMatrix) {
     ASSERT_EQ(loaded.nonZeros(), 3);
     EXPECT_TRUE(original.isApprox(loaded));
 }
+
+// ========================================================================================
+} /* End ofnamespace trex::test::utils::serialization */

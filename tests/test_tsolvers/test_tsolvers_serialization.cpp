@@ -27,6 +27,9 @@
 
 // ========================================================================================
 
+// Embed into test namespace
+namespace trex::test::tsolvers::linear_model {
+
 using namespace trex::tsolvers::linear_model::lars_based;
 using namespace trex::utils::datageneration::datagen;
 namespace fs = std::filesystem;
@@ -112,3 +115,6 @@ TEST_F(TSolverSerializationTest, ExpectResumePathMatchesContinuousPath) {
     // Cleanup
     fs::remove(checkpoint);
 }
+
+// ========================================================================================
+} /* End of namespace trex::test::tsolvers::linear_model */

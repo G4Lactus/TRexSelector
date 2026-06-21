@@ -20,6 +20,9 @@
 
 // ========================================================================================
 
+// Embed into test namespace
+namespace trex::test::trex_selector_methods::trex_da {
+
 // Namespace aliases for convenience
 using namespace trex::trex_selector_methods::trex_da;
 using namespace trex::trex_selector_methods::trex_core;
@@ -179,3 +182,6 @@ TEST(TRexDATest, Method_AR1_SKIPL_DoesNotThrow) {
         EXPECT_EQ(result.T_stop >= 1, true);
     });
 }
+
+// ========================================================================================
+} /* End of namespace trex::test::trex_selector_methods::trex_da */

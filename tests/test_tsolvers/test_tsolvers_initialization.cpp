@@ -22,6 +22,9 @@
 
 // ========================================================================================
 
+// Embed into test namespace
+namespace trex::test::tsolvers::linear_model {
+
 using namespace trex::tsolvers::linear_model::lars_based;
 using namespace trex::utils::datageneration::datagen;
 
@@ -49,7 +52,7 @@ protected:
 
 // ========================================================================================
 
-/** @brief Verify unit L2-normalization and centroid subtraction during initialization */
+/** @brief Test to verify unit L2-normalization and centroid subtraction during initialization */
 TEST_F(TSolverInitTest, NormalizationAndCentering) {
 
     Eigen::Map<Eigen::MatrixXd> X_map(X.data(), X.rows(), X.cols());
@@ -74,7 +77,7 @@ TEST_F(TSolverInitTest, NormalizationAndCentering) {
 }
 
 
-/** @brief Verify collinear columns are caught and tracked correctly to avoid singularity */
+/** @brief Test to verify collinear columns are caught and tracked correctly to avoid singularity */
 TEST_F(TSolverInitTest, CollinearDroppingLogic) {
     // Force a perfect collinearity (Column 1 is exactly 3x Column 0)
     X.col(1) = X.col(0) * 3.0;
@@ -98,3 +101,6 @@ TEST_F(TSolverInitTest, CollinearDroppingLogic) {
     // ensuring executeStep doesn't encounter floating point limits
     EXPECT_NO_THROW(solver.executeStep(2, true));
 }
+
+// ========================================================================================
+} /* End of namespace trex::test::tsolvers::linear_model */

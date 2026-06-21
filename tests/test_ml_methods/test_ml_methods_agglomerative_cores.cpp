@@ -22,6 +22,9 @@
 
 // ===================================================================================
 
+// Embed into test namespace
+namespace trex::test::ml_methods::clustering::hierarchical::agglomerative {
+
 using namespace trex::ml_methods::clustering::hierarchical::agglomerative;
 
 // ===================================================================================
@@ -29,8 +32,8 @@ using namespace trex::ml_methods::clustering::hierarchical::agglomerative;
 // ===================================================================================
 
 /**
- * A mock distance policy that overrides distance computations allowing exact logic checks
- * isolated from Lance-Williams block matrices.
+ * Define a mock distance policy that overrides distance computations allowing exact
+ * logic checks isolated from Lance-Williams block matrices.
  */
 struct MockDistancePolicy {
     Eigen::MatrixXd dist_matrix;
@@ -221,3 +224,7 @@ TEST(NNChainTest, CoreEngineExecution) {
     }
     EXPECT_TRUE(active[6]);
 }
+
+// ========================================================================================
+
+} /* End of namespace trex::test::ml_methods::clustering::hierarchical::agglomerative */

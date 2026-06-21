@@ -17,6 +17,9 @@
 
 // ========================================================================================
 
+// Embed into test namespace
+namespace trex::test::utils::datageneration {
+
 // Namespace alias for convenience
 using namespace trex::utils::datageneration::dummygen;
 
@@ -112,3 +115,6 @@ TEST(DummyGenTest, GenerateDummiesDeterminism) {
     // Different seed -> matrix should be different
     EXPECT_FALSE(D1.isApprox(D3, 1e-15));
 }
+
+// ========================================================================================
+} /* End of namespace trex::test::utils::datageneration */

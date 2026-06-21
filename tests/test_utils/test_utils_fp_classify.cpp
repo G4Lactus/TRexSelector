@@ -21,6 +21,9 @@
 
 // =========================================================================================
 
+// Embed into test namespace
+namespace trex::test::utils::fp_classify {
+
 // Namespace alias for convenience
 using namespace trex::utils::fp_classify;
 
@@ -84,3 +87,6 @@ TEST(FPClassifyTest, AllFinite) {
     with_inf << 1.0, 2.0, std::numeric_limits<double>::infinity();
     EXPECT_FALSE(allFinite(with_inf));
 }
+
+// =========================================================================================
+} /* End ofnamespace trex::test::utils::fp_classify */

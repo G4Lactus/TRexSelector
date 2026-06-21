@@ -17,6 +17,9 @@
 
 // ========================================================================================
 
+// Embed into test namespace
+namespace trex::test::utils {
+
 /** @brief Test the TREX_INFO macro. */
 TEST(LoggingTest, InfoMacro) {
 #ifndef CRAN_BUILD
@@ -44,3 +47,6 @@ TEST(LoggingTest, WarnMacro) {
     SUCCEED();
 #endif
 }
+
+// ========================================================================================
+} /* End of namespace trex::test::utils */

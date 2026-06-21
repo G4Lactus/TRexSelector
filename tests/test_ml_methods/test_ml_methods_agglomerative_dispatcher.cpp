@@ -21,6 +21,9 @@
 
 // ===================================================================================
 
+// Embed into test namespace
+namespace trex::test::ml_methods::clustering::hierarchical::agglomerative {
+
 // Namespace import for convenience
 using namespace trex::ml_methods::clustering::hierarchical::agglomerative;
 
@@ -170,3 +173,6 @@ TEST(AgglomerativeDispatcherTest, CentroidLinkageSciPyMatch) {
     EXPECT_NEAR(merges[3].distance, 113.77777777777777, 1e-5);
     EXPECT_EQ(merges[3].new_cluster_size, 5);
 }
+
+// ===================================================================================
+} /* namespace trex::test::ml_methods::clustering::hierarchical::agglomerative */

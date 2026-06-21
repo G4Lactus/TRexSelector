@@ -23,6 +23,9 @@
 
 // ========================================================================================
 
+// Embed into test namespace
+namespace trex::test::tsolvers::linear_model {
+
 using namespace trex::tsolvers::linear_model::lars_based;
 using namespace trex::utils::datageneration::datagen;
 
@@ -53,7 +56,7 @@ protected:
 
 // ========================================================================================
 
-/** @brief Validate that the solver properly respects early T_stop halting constraints. */
+/** @brief Test to validate that the solver properly respects early T_stop halting constraints. */
 TEST_F(TSolverExecutionTest, ExecuteEarlyStoppingAtTStop) {
     Eigen::Map<Eigen::MatrixXd> X_map(X.data(), X.rows(), X.cols());
     Eigen::Map<Eigen::MatrixXd> D_map(D.data(), D.rows(), D.cols());
@@ -75,7 +78,7 @@ TEST_F(TSolverExecutionTest, ExecuteEarlyStoppingAtTStop) {
 }
 
 
-/** @brief Ensure the residual sum of squares shrinks monotonically along the inclusion path. */
+/** @brief Test to ensure the residual sum of squares shrinks monotonically along the inclusion path. */
 TEST_F(TSolverExecutionTest, MonotonicRSSDecrease) {
     Eigen::Map<Eigen::MatrixXd> X_map(X.data(), X.rows(), X.cols());
     Eigen::Map<Eigen::MatrixXd> D_map(D.data(), D.rows(), D.cols());
@@ -97,3 +100,6 @@ TEST_F(TSolverExecutionTest, MonotonicRSSDecrease) {
         EXPECT_LE(rss_path[i], rss_path[i-1] + 1e-12);
     }
 }
+
+// ========================================================================================
+} /* End of namespace trex::test::tsolvers::linear_model */

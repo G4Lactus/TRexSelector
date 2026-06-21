@@ -19,6 +19,9 @@
 
 // ========================================================================================
 
+// Embed into test namespace
+namespace trex::test::utils::eval {
+
 // Namespace aliases for convenience
 namespace counts = trex::utils::eval::counts;
 namespace rates = trex::utils::eval::rates;
@@ -87,3 +90,6 @@ TEST(EvalMetricsTest, F1Score) {
     EXPECT_DOUBLE_EQ(composites::f1_score(1.0, 0.0), 0.0);
     EXPECT_DOUBLE_EQ(composites::f1_score(0.5, 0.5), 0.5);
 }
+
+// ========================================================================================
+} /* End ofnamespace trex::test::utils::eval */
