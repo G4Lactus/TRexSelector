@@ -87,7 +87,7 @@ target_sources(trex_selector_methods PUBLIC
         ${CMAKE_CURRENT_SOURCE_DIR}/trex_gvs/trex_gvs.hpp
         ${CMAKE_CURRENT_SOURCE_DIR}/trex_screening/trex_screening.hpp
         ${CMAKE_CURRENT_SOURCE_DIR}/trex_screening/trex_biobank_screening.hpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/trex_sparse_pca/trex_sparse_pca.hpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/trex_spca/trex_spca.hpp
         ${CMAKE_CURRENT_SOURCE_DIR}/trex_utils/trex_data_normalizer.hpp
         ${CMAKE_CURRENT_SOURCE_DIR}/trex_utils/trex_dummy_generator.hpp
         ${CMAKE_CURRENT_SOURCE_DIR}/trex_utils/trex_experiment_runner.hpp
@@ -107,7 +107,7 @@ add_subdirectory(trex_core)
 add_subdirectory(trex_da)
 add_subdirectory(trex_gvs)
 add_subdirectory(trex_screening)
-add_subdirectory(trex_sparse_pca)
+add_subdirectory(trex_spca)
 # ==================================================================================
 
 
