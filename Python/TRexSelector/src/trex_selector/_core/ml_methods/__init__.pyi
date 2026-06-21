@@ -97,3 +97,78 @@ class RidgeCV:
     def get_lambdas(self) -> np.ndarray: ...
     def get_cv_errors(self) -> np.ndarray: ...
     def get_cv_std(self) -> np.ndarray: ...
+
+# ---------------------------------------------------------------------------
+# SVDResult
+# ---------------------------------------------------------------------------
+
+class SVDResult:
+    U: np.ndarray
+    """Left singular vectors (n × M)."""
+    S: np.ndarray
+    """Singular values (M)."""
+    V: np.ndarray
+    """Right singular vectors (p × M)."""
+    def __init__(self) -> None: ...
+
+# ---------------------------------------------------------------------------
+# SVDSolver
+# ---------------------------------------------------------------------------
+
+class SVDSolver:
+    """Computes the top-M truncated SVD of a matrix.
+
+    Dispatches among direct (tall), Gram (wide), and randomized paths
+    based on matrix shape.
+    """
+    def __init__(self) -> None: ...
+    def compute(self, X: np.ndarray, M: int) -> SVDResult: ...
+
+# ---------------------------------------------------------------------------
+# PCAResult
+# ---------------------------------------------------------------------------
+
+class PCAResult:
+    Z: np.ndarray
+    """Score matrix (n × M)."""
+    V: np.ndarray
+    """Loading matrix (p × M)."""
+    explained_variance: np.ndarray
+    """Explained variance per component (M)."""
+    def __init__(self) -> None: ...
+
+# ---------------------------------------------------------------------------
+# PCA
+# ---------------------------------------------------------------------------
+
+class PCA:
+    """Fits PCA with optional in-place centering (RAII).
+
+    When ``center=True``, the design matrix is modified in-place during
+    ``fit()`` and restored when ``restore()`` is called.
+
+    Note
+    ----
+    ``fit()`` requires a Fortran-contiguous (column-major) array.
+    Pass ``np.asfortranarray(X)`` when in doubt.
+    """
+    def __init__(self, center: bool = ...) -> None: ...
+    def fit(self, X: np.ndarray, M: int) -> PCAResult: ...
+    def transform(self, X_new: np.ndarray) -> np.ndarray: ...
+    def restore(self) -> None: ...
+    def get_mean(self) -> np.ndarray: ...
+    def get_loadings(self) -> np.ndarray: ...
+    def get_explained_variance(self) -> np.ndarray: ...
+
+# ---------------------------------------------------------------------------
+# RidgeSolver
+# ---------------------------------------------------------------------------
+
+class RidgeSolver:
+    """Solves ridge regression for a single lambda value.
+
+    Dispatches between primal (n >= p) and dual (n < p) Cholesky solvers.
+    """
+    def __init__(self) -> None: ...
+    @staticmethod
+    def solve(X: np.ndarray, y: np.ndarray, lambda_val: float) -> np.ndarray: ...

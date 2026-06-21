@@ -16,6 +16,7 @@ from .trex_selector_methods import (
     TRexBiobankScreeningSelector as PyBiobankScreeningSelector, BiobankScreenTRexControl,
                                     BiobankScreenTRexResult,
     SolverTypeForTRex, SolverHyperparameters, DummyDistribution,
+    SPCAMode, TRexSPCAControlParameter, TRexSPCAResult, TRexSPCA as _TRexSPCA,
 )
 
 
@@ -248,6 +249,91 @@ class TRexBiobankScreeningSelector:
         return self._selector.screenPhenotype()
 
 
+class TRexSPCASelector:
+    """
+    Python wrapper for T-Rex Sparse PCA selection.
+
+    Extracts sparse principal components under FDR control. For each of the
+    M components, ordinary PCA identifies a PC-response direction, T-Rex selects
+    a sparse active set at the target FDR, and a sparse loading vector is
+    assembled. Explained variance is adjusted for non-orthogonality via QR.
+    """
+
+    def __init__(self,
+                 X: np.ndarray,
+                 spca_ctrl: TRexSPCAControlParameter | None = None):
+        """
+        Parameters
+        ----------
+        X : ndarray, shape (n, p)
+            Design matrix. Stored by reference; centered in-place during
+            ``select()`` and restored on return.
+        spca_ctrl : TRexSPCAControlParameter, optional
+            Algorithmic control. Defaults to ``TRexSPCAControlParameter()``.
+        """
+        self.X = np.asfortranarray(X, dtype=np.float64)
+        self._ctrl = spca_ctrl if spca_ctrl is not None else TRexSPCAControlParameter()
+        self._result: TRexSPCAResult | None = None
+
+    def select(self, M: int, tFDR: float) -> "TRexSPCASelector":
+        """
+        Run T-Rex Sparse PCA selection.
+
+        Parameters
+        ----------
+        M : int
+            Number of sparse principal components to extract.
+        tFDR : float
+            Target false discovery rate in (0, 1).
+
+        Returns
+        -------
+        self : TRexSPCASelector
+            For method chaining. Results accessible via properties.
+        """
+        if M < 1:
+            raise ValueError(f"M must be >= 1, got {M}")
+        if not 0.0 < tFDR < 1.0:
+            raise ValueError(f"tFDR must be in (0, 1), got {tFDR}")
+        self._result = _TRexSPCA.select(self.X, M, tFDR, self._ctrl)
+        return self
+
+    @property
+    def Z(self) -> np.ndarray:
+        """Score matrix (n × M) from the last ``select()`` call."""
+        if self._result is None:
+            raise RuntimeError("Call select() first.")
+        return self._result.Z
+
+    @property
+    def V(self) -> np.ndarray:
+        """Loading matrix (p × M) from the last ``select()`` call."""
+        if self._result is None:
+            raise RuntimeError("Call select() first.")
+        return self._result.V
+
+    @property
+    def active_sets(self) -> list[list[int]]:
+        """Per-component active sets (0-based indices) from the last ``select()`` call."""
+        if self._result is None:
+            raise RuntimeError("Call select() first.")
+        return self._result.active_sets
+
+    @property
+    def adjusted_ev(self) -> np.ndarray:
+        """Marginal adjusted explained variance per component (M-vector)."""
+        if self._result is None:
+            raise RuntimeError("Call select() first.")
+        return self._result.adjusted_ev
+
+    @property
+    def cumulative_ev(self) -> np.ndarray:
+        """Cumulative percentage of explained variance (M-vector)."""
+        if self._result is None:
+            raise RuntimeError("Call select() first.")
+        return self._result.cumulative_ev
+
+
 __all__ = [
     "LLoopStrategy",
     "SolverTypeForTRex",
@@ -271,6 +357,10 @@ __all__ = [
     "TRexBiobankScreeningSelector",
     "BiobankScreenTRexControl",
     "BiobankScreenTRexResult",
+    "SPCAMode",
+    "TRexSPCAControlParameter",
+    "TRexSPCAResult",
+    "TRexSPCASelector",
     # Submodules
     "ml_methods",
     "tsolvers",

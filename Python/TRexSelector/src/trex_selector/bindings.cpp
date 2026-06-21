@@ -30,6 +30,7 @@
 #include "trex_gvs_bindings.hpp"
 #include "trex_screen_bindings.hpp"
 #include "trex_screening_biobanks_bindings.hpp"
+#include "trex_spca_bindings.hpp"
 
 // =====================================================================================
 
@@ -60,6 +61,7 @@ PYBIND11_MODULE(_core, m) {
     bind_trex_gvs(m_tsm);
     bind_trex_screen(m_tsm);
     bind_trex_screening_biobanks(m_tsm);
+    bind_trex_spca(m_tsm);
 
     // Bind Hierarchical clustering as a submodule of m_ml
     py::module m_clustering = m_ml.def_submodule("clustering",

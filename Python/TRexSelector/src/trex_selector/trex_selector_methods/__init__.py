@@ -25,7 +25,12 @@ from .._core.trex_selector_methods import (
     # Biobank Screen-TRex
     BiobankScreenTRexControl,
     BiobankScreenTRexResult,
-    TRexBiobankScreeningSelector
+    TRexBiobankScreeningSelector,
+    # SPCA-TRex
+    SPCAMode,
+    TRexSPCAControlParameter,
+    TRexSPCAResult,
+    TRexSPCA,
 )
 
 __all__ = [
@@ -50,5 +55,9 @@ __all__ = [
     "TRexScreeningSelector",
     "BiobankScreenTRexControl",
     "BiobankScreenTRexResult",
-    "TRexBiobankScreeningSelector"
+    "TRexBiobankScreeningSelector",
+    "SPCAMode",
+    "TRexSPCAControlParameter",
+    "TRexSPCAResult",
+    "TRexSPCA",
 ]

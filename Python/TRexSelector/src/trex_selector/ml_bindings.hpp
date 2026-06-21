@@ -27,6 +27,9 @@
 #include <ml_methods/standardization/data_transformer.hpp>
 #include <ml_methods/model_selection/ridge_cv.hpp>
 #include <ml_methods/model_selection/ridge_gcv.hpp>
+#include <ml_methods/svd/svd.hpp>
+#include <ml_methods/pca/pca.hpp>
+#include <ml_methods/ridge_regression/ridge.hpp>
 
 // =====================================================================================
 
@@ -225,6 +228,102 @@ inline void bind_ml_methods(py::module& m) {
         .def("get_lambdas", &ridge_cv::lambdas)
         .def("get_cv_errors", &ridge_cv::cv_mse)
         .def("get_cv_std", &ridge_cv::cv_sem);
+
+
+    // =================================================================================
+    // SVD Solver
+    // =================================================================================
+    using namespace trex::ml_methods::svd;
+
+    /**
+     * @brief Container for a truncated SVD decomposition.
+     *
+     * @details Returned by SVDSolver::compute(). Holds U (n × M), S (M), V (p × M).
+     */
+    py::class_<SVDResult>(m, "SVDResult")
+        .def(py::init<>())
+        .def_readwrite("U", &SVDResult::U)
+        .def_readwrite("S", &SVDResult::S)
+        .def_readwrite("V", &SVDResult::V);
+
+    /**
+     * @brief Computes the top-M truncated SVD of a matrix.
+     *
+     * @details Dispatches among direct (tall), Gram (wide), and randomized paths
+     *          based on matrix shape.
+     */
+    py::class_<SVDSolver>(m, "SVDSolver")
+        .def(py::init<>())
+        .def("compute",
+            [](SVDSolver& self,
+               Eigen::Ref<const Eigen::MatrixXd> X,
+               Eigen::Index M) {
+                return self.compute(X, M);
+            },
+            py::arg("X"), py::arg("M"));
+
+
+    // =================================================================================
+    // PCA
+    // =================================================================================
+    using namespace trex::ml_methods::pca;
+
+    /**
+     * @brief Container for a PCA fit result.
+     *
+     * @details Holds Z (n × M scores), V (p × M loadings), and explained_variance (M).
+     */
+    py::class_<PCAResult>(m, "PCAResult")
+        .def(py::init<>())
+        .def_readwrite("Z",                  &PCAResult::Z)
+        .def_readwrite("V",                  &PCAResult::V)
+        .def_readwrite("explained_variance", &PCAResult::explained_variance);
+
+    /**
+     * @brief Fits PCA to a data matrix with optional in-place centering (RAII).
+     *
+     * @details When center=true, X is modified in-place during fit() and restored
+     *          when restore() is called or the object is destroyed.
+     */
+    py::class_<PCA>(m, "PCA")
+        .def(py::init<bool>(), py::arg("center") = true)
+        .def("fit",
+            [](PCA& self, Eigen::Ref<Eigen::MatrixXd> X, Eigen::Index M) {
+                Eigen::Map<Eigen::MatrixXd> X_map(X.data(), X.rows(), X.cols());
+                return self.fit(X_map, M);
+            },
+            py::arg("X"), py::arg("M"))
+        .def("transform",
+            [](PCA& self,
+               Eigen::Ref<const Eigen::MatrixXd> X_new) {
+                return self.transform(X_new);
+            },
+            py::arg("X_new"))
+        .def("restore", &PCA::restore)
+        .def("get_mean",               &PCA::getMean)
+        .def("get_loadings",           &PCA::getLoadings)
+        .def("get_explained_variance", &PCA::getExplainedVariance);
+
+
+    // =================================================================================
+    // Ridge Regression (standalone solver)
+    // =================================================================================
+    using namespace trex::ml_methods::ridge;
+
+    /**
+     * @brief Solves ridge regression for a single lambda value.
+     *
+     * @details Dispatches between primal (n >= p) and dual (n < p) Cholesky solvers.
+     */
+    py::class_<RidgeSolver>(m, "RidgeSolver")
+        .def(py::init<>())
+        .def_static("solve",
+            [](Eigen::Ref<const Eigen::MatrixXd> X,
+               Eigen::Ref<const Eigen::VectorXd> y,
+               double lambda) {
+                return RidgeSolver::solve(X, y, lambda);
+            },
+            py::arg("X"), py::arg("y"), py::arg("lambda_val"));
 
 
 // =====================================================================================

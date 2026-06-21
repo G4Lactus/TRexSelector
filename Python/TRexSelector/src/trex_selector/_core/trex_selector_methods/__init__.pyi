@@ -337,3 +337,48 @@ class TRexBiobankScreeningSelector:
     ) -> None: ...
     def screenPhenotype(self) -> BiobankScreenTRexResult: ...
     def screenPhenotypes(self) -> list[BiobankScreenTRexResult]: ...
+
+# ---------------------------------------------------------------------------
+# T-Rex Sparse PCA
+# ---------------------------------------------------------------------------
+
+class SPCAMode:
+    ActiveSet: SPCAMode
+    """Ridge regression on the T-Rex active set to compute loadings."""
+    Thresholded: SPCAMode
+    """Keep and normalize the top |A| ordinary PCA loadings."""
+
+class TRexSPCAControlParameter:
+    mode: SPCAMode
+    """Sparse loading strategy (default: ActiveSet)."""
+    lambda2: float
+    """Ridge penalty for ActiveSet loading assembly (default: 1e-6)."""
+    seed: int
+    """Random seed forwarded to each per-PC T-Rex run (-1 = hardware entropy)."""
+    trex_ctrl: TRexControlParameter
+    """TRexControlParameter forwarded to each per-PC T-Rex run."""
+    def __init__(self) -> None: ...
+
+class TRexSPCAResult:
+    Z: np.ndarray
+    """Sparse PC score matrix (n × M)."""
+    V: np.ndarray
+    """Sparse loading matrix (p × M)."""
+    active_sets: list[list[int]]
+    """Support indices per PC (list of M index vectors, 0-based)."""
+    adjusted_ev: np.ndarray
+    """Marginal adjusted explained variance per component (M-vector)."""
+    cumulative_ev: np.ndarray
+    """Cumulative percentage of explained variance (M-vector)."""
+    def __init__(self) -> None: ...
+
+class TRexSPCA:
+    """T-Rex Sparse PCA orchestrator — all methods are static."""
+    def __init__(self) -> None: ...
+    @staticmethod
+    def select(
+        X: np.ndarray,
+        M: int,
+        tFDR: float,
+        spca_ctrl: TRexSPCAControlParameter = ...,
+    ) -> TRexSPCAResult: ...
