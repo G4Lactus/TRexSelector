@@ -10,7 +10,7 @@
  * @brief T-Rex Sparse PCA selector class.
  *
  * @details
- *  Implements methods 5–8 from the T-Rex SPCA paper:
+ *  Implements from the T-Rex SPCA paper:
  *    5. T-Rex+GVS(EN)  + ActiveSet   loading assembly
  *    6. T-Rex+GVS(EN)  + Thresholded loading assembly
  *    7. T-Rex+GVS(IEN) + ActiveSet   loading assembly
@@ -40,8 +40,8 @@
 namespace trex::trex_selector_methods::trex_spca {
 
 // Namespace aliases
-namespace tc        = trex::trex_selector_methods::trex_core;
-namespace tg        = trex::trex_selector_methods::trex_gvs;
+namespace tc         = trex::trex_selector_methods::trex_core;
+namespace tg         = trex::trex_selector_methods::trex_gvs;
 namespace std_scaler = trex::ml_methods::standardization;
 
 // ==============================================================================
@@ -119,8 +119,8 @@ struct TRexSPCAControlParameter {
      *  Set gvs_ctrl.gvs_type = tg::GVSType::EN  for EN based methods.
      *  Set gvs_ctrl.gvs_type = tg::GVSType::IEN for IEN based methods.
      *
-     *  The GVS ridge penalty (R's `lambda_2_lars`) is controlled via:
-     *    - gvs_ctrl.lambda2_lars   : set > 0.0 to supply a fixed value; 0.0 (default)
+     *  The GVS ridge penalty is controlled via:
+     *    - gvs_ctrl.lambda_2       : set > 0.0 to supply a fixed value; 0.0 (default)
      *                                triggers auto-determination.
      *    - gvs_ctrl.lambda2_method : selects the auto-determination strategy
      *                                (GCV, CV_MIN, CV_1SE, COND_NUM; default: GCV).
