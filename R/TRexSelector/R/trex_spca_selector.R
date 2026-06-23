@@ -84,8 +84,8 @@ trex_spca_control <- function(mode                   = "ActiveSet",
 #'
 #' @examples
 #' \donttest{
-#' set.seed(42)
-#' n <- 60; p <- 20
+#' set.seed(1)
+#' n <- 100; p <- 30
 #' X <- matrix(rnorm(n * p), n, p)
 #' sel <- TRexSPCASelector$new(X, control = trex_spca_control(K = 5))
 #' sel$select(M = 2, tFDR = 0.2)

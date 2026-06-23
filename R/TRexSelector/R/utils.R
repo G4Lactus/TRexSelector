@@ -150,7 +150,9 @@ dim.mmap_matrix <- function(x) {
 }
 
 
-#' @title Extract block from mmap_matrix
+#' @title Extract or assign blocks in an mmap_matrix
+#'
+#' @aliases [<-.mmap_matrix
 #'
 #' @param x mmap_matrix object
 #' @param i row indices
@@ -159,7 +161,7 @@ dim.mmap_matrix <- function(x) {
 #' @param drop logical. If TRUE the result is coerced to the lowest possible dimension
 #' (not supported).
 #'
-#' @return a matrix block
+#' @return For extraction: a matrix block. For assignment: \code{x} invisibly.
 #'
 #' @examples
 #' \donttest{
@@ -169,7 +171,10 @@ dim.mmap_matrix <- function(x) {
 #' convert_to_memory_mapped(mat, f)
 #' mm <- mmap_matrix(f, rows = 4, cols = 5)
 #' mm[1:2, 1:3]
+#' mm[2, 3] <- 99.0
+#' mm[1:2, 1:3] <- matrix(as.double(1:6), nrow = 2, ncol = 3)
 #' }
+#' @usage \method{[}{mmap_matrix}(x, i, j, ..., drop = FALSE)
 #' @export
 `[.mmap_matrix` <- function(x, i, j, ..., drop = FALSE) {
   rows <- mmap_matrix_rows(x)
@@ -235,6 +240,7 @@ dim.mmap_matrix <- function(x) {
 #' mm[1:2, 1:3] <- matrix(as.double(1:6), nrow = 2, ncol = 3)
 #' }
 #'
+#' @noRd
 #' @method "[<-" mmap_matrix
 #' @export
 `[<-.mmap_matrix` <- function(x, i, j, value) {

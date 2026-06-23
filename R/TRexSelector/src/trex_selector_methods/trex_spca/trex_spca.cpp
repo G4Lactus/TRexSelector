@@ -11,7 +11,6 @@
 // std includes
 #include <algorithm>
 #include <cmath>
-#include <iostream>
 #include <stdexcept>
 #include <vector>
 
@@ -104,7 +103,7 @@ TRexSPCAResult TRexSPCA::select() {
     for (Eigen::Index m = 0; m < M_; ++m) {
 
         if (verbose_) {
-            std::cout << "[TRexSPCA] Processing PC " << (m + 1) << " / " << M_ << "\n";
+            TREX_INFO("[TRexSPCA] Processing PC " << (m + 1) << " / " << M_);
         }
 
         // 3. Run TRexGVSSelector on z_m ~ X.

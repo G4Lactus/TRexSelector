@@ -2,16 +2,17 @@
 % Please edit documentation in R/utils.R
 \name{[.mmap_matrix}
 \alias{[.mmap_matrix}
-\title{Extract block from mmap_matrix}
+\alias{[<-.mmap_matrix}
+\title{Extract or assign blocks in an mmap_matrix}
 \usage{
 \method{[}{mmap_matrix}(x, i, j, ..., drop = FALSE)
 }
 \arguments{
 \item{x}{mmap_matrix object}
 
-\item{i}{row indices}
+\item{i}{Row index or contiguous range (1-based)}
 
-\item{j}{column indices}
+\item{j}{Column index or contiguous range (1-based)}
 
 \item{...}{unused arguments}
 
@@ -19,10 +20,13 @@
 (not supported).}
 }
 \value{
-a matrix block
+For extraction: a matrix block. For assignment: \code{x} invisibly.
 }
 \description{
-Extract block from mmap_matrix
+Extract a numeric block from, or write into, a memory-mapped matrix.
+For the assignment form \code{x[i, j] <- value}, \code{value} must be a scalar or
+numeric matrix whose dimensions match the selected block; the object must be
+open in \code{"readwrite"} mode.
 }
 \examples{
 \donttest{
@@ -32,5 +36,7 @@ on.exit(unlink(f), add = TRUE)
 convert_to_memory_mapped(mat, f)
 mm <- mmap_matrix(f, rows = 4, cols = 5)
 mm[1:2, 1:3]
+mm[2, 3] <- 99.0
+mm[1:2, 1:3] <- matrix(as.double(1:6), nrow = 2, ncol = 3)
 }
 }
