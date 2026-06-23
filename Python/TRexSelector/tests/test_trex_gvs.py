@@ -54,9 +54,9 @@ def test_gvs_control_new_fields():
     from trex_selector._core.ml_methods.clustering import LinkageMethod
     gvs_ctrl.hc_linkage = LinkageMethod.Complete
     assert gvs_ctrl.hc_linkage == LinkageMethod.Complete
-    # lambda2_lars
-    gvs_ctrl.lambda2_lars = 0.01
-    assert gvs_ctrl.lambda2_lars == pytest.approx(0.01)
+    # lambda_2
+    gvs_ctrl.lambda_2 = 0.01
+    assert gvs_ctrl.lambda_2 == pytest.approx(0.01)
 
 
 def test_gvs_prior_groups(signal_data, fast_control):

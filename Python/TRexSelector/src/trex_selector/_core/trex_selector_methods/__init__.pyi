@@ -229,7 +229,7 @@ class TRexGVSControlParameter:
     gvs_type: GVSType
     corr_max: float
     hc_linkage: LinkageMethod
-    lambda2_lars: float
+    lambda_2: float
     prior_groups: list[int] # flat list
     def __init__(self) -> None: ...
 
@@ -351,10 +351,12 @@ class SPCAMode:
 class TRexSPCAControlParameter:
     mode: SPCAMode
     """Sparse loading strategy (default: ActiveSet)."""
-    lambda2: float
+    lambda2_ridge_loadings: float
     """Ridge penalty for ActiveSet loading assembly (default: 1e-6)."""
-    seed: int
-    """Random seed forwarded to each per-PC T-Rex run (-1 = hardware entropy)."""
+    gvs_ctrl: TRexGVSControlParameter
+    """TRexGVSControlParameter forwarded to each per-PC GVS run.
+    Set gvs_ctrl.gvs_type = GVSType.EN (default) or GVSType.IEN.
+    Set gvs_ctrl.lambda_2 > 0 to bypass auto-determination."""
     trex_ctrl: TRexControlParameter
     """TRexControlParameter forwarded to each per-PC T-Rex run."""
     def __init__(self) -> None: ...
@@ -370,15 +372,20 @@ class TRexSPCAResult:
     """Marginal adjusted explained variance per component (M-vector)."""
     cumulative_ev: np.ndarray
     """Cumulative percentage of explained variance (M-vector)."""
+    gvs_type: GVSType
+    """GVS variant (EN or IEN) used for per-PC sub-selection."""
     def __init__(self) -> None: ...
 
-class TRexSPCA:
-    """T-Rex Sparse PCA orchestrator — all methods are static."""
-    def __init__(self) -> None: ...
-    @staticmethod
-    def select(
+class TRexSPCASelector:
+    """T-Rex Sparse PCA selector — instance wrapper (zero-copy Eigen::Map)."""
+    def __init__(
+        self,
         X: np.ndarray,
         M: int,
         tFDR: float,
-        spca_ctrl: TRexSPCAControlParameter = ...,
-    ) -> TRexSPCAResult: ...
+        ctrl: TRexSPCAControlParameter = ...,
+        seed: int = -1,
+        verbose: bool = False,
+    ) -> None: ...
+    def select(self) -> None: ...
+    def getResult(self) -> TRexSPCAResult: ...

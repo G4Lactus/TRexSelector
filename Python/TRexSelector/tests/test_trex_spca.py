@@ -7,6 +7,7 @@ from trex_selector import (
     TRexSPCASelector,
     TRexSPCAControlParameter,
     SPCAMode,
+    GVSType,
 )
 
 
@@ -30,8 +31,13 @@ def make_ctrl(**kwargs):
     ctrl = TRexSPCAControlParameter()
     ctrl.trex_ctrl.K = kwargs.get("K", 3)
     ctrl.trex_ctrl.max_dummy_multiplier = kwargs.get("max_dummy_multiplier", 3)
-    ctrl.seed = kwargs.get("seed", 1)
     ctrl.mode = kwargs.get("mode", SPCAMode.ActiveSet)
+    if "lambda2_ridge_loadings" in kwargs:
+        ctrl.lambda2_ridge_loadings = kwargs["lambda2_ridge_loadings"]
+    if "gvs_type" in kwargs:
+        ctrl.gvs_ctrl.gvs_type = kwargs["gvs_type"]
+    if "lambda_2" in kwargs:
+        ctrl.gvs_ctrl.lambda_2 = kwargs["lambda_2"]
     return ctrl
 
 
@@ -44,9 +50,19 @@ def test_spca_control_default_mode():
     assert ctrl.mode == SPCAMode.ActiveSet
 
 
-def test_spca_control_default_lambda2():
+def test_spca_control_default_lambda2_ridge_loadings():
     ctrl = TRexSPCAControlParameter()
-    assert np.isclose(ctrl.lambda2, 1e-6)
+    assert np.isclose(ctrl.lambda2_ridge_loadings, 1e-6)
+
+
+def test_spca_control_default_gvs_type():
+    ctrl = TRexSPCAControlParameter()
+    assert ctrl.gvs_ctrl.gvs_type == GVSType.EN
+
+
+def test_spca_control_default_lambda_2():
+    ctrl = TRexSPCAControlParameter()
+    assert ctrl.gvs_ctrl.lambda_2 == 0.0
 
 
 def test_spca_control_thresholded_mode():
@@ -59,17 +75,31 @@ def test_spca_control_thresholded_mode():
 # Group 2: Basic execution
 # ---------------------------------------------------------------------------
 
-def test_spca_select_runs_activeset(spca_fixture):
+def test_spca_select_runs_activeset_en(spca_fixture):
     X, _, _ = spca_fixture
     ctrl = make_ctrl()
-    sel = TRexSPCASelector(X, ctrl)
+    sel = TRexSPCASelector(X, ctrl, seed=1)
     sel.select(M, TFDR)  # must not raise
 
 
-def test_spca_select_runs_thresholded(spca_fixture):
+def test_spca_select_runs_thresholded_en(spca_fixture):
     X, _, _ = spca_fixture
     ctrl = make_ctrl(mode=SPCAMode.Thresholded)
-    sel = TRexSPCASelector(X, ctrl)
+    sel = TRexSPCASelector(X, ctrl, seed=1)
+    sel.select(M, TFDR)  # must not raise
+
+
+def test_spca_select_runs_activeset_ien(spca_fixture):
+    X, _, _ = spca_fixture
+    ctrl = make_ctrl(gvs_type=GVSType.IEN)
+    sel = TRexSPCASelector(X, ctrl, seed=1)
+    sel.select(M, TFDR)  # must not raise
+
+
+def test_spca_select_runs_with_lambda_2_bypass(spca_fixture):
+    X, _, _ = spca_fixture
+    ctrl = make_ctrl(lambda_2=0.01)
+    sel = TRexSPCASelector(X, ctrl, seed=1)
     sel.select(M, TFDR)  # must not raise
 
 
@@ -79,28 +109,28 @@ def test_spca_select_runs_thresholded(spca_fixture):
 
 def test_spca_Z_shape(spca_fixture):
     X, n, _ = spca_fixture
-    sel = TRexSPCASelector(X, make_ctrl())
+    sel = TRexSPCASelector(X, make_ctrl(), seed=1)
     sel.select(M, TFDR)
     assert sel.Z.shape == (n, M)
 
 
 def test_spca_V_shape(spca_fixture):
     X, _, p = spca_fixture
-    sel = TRexSPCASelector(X, make_ctrl())
+    sel = TRexSPCASelector(X, make_ctrl(), seed=1)
     sel.select(M, TFDR)
     assert sel.V.shape == (p, M)
 
 
 def test_spca_active_sets_length(spca_fixture):
     X, _, _ = spca_fixture
-    sel = TRexSPCASelector(X, make_ctrl())
+    sel = TRexSPCASelector(X, make_ctrl(), seed=1)
     sel.select(M, TFDR)
     assert len(sel.active_sets) == M
 
 
 def test_spca_explained_variance_length(spca_fixture):
     X, _, _ = spca_fixture
-    sel = TRexSPCASelector(X, make_ctrl())
+    sel = TRexSPCASelector(X, make_ctrl(), seed=1)
     sel.select(M, TFDR)
     assert sel.adjusted_ev.shape == (M,)
     assert sel.cumulative_ev.shape == (M,)
@@ -108,7 +138,7 @@ def test_spca_explained_variance_length(spca_fixture):
 
 def test_spca_M1_shapes(spca_fixture):
     X, n, p = spca_fixture
-    sel = TRexSPCASelector(X, make_ctrl())
+    sel = TRexSPCASelector(X, make_ctrl(), seed=1)
     sel.select(1, TFDR)
     assert sel.Z.shape == (n, 1)
     assert sel.V.shape == (p, 1)
@@ -121,7 +151,7 @@ def test_spca_M1_shapes(spca_fixture):
 
 def test_spca_active_set_indices_in_range(spca_fixture):
     X, _, p = spca_fixture
-    sel = TRexSPCASelector(X, make_ctrl())
+    sel = TRexSPCASelector(X, make_ctrl(), seed=1)
     sel.select(M, TFDR)
     for as_m in sel.active_sets:
         for idx in as_m:
@@ -134,21 +164,21 @@ def test_spca_active_set_indices_in_range(spca_fixture):
 
 def test_spca_adjusted_ev_non_negative(spca_fixture):
     X, _, _ = spca_fixture
-    sel = TRexSPCASelector(X, make_ctrl())
+    sel = TRexSPCASelector(X, make_ctrl(), seed=1)
     sel.select(M, TFDR)
     assert np.all(sel.adjusted_ev >= 0)
 
 
 def test_spca_cumulative_ev_non_decreasing(spca_fixture):
     X, _, _ = spca_fixture
-    sel = TRexSPCASelector(X, make_ctrl())
+    sel = TRexSPCASelector(X, make_ctrl(), seed=1)
     sel.select(M, TFDR)
     assert np.all(np.diff(sel.cumulative_ev) >= -1e-10)
 
 
 def test_spca_cumulative_ev_in_unit_interval(spca_fixture):
     X, _, _ = spca_fixture
-    sel = TRexSPCASelector(X, make_ctrl())
+    sel = TRexSPCASelector(X, make_ctrl(), seed=1)
     sel.select(M, TFDR)
     assert np.all(sel.cumulative_ev >= 0)
     assert np.all(sel.cumulative_ev <= 1.0 + 1e-10)
@@ -161,7 +191,7 @@ def test_spca_cumulative_ev_in_unit_interval(spca_fixture):
 def test_spca_X_restored_after_select(spca_fixture):
     X, _, _ = spca_fixture
     X_orig = X.copy()  # genuine deep copy
-    sel = TRexSPCASelector(X, make_ctrl())
+    sel = TRexSPCASelector(X, make_ctrl(), seed=1)
     sel.select(M, TFDR)
     assert np.allclose(X, X_orig, atol=1e-12)
 

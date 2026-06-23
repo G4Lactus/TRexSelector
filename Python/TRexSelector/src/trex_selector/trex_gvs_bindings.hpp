@@ -89,7 +89,7 @@ inline void bind_trex_gvs(py::module& m) {
         .def_readwrite("gvs_type",    &TRexGVSControlParameter::gvs_type,    "GVS method variant (EN = Elastic Net, IEN = Informed Elastic Net).")
         .def_readwrite("corr_max",    &TRexGVSControlParameter::corr_max,    "Maximum pairwise correlation for automatic cluster formation.")
         .def_readwrite("hc_linkage",  &TRexGVSControlParameter::hc_linkage,  "Hierarchical clustering linkage method.")
-        .def_readwrite("lambda2_lars", &TRexGVSControlParameter::lambda2_lars, "L2 penalty weight for group structure (0 = auto-select via GCV).")
+        .def_readwrite("lambda_2", &TRexGVSControlParameter::lambda_2, "L2 penalty weight for group structure (0 = auto-select via GCV).")
         .def_readwrite("prior_groups", &TRexGVSControlParameter::prior_groups, "Manually specified group assignments (0-based; empty = auto-cluster).");
 
     py::class_<TRexGVSSelector::GVSSelectionResult, TRexSelector::SelectionResult>(m, "GVSSelectionResult", "SelectionResult extended with GVS-specific fields.")

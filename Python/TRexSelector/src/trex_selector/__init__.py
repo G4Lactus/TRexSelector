@@ -16,7 +16,8 @@ from .trex_selector_methods import (
     TRexBiobankScreeningSelector as PyBiobankScreeningSelector, BiobankScreenTRexControl,
                                     BiobankScreenTRexResult,
     SolverTypeForTRex, SolverHyperparameters, DummyDistribution,
-    SPCAMode, TRexSPCAControlParameter, TRexSPCAResult, TRexSPCA as _TRexSPCA,
+    SPCAMode, TRexSPCAControlParameter, TRexSPCAResult,
+    TRexSPCASelector as PyTRexSPCASelector,
 )
 
 
@@ -254,14 +255,15 @@ class TRexSPCASelector:
     Python wrapper for T-Rex Sparse PCA selection.
 
     Extracts sparse principal components under FDR control. For each of the
-    M components, ordinary PCA identifies a PC-response direction, T-Rex selects
-    a sparse active set at the target FDR, and a sparse loading vector is
-    assembled. Explained variance is adjusted for non-orthogonality via QR.
+    M components, ordinary PCA identifies a PC-response direction, T-Rex GVS
+    selects a sparse active set at the target FDR, and a sparse loading vector
+    is assembled. Explained variance is adjusted for non-orthogonality via QR.
     """
 
     def __init__(self,
                  X: np.ndarray,
-                 spca_ctrl: TRexSPCAControlParameter | None = None):
+                 spca_ctrl: TRexSPCAControlParameter | None = None,
+                 seed: int = -1):
         """
         Parameters
         ----------
@@ -270,9 +272,16 @@ class TRexSPCASelector:
             ``select()`` and restored on return.
         spca_ctrl : TRexSPCAControlParameter, optional
             Algorithmic control. Defaults to ``TRexSPCAControlParameter()``.
+            Set ``spca_ctrl.gvs_ctrl.gvs_type = GVSType.IEN`` for the IEN
+            variant. Set ``spca_ctrl.gvs_ctrl.lambda_2 > 0`` to bypass
+            auto-determination of the GVS ridge penalty.
+        seed : int, optional
+            Random seed. ``-1`` (default) for non-deterministic (hardware
+            entropy). ``>= 0`` for reproducible per-PC runs.
         """
         self.X = np.asfortranarray(X, dtype=np.float64)
         self._ctrl = spca_ctrl if spca_ctrl is not None else TRexSPCAControlParameter()
+        self._seed = seed
         self._result: TRexSPCAResult | None = None
 
     def select(self, M: int, tFDR: float) -> "TRexSPCASelector":
@@ -295,7 +304,9 @@ class TRexSPCASelector:
             raise ValueError(f"M must be >= 1, got {M}")
         if not 0.0 < tFDR < 1.0:
             raise ValueError(f"tFDR must be in (0, 1), got {tFDR}")
-        self._result = _TRexSPCA.select(self.X, M, tFDR, self._ctrl)
+        selector = PyTRexSPCASelector(self.X, M, tFDR, self._ctrl, self._seed, False)
+        selector.select()
+        self._result = selector.getResult()
         return self
 
     @property
