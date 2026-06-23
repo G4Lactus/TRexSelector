@@ -136,5 +136,52 @@ TEST_F(TRexGVSTest, Validation_ThrowsOnUnsupportedSolver_TLARS) {
     }, std::invalid_argument);
 }
 
+
+// ========================================================================================
+// Data Integrity
+// ========================================================================================
+
+/** @brief X is restored to its original values after select() returns (object still alive). */
+TEST_F(TRexGVSTest, DataIntegrity_XRestoredAfterSelect) {
+    Eigen::MatrixXd X_copy = X;
+
+    TRexControlParameter tc_params;
+    tc_params.K = 3;
+    tc_params.max_dummy_multiplier = 2;
+    tc_params.solver_type = SolverTypeForTRex::TENET;
+
+    TRexGVSControlParameter gvs_params;
+    gvs_params.gvs_type = GVSType::EN;
+
+    TRexGVSSelector selector(X_map, y_map, 0.1, gvs_params, tc_params, 42, false);
+    selector.select();
+
+    EXPECT_TRUE(X.isApprox(X_copy, 1e-12))
+        << "X was not restored after TRexGVSSelector::select().";
+}
+
+
+/** @brief X is restored to its original values when the object is destroyed without
+ *         calling select() (normalization happens in the constructor). */
+TEST_F(TRexGVSTest, DataIntegrity_XRestoredOnDestruction) {
+    Eigen::MatrixXd X_copy = X;
+
+    TRexControlParameter tc_params;
+    tc_params.K = 3;
+    tc_params.max_dummy_multiplier = 2;
+    tc_params.solver_type = SolverTypeForTRex::TENET;
+
+    TRexGVSControlParameter gvs_params;
+    gvs_params.gvs_type = GVSType::EN;
+
+    {
+        TRexGVSSelector selector(X_map, y_map, 0.1, gvs_params, tc_params, 42, false);
+        // X is now normalized. Destructor fires here.
+    }
+
+    EXPECT_TRUE(X.isApprox(X_copy, 1e-12))
+        << "X was not restored by TRexGVSSelector destructor.";
+}
+
 // ========================================================================================
 } /* End of namespace trex::test::trex_selector_methods::trex_gvs */

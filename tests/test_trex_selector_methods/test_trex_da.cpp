@@ -183,5 +183,60 @@ TEST(TRexDATest, Method_AR1_SKIPL_DoesNotThrow) {
     });
 }
 
+
+// ========================================================================================
+// Data Integrity
+// ========================================================================================
+
+/** @brief X is restored to its original values after select() returns (object still alive). */
+TEST(TRexDATest, DataIntegrity_XRestoredAfterSelect) {
+    Eigen::MatrixXd X = Eigen::MatrixXd::Random(30, 10);
+    Eigen::VectorXd y = Eigen::VectorXd::Random(30);
+    Eigen::MatrixXd X_copy = X;
+
+    Eigen::Map<Eigen::MatrixXd> X_map(X.data(), X.rows(), X.cols());
+    Eigen::Map<Eigen::VectorXd> y_map(y.data(), y.size());
+
+    TRexControlParameter trex_ctrl;
+    trex_ctrl.K = 3;
+    trex_ctrl.max_dummy_multiplier = 2;
+
+    TRexDAControlParameter da_ctrl;
+    da_ctrl.method = DAMethod::AR1;
+
+    TRexDASelector trex(X_map, y_map, 0.1, da_ctrl, trex_ctrl, 42, false);
+    trex.select();
+
+    EXPECT_TRUE(X.isApprox(X_copy, 1e-12))
+        << "X was not restored after TRexDASelector::select().";
+}
+
+
+/** @brief X is restored to its original values when the object is destroyed without
+ *         calling select() (normalization happens in the constructor). */
+TEST(TRexDATest, DataIntegrity_XRestoredOnDestruction) {
+    Eigen::MatrixXd X = Eigen::MatrixXd::Random(30, 10);
+    Eigen::VectorXd y = Eigen::VectorXd::Random(30);
+    Eigen::MatrixXd X_copy = X;
+
+    Eigen::Map<Eigen::MatrixXd> X_map(X.data(), X.rows(), X.cols());
+    Eigen::Map<Eigen::VectorXd> y_map(y.data(), y.size());
+
+    TRexControlParameter trex_ctrl;
+    trex_ctrl.K = 3;
+    trex_ctrl.max_dummy_multiplier = 2;
+
+    TRexDAControlParameter da_ctrl;
+    da_ctrl.method = DAMethod::AR1;
+
+    {
+        TRexDASelector trex(X_map, y_map, 0.1, da_ctrl, trex_ctrl, 42, false);
+        // X is now normalized. Destructor fires here.
+    }
+
+    EXPECT_TRUE(X.isApprox(X_copy, 1e-12))
+        << "X was not restored by TRexDASelector destructor.";
+}
+
 // ========================================================================================
 } /* End of namespace trex::test::trex_selector_methods::trex_da */

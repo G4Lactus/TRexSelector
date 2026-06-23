@@ -114,4 +114,48 @@ TEST_F(TRexScreeningTest, Execution_BootstrapScreenTRexDoesNotThrow) {
 }
 
 /// ========================================================================================
+// Data Integrity
+// ========================================================================================
+
+/** @brief X is restored to its original values after select() returns (object still alive). */
+TEST_F(TRexScreeningTest, DataIntegrity_XRestoredAfterSelect) {
+    Eigen::MatrixXd X_copy = X;
+
+    TRexControlParameter tc_params;
+    tc_params.K = 3;
+    tc_params.max_dummy_multiplier = 2;
+    tc_params.lloop_strategy = LLoopStrategy::STANDARD;
+
+    ScreenTRexControlParameter screen_params;
+
+    ScreenTRexSelector selector(X_map, y_map, screen_params, tc_params, 42, false);
+    selector.select();
+
+    EXPECT_TRUE(X.isApprox(X_copy, 1e-12))
+        << "X was not restored after ScreenTRexSelector::select().";
+}
+
+
+/** @brief X is restored to its original values when the object is destroyed without
+ *         calling select() (normalization happens in the constructor). */
+TEST_F(TRexScreeningTest, DataIntegrity_XRestoredOnDestruction) {
+    Eigen::MatrixXd X_copy = X;
+
+    TRexControlParameter tc_params;
+    tc_params.K = 3;
+    tc_params.max_dummy_multiplier = 2;
+    tc_params.lloop_strategy = LLoopStrategy::STANDARD;
+
+    ScreenTRexControlParameter screen_params;
+
+    {
+        ScreenTRexSelector selector(X_map, y_map, screen_params, tc_params, 42, false);
+        // X is now normalized. Destructor fires here.
+    }
+
+    EXPECT_TRUE(X.isApprox(X_copy, 1e-12))
+        << "X was not restored by ScreenTRexSelector destructor.";
+}
+
+/// ========================================================================================
 } /* End of namespace trex::test::trex_selector_methods::trex_screening */
