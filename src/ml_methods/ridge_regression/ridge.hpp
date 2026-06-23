@@ -91,7 +91,7 @@ private:
         Eigen::Index p = X.cols();
 
         // Normal equation: (X^T X + lambda I) beta = X^T y
-        Eigen::MatrixXd XtX = Eigen::MatrixXd(p, p);
+        Eigen::MatrixXd XtX = Eigen::MatrixXd::Zero(p, p);
         XtX.selfadjointView<Eigen::Lower>().rankUpdate(X.transpose());
 
         // Add Ridge penalty to the diagonal
