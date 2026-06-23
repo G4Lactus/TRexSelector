@@ -4,19 +4,20 @@
 /**
  * @file trex_spca.cpp
  *
- * @brief Implementation of the T-Rex Sparse PCA and Thresholded PCA selector.
+ * @brief Implementation of the T-Rex Sparse PCA selector.
  */
 // ==============================================================================
 
 // std includes
 #include <algorithm>
 #include <cmath>
+#include <iostream>
 #include <stdexcept>
 #include <vector>
 
 // trex_selector_methods includes
 #include <trex_selector_methods/trex_spca/trex_spca.hpp>
-#include <trex_selector_methods/trex_core/trex.hpp>
+#include <trex_selector_methods/trex_gvs/trex_gvs.hpp>
 
 // ml_methods includes
 #include <ml_methods/pca/pca.hpp>
@@ -25,197 +26,243 @@
 
 // ==============================================================================
 
-namespace trex {
-namespace trex_selector_methods {
-namespace trex_spca {
+namespace trex::trex_selector_methods::trex_spca {
 
 // Namespace aliases
 namespace pca        = trex::ml_methods::pca;
 namespace ridge      = trex::ml_methods::ridge;
+namespace tg         = trex::trex_selector_methods::trex_gvs;
 namespace tc         = trex::trex_selector_methods::trex_core;
-namespace std_scaler = trex::ml_methods::standardization;
+namespace sd         = trex::trex_selector_methods::utils::solver_dispatch;
+// std_scaler alias inherited from header via using-declaration of the namespace block
+
+
+// ==============================================================================
+// Constructor
+// ==============================================================================
+
+TRexSPCA::TRexSPCA(Eigen::Map<Eigen::MatrixXd>& X,
+                   Eigen::Index M,
+                   double tFDR,
+                   TRexSPCAControlParameter spca_ctrl,
+                   int seed,
+                   bool verbose)
+    : X_(&X)
+    , M_(M)
+    , tFDR_(tFDR)
+    , spca_ctrl_(std::move(spca_ctrl))
+    , seed_(seed)
+    , verbose_(verbose)
+    , scaler_(std_scaler::LpNormScaler::NormType::L2, /*with_mean=*/true, /*with_norm=*/false)
+{
+    if (M_ > std::min(X_->rows(), X_->cols())) {
+        throw std::invalid_argument(
+            "TRexSPCA: M must not exceed min(n, p).");
+    }
+}
+
+
+// ==============================================================================
+// Destructor
+// ==============================================================================
+
+TRexSPCA::~TRexSPCA() {
+    // Safety net: if select() was interrupted by an exception after centering X
+    // but before restoring it, restore X here so the caller's data is not corrupted.
+    if (X_is_centered_) {
+        scaler_.inverse_transform_inplace(*X_);  // X += means
+        X_is_centered_ = false;
+    }
+}
 
 
 // ==============================================================================
 // TRexSPCA::select
 // ==============================================================================
 
-TRexSPCAResult TRexSPCA::select(Eigen::Map<Eigen::MatrixXd>& X,
-                                Eigen::Index M,
-                                double tFDR,
-                                TRexSPCAControlParameter spca_ctrl) {
+TRexSPCAResult TRexSPCA::select() {
 
-    Eigen::Index n = X.rows();
-    Eigen::Index p = X.cols();
+    const Eigen::Index n = X_->rows();
+    const Eigen::Index p = X_->cols();
 
-    if (M > std::min(n, p)) {
-        throw std::invalid_argument("TRexSPCA::select: M must not exceed min(n, p).");
-    }
+    result_ = TRexSPCAResult{};
+    result_.V = Eigen::MatrixXd::Zero(p, M_);
+    result_.Z = Eigen::MatrixXd::Zero(n, M_);
+    result_.active_sets.resize(static_cast<std::size_t>(M_));
+    result_.gvs_type = spca_ctrl_.gvs_ctrl.gvs_type;
 
-    TRexSPCAResult result;
-    result.V = Eigen::MatrixXd::Zero(p, M);
-    result.Z = Eigen::MatrixXd::Zero(n, M);
-    result.active_sets.resize(M);
+    // 0. Center X column-wise (mean subtraction only, no L2 scaling).
+    //    scaler_ is a member so the destructor can restore X on exception.
+    scaler_.fit(*X_);
+    scaler_.transform_inplace(*X_);  // X -= means
+    X_is_centered_ = true;
 
-    // 0. Center X column-wise (centering only, no L2 scaling).
-    //    LpNormScaler stores column means and restores X exactly at the end of select().
-    std_scaler::LpNormScaler scaler(
-        std_scaler::LpNormScaler::NormType::L2, /*with_mean=*/true, /*with_norm=*/false);
-    scaler.fit(X);
-    scaler.transform_inplace(X);  // X -= means
+    // 1. Compute ordinary PCA on the centered X.
+    pca::PCAResult ord_pca = pca::PCA(false).fit(*X_, M_);
 
-    // 1. Compute ordinary PCA to obtain the PC response vectors (centered X, read-only).
-    pca::PCAResult ord_pca = pca::PCA(false).fit(X, M);
+    // 2. Per-PC loop.
+    for (Eigen::Index m = 0; m < M_; ++m) {
 
-    // 2. Iterate over each PC.
-    for (Eigen::Index m = 0; m < M; ++m) {
+        if (verbose_) {
+            std::cout << "[TRexSPCA] Processing PC " << (m + 1) << " / " << M_ << "\n";
+        }
 
-        // 3. Run T-Rex selector on z_m ~ X.
-        //    TRexSelector requires Eigen::Map (non-const, mutable).
-        //    TRexSelector copies y internally, so z_m is not mutated.
+        // 3. Run TRexGVSSelector on z_m ~ X.
+        //    TRexGVSSelector copies y internally, so z_m is not mutated.
+        //    Auto-configure solver_type to match gvs_type (EN → TENET, IEN → TLASSO).
+        //    Seed: per-PC variation when seed_ >= 0; hardware entropy when seed_ < 0.
         Eigen::VectorXd z_m = ord_pca.Z.col(m);
+        const int seed_pc = (seed_ >= 0) ? seed_ + static_cast<int>(m) * 1000 : -1;
+
+        tc::TRexControlParameter trex_ctrl = spca_ctrl_.trex_ctrl;
+        if (spca_ctrl_.gvs_ctrl.gvs_type == tg::GVSType::EN) {
+            trex_ctrl.solver_type = sd::SolverTypeForTRex::TENET;
+        } else {
+            trex_ctrl.solver_type = sd::SolverTypeForTRex::TLASSO;
+        }
 
         std::vector<Eigen::Index> active_set;
         {
             Eigen::Map<Eigen::VectorXd> z_map(z_m.data(), n);
-            tc::TRexSelector trex(X, z_map, tFDR,
-                                  spca_ctrl.trex_ctrl,
-                                  spca_ctrl.seed, false);
-            trex.select();
+            tg::TRexGVSSelector gvs(*X_, z_map, tFDR_,
+                                    spca_ctrl_.gvs_ctrl,
+                                    trex_ctrl,
+                                    seed_pc, /*verbose=*/false);
+            gvs.select();
 
-            // X is normalized here
-            // extract indices before restoration.
-            const auto& raw_indices = trex.getSelectedIndices();
+            // X is column-normalized here; extract indices before restoration.
+            const auto& raw_indices = gvs.getSelectedIndices();
             active_set.reserve(raw_indices.size());
             for (std::size_t idx : raw_indices) {
                 active_set.push_back(static_cast<Eigen::Index>(idx));
             }
-        } // TRexSelector destructor restores X to its centered state here.
+        } // TRexGVSSelector destructor restores X to its centered state here.
 
         if (active_set.empty()) {
-            // active set empty -> component is effectively null.
             continue;
         }
 
-        result.active_sets[m] = active_set;
+        result_.active_sets[static_cast<std::size_t>(m)] = active_set;
 
-        // 4. Assemble the sparse loading vector.
-        if (spca_ctrl.mode == SPCAMode::ActiveSet) {
-            assemble_active_set_loadings(
-                X, z_m, active_set, spca_ctrl.lambda2, result.V.col(m)
-            );
+        // 4. Assemble sparse loading vector.
+        if (spca_ctrl_.mode == SPCAMode::ActiveSet) {
+            assembleActiveSetLoadings(*X_, z_m, active_set, result_.V.col(m));
         } else {
-            assemble_thresholded_loadings(
+            assembleThresholdedLoadings(
                 ord_pca.V.col(m),
                 static_cast<Eigen::Index>(active_set.size()),
-                result.V.col(m)
-            );
+                result_.V.col(m));
         }
 
-        // 5. Compute sparse PC scores over the active set:
-        //      z_hat_m = X_{A_m} * v_hat_m.
+        // 5. Compute sparse PC scores: z_hat_m = X_{A_m} * v_hat_m.
         for (Eigen::Index idx : active_set) {
-            result.Z.col(m) += X.col(idx) * result.V(idx, m);
+            result_.Z.col(m) += X_->col(idx) * result_.V(idx, m);
         }
     }
 
-    // 6. Compute adjusted explained variance over the fully-assembled score matrix.
-    //    Sparse PCs are not strictly orthogonal thus we adjust by factoring Z = QR
-    //    and using the squared diagonal entries of R as marginal variances.
-    Eigen::HouseholderQR<Eigen::MatrixXd> qr(result.Z);
-    Eigen::MatrixXd R = qr.matrixQR().triangularView<Eigen::Upper>();
+    // 6. Adjust explained variance via QR decomposition of the score matrix.
+    adjustExplainedVariance(result_, *X_);
 
-    result.adjusted_ev   = Eigen::VectorXd::Zero(M);
-    result.cumulative_ev = Eigen::VectorXd::Zero(M);
+    // 7. Restore X to its original (uncentered) state.
+    scaler_.inverse_transform_inplace(*X_);  // X += means
+    X_is_centered_ = false;
 
-    // Total variance of the centered data: trace(X^T X) / (n - 1).
-    // squaredNorm() efficiently sums all squared elements since X is centered.
-    double total_variance = X.squaredNorm() / static_cast<double>(n - 1);
-    double cum_ev = 0.0;
-
-    for (Eigen::Index k = 0; k < M; ++k) {
-        double r_kk = R(k, k);
-        double marginal_ev = (r_kk * r_kk) / static_cast<double>(n - 1);
-        result.adjusted_ev(k) = marginal_ev;
-
-        cum_ev += marginal_ev;
-        result.cumulative_ev(k) = cum_ev / total_variance;
-    }
-
-    // Restore X to its original (uncentered) state.
-    scaler.inverse_transform_inplace(X);  // X += means
-
-    return result;
+    return result_;
 }
 
 
 // ==============================================================================
-// TRexSPCA::assemble_active_set_loadings
+// TRexSPCA::assembleActiveSetLoadings
 // ==============================================================================
 
-void TRexSPCA::assemble_active_set_loadings(
-    const Eigen::Ref<const Eigen::MatrixXd>& X,
+void TRexSPCA::assembleActiveSetLoadings(
+    const Eigen::Ref<const Eigen::MatrixXd>& X_ref,
     const Eigen::Ref<const Eigen::VectorXd>& z_m,
     const std::vector<Eigen::Index>& active_set,
-    double lambda2,
-    Eigen::Ref<Eigen::VectorXd> v_out) {
+    Eigen::Ref<Eigen::VectorXd> v_out) const {
 
-    Eigen::Index k = static_cast<Eigen::Index>(active_set.size());
-    Eigen::Index n = X.rows();
+    const Eigen::Index k = static_cast<Eigen::Index>(active_set.size());
+    const Eigen::Index n = X_ref.rows();
 
     // Extract a contiguous dense subset of the active columns.
     Eigen::MatrixXd X_active(n, k);
     for (Eigen::Index i = 0; i < k; ++i) {
-        X_active.col(i) = X.col(active_set[i]);
+        X_active.col(i) = X_ref.col(active_set[static_cast<std::size_t>(i)]);
     }
 
-    // Solve Ridge regression on the active subset.
-    Eigen::VectorXd beta_ridge = ridge::RidgeSolver::solve(X_active, z_m, lambda2);
-
-    // Normalize and scatter back into the full p-dimensional loading vector.
+    // Ridge regression on the active subset; normalize and scatter back.
+    Eigen::VectorXd beta_ridge = ridge::RidgeSolver::solve(X_active, z_m, spca_ctrl_.lambda2_ridge_loadings);
     beta_ridge.normalize();
+
     for (Eigen::Index i = 0; i < k; ++i) {
-        v_out(active_set[i]) = beta_ridge(i);
+        v_out(active_set[static_cast<std::size_t>(i)]) = beta_ridge(i);
     }
 }
 
 
 // ==============================================================================
-// TRexSPCA::assemble_thresholded_loadings
+// TRexSPCA::assembleThresholdedLoadings
 // ==============================================================================
 
-void TRexSPCA::assemble_thresholded_loadings(
+void TRexSPCA::assembleThresholdedLoadings(
     const Eigen::Ref<const Eigen::VectorXd>& ord_v,
     Eigen::Index active_size,
-    Eigen::Ref<Eigen::VectorXd> v_out) {
+    Eigen::Ref<Eigen::VectorXd> v_out) const {
 
-    Eigen::Index p = ord_v.size();
+    const Eigen::Index p = ord_v.size();
 
-    // Copy absolute values; avoids modifying the original loadings.
+    // Copy absolute values to find the threshold without modifying ord_v.
     std::vector<double> abs_vals(static_cast<std::size_t>(p));
     for (Eigen::Index i = 0; i < p; ++i) {
         abs_vals[static_cast<std::size_t>(i)] = std::abs(ord_v(i));
     }
 
-    // O(p) selection: find the threshold that retains the top |A| elements.
+    // O(p) nth_element to find the cutoff for the top |A| entries.
     auto nth_it = abs_vals.begin() + (p - active_size);
     std::nth_element(abs_vals.begin(), nth_it, abs_vals.end());
-    double threshold = *nth_it;
+    const double threshold = *nth_it;
 
-    // Apply threshold and copy values at or above it.
     for (Eigen::Index i = 0; i < p; ++i) {
         if (std::abs(ord_v(i)) >= threshold) {
             v_out(i) = ord_v(i);
         }
     }
-
-    // Normalize the truncated loading vector to unit length.
     v_out.normalize();
 }
 
 
 // ==============================================================================
-} /* namespace trex_spca */
-} /* namespace trex_selector_methods */
-} /* namespace trex */
+// TRexSPCA::adjustExplainedVariance
+// ==============================================================================
+
+void TRexSPCA::adjustExplainedVariance(
+    TRexSPCAResult& result,
+    const Eigen::Ref<const Eigen::MatrixXd>& X_ref) const {
+
+    // Sparse PCs are not strictly orthogonal; adjust by factoring Z = QR and
+    // using squared diagonal entries of R as marginal variances.
+    Eigen::HouseholderQR<Eigen::MatrixXd> qr(result.Z);
+    const Eigen::MatrixXd R = qr.matrixQR().triangularView<Eigen::Upper>();
+
+    result.adjusted_ev   = Eigen::VectorXd::Zero(M_);
+    result.cumulative_ev = Eigen::VectorXd::Zero(M_);
+
+    // Total variance of centered X: trace(X^T X) / (n - 1).
+    const double total_variance =
+        X_ref.squaredNorm() / static_cast<double>(X_ref.rows() - 1);
+    double cum_ev = 0.0;
+
+    for (Eigen::Index k = 0; k < M_; ++k) {
+        const double r_kk = R(k, k);
+        const double marginal_ev = (r_kk * r_kk) / static_cast<double>(X_ref.rows() - 1);
+        result.adjusted_ev(k) = marginal_ev;
+
+        cum_ev += marginal_ev;
+        result.cumulative_ev(k) = cum_ev / total_variance;
+    }
+}
+
+
+// ==============================================================================
+} /* namespace trex::trex_selector_methods::trex_spca */
 // ==============================================================================

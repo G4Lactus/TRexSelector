@@ -6,7 +6,10 @@
 \usage{
 trex_spca_control(
   mode = "ActiveSet",
-  lambda2 = 1e-06,
+  lambda2_ridge_loadings = 1e-06,
+  gvs_type = "EN",
+  lambda_2 = 0.0,
+  lambda2_method = "GCV",
   seed = -1L,
   K = 20L,
   max_dummy_multiplier = 10L
@@ -18,11 +21,24 @@ assembles loadings via Ridge regression on the T-Rex active set;
 \code{"Thresholded"} keeps and normalizes the top-\code{|A|} ordinary
 PCA loadings.}
 
-\item{lambda2}{Numeric, Ridge penalty for ActiveSet loading assembly
-(default: \code{1e-6}).}
+\item{lambda2_ridge_loadings}{Numeric, Ridge penalty for ActiveSet loading
+assembly (default: \code{1e-6}).}
+
+\item{gvs_type}{Character, GVS variant used internally for per-PC variable
+selection: \code{"EN"} (default, Elastic Net via TENET solver) or
+\code{"IEN"} (Informed Elastic Net via TLASSO solver).}
+
+\item{lambda_2}{Numeric, L2/Elastic Net penalty forwarded to the internal
+TRexGVSSelector. \code{0} (default) triggers automatic determination
+(method selected by \code{lambda2_method}). Supply a positive value to
+bypass auto-determination.}
+
+\item{lambda2_method}{Character, auto-determination strategy for
+\code{lambda_2} when \code{lambda_2 = 0}:
+\code{"GCV"} (default), \code{"COND_NUM"}, \code{"CV_MIN"}, \code{"CV_1SE"}.}
 
 \item{seed}{Integer random seed forwarded to each per-PC T-Rex run.
-Use \code{-1} (default) for non-deterministic (hardware entropy) behavior.}
+Use \code{-1L} (default) for non-deterministic (hardware entropy) behavior.}
 
 \item{K}{Integer, number of T-Rex random experiments per PC (default: 20).}
 
@@ -38,5 +54,6 @@ Build a control list for the T-Rex Sparse PCA selector.
 \examples{
 trex_spca_control()
 trex_spca_control(mode = "Thresholded", K = 10)
+trex_spca_control(gvs_type = "IEN", lambda_2 = 0.01)
 
 }

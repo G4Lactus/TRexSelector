@@ -158,10 +158,10 @@ void TRexGVSSelector::validateGVSParameters() const {
             "Supported: Single, Complete, Average, WPGMA.");
     }
 
-    if (gvs_ctrl_.lambda2_lars < 0.0) {
+    if (gvs_ctrl_.lambda_2 < 0.0) {
         throw std::invalid_argument(
-            "TRexGVSSelector: lambda2_lars must be >= 0. Got: " +
-            std::to_string(gvs_ctrl_.lambda2_lars));
+            "TRexGVSSelector: lambda_2 must be >= 0. Got: " +
+            std::to_string(gvs_ctrl_.lambda_2));
     }
 
     // Validate prior_groups (length p, 0-based, contiguous in [0, M-1]).
@@ -378,8 +378,8 @@ void TRexGVSSelector::finalizeSetup() {
 
 double TRexGVSSelector::computeLambda2() const {
 
-    if (gvs_ctrl_.lambda2_lars > 0.0) {
-        return gvs_ctrl_.lambda2_lars;
+    if (gvs_ctrl_.lambda_2 > 0.0) {
+        return gvs_ctrl_.lambda_2;
     }
 
     // Auto-compute lambda_2 and convert from glmnet to LARS units: lambda_lars = lambda_glmnet * p / 2

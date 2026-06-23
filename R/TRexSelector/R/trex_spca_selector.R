@@ -12,10 +12,20 @@
 #'   assembles loadings via Ridge regression on the T-Rex active set;
 #'   \code{"Thresholded"} keeps and normalizes the top-\code{|A|} ordinary
 #'   PCA loadings.
-#' @param lambda2 Numeric, Ridge penalty for ActiveSet loading assembly
-#'   (default: \code{1e-6}).
+#' @param lambda2_ridge_loadings Numeric, Ridge penalty for ActiveSet loading
+#'   assembly (default: \code{1e-6}).
+#' @param gvs_type Character, GVS variant used internally for per-PC variable
+#'   selection: \code{"EN"} (default, Elastic Net via TENET solver) or
+#'   \code{"IEN"} (Informed Elastic Net via TLASSO solver).
+#' @param lambda_2 Numeric, L2/Elastic Net penalty forwarded to the internal
+#'   TRexGVSSelector. \code{0} (default) triggers automatic determination
+#'   (method selected by \code{lambda2_method}). Supply a positive value to
+#'   bypass auto-determination.
+#' @param lambda2_method Character, auto-determination strategy for
+#'   \code{lambda_2} when \code{lambda_2 = 0}:
+#'   \code{"GCV"} (default), \code{"COND_NUM"}, \code{"CV_MIN"}, \code{"CV_1SE"}.
 #' @param seed Integer random seed forwarded to each per-PC T-Rex run.
-#'   Use \code{-1} (default) for non-deterministic (hardware entropy) behavior.
+#'   Use \code{-1L} (default) for non-deterministic (hardware entropy) behavior.
 #' @param K Integer, number of T-Rex random experiments per PC (default: 20).
 #' @param max_dummy_multiplier Integer, maximum dummy feature multiplier for
 #'   T-Rex sub-selection (default: 10).
@@ -25,26 +35,36 @@
 #' @examples
 #' trex_spca_control()
 #' trex_spca_control(mode = "Thresholded", K = 10)
+#' trex_spca_control(gvs_type = "IEN", lambda_2 = 0.01)
 #'
 #' @export
-trex_spca_control <- function(mode                 = "ActiveSet",
-                               lambda2               = 1e-6,
-                               seed                  = -1L,
-                               K                     = 20L,
-                               max_dummy_multiplier  = 10L) {
-  mode <- match.arg(mode, c("ActiveSet", "Thresholded"))
+trex_spca_control <- function(mode                   = "ActiveSet",
+                              lambda2_ridge_loadings  = 1e-6,
+                              gvs_type               = "EN",
+                              lambda_2               = 0.0,
+                              lambda2_method          = "GCV",
+                              seed                   = -1L,
+                              K                      = 20L,
+                              max_dummy_multiplier   = 10L) {
+  mode          <- match.arg(mode,          c("ActiveSet", "Thresholded"))
+  gvs_type      <- match.arg(gvs_type,      c("EN", "IEN"))
+  lambda2_method <- match.arg(lambda2_method, c("GCV", "COND_NUM", "CV_MIN", "CV_1SE"))
   stopifnot(
-    is.numeric(lambda2), lambda2 >= 0,
+    is.numeric(lambda2_ridge_loadings), lambda2_ridge_loadings >= 0,
+    is.numeric(lambda_2),               lambda_2 >= 0,
     is.numeric(seed),
-    is.numeric(K), K >= 1L,
-    is.numeric(max_dummy_multiplier), max_dummy_multiplier >= 1L
+    is.numeric(K),                      K >= 1L,
+    is.numeric(max_dummy_multiplier),   max_dummy_multiplier >= 1L
   )
   list(
-    mode                = mode,
-    lambda2             = as.numeric(lambda2),
-    seed                = as.integer(seed),
-    K                   = as.integer(K),
-    max_dummy_multiplier = as.integer(max_dummy_multiplier)
+    mode                  = mode,
+    lambda2_ridge_loadings = as.numeric(lambda2_ridge_loadings),
+    gvs_type              = gvs_type,
+    lambda_2              = as.numeric(lambda_2),
+    lambda2_method        = lambda2_method,
+    seed                  = as.integer(seed),
+    K                     = as.integer(K),
+    max_dummy_multiplier  = as.integer(max_dummy_multiplier)
   )
 }
 
@@ -90,7 +110,7 @@ TRexSPCASelector <- R6::R6Class("TRexSPCASelector",
     #'   (default: \code{trex_spca_control()}).
     initialize = function(X, control = trex_spca_control()) {
       if (!is.matrix(X)) X <- as.matrix(X)
-      stopifnot(is.numeric(X), is.numeric(control$lambda2))
+      stopifnot(is.numeric(X), is.numeric(control$lambda2_ridge_loadings))
       private$X_ref <- X
       private$ctrl  <- control
     },
@@ -106,11 +126,13 @@ TRexSPCASelector <- R6::R6Class("TRexSPCASelector",
     select = function(M, tFDR) {
       stopifnot(is.numeric(M), M >= 1L,
                 is.numeric(tFDR), tFDR > 0, tFDR < 1)
+      seed <- if (!is.null(private$ctrl$seed)) as.integer(private$ctrl$seed) else -1L
       private$result_ <- trex_spca_select(
         private$X_ref,
         as.integer(M),
         as.numeric(tFDR),
-        private$ctrl
+        private$ctrl,
+        seed
       )
       invisible(self)
     }

@@ -939,15 +939,17 @@ trex_selector_get_y_mean <- function(r_ptr) {
 
 #' @title Run T-Rex Sparse PCA selection
 #'
-#' @description Orchestrates M rounds of ordinary PCA, T-Rex FDR-controlled
+#' @description Orchestrates M rounds of ordinary PCA, T-Rex GVS FDR-controlled
 #'   variable selection, and sparse loading assembly to produce sparse principal
 #'   components.
 #'
 #' @param X Design matrix (n x p). Column-centered internally; restored on return.
 #' @param M Integer, number of sparse PCs to extract.
 #' @param tFDR Numeric, target false discovery rate in (0, 1).
-#' @param spca_ctrl_list Named R list of control parameters (mode, lambda2, seed,
+#' @param spca_ctrl_list Named R list of control parameters (mode,
+#'   lambda2_ridge_loadings, gvs_type, lambda_2, lambda2_method,
 #'   K, max_dummy_multiplier).
+#' @param seed Integer random seed. \code{-1L} (default) for non-deterministic.
 #'
 #' @return Named list:
 #'   \itemize{
@@ -958,8 +960,8 @@ trex_selector_get_y_mean <- function(r_ptr) {
 #'     \item \code{cumulative_ev} Numeric vector of cumulative explained variance (M).
 #'   }
 #' @noRd
-trex_spca_select <- function(X, M, tFDR, spca_ctrl_list) {
-    .Call(`_TRexSelector_trex_spca_select`, X, M, tFDR, spca_ctrl_list)
+trex_spca_select <- function(X, M, tFDR, spca_ctrl_list, seed) {
+    .Call(`_TRexSelector_trex_spca_select`, X, M, tFDR, spca_ctrl_list, seed)
 }
 
 #' @title Create LARS Solver
@@ -1443,4 +1445,3 @@ rcpp_compute_fdp_dense <- function(beta_hat, beta, eps = 1e-15) {
 rcpp_compute_tpp_dense <- function(beta_hat, beta, eps = 1e-15) {
     .Call(`_TRexSelector_rcpp_compute_tpp_dense`, beta_hat, beta, eps)
 }
-

@@ -11,10 +11,10 @@ extern TRexControlParameter parse_control_parameter(const Rcpp::List& control);
 
 /**
  * @brief Parses an R list into a TRexGVSControlParameter C++ struct.
- * 
+ *
  * Maps parameters such as grouping correlation thresholds, linkage methods,
  * and lambda penalties associated with the Group Variable Selection variant.
- * 
+ *
  * @param control List of parameters passed from R.
  * @return Populated TRexGVSControlParameter instance.
  */
@@ -27,9 +27,9 @@ TRexGVSControlParameter parse_gvs_parameter(const Rcpp::List& control) {
         else if (method == "IEN") params.gvs_type = GVSType::IEN;
         else Rcpp::stop("Unknown GVSType: " + method);
     }
-    
+
     if (control.containsElementNamed("corr_max")) params.corr_max = control["corr_max"];
-    
+
     if (control.containsElementNamed("hc_linkage")) {
         std::string linkage = control["hc_linkage"];
         if (linkage == "Single") params.hc_linkage = trex::ml_methods::clustering::hierarchical::agglomerative::LinkageMethod::Single;
@@ -38,9 +38,9 @@ TRexGVSControlParameter parse_gvs_parameter(const Rcpp::List& control) {
         else if (linkage == "WPGMA") params.hc_linkage = trex::ml_methods::clustering::hierarchical::agglomerative::LinkageMethod::WPGMA;
         else Rcpp::stop("Unsupported linkage method for GVS: " + linkage + "\nSupported: Single, Complete, Average, WPGMA.");
     }
-    
-    if (control.containsElementNamed("lambda_2")) params.lambda2_lars = control["lambda_2"];
-    
+
+    if (control.containsElementNamed("lambda_2")) params.lambda_2 = control["lambda_2"];
+
     if (control.containsElementNamed("groups") && !Rf_isNull(control["groups"])) {
         IntegerVector r_groups = control["groups"];
         params.prior_groups = std::vector<Eigen::Index>(r_groups.size());

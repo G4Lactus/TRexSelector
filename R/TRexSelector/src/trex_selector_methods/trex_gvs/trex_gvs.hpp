@@ -62,7 +62,7 @@
  *      `writeAssembledDIntoMap`.
  *
  *    - The lambda_2 ridge parameter is either user-supplied
- *      (TRexGVSControlParameter::lambda2_lars > 0) or computed once via the
+ *      (TRexGVSControlParameter::lambda_2 > 0) or computed once via the
  *      Generalized Cross-Validation (GCV) optimum on the original (X, y),
  *      scaled by p / 2 to convert from glmnet to LARS units.
  *
@@ -186,10 +186,10 @@ struct TRexGVSControlParameter {
      *  is then scaled by p / 2 to obtain LARS units (matches R's
      *  `trex_GVS()` convention).
      */
-    double lambda2_lars = 0.0;
+    double lambda_2 = 0.0;
 
     /** @brief Selection rule for auto-computing `lambda_2` when
-     *  `lambda2_lars == 0`. Default: GCV (backward-compatible).
+     *  `lambda_2 == 0`. Default: GCV (backward-compatible).
      */
     LambdaSelectionMethod lambda2_method = LambdaSelectionMethod::GCV;
 

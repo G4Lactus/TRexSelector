@@ -3,7 +3,7 @@
 #
 # Test groups:
 #   1. trex_spca_control — default and custom construction
-#   2. TRexSPCASelector  — basic execution (ActiveSet / Thresholded)
+#   2. TRexSPCASelector  — basic execution (modes / GVS variants)
 #   3. TRexSPCASelector  — output dimensions
 #   4. TRexSPCASelector  — active set bounds
 #   5. TRexSPCASelector  — explained variance properties
@@ -34,38 +34,65 @@ ctrl  <- trex_spca_control(K = 3L, max_dummy_multiplier = 3L, seed = 1L)
 
 test_that("trex_spca_control returns a named list with correct defaults", {
   ctrl_def <- trex_spca_control()
-  expect_named(ctrl_def, c("mode", "lambda2", "seed", "K", "max_dummy_multiplier"))
-  expect_equal(ctrl_def$mode,                 "ActiveSet")
-  expect_equal(ctrl_def$lambda2,              1e-6)
-  expect_equal(ctrl_def$seed,                 -1L)
-  expect_equal(ctrl_def$K,                    20L)
-  expect_equal(ctrl_def$max_dummy_multiplier, 10L)
+  expect_named(ctrl_def, c("mode", "lambda2_ridge_loadings", "gvs_type",
+                            "lambda_2", "lambda2_method",
+                            "seed", "K", "max_dummy_multiplier"))
+  expect_equal(ctrl_def$mode,                   "ActiveSet")
+  expect_equal(ctrl_def$lambda2_ridge_loadings,  1e-6)
+  expect_equal(ctrl_def$gvs_type,               "EN")
+  expect_equal(ctrl_def$lambda_2,            0.0)
+  expect_equal(ctrl_def$lambda2_method,          "GCV")
+  expect_equal(ctrl_def$seed,                   -1L)
+  expect_equal(ctrl_def$K,                       20L)
+  expect_equal(ctrl_def$max_dummy_multiplier,    10L)
 })
 
 test_that("trex_spca_control rejects invalid mode", {
   expect_error(trex_spca_control(mode = "unknown"))
 })
 
-test_that("trex_spca_control rejects negative lambda2", {
-  expect_error(trex_spca_control(lambda2 = -1))
+test_that("trex_spca_control rejects invalid gvs_type", {
+  expect_error(trex_spca_control(gvs_type = "unknown"))
+})
+
+test_that("trex_spca_control rejects negative lambda2_ridge_loadings", {
+  expect_error(trex_spca_control(lambda2_ridge_loadings = -1))
+})
+
+test_that("trex_spca_control rejects invalid lambda2_method", {
+  expect_error(trex_spca_control(lambda2_method = "unknown"))
 })
 
 
 # =============================================================================
-# Group 2: TRexSPCASelector — basic execution (modes)
+# Group 2: TRexSPCASelector — basic execution (modes / GVS variants)
 # =============================================================================
 
-test_that("TRexSPCASelector select() runs to completion (ActiveSet mode)", {
+test_that("TRexSPCASelector select() runs to completion (ActiveSet + EN)", {
   d <- local_fixture()
   sel <- TRexSPCASelector$new(d$X, control = trex_spca_control(
-    mode = "ActiveSet", K = 3L, max_dummy_multiplier = 3L, seed = 1L))
+    mode = "ActiveSet", gvs_type = "EN", K = 3L, max_dummy_multiplier = 3L, seed = 1L))
   expect_no_error(sel$select(M, tFDR))
 })
 
-test_that("TRexSPCASelector select() runs to completion (Thresholded mode)", {
+test_that("TRexSPCASelector select() runs to completion (Thresholded + EN)", {
   d <- local_fixture()
   sel <- TRexSPCASelector$new(d$X, control = trex_spca_control(
-    mode = "Thresholded", K = 3L, max_dummy_multiplier = 3L, seed = 1L))
+    mode = "Thresholded", gvs_type = "EN", K = 3L, max_dummy_multiplier = 3L, seed = 1L))
+  expect_no_error(sel$select(M, tFDR))
+})
+
+test_that("TRexSPCASelector select() runs to completion (ActiveSet + IEN)", {
+  d <- local_fixture()
+  sel <- TRexSPCASelector$new(d$X, control = trex_spca_control(
+    mode = "ActiveSet", gvs_type = "IEN", K = 3L, max_dummy_multiplier = 3L, seed = 1L))
+  expect_no_error(sel$select(M, tFDR))
+})
+
+test_that("TRexSPCASelector select() accepts a fixed lambda_2 bypass value", {
+  d <- local_fixture()
+  sel <- TRexSPCASelector$new(d$X, control = trex_spca_control(
+    gvs_type = "EN", lambda_2 = 0.01, K = 3L, max_dummy_multiplier = 3L, seed = 1L))
   expect_no_error(sel$select(M, tFDR))
 })
 

@@ -61,9 +61,9 @@ test_that("TRexGVSSelector executes correctly with valid data", {
   # Assert result structure and logic
   res_indices <- selector$selected_indices
   res_T_stop <- selector$T_stop
-  
+
   expect_type(res_indices, "integer")
-  
+
   expect_type(res_T_stop, "integer")
 
   # Bounds check on output selected indices (1 <= index <= p)
@@ -96,10 +96,10 @@ test_that("TRexGVSSelector handles concurrent execution properly (OpenMP)", {
 
   res_openmp_indices <- selector_openmp$selected_indices
   res_openmp_T_stop <- selector_openmp$T_stop
-  
+
 
   expect_type(res_openmp_indices, "integer")
-  
+
   expect_type(res_openmp_T_stop, "integer")
 })
 
@@ -138,7 +138,7 @@ test_that("TRexGVSSelector correctly guards against invalid parameters", {
   # Negative Ridge lambda_2 penalty
   expect_error(
     TRexGVSSelector$new(X, y, gvs_control = trex_gvs_control(gvs_type = "EN", lambda_2 = -1.0), verbose = FALSE),
-    "lambda2_lars must be >= 0"
+    "lambda_2 must be >= 0"
   )
 })
 
@@ -191,9 +191,9 @@ test_that("TRexGVSSelector behaves memory safe with memory mapping enabled", {
 
   res_indices <- selector$selected_indices
   res_T_stop <- selector$T_stop
-  
+
   expect_type(res_indices, "integer")
-  
+
 })
 
 
