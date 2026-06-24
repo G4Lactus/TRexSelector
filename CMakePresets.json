@@ -34,6 +34,15 @@
             }
         },
         {
+            "name": "local-install",
+            "displayName": "Release (install to project-local install/)",
+            "description": "Same as release-libs but pre-sets install prefix to ${sourceDir}/install for cmake --install",
+            "inherits": "release-libs",
+            "cacheVariables": {
+                "CMAKE_INSTALL_PREFIX": "${sourceDir}/install"
+            }
+        },
+        {
             "name": "vcpkg-release",
             "displayName": "Release with vcpkg dependencies",
             "description": "Release build (no demos) using vcpkg toolchain to auto-install dependencies. Requires VCPKG_ROOT to be set.",
@@ -84,6 +93,11 @@
             "configurePreset": "release-libs"
         },
         {
+            "name": "local-install-build",
+            "displayName": "Release Build (local install)",
+            "configurePreset": "local-install"
+        },
+        {
             "name": "vcpkg-release-build",
             "displayName": "Release Build (vcpkg)",
             "configurePreset": "vcpkg-release"
@@ -106,6 +120,14 @@
             "steps": [
                 { "type": "configure", "name": "release-libs" },
                 { "type": "build",     "name": "release-build-libs" }
+            ]
+        },
+        {
+            "name": "local-install",
+            "displayName": "Configure + Build + (ready to install locally)",
+            "steps": [
+                { "type": "configure", "name": "local-install" },
+                { "type": "build",     "name": "local-install-build" }
             ]
         },
         {
