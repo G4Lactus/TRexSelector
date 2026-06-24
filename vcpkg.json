@@ -9,10 +9,6 @@
             "name": "boost-headers",
             "version>=": "1.80.0"
         },
-        {
-            "name": "boost-iostreams",
-            "version>=": "1.80.0"
-        },
         "cereal",
         {
             "name": "libomp",
