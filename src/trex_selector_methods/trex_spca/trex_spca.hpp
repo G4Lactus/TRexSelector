@@ -111,6 +111,7 @@ struct TRexSPCAControlParameter {
      */
     double lambda2_ridge_loadings = 1e-6;
 
+
     // ====================================
     // GVS Sub-Selector
     // ====================================
@@ -123,7 +124,7 @@ struct TRexSPCAControlParameter {
      *    - gvs_ctrl.lambda_2       : set > 0.0 to supply a fixed value; 0.0 (default)
      *                                triggers auto-determination.
      *    - gvs_ctrl.lambda2_method : selects the auto-determination strategy
-     *                                (GCV, CV_MIN, CV_1SE, COND_NUM; default: GCV).
+     *                                (GCV, CV_MIN, CV_1SE; default: CV_1SE).
      */
     tg::TRexGVSControlParameter gvs_ctrl;
 
