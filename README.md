@@ -36,7 +36,7 @@ experiments, a voting threshold is derived that provably bounds the FDR.
 | `TRexGVSSelector` | Grouped variable selection |
 | `TRexScreeningSelector` | Fast FDR-controlled variable pre-screening for large *p* |
 | `TRexBiobankScreeningSelector` | High-throughput genomic / biobank screening |
-| `TRexSparsePCA`| coming soon |
+| `TRexSPCA` | FDR-controlled sparse principal component analysis |
 
 ---
 
