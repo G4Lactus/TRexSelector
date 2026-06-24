@@ -85,8 +85,8 @@ target_link_libraries(trex_tsolvers
         OpenMP::OpenMP_CXX              # Parallel computing
 
     PRIVATE
-        ${BLAS_LIBRARIES}               # BLAS backend
-        ${LAPACK_LIBRARIES}             # LAPACK backend
+        BLAS::BLAS                      # BLAS backend (imported target — portable across machines)
+        LAPACK::LAPACK                  # LAPACK backend (imported target — portable across machines)
 )
 # ==============================================================================
 
