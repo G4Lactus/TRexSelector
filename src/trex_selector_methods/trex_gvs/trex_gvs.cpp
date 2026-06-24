@@ -88,6 +88,15 @@ TRexGVSSelector::TRexGVSSelector(
     gvs_ctrl_(std::move(gvs_control)),
     gvs_use_mmap_(trex_control.use_memory_mapping)
 {
+    // Resolve CV fold-permutation seed (analogous to permutation_base_seed_ in base).
+    if (gvs_ctrl_.cv_seed >= 0) {
+        resolved_cv_seed_ = static_cast<unsigned int>(gvs_ctrl_.cv_seed);
+    } else if (seed_ >= 0) {
+        resolved_cv_seed_ = trex::utils::datageneration::dummygen::mix_seed(
+            static_cast<std::uint32_t>(seed_), 1u);
+    } else {
+        resolved_cv_seed_ = std::random_device{}();
+    }
     // ---- Solver-type compatibility checks ---------------------------------
     if (gvs_ctrl_.gvs_type == GVSType::EN) {
         if (trex_ctrl_.solver_type != sd::SolverTypeForTRex::TENET) {
@@ -417,7 +426,7 @@ double TRexGVSSelector::computeLambda2() const {
                    gvs_ctrl_.cv_n_folds,
                    gvs_ctrl_.cv_n_lambda,
                    /*lambda_ratio=*/1000.0,
-                   gvs_ctrl_.cv_seed);
+                   resolved_cv_seed_);
             lambda_glmnet = cv.cv_min();
             break;
         }
@@ -430,7 +439,7 @@ double TRexGVSSelector::computeLambda2() const {
                    gvs_ctrl_.cv_n_folds,
                    gvs_ctrl_.cv_n_lambda,
                    /*lambda_ratio=*/1000.0,
-                   gvs_ctrl_.cv_seed);
+                   resolved_cv_seed_);
             lambda_glmnet = cv.cv_1se();
             break;
         }

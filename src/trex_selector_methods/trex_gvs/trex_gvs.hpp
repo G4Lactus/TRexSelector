@@ -208,9 +208,13 @@ struct TRexGVSControlParameter {
     Eigen::Index cv_n_lambda = 100;
 
     /** @brief Seed for the deterministic fold-permutation RNG when
-     *  `lambda2_method` is `CV_MIN` or `CV_1SE`. Default: 0.
+     *  `lambda2_method` is `CV_MIN` or `CV_1SE`.
+     *
+     *  -  `-1` (default): derived from the T-Rex `seed` parameter —
+     *      deterministic when `seed >= 0`, hardware-entropy when `seed < 0`.
+     *  - `>= 0`: explicit fold seed; overrides `seed` for CV only.
      */
-    unsigned int cv_seed = 0;
+    int cv_seed = -1;
 
     /** @brief Optional prior cluster assignment (length p, 0-based, contiguous
      *  IDs in [0, M-1]). Empty (default) triggers Route 2 (auto-cluster).
@@ -393,6 +397,15 @@ protected:
 
     /** @brief Resolved lambda_2 in LARS units (> 0 after computeLambda2()). */
     double lambda2_{0.0};
+
+    /** @brief Resolved CV fold-permutation seed.
+     *
+     *  Computed once in the constructor from `gvs_ctrl_.cv_seed` and `seed_`:
+     *  - `cv_seed >= 0`: used directly (explicit override).
+     *  - `cv_seed < 0 && seed_ >= 0`: `mix_seed(seed_, 1u)` (deterministic).
+     *  - `cv_seed < 0 && seed_ < 0`:  `std::random_device{}()` (entropy).
+     */
+    unsigned int resolved_cv_seed_{0};
 
     /** @brief Full GVS result of the last select() call. */
     GVSSelectionResult gvs_result_;
