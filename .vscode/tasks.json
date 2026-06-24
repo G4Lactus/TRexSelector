@@ -62,6 +62,33 @@
         },
 
         // -----------------------------------------------------------------------
+        // C++ Install (cmake --install)
+        // -----------------------------------------------------------------------
+
+        // Install to project-local install/ directory (uses local-install preset which pre-sets prefix)
+        {
+            "type": "shell",
+            "label": "CMake Install (local → install/)",
+            "command": "cmake",
+            "args": ["--install", "build/release-portable"],
+            "options": {"cwd": "${workspaceFolder}"},
+            "group": {"kind": "build"},
+            "problemMatcher": [],
+            "detail": "Install headers + libs to install/ (requires local-install preset build first)"
+        },
+        // Install to system /usr/local — requires sudo on macOS
+        {
+            "type": "shell",
+            "label": "CMake Install (system → /usr/local)",
+            "command": "cmake",
+            "args": ["--install", "build/release-portable", "--prefix", "/usr/local"],
+            "options": {"cwd": "${workspaceFolder}"},
+            "group": {"kind": "build"},
+            "problemMatcher": [],
+            "detail": "Install headers + libs to /usr/local (may require sudo on macOS)"
+        },
+
+        // -----------------------------------------------------------------------
         // R Package (R/TRexSelector/)
         // -----------------------------------------------------------------------
 
