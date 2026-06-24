@@ -111,7 +111,10 @@ TRexSPCAResult TRexSPCA::select() {
         //    Auto-configure solver_type to match gvs_type (EN → TENET, IEN → TLASSO).
         //    Seed: per-PC variation when seed_ >= 0; hardware entropy when seed_ < 0.
         Eigen::VectorXd z_m = ord_pca.Z.col(m);
-        const int seed_pc = (seed_ >= 0) ? seed_ + static_cast<int>(m) * 1000 : -1;
+        const int seed_pc = (seed_ >= 0)
+            ? static_cast<int>(trex::utils::datageneration::dummygen::mix_seed(
+                static_cast<std::uint32_t>(seed_), m) & 0x7FFFFFFFu)
+            : -1;
 
         tc::TRexControlParameter trex_ctrl = spca_ctrl_.trex_ctrl;
         if (spca_ctrl_.gvs_ctrl.gvs_type == tg::GVSType::EN) {

@@ -181,7 +181,7 @@ public:
      * @param tFDR       Target false discovery rate.
      * @param spca_ctrl  Control parameters (loading mode, GVS type, lambda2, T-Rex params).
      * @param seed       Random seed for reproducibility.
-     *                   seed >= 0 : per-PC deterministic runs (seed + m * 1000).
+     *                   seed >= 0 : per-PC deterministic runs via mix_seed(seed, m).
      *                   seed < 0  : non-deterministic (default: -1).
      * @param verbose    Enable verbose output (default: false).
      *
