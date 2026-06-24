@@ -139,18 +139,20 @@ enum class GVSType {
  *        when no user-supplied value is given.
  *
  * @details
- *   - `GCV`     : minimise generalised cross-validation criterion
- *                 (closed-form via SVD; default, backward compatible).
- *   - `CV_MIN`  : k-fold cross-validation, lambda minimising mean MSE.
  *   - `CV_1SE`  : k-fold cross-validation, glmnet-style one-standard-error
  *                 rule (largest lambda whose CV-MSE is within one SE of
  *                 the CV-min, biased toward stronger regularisation).
+ *                 Default: produces higher TPR at controlled FDR on
+ *                 high-correlation DGPs.
+ *   - `CV_MIN`  : k-fold cross-validation, lambda minimising mean MSE.
+ *   - `GCV`     : minimise generalised cross-validation criterion
+ *                 (closed-form via SVD; fast but tends toward the Lasso
+ *                 solution on low-noise problems).
  */
 enum class LambdaSelectionMethod {
-    GCV,
-    COND_NUM,
+    CV_1SE,
     CV_MIN,
-    CV_1SE
+    GCV
 };
 
 
@@ -189,15 +191,9 @@ struct TRexGVSControlParameter {
     double lambda_2 = 0.0;
 
     /** @brief Selection rule for auto-computing `lambda_2` when
-     *  `lambda_2 == 0`. Default: GCV (backward-compatible).
+     *  `lambda_2 == 0`. Default: CV_1SE.
      */
-    LambdaSelectionMethod lambda2_method = LambdaSelectionMethod::GCV;
-
-    /** @brief Maximum allowed condition number for the Gram matrix X^T X
-     *  when `lambda2_method` is `COND_NUM`. Used to compute the minimal
-     *  ridge penalty required for numerical stability. Default: 10000.0.
-     */
-    double kappa_max = 10000.0;
+    LambdaSelectionMethod lambda2_method = LambdaSelectionMethod::CV_1SE;
 
     /** @brief Number of folds for k-fold cross-validation when
      *  `lambda2_method` is `CV_MIN` or `CV_1SE`. Default: 10

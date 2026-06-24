@@ -411,34 +411,6 @@ double TRexGVSSelector::computeLambda2() const {
             lambda_glmnet = gcv.gcv_optimal();
             break;
         }
-        case LambdaSelectionMethod::COND_NUM: {
-            double eta_max = 0.0;
-            double eta_min = 0.0;
-            const double n_inv = 1.0 / static_cast<double>(n_);
-
-            if (p_ > n_) {
-                // p > n: Rank deficient, min eigenvalue of X^T X is exactly 0.
-                // Max eigenvalue is the max eigenvalue of X X^T.
-                Eigen::MatrixXd XXT = (*X_) * X_->transpose() * n_inv;
-                Eigen::SelfAdjointEigenSolver<Eigen::MatrixXd> eig(XXT, Eigen::EigenvaluesOnly);
-                eta_max = eig.eigenvalues().maxCoeff();
-                eta_min = 0.0;
-            } else {
-                // p <= n: Compute full spectrum of X^T X.
-                Eigen::MatrixXd XTX = X_->transpose() * (*X_) * n_inv;
-                Eigen::SelfAdjointEigenSolver<Eigen::MatrixXd> eig(XTX, Eigen::EigenvaluesOnly);
-                eta_max = eig.eigenvalues().maxCoeff();
-                eta_min = std::max(0.0, eig.eigenvalues().minCoeff()); // Guard against numerical noise
-            }
-
-            double kappa_max = gvs_ctrl_.kappa_max;
-            if (kappa_max <= 1.0) {
-                kappa_max = 1.0 + 1e-6; // Prevent division by zero
-            }
-
-            lambda_glmnet = std::max(0.0, (eta_max - kappa_max * eta_min) / (kappa_max - 1.0));
-            break;
-        }
         case LambdaSelectionMethod::CV_MIN: {
             ms::ridge_cv cv;
             cv.fit(*X_, y_,
@@ -900,10 +872,9 @@ void TRexGVSSelector::prepareDummiesForLStep(LStepContext& ctx)
     // ---- Generate / extend per-experiment dummy layers -------------------
     for (std::size_t k = 0; k < K; ++k) {
 
-        std::mt19937 rng(static_cast<std::uint32_t>(
-            base_seed +
-            static_cast<std::uint64_t>(k) * 1000003ULL +
-            static_cast<std::uint64_t>(LL)));
+        std::mt19937 rng(trex::utils::datageneration::dummygen::mix_seed(
+            trex::utils::datageneration::dummygen::mix_seed(
+                static_cast<std::uint32_t>(base_seed), k), LL));
 
         if (redraw_all) {
             // Redraw all LL layers from scratch.
