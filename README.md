@@ -165,27 +165,40 @@ pytest Python/TRexSelector/tests/ -v
 
 The library installs CMake package config files and can be consumed by other C++ projects via `find_package(TRexSelector)`.
 
-**Step 1 — Configure and build:**
+### Install the library
+
+**Option A — Install to the project-local `install/` directory:**
 
 ```bash
-# Debug build (symbols, no optimisation)
-cmake --preset debug
-cmake --build --preset debug-build
+# 1. Configure and build (portable release, no -march=native)
+cmake --workflow --preset local-install
 
-# Release build (optimised)
-cmake --preset release
-cmake --build --preset release-build
+# 2. Run the install step
+cmake --install build/release-portable
+# Installs to <project-root>/install/ (prefix set in the local-install preset)
 ```
 
-**Step 2 — Install to a prefix:**
+**Option B — Install system-wide (`/usr/local`):**
 
 ```bash
-cmake --install build/release --prefix /path/to/install
+# 1. Configure and build
+cmake --workflow --preset release-libs
+
+# 2. Install (sudo required on macOS)
+sudo cmake --install build/release-portable --prefix /usr/local
 ```
 
-**Step 3 — Consume in your project (`CMakeLists.txt`):**
+**Option C — Install to a custom prefix:**
+
+```bash
+cmake --workflow --preset release-libs
+cmake --install build/release-portable --prefix /your/custom/prefix
+```
+
+### Consume in a downstream project
 
 ```cmake
+# CMakeLists.txt of the consuming project
 find_package(TRexSelector REQUIRED)
 
 target_link_libraries(my_app PRIVATE
@@ -193,20 +206,22 @@ target_link_libraries(my_app PRIVATE
 )
 ```
 
-Available targets:
+If the library is not on the standard search path, pass its prefix:
+
+```bash
+cmake -S . -B build -DCMAKE_PREFIX_PATH=/path/to/TRexSelector/install
+```
+
+**Exported targets:**
 
 | Target | Contains |
 |--------|----------|
-| `TRexSelector::trex_selector_methods` | All selectors — links tsolvers, ml_methods, utils |
+| `TRexSelector::trex_selector_methods` | All selectors — links tsolvers, ml\_methods, utils |
 | `TRexSelector::trex_tsolvers` | T-algorithm solvers only |
 | `TRexSelector::trex_ml_methods` | Standardization, clustering, model selection |
 | `TRexSelector::trex_utils` | Foundational utilities (memmap, serialization, OpenMP, Eigen) |
 
-Point `CMAKE_PREFIX_PATH` at your install prefix so `find_package` can locate the config:
-
-```bash
-cmake -S . -B build -DCMAKE_PREFIX_PATH=/path/to/install
-```
+All targets bring their transitive dependencies (Eigen3, Cereal, OpenMP, Boost, BLAS/LAPACK) with them — downstream projects do not need to call `find_package` for those individually.
 
 ---
 
