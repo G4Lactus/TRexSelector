@@ -441,8 +441,9 @@ protected:
 
     // ----- Effective data shapes used by the solver -----
 
-    /** @brief Number of effective rows seen by the solver (n for EN,
-     *  n + M for IEN). Set once per select() inside setupGVS().
+    /** @brief Number of effective rows seen by the solver:
+     *  n for EN, n + M for IEN.
+     *  Set once per select() in onSelectBegin().
      */
     std::size_t n_eff_{0};
 
@@ -555,11 +556,11 @@ protected:
     // ============================================================
 
     /**
-     * @brief Draw one cluster-aware dummy layer (n x p).
+     * @brief Draw one cluster-aware dummy layer (n_ rows).
      *
-     * @param rng Mersenne-Twister RNG, advanced in-place.
+     * @param rng  Mersenne-Twister RNG, advanced in-place.
      *
-     * @return One layer of (n x p) MVN draws, columns aligned with the
+     * @return One layer of (n_ x p) MVN draws, columns aligned with the
      *         clusters in gvs_setup_.clusters_list.
      */
     Eigen::MatrixXd drawClusterDummyLayer(std::mt19937& rng) const;

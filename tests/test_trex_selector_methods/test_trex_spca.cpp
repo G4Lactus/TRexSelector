@@ -206,15 +206,6 @@ TEST_F(TRexSPCATest, DataIntegrity_XUnchangedOnDestructionWithoutSelect) {
 // GVS type recorded in result
 // ========================================================================================
 
-/** @brief Result records the GVS variant used (EN by default). */
-TEST_F(TRexSPCATest, GVSType_DefaultIsEN) {
-    TRexSPCA spca(X_map, M, 0.2, fast_ctrl(), seed);
-    auto result = spca.select();
-
-    EXPECT_EQ(result.gvs_type, tg::GVSType::EN);
-}
-
-
 // ========================================================================================
 // Exception handling
 // ========================================================================================

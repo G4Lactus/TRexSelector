@@ -389,10 +389,23 @@ public:
     /**
      * @brief Generate a default grid of lambda values for ridge regression path solving.
      *
-     * @param num_lambda Number of lambda values to generate.
-     * @param ratio      Ratio between max and min lambda (on the order of s_max^2 / s_min^2).
+     * @details The grid is anchored to the maximum absolute initial LARS correlation
+     *          c_max = max_j |x_j^T y_c|, mirroring R's cv.glmnet grid for alpha = 0:
      *
-     * @return Vector of lambda values.
+     *            lambda_max = c_max / sqrt(n - 1)
+     *            grid       = [ lambda_max / ratio, lambda_max ]  (geometrically spaced)
+     *
+     *          This makes the grid scale with the signal strength in y so that ridge_cv
+     *          selects lambda values that translate correctly to TENET's lambda_2 across
+     *          different DGP configurations (e.g., varying numbers of active variables).
+     *          Falls back to an SVD-eigenvalue-based grid when c_max is numerically zero
+     *          (y orthogonal to X).
+     *
+     * @param num_lambda Number of lambda values to generate.
+     * @param ratio      Ratio of grid maximum to grid minimum (default 1000, matching
+     *                   glmnet's lambda.min.ratio = 0.001 for p > n problems).
+     *
+     * @return Vector of lambda values in ascending order.
      */
     Eigen::VectorXd default_lambda_grid(Eigen::Index num_lambda = 100,
                                         double ratio = 1000.0) const {
@@ -408,15 +421,34 @@ public:
                 "ridge_gcv::default_lambda_grid: ratio must be positive");
         }
 
-        double s_max = sigma_(0);
-        double s_min = sigma_(r_ - 1);
+        // Compute c_max = max_j |x_j^T y_c| from stored SVD components.
+        // In both code paths (n >= p and n < p):
+        //   V_ * diag(sigma_) * Uty_ = X_c^T y_c  (exact).
+        const Eigen::VectorXd Xty_c = V_ * sigma_.cwiseProduct(Uty_);
+        const double c_max = Xty_c.cwiseAbs().maxCoeff();
 
-        if (s_min < 1e-15 * s_max) {
-            s_min = s_max * 1e-10;
+        double log_lo, log_hi;
+
+        if (c_max > 1e-12) {
+            // Hybrid anchor:
+            // 1.  y-dependent grid anchored to c_max / sqrt(n - 1), mirroring glmnet's
+            //     lambda_max = max_j|X_R_j^T y| / n = sqrt(n-1) * c_max / n.
+            // 2. SVD-eigenvalue-based grid anchored to sigma_max / sqrt(n - 1).
+            const double lambda_max_y = c_max / std::sqrt(static_cast<double>(n_ - 1));
+            const double lambda_max_svd = sigma_(0) / std::sqrt(static_cast<double>(n_ - 1));
+            const double lambda_max     = std::max(lambda_max_y, lambda_max_svd);
+            log_hi = std::log10(lambda_max);
+            log_lo = std::log10(lambda_max / ratio);
+        } else {
+            // Fallback: y is (nearly) orthogonal to X; use SVD-eigenvalue-based range.
+            double s_max = sigma_(0);
+            double s_min = sigma_(r_ - 1);
+            if (s_min < 1e-15 * s_max) {
+                s_min = s_max * 1e-10;
+            }
+            log_lo = std::log10(s_min * s_min / ratio);
+            log_hi = std::log10(s_max * s_max * ratio);
         }
-
-        const double log_lo = std::log10(s_min * s_min / ratio);
-        const double log_hi = std::log10(s_max * s_max * ratio);
 
         Eigen::VectorXd grid(num_lambda);
 

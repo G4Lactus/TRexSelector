@@ -65,6 +65,17 @@
         // C++ Install (cmake --install)
         // -----------------------------------------------------------------------
 
+        // Build release-portable (prerequisite for both install tasks)
+        {
+            "type": "shell",
+            "label": "CMake Full Build (release-portable)",
+            "command": "cmake",
+            "args": ["--workflow", "--preset", "local-install"],
+            "options": {"cwd": "${workspaceFolder}"},
+            "group": {"kind": "build"},
+            "problemMatcher": ["$gcc"],
+            "detail": "Configure + build portable release (build/release-portable) ready for install"
+        },
         // Install to project-local install/ directory (uses local-install preset which pre-sets prefix)
         {
             "type": "shell",
@@ -73,20 +84,24 @@
             "args": ["--install", "build/release-portable"],
             "options": {"cwd": "${workspaceFolder}"},
             "group": {"kind": "build"},
+            "dependsOn": ["CMake Full Build (release-portable)"],
+            "dependsOrder": "sequence",
             "problemMatcher": [],
-            "detail": "Install headers + libs to install/ (requires local-install preset build first)"
+            "detail": "Build release-portable, then install headers + libs to install/"
         },
-        // Install to system /usr/local — requires sudo on macOS
-        {
-            "type": "shell",
-            "label": "CMake Install (system → /usr/local)",
-            "command": "cmake",
-            "args": ["--install", "build/release-portable", "--prefix", "/usr/local"],
-            "options": {"cwd": "${workspaceFolder}"},
-            "group": {"kind": "build"},
-            "problemMatcher": [],
-            "detail": "Install headers + libs to /usr/local (may require sudo on macOS)"
-        },
+        // Install to system /usr/local — requires "sudo" on macOS !!!
+        //{
+        //    "type": "shell",
+        //    "label": "CMake Install (system → /usr/local)",
+        //    "command": "cmake",
+        //    "args": ["--install", "build/release-portable", "--prefix", "/usr/local"],
+        //    "options": {"cwd": "${workspaceFolder}"},
+        //    "group": {"kind": "build"},
+        //    "dependsOn": ["CMake Full Build (release-portable)"],
+        //    "dependsOrder": "sequence",
+        //    "problemMatcher": [],
+        //    "detail": "Build release-portable, then install headers + libs to /usr/local (may require sudo on macOS)"
+        //},
 
         // -----------------------------------------------------------------------
         // R Package (R/TRexSelector/)
