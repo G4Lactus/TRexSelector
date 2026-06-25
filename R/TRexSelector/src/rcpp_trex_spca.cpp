@@ -27,7 +27,7 @@ namespace tg = trex::trex_selector_methods::trex_gvs;
  * @param spca_ctrl_list R list with keys:
  *   mode ("ActiveSet"/"Thresholded"), lambda2_ridge_loadings,
  *   gvs_type ("EN"/"IEN"), lambda_2, lambda2_method,
- *   ("GCV"/"COND_NUM"/"CV_MIN"/"CV_1SE"), K, max_dummy_multiplier.
+ *   ("CV_1SE"/"CV_MIN"/"GCV"), K, max_dummy_multiplier.
  * @return Populated TRexSPCAControlParameter instance.
  */
 TRexSPCAControlParameter parse_spca_control(const Rcpp::List& spca_ctrl_list) {
@@ -69,15 +69,13 @@ TRexSPCAControlParameter parse_spca_control(const Rcpp::List& spca_ctrl_list) {
         std::string method_str = spca_ctrl_list["lambda2_method"];
         if (method_str == "GCV") {
             ctrl.gvs_ctrl.lambda2_method = tg::LambdaSelectionMethod::GCV;
-        } else if (method_str == "COND_NUM") {
-            ctrl.gvs_ctrl.lambda2_method = tg::LambdaSelectionMethod::COND_NUM;
         } else if (method_str == "CV_MIN") {
             ctrl.gvs_ctrl.lambda2_method = tg::LambdaSelectionMethod::CV_MIN;
         } else if (method_str == "CV_1SE") {
             ctrl.gvs_ctrl.lambda2_method = tg::LambdaSelectionMethod::CV_1SE;
         } else {
             Rcpp::stop("Unknown lambda2_method: '" + method_str +
-                       "'. Use 'GCV', 'COND_NUM', 'CV_MIN', or 'CV_1SE'.");
+                       "'. Use 'CV_1SE', 'CV_MIN', or 'GCV'.");
         }
     }
 
@@ -124,11 +122,12 @@ Rcpp::List trex_spca_select(
     int M,
     double tFDR,
     Rcpp::List spca_ctrl_list,
-    int seed
+    int seed,
+    bool verbose
 ) {
     TRexSPCAControlParameter ctrl = parse_spca_control(spca_ctrl_list);
 
-    TRexSPCA spca(X, static_cast<Eigen::Index>(M), tFDR, ctrl, seed);
+    TRexSPCA spca(X, static_cast<Eigen::Index>(M), tFDR, ctrl, seed, verbose);
     TRexSPCAResult res = spca.select();
 
     // Convert active sets to R-friendly 1-based integer vectors

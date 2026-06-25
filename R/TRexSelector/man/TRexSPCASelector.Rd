@@ -16,8 +16,9 @@ via QR decomposition.
 set.seed(1)
 n <- 100; p <- 30
 X <- matrix(rnorm(n * p), n, p)
-sel <- TRexSPCASelector$new(X, control = trex_spca_control(K = 5))
-sel$select(M = 2, tFDR = 0.2)
+sel <- TRexSPCASelector$new(X, M = 2, tFDR = 0.2,
+                             control = trex_spca_control(K = 5))
+sel$select()
 sel$adjusted_ev
 sel$active_sets
 }
@@ -52,7 +53,14 @@ sel$active_sets
 \subsection{Method \code{new()}}{
 Create a new TRexSPCASelector.
 \subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{TRexSPCASelector$new(X, control = trex_spca_control())}\if{html}{\out{</div>}}
+\if{html}{\out{<div class="r">}}\preformatted{TRexSPCASelector$new(
+  X,
+  M,
+  tFDR,
+  control = trex_spca_control(),
+  seed = -1L,
+  verbose = FALSE
+)}\if{html}{\out{</div>}}
 }
 
 \subsection{Arguments}{
@@ -61,8 +69,17 @@ Create a new TRexSPCASelector.
 \item{\code{X}}{Numeric matrix (n x p). Stored by reference; centered in-place
 during \code{select()} and restored on return.}
 
+\item{\code{M}}{Integer, number of sparse principal components to extract.}
+
+\item{\code{tFDR}}{Numeric, target false discovery rate in \code{(0, 1)}.}
+
 \item{\code{control}}{A control list from \code{\link{trex_spca_control}()}
 (default: \code{trex_spca_control()}).}
+
+\item{\code{seed}}{Integer random seed. Use \code{-1L} (default) for
+non-deterministic (hardware entropy) behaviour.}
+
+\item{\code{verbose}}{Logical, whether to print progress (default: \code{FALSE}).}
 }
 \if{html}{\out{</div>}}
 }
@@ -73,18 +90,9 @@ during \code{select()} and restored on return.}
 \subsection{Method \code{select()}}{
 Run T-Rex Sparse PCA selection.
 \subsection{Usage}{
-\if{html}{\out{<div class="r">}}\preformatted{TRexSPCASelector$select(M, tFDR)}\if{html}{\out{</div>}}
+\if{html}{\out{<div class="r">}}\preformatted{TRexSPCASelector$select()}\if{html}{\out{</div>}}
 }
 
-\subsection{Arguments}{
-\if{html}{\out{<div class="arguments">}}
-\describe{
-\item{\code{M}}{Integer, number of sparse principal components to extract.}
-
-\item{\code{tFDR}}{Numeric, target false discovery rate in \code{(0, 1)}.}
-}
-\if{html}{\out{</div>}}
-}
 \subsection{Returns}{
 Invisible \code{self} for method chaining. Results accessible
 via active fields \code{Z}, \code{V}, \code{active_sets},

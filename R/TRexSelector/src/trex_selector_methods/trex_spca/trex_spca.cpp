@@ -88,7 +88,6 @@ TRexSPCAResult TRexSPCA::select() {
     result_.V = Eigen::MatrixXd::Zero(p, M_);
     result_.Z = Eigen::MatrixXd::Zero(n, M_);
     result_.active_sets.resize(static_cast<std::size_t>(M_));
-    result_.gvs_type = spca_ctrl_.gvs_ctrl.gvs_type;
 
     // 0. Center X column-wise (mean subtraction only, no L2 scaling).
     //    scaler_ is a member so the destructor can restore X on exception.
@@ -108,23 +107,31 @@ TRexSPCAResult TRexSPCA::select() {
 
         // 3. Run TRexGVSSelector on z_m ~ X.
         //    TRexGVSSelector copies y internally, so z_m is not mutated.
-        //    Auto-configure solver_type to match gvs_type (EN → TENET, IEN → TLASSO).
         //    Seed: per-PC variation when seed_ >= 0; hardware entropy when seed_ < 0.
         Eigen::VectorXd z_m = ord_pca.Z.col(m);
-        const int seed_pc = (seed_ >= 0) ? seed_ + static_cast<int>(m) * 1000 : -1;
+        const int seed_pc = (seed_ >= 0)
+            ? static_cast<int>(trex::utils::datageneration::dummygen::mix_seed(
+                static_cast<std::uint32_t>(seed_), m) & 0x7FFFFFFFu)
+            : -1;
 
         tc::TRexControlParameter trex_ctrl = spca_ctrl_.trex_ctrl;
-        if (spca_ctrl_.gvs_ctrl.gvs_type == tg::GVSType::EN) {
-            trex_ctrl.solver_type = sd::SolverTypeForTRex::TENET;
+        tg::TRexGVSControlParameter gvs_ctrl = spca_ctrl_.gvs_ctrl;
+
+        // Branch 1: EN + TENET (default / original behavior).
+        // Branch 2: EN_AUG + TLASSO or TLARS (explicitly requested by caller;
+        //           TRexGVSSelector's constructor enforces the solver-type constraint).
+        if (gvs_ctrl.gvs_type == tg::GVSType::EN_AUG) {
+            // Forward gvs_type and solver_type as supplied by the caller.
         } else {
-            trex_ctrl.solver_type = sd::SolverTypeForTRex::TLASSO;
+            gvs_ctrl.gvs_type     = tg::GVSType::EN;
+            trex_ctrl.solver_type = sd::SolverTypeForTRex::TENET;
         }
 
         std::vector<Eigen::Index> active_set;
         {
             Eigen::Map<Eigen::VectorXd> z_map(z_m.data(), n);
             tg::TRexGVSSelector gvs(*X_, z_map, tFDR_,
-                                    spca_ctrl_.gvs_ctrl,
+                                    gvs_ctrl,
                                     trex_ctrl,
                                     seed_pc, /*verbose=*/false);
             gvs.select();

@@ -1262,8 +1262,8 @@ BEGIN_RCPP
 END_RCPP
 }
 // trex_spca_select
-Rcpp::List trex_spca_select(Eigen::Map<Eigen::MatrixXd> X, int M, double tFDR, Rcpp::List spca_ctrl_list, int seed);
-RcppExport SEXP _TRexSelector_trex_spca_select(SEXP XSEXP, SEXP MSEXP, SEXP tFDRSEXP, SEXP spca_ctrl_listSEXP, SEXP seedSEXP) {
+Rcpp::List trex_spca_select(Eigen::Map<Eigen::MatrixXd> X, int M, double tFDR, Rcpp::List spca_ctrl_list, int seed, bool verbose);
+RcppExport SEXP _TRexSelector_trex_spca_select(SEXP XSEXP, SEXP MSEXP, SEXP tFDRSEXP, SEXP spca_ctrl_listSEXP, SEXP seedSEXP, SEXP verboseSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
@@ -1272,7 +1272,8 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< double >::type tFDR(tFDRSEXP);
     Rcpp::traits::input_parameter< Rcpp::List >::type spca_ctrl_list(spca_ctrl_listSEXP);
     Rcpp::traits::input_parameter< int >::type seed(seedSEXP);
-    rcpp_result_gen = Rcpp::wrap(trex_spca_select(X, M, tFDR, spca_ctrl_list, seed));
+    Rcpp::traits::input_parameter< bool >::type verbose(verboseSEXP);
+    rcpp_result_gen = Rcpp::wrap(trex_spca_select(X, M, tFDR, spca_ctrl_list, seed, verbose));
     return rcpp_result_gen;
 END_RCPP
 }
@@ -2162,7 +2163,7 @@ static const R_CallMethodDef CallEntries[] = {
     {"_TRexSelector_trex_selector_get_x_means", (DL_FUNC) &_TRexSelector_trex_selector_get_x_means, 1},
     {"_TRexSelector_trex_selector_get_x_l2_norms", (DL_FUNC) &_TRexSelector_trex_selector_get_x_l2_norms, 1},
     {"_TRexSelector_trex_selector_get_y_mean", (DL_FUNC) &_TRexSelector_trex_selector_get_y_mean, 1},
-    {"_TRexSelector_trex_spca_select", (DL_FUNC) &_TRexSelector_trex_spca_select, 5},
+    {"_TRexSelector_trex_spca_select", (DL_FUNC) &_TRexSelector_trex_spca_select, 6},
     {"_TRexSelector_tsolver_lars_create", (DL_FUNC) &_TRexSelector_tsolver_lars_create, 6},
     {"_TRexSelector_tsolver_omp_create", (DL_FUNC) &_TRexSelector_tsolver_omp_create, 6},
     {"_TRexSelector_tsolver_lars_mmap_create", (DL_FUNC) &_TRexSelector_tsolver_lars_mmap_create, 6},

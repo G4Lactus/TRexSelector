@@ -41,6 +41,20 @@ TRexGVSControlParameter parse_gvs_parameter(const Rcpp::List& control) {
 
     if (control.containsElementNamed("lambda_2")) params.lambda_2 = control["lambda_2"];
 
+    if (control.containsElementNamed("lambda2_method")) {
+        std::string method_str = control["lambda2_method"];
+        if (method_str == "CV_1SE") {
+            params.lambda2_method = LambdaSelectionMethod::CV_1SE;
+        } else if (method_str == "CV_MIN") {
+            params.lambda2_method = LambdaSelectionMethod::CV_MIN;
+        } else if (method_str == "GCV") {
+            params.lambda2_method = LambdaSelectionMethod::GCV;
+        } else {
+            Rcpp::stop("Unknown lambda2_method: '" + method_str +
+                       "'. Use 'CV_1SE', 'CV_MIN', or 'GCV'.");
+        }
+    }
+
     if (control.containsElementNamed("groups") && !Rf_isNull(control["groups"])) {
         IntegerVector r_groups = control["groups"];
         params.prior_groups = std::vector<Eigen::Index>(r_groups.size());

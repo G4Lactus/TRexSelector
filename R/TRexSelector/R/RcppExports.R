@@ -960,8 +960,8 @@ trex_selector_get_y_mean <- function(r_ptr) {
 #'     \item \code{cumulative_ev} Numeric vector of cumulative explained variance (M).
 #'   }
 #' @noRd
-trex_spca_select <- function(X, M, tFDR, spca_ctrl_list, seed) {
-    .Call(`_TRexSelector_trex_spca_select`, X, M, tFDR, spca_ctrl_list, seed)
+trex_spca_select <- function(X, M, tFDR, spca_ctrl_list, seed, verbose) {
+    .Call(`_TRexSelector_trex_spca_select`, X, M, tFDR, spca_ctrl_list, seed, verbose)
 }
 
 #' @title Create LARS Solver

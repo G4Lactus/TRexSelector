@@ -161,7 +161,11 @@ trex_da_control <- function(da_method = "BT",
 #' @param corr_max Maximum pairwise correlation for automatic cluster formation (default: 0.5).
 #' @param hc_linkage Hierarchical clustering linkage: "Single", "Complete", "Average",
 #'   "WPGMA" (default: "Single").
-#' @param lambda_2 L2 penalty weight for group structure (default: 0.1).
+#' @param lambda_2 L2 penalty weight for group structure. \code{0} (default) triggers
+#'   automatic determination via the method selected by \code{lambda2_method}.
+#'   Supply a positive value to bypass auto-determination.
+#' @param lambda2_method Auto-determination strategy for \code{lambda_2} when
+#'   \code{lambda_2 = 0}: \code{"CV_1SE"} (default), \code{"CV_MIN"}, \code{"GCV"}.
 #' @param groups Integer vector of manually specified group assignments (1-based, default: NULL).
 #'
 #' @return A named list for use in TRexGVSSelector.
@@ -174,14 +178,17 @@ trex_da_control <- function(da_method = "BT",
 trex_gvs_control <- function(gvs_type = "EN",
                              corr_max = 0.5,
                              hc_linkage = "Single",
-                             lambda_2 = 0.1,
+                             lambda_2 = 0.0,
+                             lambda2_method = "CV_1SE",
                              groups = NULL) {
+  lambda2_method <- match.arg(lambda2_method, c("CV_1SE", "CV_MIN", "GCV"))
   list(
-    gvs_type   = gvs_type,
-    corr_max   = corr_max,
-    hc_linkage = hc_linkage,
-    lambda_2   = lambda_2,
-    groups     = groups
+    gvs_type       = gvs_type,
+    corr_max       = corr_max,
+    hc_linkage     = hc_linkage,
+    lambda_2       = lambda_2,
+    lambda2_method = lambda2_method,
+    groups         = groups
   )
 }
 

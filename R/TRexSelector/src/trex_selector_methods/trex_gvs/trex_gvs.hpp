@@ -130,7 +130,12 @@ enum class GVSType {
     /** @brief Ordinary Elastic Net  (no data augmentation + TENET solver). */
     EN,
     /** @brief Informed Elastic Net (row-augmented system + TLASSO solver). */
-    IEN
+    IEN,
+    /** @brief Augmented EN LASSO: zero-padded X, diagonal identity block in D.
+     *  Supports TLASSO (correct) and TLARS (semi-correct, matches R reference).
+     *  n_eff is fixed at n + max_dummy_multiplier * p; zero-padded rows are
+     *  algebraically transparent to LARS/LASSO inner products. */
+    EN_AUG
 };
 
 
@@ -139,18 +144,20 @@ enum class GVSType {
  *        when no user-supplied value is given.
  *
  * @details
- *   - `GCV`     : minimise generalised cross-validation criterion
- *                 (closed-form via SVD; default, backward compatible).
- *   - `CV_MIN`  : k-fold cross-validation, lambda minimising mean MSE.
  *   - `CV_1SE`  : k-fold cross-validation, glmnet-style one-standard-error
  *                 rule (largest lambda whose CV-MSE is within one SE of
  *                 the CV-min, biased toward stronger regularisation).
+ *                 Default: produces higher TPR at controlled FDR on
+ *                 high-correlation DGPs.
+ *   - `CV_MIN`  : k-fold cross-validation, lambda minimising mean MSE.
+ *   - `GCV`     : minimise generalised cross-validation criterion
+ *                 (closed-form via SVD; fast but tends toward the Lasso
+ *                 solution on low-noise problems).
  */
 enum class LambdaSelectionMethod {
-    GCV,
-    COND_NUM,
+    CV_1SE,
     CV_MIN,
-    CV_1SE
+    GCV
 };
 
 
@@ -189,15 +196,9 @@ struct TRexGVSControlParameter {
     double lambda_2 = 0.0;
 
     /** @brief Selection rule for auto-computing `lambda_2` when
-     *  `lambda_2 == 0`. Default: GCV (backward-compatible).
+     *  `lambda_2 == 0`. Default: CV_1SE.
      */
-    LambdaSelectionMethod lambda2_method = LambdaSelectionMethod::GCV;
-
-    /** @brief Maximum allowed condition number for the Gram matrix X^T X
-     *  when `lambda2_method` is `COND_NUM`. Used to compute the minimal
-     *  ridge penalty required for numerical stability. Default: 10000.0.
-     */
-    double kappa_max = 10000.0;
+    LambdaSelectionMethod lambda2_method = LambdaSelectionMethod::CV_1SE;
 
     /** @brief Number of folds for k-fold cross-validation when
      *  `lambda2_method` is `CV_MIN` or `CV_1SE`. Default: 10
@@ -212,9 +213,13 @@ struct TRexGVSControlParameter {
     Eigen::Index cv_n_lambda = 100;
 
     /** @brief Seed for the deterministic fold-permutation RNG when
-     *  `lambda2_method` is `CV_MIN` or `CV_1SE`. Default: 0.
+     *  `lambda2_method` is `CV_MIN` or `CV_1SE`.
+     *
+     *  -  `-1` (default): derived from the T-Rex `seed` parameter —
+     *      deterministic when `seed >= 0`, hardware-entropy when `seed < 0`.
+     *  - `>= 0`: explicit fold seed; overrides `seed` for CV only.
      */
-    unsigned int cv_seed = 0;
+    int cv_seed = -1;
 
     /** @brief Optional prior cluster assignment (length p, 0-based, contiguous
      *  IDs in [0, M-1]). Empty (default) triggers Route 2 (auto-cluster).
@@ -398,6 +403,15 @@ protected:
     /** @brief Resolved lambda_2 in LARS units (> 0 after computeLambda2()). */
     double lambda2_{0.0};
 
+    /** @brief Resolved CV fold-permutation seed.
+     *
+     *  Computed once in the constructor from `gvs_ctrl_.cv_seed` and `seed_`:
+     *  - `cv_seed >= 0`: used directly (explicit override).
+     *  - `cv_seed < 0 && seed_ >= 0`: `mix_seed(seed_, 1u)` (deterministic).
+     *  - `cv_seed < 0 && seed_ < 0`:  `std::random_device{}()` (entropy).
+     */
+    unsigned int resolved_cv_seed_{0};
+
     /** @brief Full GVS result of the last select() call. */
     GVSSelectionResult gvs_result_;
 
@@ -424,6 +438,17 @@ protected:
      */
     Eigen::VectorXd y_aug_;
 
+    /** @brief Augmented predictor matrix X_aug_en_ ((n + p) x p).
+     *  EN_AUG only. Holds the Zou & Hastie (2005) augmentation
+     *  [X ; sqrt(lambda2)*I_p], column-normalized to unit-L2 over n+p rows.
+     */
+    Eigen::MatrixXd X_aug_en_;
+
+    /** @brief Augmented response y_aug_en_ (n + p).
+     *  EN_AUG only. Holds [y ; 0_p], zero-centered.
+     */
+    Eigen::VectorXd y_aug_en_;
+
     /** @brief Per-cluster IEN bottom-row contribution (M x p): row m has
      *  value (sqrt(lambda2) / sqrt(p_m)) at columns of cluster m, zero elsewhere.
      *  Built once per select() if gvs_type == IEN.
@@ -432,8 +457,9 @@ protected:
 
     // ----- Effective data shapes used by the solver -----
 
-    /** @brief Number of effective rows seen by the solver (n for EN,
-     *  n + M for IEN). Set once per select() inside setupGVS().
+    /** @brief Number of effective rows seen by the solver:
+     *  n for EN, n + M for IEN, n + p for EN_AUG.
+     *  Set once per select() in onSelectBegin().
      */
     std::size_t n_eff_{0};
 
@@ -503,6 +529,14 @@ protected:
      *  Called once per select() when gvs_type == IEN.
      */
     void buildIENAugmentation();
+
+    /** @brief Build the EN_AUG-augmented X_aug_en_ and y_aug_en_.
+     *  Called once per select() when gvs_type == EN_AUG.
+     *  Implements the Zou & Hastie (2005) LARS-EN data augmentation:
+     *  X_aug = [X ; sqrt(lambda2)*I_p] (column-normalized), y_aug = [y ; 0_p].
+     *  n_eff is fixed at n + p.
+     */
+    void buildENAugmentation();
 
     /**
      * @brief Center each column to mean 0 and rescale to unit L2-norm,

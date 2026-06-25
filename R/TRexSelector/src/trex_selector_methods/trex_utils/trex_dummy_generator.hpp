@@ -327,8 +327,7 @@ public:
             target = base_dummies_perm_;
         } else {
             // Deterministic row permutation directly into target
-            std::mt19937 rng(
-                base_seed_perm_ + static_cast<unsigned int>(k) + 1);
+            std::mt19937 rng(dummygen::mix_seed(base_seed_perm_, k));
             applyRowPermutationInto(base_dummies_perm_, target, rng);
         }
     }
@@ -471,7 +470,7 @@ public:
      * @details
      *  - k == 0: returns base dummies as-is.
      *  - k > 0:  returns a deterministic row-permutation of the base dummies.
-     *            Seed = base_seed_perm_ + k + 1 (stable across T-loop iterations).
+     *            Seed = mix_seed(base_seed_perm_, k) (stable across T-loop iterations).
      *
      * @param k             Experiment index [0, K).
      * @param num_dummies   Expected number of dummy columns (validated).
@@ -499,7 +498,7 @@ public:
         }
 
         // Experiments k > 0: deterministic row permutation
-        std::mt19937 rng(base_seed_perm_ + static_cast<unsigned int>(k) + 1);
+        std::mt19937 rng(dummygen::mix_seed(base_seed_perm_, k));
         return applyRowPermutation(base_dummies_perm_, rng);
     }
 

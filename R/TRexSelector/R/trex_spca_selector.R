@@ -23,9 +23,7 @@
 #'   bypass auto-determination.
 #' @param lambda2_method Character, auto-determination strategy for
 #'   \code{lambda_2} when \code{lambda_2 = 0}:
-#'   \code{"GCV"} (default), \code{"COND_NUM"}, \code{"CV_MIN"}, \code{"CV_1SE"}.
-#' @param seed Integer random seed forwarded to each per-PC T-Rex run.
-#'   Use \code{-1L} (default) for non-deterministic (hardware entropy) behavior.
+#'   \code{"CV_1SE"} (default), \code{"CV_MIN"}, \code{"GCV"}.
 #' @param K Integer, number of T-Rex random experiments per PC (default: 20).
 #' @param max_dummy_multiplier Integer, maximum dummy feature multiplier for
 #'   T-Rex sub-selection (default: 10).
@@ -42,17 +40,15 @@ trex_spca_control <- function(mode                   = "ActiveSet",
                               lambda2_ridge_loadings  = 1e-6,
                               gvs_type               = "EN",
                               lambda_2               = 0.0,
-                              lambda2_method          = "GCV",
-                              seed                   = -1L,
+                              lambda2_method          = "CV_1SE",
                               K                      = 20L,
                               max_dummy_multiplier   = 10L) {
   mode          <- match.arg(mode,          c("ActiveSet", "Thresholded"))
   gvs_type      <- match.arg(gvs_type,      c("EN", "IEN"))
-  lambda2_method <- match.arg(lambda2_method, c("GCV", "COND_NUM", "CV_MIN", "CV_1SE"))
+  lambda2_method <- match.arg(lambda2_method, c("CV_1SE", "CV_MIN", "GCV"))
   stopifnot(
     is.numeric(lambda2_ridge_loadings), lambda2_ridge_loadings >= 0,
     is.numeric(lambda_2),               lambda_2 >= 0,
-    is.numeric(seed),
     is.numeric(K),                      K >= 1L,
     is.numeric(max_dummy_multiplier),   max_dummy_multiplier >= 1L
   )
@@ -62,7 +58,6 @@ trex_spca_control <- function(mode                   = "ActiveSet",
     gvs_type              = gvs_type,
     lambda_2              = as.numeric(lambda_2),
     lambda2_method        = lambda2_method,
-    seed                  = as.integer(seed),
     K                     = as.integer(K),
     max_dummy_multiplier  = as.integer(max_dummy_multiplier)
   )
@@ -87,8 +82,9 @@ trex_spca_control <- function(mode                   = "ActiveSet",
 #' set.seed(1)
 #' n <- 100; p <- 30
 #' X <- matrix(rnorm(n * p), n, p)
-#' sel <- TRexSPCASelector$new(X, control = trex_spca_control(K = 5))
-#' sel$select(M = 2, tFDR = 0.2)
+#' sel <- TRexSPCASelector$new(X, M = 2, tFDR = 0.2,
+#'                              control = trex_spca_control(K = 5))
+#' sel$select()
 #' sel$adjusted_ev
 #' sel$active_sets
 #' }
@@ -97,6 +93,10 @@ trex_spca_control <- function(mode                   = "ActiveSet",
 TRexSPCASelector <- R6::R6Class("TRexSPCASelector",
   private = list(
     X_ref   = NULL,
+    M_      = NULL,
+    tFDR_   = NULL,
+    seed_   = NULL,
+    verbose_= NULL,
     ctrl    = NULL,
     result_ = NULL
   ),
@@ -106,33 +106,46 @@ TRexSPCASelector <- R6::R6Class("TRexSPCASelector",
     #'
     #' @param X Numeric matrix (n x p). Stored by reference; centered in-place
     #'   during \code{select()} and restored on return.
+    #' @param M Integer, number of sparse principal components to extract.
+    #' @param tFDR Numeric, target false discovery rate in \code{(0, 1)}.
     #' @param control A control list from \code{\link{trex_spca_control}()}
     #'   (default: \code{trex_spca_control()}).
-    initialize = function(X, control = trex_spca_control()) {
+    #' @param seed Integer random seed. Use \code{-1L} (default) for
+    #'   non-deterministic (hardware entropy) behaviour.
+    #' @param verbose Logical, whether to print progress (default: \code{FALSE}).
+    initialize = function(X, M, tFDR,
+                          control = trex_spca_control(),
+                          seed    = -1L,
+                          verbose = FALSE) {
       if (!is.matrix(X)) X <- as.matrix(X)
-      stopifnot(is.numeric(X), is.numeric(control$lambda2_ridge_loadings))
-      private$X_ref <- X
-      private$ctrl  <- control
+      stopifnot(
+        is.numeric(X),
+        is.numeric(M),    M >= 1L,
+        is.numeric(tFDR), tFDR > 0, tFDR < 1,
+        is.numeric(control$lambda2_ridge_loadings),
+        is.logical(verbose)
+      )
+      private$X_ref    <- X
+      private$M_       <- as.integer(M)
+      private$tFDR_    <- as.numeric(tFDR)
+      private$seed_    <- as.integer(seed)
+      private$verbose_ <- as.logical(verbose)
+      private$ctrl     <- control
     },
 
     #' @description Run T-Rex Sparse PCA selection.
     #'
-    #' @param M Integer, number of sparse principal components to extract.
-    #' @param tFDR Numeric, target false discovery rate in \code{(0, 1)}.
-    #'
     #' @return Invisible \code{self} for method chaining. Results accessible
     #'   via active fields \code{Z}, \code{V}, \code{active_sets},
     #'   \code{adjusted_ev}, \code{cumulative_ev}.
-    select = function(M, tFDR) {
-      stopifnot(is.numeric(M), M >= 1L,
-                is.numeric(tFDR), tFDR > 0, tFDR < 1)
-      seed <- if (!is.null(private$ctrl$seed)) as.integer(private$ctrl$seed) else -1L
+    select = function() {
       private$result_ <- trex_spca_select(
         private$X_ref,
-        as.integer(M),
-        as.numeric(tFDR),
+        private$M_,
+        private$tFDR_,
         private$ctrl,
-        seed
+        private$seed_,
+        private$verbose_
       )
       invisible(self)
     }

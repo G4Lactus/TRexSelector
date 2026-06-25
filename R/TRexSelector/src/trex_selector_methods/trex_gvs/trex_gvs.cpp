@@ -41,6 +41,7 @@
 
 // Concrete solver types (for direct in-memory warm-start)
 #include <tsolvers/linear_model/lars_based/tenet_solver.hpp>
+#include <tsolvers/linear_model/lars_based/tlars_solver.hpp>
 #include <tsolvers/linear_model/lars_based/tlasso_solver.hpp>
 
 // OpenMP (parallel-K loop)
@@ -88,11 +89,27 @@ TRexGVSSelector::TRexGVSSelector(
     gvs_ctrl_(std::move(gvs_control)),
     gvs_use_mmap_(trex_control.use_memory_mapping)
 {
+    // Resolve CV fold-permutation seed (analogous to permutation_base_seed_ in base).
+    if (gvs_ctrl_.cv_seed >= 0) {
+        resolved_cv_seed_ = static_cast<unsigned int>(gvs_ctrl_.cv_seed);
+    } else if (seed_ >= 0) {
+        resolved_cv_seed_ = trex::utils::datageneration::dummygen::mix_seed(
+            static_cast<std::uint32_t>(seed_), 1u);
+    } else {
+        resolved_cv_seed_ = std::random_device{}();
+    }
     // ---- Solver-type compatibility checks ---------------------------------
     if (gvs_ctrl_.gvs_type == GVSType::EN) {
         if (trex_ctrl_.solver_type != sd::SolverTypeForTRex::TENET) {
             throw std::invalid_argument(
                 "TRexGVSSelector: gvs_type = EN requires solver_type = TENET.");
+        }
+    } else if (gvs_ctrl_.gvs_type == GVSType::EN_AUG) {
+        if (trex_ctrl_.solver_type != sd::SolverTypeForTRex::TLASSO &&
+            trex_ctrl_.solver_type != sd::SolverTypeForTRex::TLARS) {
+            throw std::invalid_argument(
+                "TRexGVSSelector: gvs_type = EN_AUG requires solver_type = TLASSO "
+                "(correct) or TLARS (semi-correct, matches R reference).");
         }
     } else { // IEN
         if (trex_ctrl_.solver_type != sd::SolverTypeForTRex::TLASSO) {
@@ -382,8 +399,16 @@ double TRexGVSSelector::computeLambda2() const {
         return gvs_ctrl_.lambda_2;
     }
 
-    // Auto-compute lambda_2 and convert from glmnet to LARS units: lambda_lars = lambda_glmnet * p / 2
-    // (matches R's trex_GVS(), which uses cv.glmnet(alpha=0)$lambda.1se * p / 2).
+    // Auto-compute lambda_2 and convert from glmnet to LARS units:
+    //   lambda_lars = lambda_glmnet * (n - 1) * p / 2
+    //
+    // The (n-1) factor corrects for the column-normalization difference between C++ and R:
+    //   C++ : centerAndL2NormalizeX → column L2 norm = 1
+    //   R   : scale(X)             → column L2 norm = sqrt(n-1)
+    // Ridge-regression optimal lambda scales as the square of column norms, so the glmnet-unit
+    // lambda returned by cv.glmnet on R's SD-normalized X is (n-1) times larger than what
+    // ridge_cv returns on the L2-normalized X.  Applying the (n-1) factor here recovers the
+    // same effective ridge penalty that R's trex_GVS() uses (cv.glmnet(alpha=0)$lambda.1se * p / 2).
     //
     // Method notes:
     //   GCV    — closed-form GCV via SVD; introduced as a large-data shortcut (large n and p make
@@ -411,41 +436,13 @@ double TRexGVSSelector::computeLambda2() const {
             lambda_glmnet = gcv.gcv_optimal();
             break;
         }
-        case LambdaSelectionMethod::COND_NUM: {
-            double eta_max = 0.0;
-            double eta_min = 0.0;
-            const double n_inv = 1.0 / static_cast<double>(n_);
-
-            if (p_ > n_) {
-                // p > n: Rank deficient, min eigenvalue of X^T X is exactly 0.
-                // Max eigenvalue is the max eigenvalue of X X^T.
-                Eigen::MatrixXd XXT = (*X_) * X_->transpose() * n_inv;
-                Eigen::SelfAdjointEigenSolver<Eigen::MatrixXd> eig(XXT, Eigen::EigenvaluesOnly);
-                eta_max = eig.eigenvalues().maxCoeff();
-                eta_min = 0.0;
-            } else {
-                // p <= n: Compute full spectrum of X^T X.
-                Eigen::MatrixXd XTX = X_->transpose() * (*X_) * n_inv;
-                Eigen::SelfAdjointEigenSolver<Eigen::MatrixXd> eig(XTX, Eigen::EigenvaluesOnly);
-                eta_max = eig.eigenvalues().maxCoeff();
-                eta_min = std::max(0.0, eig.eigenvalues().minCoeff()); // Guard against numerical noise
-            }
-
-            double kappa_max = gvs_ctrl_.kappa_max;
-            if (kappa_max <= 1.0) {
-                kappa_max = 1.0 + 1e-6; // Prevent division by zero
-            }
-
-            lambda_glmnet = std::max(0.0, (eta_max - kappa_max * eta_min) / (kappa_max - 1.0));
-            break;
-        }
         case LambdaSelectionMethod::CV_MIN: {
             ms::ridge_cv cv;
             cv.fit(*X_, y_,
                    gvs_ctrl_.cv_n_folds,
                    gvs_ctrl_.cv_n_lambda,
-                   /*lambda_ratio=*/1000.0,
-                   gvs_ctrl_.cv_seed);
+                   /*lambda_ratio=*/10000.0,
+                   resolved_cv_seed_);
             lambda_glmnet = cv.cv_min();
             break;
         }
@@ -457,8 +454,8 @@ double TRexGVSSelector::computeLambda2() const {
             cv.fit(*X_, y_,
                    gvs_ctrl_.cv_n_folds,
                    gvs_ctrl_.cv_n_lambda,
-                   /*lambda_ratio=*/1000.0,
-                   gvs_ctrl_.cv_seed);
+                   /*lambda_ratio=*/10000.0,
+                   resolved_cv_seed_);
             lambda_glmnet = cv.cv_1se();
             break;
         }
@@ -467,7 +464,18 @@ double TRexGVSSelector::computeLambda2() const {
                 "TRexGVSSelector::computeLambda2: unknown LambdaSelectionMethod.");
     }
 
-    return lambda_glmnet * static_cast<double>(p_) / 2.0;
+    // Scale up by (n_ - 1) to account for the difference between C++ column-L2
+    // normalization (||x_j||_2 = 1) and R's scale(X) SD-normalization
+    // (||x_j||_2 = sqrt(n-1)).  Ridge regression optimal lambda scales as the
+    // square of column norms, so lambda_SD = lambda_L2 * (n-1).  R's
+    // cv.glmnet receives the SD-normalized X and therefore returns a lambda
+    // that is (n-1) times larger than what ridge_cv computes on the
+    // L2-normalized X.  The conversion factor p/2 is identical in both; only
+    // the glmnet-unit lambda scale differs.
+    return lambda_glmnet *
+            0.10000 *
+           //static_cast<double>(n_ - 1) *
+           static_cast<double>(p_) / 2.0;
 }
 
 
@@ -511,6 +519,32 @@ void TRexGVSSelector::buildIENAugmentation() {
     // y_aug_ mean is ~0 to floating-point precision; subtract for parity.
     normalizeAugmentedColumns(X_aug_, eps_);
     y_aug_.array() -= y_aug_.mean();
+}
+
+
+// ===================================================================================
+// EN_AUG: build augmented X_aug_en_, y_aug_en_ (Zou & Hastie 2005 LARS-EN)
+// ===================================================================================
+
+void TRexGVSSelector::buildENAugmentation() {
+
+    const auto n = static_cast<Eigen::Index>(n_);
+    const auto p = static_cast<Eigen::Index>(p_);
+
+    // ---- X_aug_en_ : (n + p) x p  [X ; sqrt(lambda2)*I_p] -----------------
+    // The identity bottom block creates the EN ridge effect variable-by-variable
+    // (Zou & Hastie 2005).  normalizeAugmentedColumns scales each column to
+    // unit-L2 over n+p rows, preserving the relative top/bottom ratio.
+    X_aug_en_.resize(n + p, p);
+    X_aug_en_.topRows(n)    = *X_;
+    X_aug_en_.bottomRows(p) = std::sqrt(lambda2_) * Eigen::MatrixXd::Identity(p, p);
+    normalizeAugmentedColumns(X_aug_en_, eps_);
+
+    // ---- y_aug_en_ : (n + p)  [y ; 0_p] -----------------------------------
+    y_aug_en_.resize(n + p);
+    y_aug_en_.head(n) = y_;
+    y_aug_en_.tail(p).setZero();
+    y_aug_en_.array() -= y_aug_en_.mean();
 }
 
 
@@ -592,8 +626,11 @@ Eigen::MatrixXd TRexGVSSelector::assembleD(std::size_t k,
     const auto p     = static_cast<Eigen::Index>(p_);
     const auto L     = static_cast<Eigen::Index>(num_dummies);
     const auto M     = static_cast<Eigen::Index>(gvs_setup_.max_clusters);
-    const bool ien   = (gvs_ctrl_.gvs_type == GVSType::IEN);
-    const auto n_eff = ien ? (n + M) : n;
+    const bool ien    = (gvs_ctrl_.gvs_type == GVSType::IEN);
+    const bool en_aug = (gvs_ctrl_.gvs_type == GVSType::EN_AUG);
+    const auto n_eff  = en_aug ? (n + p)
+                      : ien    ? (n + M)
+                      :          n;
 
     Eigen::MatrixXd D(n_eff, L);
 
@@ -605,11 +642,22 @@ Eigen::MatrixXd TRexGVSSelector::assembleD(std::size_t k,
         col += p;
     }
 
-    // Bottom M rows for IEN: replicated bottom block, one per layer.
+    // Bottom rows: strategy-dependent augmentation.
     if (ien) {
+        // IEN: replicated group-ridge bottom block (M x num_dummies), one
+        // ien_bottom_block_p_ copy per layer.
         col = 0;
         for (std::size_t li = 0; li < layers.size(); ++li) {
             D.block(n, col, M, p) = ien_bottom_block_p_;
+            col += p;
+        }
+    } else if (en_aug) {
+        // EN_AUG: Zou & Hastie (2005) -- sqrt(lambda2)*I_p per dummy layer.
+        // normalizeAugmentedColumns is applied externally in prepareDummiesForLStep
+        // over all n+p rows, consistent with the X_aug_en_ construction.
+        col = 0;
+        for (std::size_t li = 0; li < layers.size(); ++li) {
+            D.block(n, col, p, p) = std::sqrt(lambda2_) * Eigen::MatrixXd::Identity(p, p);
             col += p;
         }
     }
@@ -630,13 +678,17 @@ void TRexGVSSelector::writeAssembledDIntoMap(
     const auto n   = static_cast<Eigen::Index>(n_);
     const auto p   = static_cast<Eigen::Index>(p_);
     const auto M   = static_cast<Eigen::Index>(gvs_setup_.max_clusters);
-    const bool ien = (gvs_ctrl_.gvs_type == GVSType::IEN);
+    const bool ien    = (gvs_ctrl_.gvs_type == GVSType::IEN);
+    const bool en_aug = (gvs_ctrl_.gvs_type == GVSType::EN_AUG);
 
     if (dst.cols() != static_cast<Eigen::Index>(num_dummies)) {
         throw std::runtime_error(
             "TRexGVSSelector::writeAssembledDIntoMap: column-count mismatch.");
     }
-    if (dst.rows() != (ien ? (n + M) : n)) {
+    const auto expected_rows = en_aug ? (n + p)
+                             : ien    ? (n + M)
+                             :          n;
+    if (dst.rows() != expected_rows) {
         throw std::runtime_error(
             "TRexGVSSelector::writeAssembledDIntoMap: row-count mismatch.");
     }
@@ -649,11 +701,20 @@ void TRexGVSSelector::writeAssembledDIntoMap(
         col += p;
     }
 
-    // Bottom M rows for IEN: replicated bottom block, one per layer.
+    // Bottom rows: strategy-dependent augmentation.
     if (ien) {
+        // IEN: replicated group-ridge bottom block.
         col = 0;
         for (std::size_t li = 0; li < layers.size(); ++li) {
             dst.block(n, col, M, p) = ien_bottom_block_p_;
+            col += p;
+        }
+    } else if (en_aug) {
+        // EN_AUG: Zou & Hastie (2005) -- sqrt(lambda2)*I_p per dummy layer.
+        // normalizeAugmentedColumns is applied externally after this call.
+        col = 0;
+        for (std::size_t li = 0; li < layers.size(); ++li) {
+            dst.block(n, col, p, p) = std::sqrt(lambda2_) * Eigen::MatrixXd::Identity(p, p);
             col += p;
         }
     }
@@ -730,6 +791,7 @@ TRexGVSSelector::ExpAgg TRexGVSSelector::runKExperiments(
     const auto p_idx     = static_cast<Eigen::Index>(p_);
     const auto T_idx     = static_cast<Eigen::Index>(T_stop);
     const bool ien                           = (gvs_ctrl_.gvs_type == GVSType::IEN);
+    const bool en_aug                        = (gvs_ctrl_.gvs_type == GVSType::EN_AUG);
 
     // Per-experiment phi_T contributions; summed after the parallel section.
     std::vector<Eigen::MatrixXd> phi_T_per_k(K);
@@ -778,6 +840,25 @@ TRexGVSSelector::ExpAgg TRexGVSSelector::runKExperiments(
                         /*normalize=*/false,
                         /*intercept=*/false,
                         /*verbose=*/false);
+                } else if (en_aug) {
+                    if (trex_ctrl_.solver_type == sd::SolverTypeForTRex::TLASSO) {
+                        solver = std::make_unique<lars::TLASSO_Solver>(
+                            *X_solver_map_,
+                            *D_solver_maps_[k],
+                            *y_solver_map_,
+                            /*normalize=*/false,
+                            /*intercept=*/false,
+                            /*verbose=*/false);
+                    } else { // TLARS
+                        solver = std::make_unique<lars::TLARS_Solver>(
+                            *X_solver_map_,
+                            *D_solver_maps_[k],
+                            *y_solver_map_,
+                            /*normalize=*/false,
+                            /*intercept=*/false,
+                            /*verbose=*/false,
+                            lars::SolverTypeLarsBased::TLARS);
+                    }
                 } else {
                     solver = std::make_unique<lars::TENET_Solver>(
                         *X_solver_map_,
@@ -900,10 +981,9 @@ void TRexGVSSelector::prepareDummiesForLStep(LStepContext& ctx)
     // ---- Generate / extend per-experiment dummy layers -------------------
     for (std::size_t k = 0; k < K; ++k) {
 
-        std::mt19937 rng(static_cast<std::uint32_t>(
-            base_seed +
-            static_cast<std::uint64_t>(k) * 1000003ULL +
-            static_cast<std::uint64_t>(LL)));
+        std::mt19937 rng(trex::utils::datageneration::dummygen::mix_seed(
+            trex::utils::datageneration::dummygen::mix_seed(
+                static_cast<std::uint32_t>(base_seed), k), LL));
 
         if (redraw_all) {
             // Redraw all LL layers from scratch.
@@ -1001,8 +1081,9 @@ void TRexGVSSelector::onSelectBegin() {
         printProgress(oss.str());
     }
 
-    // 3. Build IEN augmentation if needed; set up effective shapes.
-    const bool ien = (gvs_ctrl_.gvs_type == GVSType::IEN);
+    // 3. Build augmentation if needed; set up effective shapes.
+    const bool ien    = (gvs_ctrl_.gvs_type == GVSType::IEN);
+    const bool en_aug = (gvs_ctrl_.gvs_type == GVSType::EN_AUG);
     if (ien) {
         buildIENAugmentation();
         n_eff_ = n_ + gvs_setup_.max_clusters;
@@ -1013,6 +1094,17 @@ void TRexGVSSelector::onSelectBegin() {
 
         y_solver_map_ = std::make_unique<Eigen::Map<Eigen::VectorXd>>(
             y_aug_.data(), y_aug_.size());
+
+    } else if (en_aug) {
+        buildENAugmentation();
+        n_eff_ = n_ + p_;   // Zou & Hastie (2005): n + p augmented rows.
+
+        // Solver-side X and y are the EN_AUG augmented buffers (long-lived members).
+        X_solver_map_ = std::make_unique<Eigen::Map<Eigen::MatrixXd>>(
+            X_aug_en_.data(), X_aug_en_.rows(), X_aug_en_.cols());
+
+        y_solver_map_ = std::make_unique<Eigen::Map<Eigen::VectorXd>>(
+            y_aug_en_.data(), y_aug_en_.size());
 
     } else { // EN: no augmentation, solver sees original X and y.
         n_eff_ = n_;
@@ -1079,6 +1171,8 @@ TRexGVSSelector::SelectionResult TRexGVSSelector::finalizeSelectionResult(
     y_solver_map_.reset();
     X_aug_.resize(0, 0);
     y_aug_.resize(0);
+    X_aug_en_.resize(0, 0);
+    y_aug_en_.resize(0);
     dummy_layers_.clear();
 
     // Return the (also-updated) base-sliced result.  We propagate the

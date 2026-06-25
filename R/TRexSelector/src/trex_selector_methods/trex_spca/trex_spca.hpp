@@ -11,10 +11,8 @@
  *
  * @details
  *  Implements from the T-Rex SPCA paper:
- *    5. T-Rex+GVS(EN)  + ActiveSet   loading assembly
- *    6. T-Rex+GVS(EN)  + Thresholded loading assembly
- *    7. T-Rex+GVS(IEN) + ActiveSet   loading assembly
- *    8. T-Rex+GVS(IEN) + Thresholded loading assembly
+ *    5. T-Rex+GVS(EN) + ActiveSet   loading assembly
+ *    6. T-Rex+GVS(EN) + Thresholded loading assembly
  *
  *  Implementations are in trex_spca.cpp.
  */
@@ -82,9 +80,6 @@ struct TRexSPCAResult {
 
     /** @brief Cumulative percentage of explained variance (M x 1). */
     Eigen::VectorXd cumulative_ev;
-
-    /** @brief GVS variant (EN or IEN) used for per-PC sub-selection. */
-    tg::GVSType gvs_type = tg::GVSType::EN;
 };
 
 
@@ -116,14 +111,22 @@ struct TRexSPCAControlParameter {
     // ====================================
 
     /** @brief GVS-specific control parameters forwarded to each per-PC TRexGVSSelector run.
-     *  Set gvs_ctrl.gvs_type = tg::GVSType::EN  for EN based methods.
-     *  Set gvs_ctrl.gvs_type = tg::GVSType::IEN for IEN based methods.
+     *
+     *  Two supported branches:
+     *    - Branch 1 — EN + TENET (default): gvs_ctrl.gvs_type is overridden to EN
+     *      and trex_ctrl.solver_type is overridden to TENET internally, regardless
+     *      of what the caller supplies.
+     *    - Branch 2 — EN_AUG + TLASSO/TLARS: set gvs_ctrl.gvs_type = EN_AUG and
+     *      trex_ctrl.solver_type = TLASSO (correct) or TLARS (semi-correct, matches
+     *      R reference). Both fields are forwarded as-is; TRexGVSSelector's constructor
+     *      enforces the solver-type constraint.
+     *  (IEN is not used by TRexSPCA.)
      *
      *  The GVS ridge penalty is controlled via:
      *    - gvs_ctrl.lambda_2       : set > 0.0 to supply a fixed value; 0.0 (default)
      *                                triggers auto-determination.
      *    - gvs_ctrl.lambda2_method : selects the auto-determination strategy
-     *                                (GCV, CV_MIN, CV_1SE, COND_NUM; default: GCV).
+     *                                (GCV, CV_MIN, CV_1SE; default: CV_1SE).
      */
     tg::TRexGVSControlParameter gvs_ctrl;
 
@@ -150,7 +153,7 @@ struct TRexSPCAControlParameter {
  * @details
  *  For each principal component m = 1, ..., M:
  *    1. Compute ordinary PCA to obtain the PC response vector z_m.
- *    2. Run TRexGVSSelector (EN or IEN) with target FDR to obtain a sparse
+ *    2. Run TRexGVSSelector (EN) with target FDR to obtain a sparse
  *       active set A_m.
  *    3. Assemble the sparse loading vector v_m:
  *       - SPCAMode::ActiveSet:   Ridge regression of z_m on X_{A_m}, normalized.
@@ -181,7 +184,7 @@ public:
      * @param tFDR       Target false discovery rate.
      * @param spca_ctrl  Control parameters (loading mode, GVS type, lambda2, T-Rex params).
      * @param seed       Random seed for reproducibility.
-     *                   seed >= 0 : per-PC deterministic runs (seed + m * 1000).
+     *                   seed >= 0 : per-PC deterministic runs via mix_seed(seed, m).
      *                   seed < 0  : non-deterministic (default: -1).
      * @param verbose    Enable verbose output (default: false).
      *
