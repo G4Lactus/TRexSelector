@@ -92,8 +92,8 @@ target_sources(trex_ml_methods PUBLIC
         ${CMAKE_CURRENT_SOURCE_DIR}/clustering/hierarchical/agglomerative/nnchain_core.hpp
         ${CMAKE_CURRENT_SOURCE_DIR}/clustering/hierarchical/agglomerative/proj_geom_updates.hpp
         ${CMAKE_CURRENT_SOURCE_DIR}/clustering/hierarchical/agglomerative/slink_core.hpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/model_selection/ridge_cv.hpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/model_selection/ridge_gcv.hpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/model_selection/enet_cv_ccd.hpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/model_selection/ridge_cv_svd.hpp
         ${CMAKE_CURRENT_SOURCE_DIR}/pca/pca.hpp
         ${CMAKE_CURRENT_SOURCE_DIR}/ridge_regression/ridge.hpp
         ${CMAKE_CURRENT_SOURCE_DIR}/svd/svd.hpp
