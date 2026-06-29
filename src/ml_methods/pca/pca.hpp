@@ -6,9 +6,10 @@
 // ===================================================================================
 /**
  * @file pca.hpp
+ *
  * @brief Principal Component Analysis (PCA) implementation using SVD solver.
- *        Supports optional in-place centering with automatic restoration via RAII.
- *        The aim is to prevent data corruption in workflows where PCA is a subroutine.
+ *        Supports independent in-place centering and L2-norm column normalisation,
+ *        with explicit caller-controlled restoration via restore().
  */
 // ===================================================================================
 
@@ -24,7 +25,7 @@
 
 // ===================================================================================
 
-// Namespace declarations
+// Namespace declarations and embedding: trex::ml_methods::pca
 namespace trex {
 namespace ml_methods {
 namespace pca {
@@ -47,28 +48,37 @@ struct PCAResult {
 /**
  * @class PCA
  *
- * @brief Stateful Principal Component Analysis with optional RAII centering.
+ * @brief Stateful Principal Component Analysis with optional in-place centering
+ *        and L2-norm column normalisation.
  *
  * @details Fits a truncated PCA model via the dimensionality-aware SVDSolver.
- *          Centering is controlled at construction time:
- *          - PCA{}        — standalone use: centers X in-place during fit(),
- *                           stores column means, and restores X on destruction
- *                           (or via an explicit restore() call).
- *          - PCA{false}   — orchestrator use: assumes X is already column-centered;
- *                           no centering or restoration is performed.
+ *          Preprocessing (centering, normalisation) is applied in-place to X
+ *          immediately in the constructor via preprocess_(). fit() then runs a
+ *          truncated SVD on the already-preprocessed data. The caller is
+ *          responsible for restoring X via restore(X) when done.
+ *
+ *          - center=true    — column means are subtracted from X in-place.
+ *          - normalize=true — columns are divided by their L2 norm after centering,
+ *                             yielding unit-norm columns. Near-zero norms (< 1e-10)
+ *                             are clamped to 1 to avoid division by zero.
+ *          - Both false     — X is assumed to be pre-processed by the caller.
+ *
+ *          State flags is_centered_ / is_normalized_ track what has actually been
+ *          applied to X, making restore() safe to call multiple times (idempotent).
  *
  * Typical standalone workflow:
  * @code
- *   PCA pca;
- *   PCAResult result = pca.fit(X, M);   // X is centered in-place
+ *   Eigen::MatrixXd X = ...;
+ *   PCA pca(X, M);               // X is centered + normalised in-place here
+ *   PCAResult result = pca.fit(); // runs truncated SVD
  *   Eigen::MatrixXd Z_new = pca.transform(X_new);
- *   // pca goes out of scope → X is restored automatically
+ *   pca.restore(X);              // undo in-place modifications
  * @endcode
  *
- * Typical orchestrator workflow (centering handled externally):
+ * Typical orchestrator workflow (preprocessing handled externally):
  * @code
- *   PCA pca(false);
- *   PCAResult result = pca.fit(X_centered, M);
+ *   PCA pca(X_preprocessed, M, false, false);
+ *   PCAResult result = pca.fit();
  * @endcode
  */
 class PCA {
@@ -76,67 +86,93 @@ class PCA {
 public:
 
     /**
-     * @brief Construct a PCA solver.
+     * @brief Construct a PCA solver and preprocess X in-place immediately.
      *
-     * @param center If true (default), column-means are computed and subtracted
-     *               in-place inside fit(), and the original values are restored
-     *               on destruction (or via restore()). If false, X is assumed
-     *               pre-centered and no modification or restoration is performed.
+     * @details Validates dimensions, then calls preprocess_() to apply centering
+     *          and/or L2-norm normalisation to X in-place. Stores means_ and norms_
+     *          (always valid after construction). Also stores a raw pointer to X's
+     *          data buffer for use by fit(). X must remain valid until fit() returns.
+     *
+     * @param X         Input data matrix (n x p). Preprocessed in-place at
+     *                  construction when center or normalize are true.
+     *                  Must outlive the call to fit().
+     * @param M         Number of principal components to retain. Must satisfy
+     *                  M <= min(n, p).
+     * @param center    If true (default), column means are subtracted in-place.
+     *                  Stored in means_; reversed by restore().
+     * @param normalize If true (default), columns are divided by their L2 norm after
+     *                  centering. Stored in norms_; reversed by restore().
+     *
+     * @throws std::invalid_argument if M > min(n, p) or n <= 1.
      */
-    explicit PCA(bool center = true)
-        : center_(center), data_ptr_(nullptr), n_(0), p_(0) {}
+    explicit PCA(Eigen::Ref<Eigen::MatrixXd> X,
+                 Eigen::Index M,
+                 bool center    = true,
+                 bool normalize = true)
+        : data_ptr_(X.data()),
+          n_(X.rows()),
+          p_(X.cols()),
+          M_(M),
+          center_(center),
+          normalize_(normalize),
+          is_centered_(false),
+          is_normalized_(false),
+          fitted_(false)
+    {
+        if (M_ > std::min(n_, p_)) {
+            throw std::invalid_argument("PCA: M must not exceed min(n, p).");
+        }
+        if (n_ <= 1) {
+            throw std::invalid_argument("PCA: requires at least 2 samples to compute variance.");
+        }
+        preprocess_(X);
+    }
 
+    /** @brief Destructor — no RAII restoration. Call restore(X) explicitly. */
+    ~PCA() = default;
 
-    /** @brief Destructor — restores X if centering was applied during fit(). */
-    ~PCA() { restore(); }
-
-
-    // PCA owns a restoration obligation: non-copyable, move-only.
+    // Non-copyable, move-only.
+    /** @brief Copy constructor (deleted) */
     PCA(const PCA&)            = delete;
+
+    /** @brief Copy assignment operator (deleted) */
     PCA& operator=(const PCA&) = delete;
+
+    /** @brief Move constructor (defaulted) */
     PCA(PCA&&)                 = default;
+
+    /** @brief Move assignment operator (defaulted) */
     PCA& operator=(PCA&&)      = default;
 
 
     /**
-     * @brief Fit PCA to the data matrix X, reducing to M principal components.
+     * @brief Compute the truncated SVD on the already-preprocessed X.
      *
-     * @details When center=true, X is modified in-place (column means subtracted).
-     *          Call restore() or let the PCA object go out of scope to undo this.
-     *
-     * @param X Input data matrix (n x p). Modified in-place when center=true.
-     * @param M Number of principal components to retain.
+     * @details X was preprocessed in-place by the constructor. fit() runs the
+     *          truncated SVD and stores loadings_ and explained_variance_.
+     *          The raw pointer to X is released after fit() returns.
+     *          Call restore(X) to undo the in-place preprocessing.
      *
      * @return PCAResult containing the principal component scores (Z),
-     *         loadings (V), and explained variance.
+     *         loadings (V), and explained variance per component.
+     *
+     * @throws std::runtime_error if called on an already-fitted instance.
      */
-    PCAResult fit(Eigen::Ref<Eigen::MatrixXd> X, Eigen::Index M) {
+    PCAResult fit() {
 
-        Eigen::Index n = X.rows();
-        Eigen::Index p = X.cols();
-
-        if (M > std::min(n, p)) {
-            throw std::invalid_argument("M must not exceed min(n, p)");
-        }
-        if (n <= 1) {
-            throw std::invalid_argument("PCA requires at least 2 samples to compute variance.");
+        if (fitted_) {
+            throw std::runtime_error(
+                "PCA::fit() called on an already-fitted instance.");
         }
 
-        if (center_) {
-            mean_ = X.colwise().mean();
-            X.rowwise() -= mean_;
-            // Store for restoration
-            data_ptr_ = X.data();
-            n_ = n;
-            p_ = p;
-        } else {
-            mean_ = Eigen::RowVectorXd::Zero(p);
-        }
+        Eigen::Map<Eigen::MatrixXd> X_map(data_ptr_, n_, p_);
 
-        svd::SVDResult svd_res = svd::SVDSolver{}.compute(X, M);
+        svd::SVDResult svd_res = svd::SVDSolver{}.compute(X_map, M_);
 
         loadings_           = svd_res.V;
-        explained_variance_ = svd_res.S.array().square() / static_cast<double>(n - 1);
+        explained_variance_ = svd_res.S.array().square() / static_cast<double>(n_ - 1);
+        fitted_             = true;
+        data_ptr_           = nullptr;  // release stale pointer
 
         PCAResult result;
         result.V                  = loadings_;
@@ -147,18 +183,40 @@ public:
 
 
     /**
-     * @brief Restore X to its original (uncentered) state by adding back the
-     *        column means computed during fit().
+     * @brief Restore X to its original state by reversing the in-place preprocessing.
      *
-     * @details This is called automatically by the destructor. Calling it
-     *          explicitly allows early restoration before the PCA object goes
-     *          out of scope. Safe to call multiple times (idempotent).
-     *          Has no effect when center=false.
+     * @details Undoes normalisation then centering (reverse of application order):
+     *            X.col(j) *= norms_(j)  [if is_normalized_]
+     *            X.rowwise() += means_  [if is_centered_]
+     *          Uses the is_normalized_ / is_centered_ state flags, so calling it
+     *          multiple times is safe: each flag is cleared after its step is applied,
+     *          making the second call a no-op.
+     *
+     * @param X Matrix to restore. Must have the same dimensions (n x p) as the
+     *          matrix passed to the constructor.
+     *
+     * @throws std::runtime_error    if called before fit().
+     * @throws std::invalid_argument if X dimensions do not match.
      */
-    void restore() {
-        if (data_ptr_) {
-            Eigen::Map<Eigen::MatrixXd>(data_ptr_, n_, p_).rowwise() += mean_;
-            data_ptr_ = nullptr;
+    void restore(Eigen::Ref<Eigen::MatrixXd> X) {
+        if (!fitted_) {
+            throw std::runtime_error("PCA::restore() called before fit().");
+        }
+        if (X.rows() != n_ || X.cols() != p_) {
+            throw std::invalid_argument(
+                "PCA::restore(): X dimensions do not match the matrix used in fit().");
+        }
+        if (!is_centered_ && !is_normalized_) { return; }
+
+        // Reverse order: undo normalisation first, then centering.
+        // Each flag is cleared immediately after its step so the call is idempotent.
+        if (is_normalized_) {
+            X.array().rowwise() *= norms_.array();
+            is_normalized_ = false;
+        }
+        if (is_centered_) {
+            X.rowwise() += means_;
+            is_centered_ = false;
         }
     }
 
@@ -166,19 +224,24 @@ public:
     /**
      * @brief Project new observations onto the fitted principal components.
      *
-     * @details Subtracts the mean stored during fit() (zero when center=false),
-     *          then multiplies by the loadings matrix.
+     * @details Applies the same preprocessing as fit() (centering then normalisation)
+     *          before projecting: Z_new = ((X_new - means_) ./ norms_) * V.
+     *          norms_ is a ones vector when normalize=false, so this formula holds
+     *          unconditionally.
      *
-     * @param X New data matrix (n_new x p). Must have the same number of columns
-     *          as the matrix passed to fit().
+     * @param X New data matrix (n_new x p). Must have p columns.
      *
      * @return Score matrix of shape (n_new x M).
+     *
+     * @throws std::runtime_error if called before fit().
      */
     Eigen::MatrixXd transform(const Eigen::Ref<const Eigen::MatrixXd>& X) const {
-        if (loadings_.cols() == 0) {
-            throw std::runtime_error("PCA::transform called before fit().");
+        if (!fitted_) {
+            throw std::runtime_error("PCA::transform() called before fit().");
         }
-        return (X.rowwise() - mean_) * loadings_;
+        Eigen::MatrixXd Xc = (X.rowwise() - means_).eval();
+        Xc.array().rowwise() /= norms_.array();
+        return Xc * loadings_;
     }
 
 
@@ -186,45 +249,118 @@ public:
     // Getters
     // ===================================================================================
 
-    /** @brief Column means computed during fit() (zero-vector when center=false). */
-    const Eigen::RowVectorXd& getMean() const { return mean_; }
+    /**
+     * @brief Column means computed at construction (zero-vector when center=false).
+     *        Available immediately after construction, before fit().
+     */
+    const Eigen::RowVectorXd& getMeans() const { return means_; }
 
-    /** @brief Principal component loadings (p x M right singular vectors). */
-    const Eigen::MatrixXd& getLoadings() const { return loadings_; }
+    /**
+     * @brief Column L2 norms computed at construction (ones-vector when normalize=false).
+     *        Available immediately after construction, before fit().
+     */
+    const Eigen::RowVectorXd& getNorms() const { return norms_; }
 
-    /** @brief Explained variance per component (eigenvalues of sample covariance). */
-    const Eigen::VectorXd& getExplainedVariance() const { return explained_variance_; }
+    /**
+     * @brief Principal component loadings (p x M right singular vectors).
+     * @throws std::runtime_error if called before fit().
+     */
+    const Eigen::MatrixXd& getLoadings() const {
+        if (!fitted_) throw std::runtime_error("PCA::getLoadings() called before fit().");
+        return loadings_;
+    }
+
+    /**
+     * @brief Explained variance per component (eigenvalues of sample covariance).
+     * @throws std::runtime_error if called before fit().
+     */
+    const Eigen::VectorXd& getExplainedVariance() const {
+        if (!fitted_) throw std::runtime_error("PCA::getExplainedVariance() called before fit().");
+        return explained_variance_;
+    }
 
 
 private:
 
-    /** @brief Whether to center the data during fit(). */
-    bool         center_;
+    /** @brief Raw pointer into X's data buffer; valid until fit() completes, then null. */
+    double* data_ptr_;
 
-    /** @brief Raw pointer into the data buffer of X passed to fit();
-               null when center=false or after restore() has been called.
-    */
-    double*      data_ptr_;
-
-    /** @brief Number of samples (rows) in the data matrix. */
+    /** @brief Number of rows in X. */
     Eigen::Index n_;
 
-    /** @brief Number of features (columns) in the data matrix. */
+    /** @brief Number of columns in X. */
     Eigen::Index p_;
 
-    /** @brief Column means computed during fit() (zero-vector when center=false). */
-    Eigen::RowVectorXd mean_;
+    /** @brief Number of principal components to compute. */
+    Eigen::Index M_;
+
+    /** @brief Intent flag: whether to subtract column means (set at construction). */
+    bool center_;
+
+    /** @brief Intent flag: whether to divide columns by their L2 norm (set at construction). */
+    bool normalize_;
+
+    /** @brief State flag: true while centering has been applied and not yet restored. */
+    bool is_centered_;
+
+    /** @brief State flag: true while normalisation has been applied and not yet restored. */
+    bool is_normalized_;
+
+    /** @brief True after fit() has been called successfully. */
+    bool fitted_;
+
+    /** @brief Column means computed at construction (zero-vector when center=false). */
+    Eigen::RowVectorXd means_;
+
+    /** @brief Column L2 norms computed at construction (ones-vector when normalize=false). */
+    Eigen::RowVectorXd norms_;
+
+
+    // ===================================================================================
+    // Private helpers
+    // ===================================================================================
+
+    /**
+     * @brief Apply centering and L2-norm normalisation to X in-place.
+     *
+     * @details Called from the constructor. Updates means_, norms_, is_centered_,
+     *          and is_normalized_ according to the center_ and normalize_ intent flags.
+     *
+     * @param X Data matrix to preprocess (same object passed to the constructor).
+     */
+    void preprocess_(Eigen::Ref<Eigen::MatrixXd> X) {
+        if (center_) {
+            means_ = X.colwise().mean();
+            X.rowwise() -= means_;
+            is_centered_ = true;
+        } else {
+            means_ = Eigen::RowVectorXd::Zero(p_);
+        }
+
+        if (normalize_) {
+            norms_.resize(p_);
+            constexpr double eps = 1e-10;
+            for (Eigen::Index j = 0; j < p_; ++j) {
+                const double col_norm = X.col(j).norm();
+                norms_(j) = (col_norm < eps) ? 1.0 : col_norm;
+                X.col(j) /= norms_(j);
+            }
+            is_normalized_ = true;
+        } else {
+            norms_ = Eigen::RowVectorXd::Ones(p_);
+        }
+    }
 
     /** @brief Principal component loadings (p x M right singular vectors). */
-    Eigen::MatrixXd    loadings_;
+    Eigen::MatrixXd loadings_;
 
     /** @brief Explained variance per component (eigenvalues of sample covariance). */
-    Eigen::VectorXd    explained_variance_;
+    Eigen::VectorXd explained_variance_;
 };
 
 // ===================================================================================
-} /* namespace pca */
-} /* namespace ml_methods */
-} /* namespace trex */
+} /* End of namespace pca */
+} /* End of namespace ml_methods */
+} /* End of namespace trex */
 // ===================================================================================
 #endif /* End of TREX_ML_METHODS_PCA_HPP */
