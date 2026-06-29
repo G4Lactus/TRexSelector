@@ -67,7 +67,8 @@ public:
                 double rho = 1.0,
                 bool normalize = true,
                 bool intercept = true,
-                bool verbose = false);
+                bool verbose = false,
+                ScalingMode scaling_mode = ScalingMode::L2);
 
     /** @brief Default constructor for serialization. */
     TAFS_Solver();

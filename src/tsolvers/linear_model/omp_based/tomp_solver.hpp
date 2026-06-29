@@ -88,7 +88,8 @@ public:
                 bool normalize = true,
                 bool intercept = true,
                 bool verbose = false,
-                SolverTypeOMPBased algorithm_type = SolverTypeOMPBased::TOMP);
+                SolverTypeOMPBased algorithm_type = SolverTypeOMPBased::TOMP,
+                ScalingMode scaling_mode = ScalingMode::L2);
 
     /** @brief Default constructor for serialization. */
     TOMP_Solver();

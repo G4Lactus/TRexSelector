@@ -29,8 +29,9 @@ TAFS_Solver::TAFS_Solver(
     double rho,
     bool normalize,
     bool intercept,
-    bool verbose)
-    : TSolver_Base(X, D, y, normalize, intercept, verbose), rho_(rho) {
+    bool verbose,
+    ScalingMode scaling_mode)
+    : TSolver_Base(X, D, y, normalize, intercept, verbose, scaling_mode), rho_(rho) {
 
     if (rho_ <= 0.0 || rho_ > 1.0) {
         throw std::invalid_argument("TAFS_Solver: rho must be in the range (0, 1].");

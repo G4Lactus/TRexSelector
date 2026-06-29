@@ -29,10 +29,11 @@ TSTAGEWISE_Solver::TSTAGEWISE_Solver(
     Eigen::Map<Eigen::VectorXd>& y,
     bool normalize,
     bool intercept,
-    bool verbose
+    bool verbose,
+    ScalingMode scaling_mode
 )
     : TLARS_Solver(X, D, y, normalize, intercept, verbose,
-                    SolverTypeLarsBased::TSTAGEWISE),
+                    SolverTypeLarsBased::TSTAGEWISE, scaling_mode),
       num_removals_(0) {
 }
 

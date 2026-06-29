@@ -110,6 +110,7 @@ public:
      * @param intercept If true, X, D, and y are centered (intercept fitted).
      * @param verbose If true, print status and diagnostics during execution.
      * @param algorithm_type SolverTypeLarsBased variant.
+     * @param scaling_mode Column-scaling convention (L2 or z-score). Default L2.
      *
      * @note X and D are not copied nor owned, so changes to X or D alter the underlying
      *       data.
@@ -125,7 +126,8 @@ public:
                  bool normalize = true,
                  bool intercept = true,
                  bool verbose = false,
-                 SolverTypeLarsBased algorithm_type = SolverTypeLarsBased::TLARS
+                 SolverTypeLarsBased algorithm_type = SolverTypeLarsBased::TLARS,
+                 ScalingMode scaling_mode = ScalingMode::L2
                 );
 
     /**

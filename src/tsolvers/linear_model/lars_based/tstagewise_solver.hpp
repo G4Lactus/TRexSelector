@@ -64,13 +64,15 @@ public:
      * @param normalize If true, each column of X is scaled to unit L2-norm.
      * @param intercept If true, X and y are centered (intercept fitted).
      * @param verbose If true, print status and diagnostics during execution.
+     * @param scaling_mode Column-scaling convention (L2 or z-score). Default L2.
      */
     TSTAGEWISE_Solver(Eigen::Map<Eigen::MatrixXd>& X,
                       Eigen::Map<Eigen::MatrixXd>& D,
                       Eigen::Map<Eigen::VectorXd>& y,
                       bool normalize = true,
                       bool intercept = true,
-                      bool verbose = false);
+                      bool verbose = false,
+                      ScalingMode scaling_mode = ScalingMode::L2);
 
     /** @brief Default constructor for serialization or deferred initialization. */
     TSTAGEWISE_Solver() : TLARS_Solver(SolverTypeLarsBased::TSTAGEWISE) {}

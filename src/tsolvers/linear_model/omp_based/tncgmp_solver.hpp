@@ -71,7 +71,8 @@ public:
                   NCGMPVariant variant = NCGMPVariant::LineSearch,
                   bool normalize = true,
                   bool intercept = true,
-                  bool verbose = false);
+                  bool verbose = false,
+                  ScalingMode scaling_mode = ScalingMode::L2);
 
     /** @brief Default constructor for serialization. */
     TNCGMP_Solver();

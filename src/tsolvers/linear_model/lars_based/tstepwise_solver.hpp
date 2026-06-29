@@ -75,15 +75,17 @@ public:
      * @param normalize If true, columns are scaled to unit L2-norm.
      * @param intercept If true, variables are centered.
      * @param verbose If true, print detailed status and diagnostics.
+     * @param scaling_mode Column-scaling convention (L2 or z-score). Default L2.
      */
     TSTEPWISE_Solver(Eigen::Map<Eigen::MatrixXd>& X,
                      Eigen::Map<Eigen::MatrixXd>& D,
                      Eigen::Map<Eigen::VectorXd>& y,
                      bool normalize = true,
                      bool intercept = true,
-                     bool verbose = false)
+                     bool verbose = false,
+                     ScalingMode scaling_mode = ScalingMode::L2)
         : TLARS_Solver(X, D, y, normalize, intercept, verbose,
-                       SolverTypeLarsBased::TSTEPWISE) {}
+                       SolverTypeLarsBased::TSTEPWISE, scaling_mode) {}
 
     /** @brief Default constructor for serialization or deferred initialization. */
     TSTEPWISE_Solver() : TLARS_Solver(SolverTypeLarsBased::TSTEPWISE) {}

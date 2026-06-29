@@ -119,9 +119,10 @@ public:
             Eigen::Map<Eigen::VectorXd>& y,
             bool normalize = true,
             bool intercept = true,
-            bool verbose = false)
+            bool verbose = false,
+            ScalingMode scaling_mode = ScalingMode::L2)
         : TOMP_Solver(X, D, y, normalize, intercept, verbose,
-                    SolverTypeOMPBased::TMP) {}
+                    SolverTypeOMPBased::TMP, scaling_mode) {}
 
     /**
     * @brief Default constructor for serialization or deferred initialization.

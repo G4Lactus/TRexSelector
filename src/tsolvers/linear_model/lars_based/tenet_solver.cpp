@@ -37,10 +37,11 @@ TENET_Solver::TENET_Solver(
     double lambda2,
     bool normalize,
     bool intercept,
-    bool verbose
+    bool verbose,
+    ScalingMode scaling_mode
 )
     : TLARS_Solver(X, D, y, normalize, intercept, verbose,
-                   SolverTypeLarsBased::TENET),
+                   SolverTypeLarsBased::TENET, scaling_mode),
       lambda2_(validateLambda2(lambda2)),
       d1_(std::sqrt(lambda2)),
       d2_(1.0 / std::sqrt(1.0 + lambda2)),

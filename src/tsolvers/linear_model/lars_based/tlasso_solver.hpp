@@ -115,15 +115,17 @@ public:
      * @param normalize If true, columns are scaled to unit L2-norm. Default true.
      * @param intercept If true, variables are centered. Default true.
      * @param verbose If true, print detailed status and diagnostics. Default false.
+     * @param scaling_mode Column-scaling convention (L2 or z-score). Default L2.
      */
     TLASSO_Solver(Eigen::Map<Eigen::MatrixXd>& X,
                   Eigen::Map<Eigen::MatrixXd>& D,
                   Eigen::Map<Eigen::VectorXd>& y,
                   bool normalize = true,
                   bool intercept = true,
-                  bool verbose = false)
+                  bool verbose = false,
+                  ScalingMode scaling_mode = ScalingMode::L2)
         : TLARS_Solver(X, D, y, normalize, intercept, verbose,
-                       SolverTypeLarsBased::TLASSO) {}
+                       SolverTypeLarsBased::TLASSO, scaling_mode) {}
 
     /**
      * @brief Default constructor for serialization or deferred initialization.

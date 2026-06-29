@@ -121,8 +121,9 @@ public:
                  Eigen::Map<Eigen::VectorXd>& y,
                  bool normalize = true,
                  bool intercept = true,
-                 bool verbose = false)
-        : TGP_Solver(X, D, y, normalize, intercept, verbose) {
+                 bool verbose = false,
+                 ScalingMode scaling_mode = ScalingMode::L2)
+        : TGP_Solver(X, D, y, normalize, intercept, verbose, scaling_mode) {
             algo_type_ = SolverTypeOMPBased::TACGP;
           }
 

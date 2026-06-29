@@ -32,9 +32,19 @@
 // Utils includes
 #include <utils/serialization/utils_cereal_eigen.hpp>
 
+// tsolvers includes
+#include <tsolvers/solver_utils/solver_preprocessing.hpp>
+
 // ===================================================================================
 
 namespace trex::tsolvers {
+
+// ===================================================================================
+
+/** @brief Column-scaling convention used by all solvers (unit-L2 or z-score).
+ *  Aliased from the preprocessing utility so derived solvers in nested
+ *  namespaces can refer to it unqualified as `ScalingMode`. */
+using ScalingMode = solver_utils::preprocessing::ScalingMode;
 
 // ===================================================================================
 
@@ -108,6 +118,10 @@ protected:
     // ==========================================================================
     /** @brief Flag indicating if the data should be normalized. Default is true. */
     bool normalize_{true};
+
+    /** @brief Column-scaling convention applied when normalize_ is true.
+     *  Default L2 (unit-L2 norm); ZSCORE divides by the sample standard deviation. */
+    ScalingMode scaling_mode_{ScalingMode::L2};
 
     /** @brief Flag indicating if an intercept should be included. Default is true. */
     bool intercept_{true};
@@ -196,7 +210,8 @@ protected:
                  Eigen::Map<Eigen::VectorXd>& y,
                  bool normalize,
                  bool intercept,
-                 bool verbose);
+                 bool verbose,
+                 ScalingMode scaling_mode = ScalingMode::L2);
 
 public:
     /** @brief Virtual default destructor. (X_, D_, not owned, not deleted). */
@@ -529,6 +544,7 @@ protected:
      */
     template<class Archive>
     void serialize(Archive& archive) {
+        int& scaling_mode_int = reinterpret_cast<int&>(scaling_mode_);
         archive(
             // Step tracking
             CEREAL_NVP(currentStep_), CEREAL_NVP(maxSteps_),
@@ -550,7 +566,7 @@ protected:
 
             // Preprocessing
             CEREAL_NVP(normalize_), CEREAL_NVP(intercept_),
-            CEREAL_NVP(verbose_),
+            CEREAL_NVP(verbose_), CEREAL_NVP(scaling_mode_int),
             CEREAL_NVP(meansx_), CEREAL_NVP(normsx_),
             CEREAL_NVP(meansd_), CEREAL_NVP(normsd_),
             CEREAL_NVP(mu_y_), CEREAL_NVP(effective_n_),

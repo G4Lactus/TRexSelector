@@ -47,10 +47,11 @@ TSolver_Base::TSolver_Base(
     Eigen::Map<Eigen::VectorXd>& y,
     bool normalize,
     bool intercept,
-    bool verbose
+    bool verbose,
+    ScalingMode scaling_mode
     )
-    : X_(&X), D_(&D), y_(y), normalize_(normalize), intercept_(intercept),
-      verbose_(verbose), is_connected_(true) {
+    : X_(&X), D_(&D), y_(y), normalize_(normalize), scaling_mode_(scaling_mode),
+      intercept_(intercept), verbose_(verbose), is_connected_(true) {
 
     p_original_ = static_cast<std::size_t>(X.cols());
     num_dummies_ = static_cast<std::size_t>(D.cols());
@@ -88,13 +89,13 @@ TSolver_Base::TSolver_Base(
 void TSolver_Base::preprocess() {
     // 1. Preprocess original predictors X
     su_preproc::preprocessMatStatistics(*X_, intercept_, normalize_,
-        eps_, meansx_, normsx_, dropped_indices_);
+        eps_, meansx_, normsx_, dropped_indices_, scaling_mode_);
 
     // 2. Preprocess dummy predictors D (Offset dropped indices)
     if (D_ != nullptr && num_dummies_ > 0) {
         std::vector<std::size_t> d_dropped;
         su_preproc::preprocessMatStatistics(*D_, intercept_, normalize_,
-            eps_, meansd_, normsd_, d_dropped);
+            eps_, meansd_, normsd_, d_dropped, scaling_mode_);
 
         // Map D drops into the unified index space
         for (std::size_t j : d_dropped) {

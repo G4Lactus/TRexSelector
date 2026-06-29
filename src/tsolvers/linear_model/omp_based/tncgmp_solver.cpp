@@ -26,9 +26,10 @@ TNCGMP_Solver::TNCGMP_Solver(
     NCGMPVariant variant,
     bool normalize,
     bool intercept,
-    bool verbose)
+    bool verbose,
+    ScalingMode scaling_mode)
 
-    : TSolver_Base(X, D, y, normalize, intercept, verbose),
+    : TSolver_Base(X, D, y, normalize, intercept, verbose, scaling_mode),
       variant_(variant) {
 
     dropped_indices_.clear();

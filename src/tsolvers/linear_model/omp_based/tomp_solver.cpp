@@ -33,8 +33,9 @@ TOMP_Solver::TOMP_Solver(
     bool normalize,
     bool intercept,
     bool verbose,
-    SolverTypeOMPBased algorithm_type)
-    : TSolver_Base(X, D, y, normalize, intercept, verbose),
+    SolverTypeOMPBased algorithm_type,
+    ScalingMode scaling_mode)
+    : TSolver_Base(X, D, y, normalize, intercept, verbose, scaling_mode),
       algo_type_(algorithm_type) {
 
     // 1. Inherited Preprocessing

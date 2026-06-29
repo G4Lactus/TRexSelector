@@ -60,7 +60,8 @@ public:
                  Eigen::Map<Eigen::VectorXd>& y,
                  bool normalize = true,
                  bool intercept = true,
-                 bool verbose = false);
+                 bool verbose = false,
+                 ScalingMode scaling_mode = ScalingMode::L2);
 
     /** @brief Default constructor for serialization. */
     TOOLS_Solver();

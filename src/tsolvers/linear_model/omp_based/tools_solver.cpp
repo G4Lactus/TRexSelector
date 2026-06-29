@@ -28,8 +28,10 @@ TOOLS_Solver::TOOLS_Solver(
     Eigen::Map<Eigen::VectorXd>& y,
     bool normalize,
     bool intercept,
-    bool verbose)
-    : TOMP_Solver(X, D, y, normalize, intercept, verbose)
+    bool verbose,
+    ScalingMode scaling_mode)
+    : TOMP_Solver(X, D, y, normalize, intercept, verbose,
+                  SolverTypeOMPBased::TOMP, scaling_mode)
 {
     // State is fully initialized by the TOMP_Solver base constructor
 }
