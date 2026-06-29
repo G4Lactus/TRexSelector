@@ -19,8 +19,8 @@ set(TREX_USE_BLAS_LAPACK OFF CACHE BOOL "Disable BLAS for Python" FORCE)
 # Disable Tests to avoid linker errors with executable targets
 set(TREX_BUILD_TESTS     OFF CACHE BOOL "Disable Tests for Python"  FORCE)
 
-# Add the parent directory containing the main TRexSelector C++ project
-add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../.. ${CMAKE_CURRENT_BINARY_DIR}/trex_core)
+# Add the cpp/ directory containing the core TRexSelector C++ library
+add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../../cpp ${CMAKE_CURRENT_BINARY_DIR}/trex_core)
 
 # Create the Python extension module mapped to _core
 pybind11_add_module(_core src/trex_selector/bindings.cpp)

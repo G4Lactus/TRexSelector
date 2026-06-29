@@ -1,0 +1,88 @@
+name: Python Wheels
+
+on:
+  push:
+    paths:
+      - 'Python/**'
+      - 'cpp/**'
+      - '.github/workflows/python-wheels.yml'
+  pull_request:
+    paths:
+      - 'Python/**'
+      - 'cpp/**'
+      - '.github/workflows/python-wheels.yml'
+  release:
+    types: [published]
+
+jobs:
+  build_wheels:
+    name: Build wheels (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build wheels
+        uses: pypa/cibuildwheel@v2.21.3
+        with:
+          package-dir: Python/TRexSelector
+          output-dir: wheelhouse
+        env:
+          # Build CPython 3.9–3.12; skip PyPy and musl-based Linux
+          CIBW_BUILD: "cp39-* cp310-* cp311-* cp312-*"
+          CIBW_SKIP: "*-musllinux_*"
+
+          # -----------------------------------------------------------------------
+          # Linux (manylinux_2_28 — dnf/yum based)
+          # -----------------------------------------------------------------------
+          CIBW_MANYLINUX_X86_64_IMAGE: manylinux_2_28
+          CIBW_BEFORE_ALL_LINUX: |
+            dnf install -y epel-release || true
+            dnf install -y eigen3-devel boost-devel libomp-devel || \
+              yum install -y epel-release && yum install -y eigen3-devel boost-devel libomp-devel
+            # cereal is header-only — install from GitHub release tarball
+            curl -fsSL https://github.com/USCiLab/cereal/archive/refs/tags/v1.3.2.tar.gz \
+              | tar xz -C /tmp
+            cp -r /tmp/cereal-1.3.2/include/cereal /usr/local/include/cereal
+
+          # -----------------------------------------------------------------------
+          # macOS — Homebrew LLVM required for OpenMP
+          # -----------------------------------------------------------------------
+          CIBW_BEFORE_ALL_MACOS: brew install eigen boost cereal llvm libomp
+
+          CIBW_ENVIRONMENT_MACOS: >
+            CMAKE_C_COMPILER=$(brew --prefix llvm)/bin/clang
+            CMAKE_CXX_COMPILER=$(brew --prefix llvm)/bin/clang++
+
+      - name: Upload wheel artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: wheels-${{ matrix.os }}
+          path: ./wheelhouse/*.whl
+
+  # ---------------------------------------------------------------------------
+  # Publish to PyPI — only on GitHub Release events
+  # ---------------------------------------------------------------------------
+  publish:
+    name: Publish to PyPI
+    needs: [build_wheels]
+    runs-on: ubuntu-latest
+    if: github.event_name == 'release'
+    environment: pypi
+    permissions:
+      id-token: write   # required for OIDC trusted publishing
+
+    steps:
+      - name: Download all wheel artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: wheels-*
+          merge-multiple: true
+          path: dist/
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1

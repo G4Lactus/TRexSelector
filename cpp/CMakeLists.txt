@@ -66,15 +66,6 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 # ============================================================================
-# Python / IDE Include Paths (For VS Code IntelliSense)
-# ============================================================================
-# These are explicitly added to the IDE's compile_commands.json so that
-# VS Code stops reporting pybind11 errors in Python/src/.
-include_directories("/opt/homebrew/Caskroom/miniconda/base/envs/trex-dev/include/python3.12")
-include_directories("/opt/homebrew/Caskroom/miniconda/base/envs/trex-dev/lib/python3.12/site-packages/pybind11/include")
-
-
-# ============================================================================
 # Find packages with priority order
 # ============================================================================
 
@@ -267,8 +258,8 @@ if(CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)
     set(CPACK_PACKAGE_VERSION_MAJOR        ${PROJECT_VERSION_MAJOR})
     set(CPACK_PACKAGE_VERSION_MINOR        ${PROJECT_VERSION_MINOR})
     set(CPACK_PACKAGE_VERSION_PATCH        ${PROJECT_VERSION_PATCH})
-    set(CPACK_RESOURCE_FILE_LICENSE        "${PROJECT_SOURCE_DIR}/LICENSE")
-    set(CPACK_RESOURCE_FILE_README         "${PROJECT_SOURCE_DIR}/README.md")
+    set(CPACK_RESOURCE_FILE_LICENSE        "${PROJECT_SOURCE_DIR}/../LICENSE")
+    set(CPACK_RESOURCE_FILE_README         "${PROJECT_SOURCE_DIR}/../README.md")
 
     # Binary package  (cmake --build <dir> --target package)
     # Produces TRexSelector-<version>-<system>.tar.gz and .zip
@@ -301,7 +292,7 @@ endif()
 # ============================================================================
 # This simply forces ms-vscode.cmake-tools to parse and provide IntelliSense for
 # the R package source files that are otherwise built externally by `R CMD INSTALL`.
-file(GLOB_RECURSE R_BINDINGS_SOURCES "R/TRexSelector/src/*.cpp")
+file(GLOB_RECURSE R_BINDINGS_SOURCES "../R/TRexSelector/src/*.cpp")
 if(R_BINDINGS_SOURCES)
 add_library(r_bindings_ide_only EXCLUDE_FROM_ALL ${R_BINDINGS_SOURCES})
 target_include_directories(r_bindings_ide_only PRIVATE

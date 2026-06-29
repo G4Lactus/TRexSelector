@@ -1,0 +1,72 @@
+name: C++ Tests
+
+on:
+  push:
+    paths:
+      - 'cpp/**'
+      - '.github/workflows/cpp-tests.yml'
+  pull_request:
+    paths:
+      - 'cpp/**'
+      - '.github/workflows/cpp-tests.yml'
+
+jobs:
+  test:
+    name: ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-latest]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # -----------------------------------------------------------------------
+      # Ubuntu: install all C++ dependencies via apt
+      # -----------------------------------------------------------------------
+      - name: Install dependencies (Ubuntu)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libeigen3-dev \
+            libboost-all-dev \
+            libcereal-dev \
+            libgtest-dev \
+            libomp-dev
+
+      # -----------------------------------------------------------------------
+      # macOS: install via Homebrew; use Homebrew LLVM for OpenMP support
+      # -----------------------------------------------------------------------
+      - name: Install dependencies (macOS)
+        if: runner.os == 'macOS'
+        run: brew install eigen boost cereal googletest llvm libomp
+
+      # -----------------------------------------------------------------------
+      # Configure
+      # -----------------------------------------------------------------------
+      - name: Configure (Ubuntu)
+        if: runner.os == 'Linux'
+        run: |
+          cmake -S cpp -B cpp/build/ci \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DTREX_PORTABLE_BUILD=ON
+
+      - name: Configure (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          cmake -S cpp -B cpp/build/ci \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_C_COMPILER="$(brew --prefix llvm)/bin/clang" \
+            -DCMAKE_CXX_COMPILER="$(brew --prefix llvm)/bin/clang++" \
+            -DTREX_PORTABLE_BUILD=ON
+
+      # -----------------------------------------------------------------------
+      # Build + Test
+      # -----------------------------------------------------------------------
+      - name: Build
+        run: cmake --build cpp/build/ci --parallel
+
+      - name: Test
+        run: ctest --test-dir cpp/build/ci --output-on-failure

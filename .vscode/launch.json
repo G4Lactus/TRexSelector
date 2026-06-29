@@ -10,7 +10,7 @@
         "type": "cppdbg",
         "request": "launch",
         // Adjust the path to your built executable for debug
-        "program": "${workspaceFolder}/build/debug/src/XXX",
+        "program": "${workspaceFolder}/cpp/build/debug/bin/XXX",
         "args": [],
         "cwd": "${workspaceFolder}",
         "preLaunchTask": "CMake Full Build (Debug)",
@@ -30,7 +30,7 @@
         "type": "cppdbg",
         "request": "launch",
         // Adjust the path to your built executable for release
-        "program": "${workspaceFolder}/build/release/src/XXX",
+        "program": "${workspaceFolder}/cpp/build/release/bin/XXX",
         "args": [],
         "cwd": "${workspaceFolder}",
         "preLaunchTask": "CMake Full Build (Release)",

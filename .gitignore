@@ -23,6 +23,9 @@ notes/
 deprecated/
 .cache/
 .github/
+!.github/
+!.github/workflows/
+!.github/workflows/*.yml
 .mypy_cache/
 .pytest_cache/
 __pycache__/

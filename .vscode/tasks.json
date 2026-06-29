@@ -27,7 +27,7 @@
                     "--build", "build/debug"
                 ]
             },
-            "options": {"cwd": "${workspaceFolder}"},
+            "options": {"cwd": "${workspaceFolder}/cpp"},
             "group": {"kind": "build"},
             "problemMatcher": ["$gcc"],
             "detail": "CMake configure and build (Debug, separate directory)"
@@ -55,7 +55,7 @@
                     "--build", "build/release"
                 ]
             },
-            "options": {"cwd": "${workspaceFolder}"},
+            "options": {"cwd": "${workspaceFolder}/cpp"},
             "group": {"kind": "build"},
             "problemMatcher": ["$gcc"],
             "detail": "CMake configure and build (Release, separate directory)"
@@ -71,7 +71,7 @@
             "label": "CMake Full Build (release-portable)",
             "command": "cmake",
             "args": ["--workflow", "--preset", "local-install"],
-            "options": {"cwd": "${workspaceFolder}"},
+            "options": {"cwd": "${workspaceFolder}/cpp"},
             "group": {"kind": "build"},
             "problemMatcher": ["$gcc"],
             "detail": "Configure + build portable release (build/release-portable) ready for install"
@@ -82,7 +82,7 @@
             "label": "CMake Install (local → install/)",
             "command": "cmake",
             "args": ["--install", "build/release-portable"],
-            "options": {"cwd": "${workspaceFolder}"},
+            "options": {"cwd": "${workspaceFolder}/cpp"},
             "group": {"kind": "build"},
             "dependsOn": ["CMake Full Build (release-portable)"],
             "dependsOrder": "sequence",
