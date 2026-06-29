@@ -14,42 +14,11 @@
  * @details
  *   Unlike `ridge_cv_svd` — which solves the ridge problem analytically via the
  *   SVD — this file implements the *same* pathwise cyclic coordinate-descent
- *   algorithm that `glmnet` uses internally.  Because `glmnet` IS coordinate
- *   descent, the coefficient path produced here matches `glmnet`'s to solver
- *   tolerance (not merely within CV noise), which makes it the most faithful
- *   reference for the lambda_2 (ridge / elastic-net penalty) determination.
- *
- *   **Objective (glmnet Gaussian parametrisation).**  For standardised columns
- *   the solver minimises, over @f$\beta@f$,
- *   @f[
- *     \frac{1}{2N}\,\lVert y_c - X_s\beta \rVert_2^2
- *       \;+\; \lambda\Big(\alpha\lVert\beta\rVert_1
- *       + \tfrac{1-\alpha}{2}\lVert\beta\rVert_2^2\Big),
- *   @f]
- *   with per-coordinate update
- *   @f$ \beta_j \leftarrow
- *       S\!\big(z_j,\ \lambda\alpha\big)\big/\big(d_j + \lambda(1-\alpha)\big) @f$,
- *   where @f$ z_j = \tfrac1N x_{s,j}^\top r + d_j\beta_j @f$,
- *   @f$ d_j = \tfrac1N\lVert x_{s,j}\rVert_2^2 @f$ (= 1 when standardised),
- *   @f$ S @f$ is the soft-threshold operator, and @f$ r @f$ is the working
- *   residual.
- *
- *   **glmnet conventions reproduced.**
- *    - Standardisation by the *population* SD (divisor @f$N@f$), so
- *      @f$\lVert x_{s,j}\rVert_2^2 = N@f$ and @f$d_j = 1@f$.
- *    - @f$\lambda_{\max} = \max_j |x_{s,j}^\top y_c| / (N\,\alpha_{\text{eff}})@f$
- *      with @f$\alpha_{\text{eff}}=\max(\alpha,10^{-3})@f$ (the glmnet ridge
- *      fallback, so @f$\alpha=0@f$ yields a finite anchor).
- *    - Log-spaced grid down to @f$\lambda_{\max}\cdot\varepsilon@f$,
- *      @f$\varepsilon=10^{-2}@f$ when @f$N<p@f$ else @f$10^{-4}@f$.
- *    - Coefficients returned in the ORIGINAL predictor scale together with the
- *      intercept @f$ \beta_0 = \bar y - \bar x^\top\beta @f$.
+ *   algorithm that `glmnet` uses internally.
  *
  *   **Performance.**  Tibshirani's sequential strong rule prunes the active set;
  *   the inner CD sweeps only active coordinates and a KKT pass re-admits any
- *   violated predictor.  Warm starts propagate @f$\beta@f$ down the (descending)
- *   @f$\lambda@f$ grid.  Pure ridge (@f$\alpha=0@f$) skips the strong rule (no
- *   exact zeros) and uses the closed per-coordinate ridge update.
+ *   violated predictor.
  */
 // ===================================================================================
 
