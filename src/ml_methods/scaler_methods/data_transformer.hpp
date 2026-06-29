@@ -7,8 +7,8 @@
  * @brief Abstract base class as template for data normalization and transformation.
  */
 // ===================================================================================
-#ifndef ML_METHODS_STANDARDIZATION_DATA_TRANSFORMER_HPP
-#define ML_METHODS_STANDARDIZATION_DATA_TRANSFORMER_HPP
+#ifndef ML_METHODS_SCALER_METHODS_DATA_TRANSFORMER_HPP
+#define ML_METHODS_SCALER_METHODS_DATA_TRANSFORMER_HPP
 // ===================================================================================
 
 // std includes
@@ -29,10 +29,10 @@
 
 // ===================================================================================
 
-// Namespace embedding: trex::ml_methods::standardization
+// Namespace embedding: trex::ml_methods::scaler_methods
 namespace trex {
 namespace ml_methods {
-namespace standardization {
+namespace scaler_methods {
 
 // ===================================================================================
 
@@ -182,8 +182,8 @@ protected:
 };
 
 // ===================================================================================
-} /* End of namespace standardization */
+} /* End of namespace scaler_methods */
 } /* End of namespace ml_methods */
 } /* End of namespace trex */
 // ===================================================================================
-#endif /* End of ML_METHODS_STANDARDIZATION_DATA_TRANSFORMER_HPP */
+#endif /* End of ML_METHODS_SCALER_METHODS_DATA_TRANSFORMER_HPP */

@@ -25,7 +25,7 @@
 #include <Eigen/Dense>
 
 // Centering (stored as member for exception-safe restoration)
-#include <ml_methods/standardization/lp_norm_scaler.hpp>
+#include <ml_methods/scaler_methods/lp_norm_scaler.hpp>
 
 // TRex core (TRexControlParameter)
 #include <trex_selector_methods/trex_core/trex.hpp>
@@ -40,7 +40,7 @@ namespace trex::trex_selector_methods::trex_spca {
 // Namespace aliases
 namespace tc         = trex::trex_selector_methods::trex_core;
 namespace tg         = trex::trex_selector_methods::trex_gvs;
-namespace std_scaler = trex::ml_methods::standardization;
+namespace std_scaler = trex::ml_methods::scaler_methods;
 
 // ==============================================================================
 // Enums
@@ -124,6 +124,21 @@ struct TRexSPCAControlParameter {
      *                                (GCV, CV_MIN, CV_1SE; default: CV_1SE).
      */
     tg::TRexGVSControlParameter gvs_ctrl;
+
+    /** @brief EN solver variant for the per-PC GVS(EN) sub-selector.
+     *
+     *  - ENSolverType::TENET     : Gram-based EN — the ridge penalty is absorbed
+     *                              via a Cholesky update on X_A^T X_A + lambda2*I.
+     *  - ENSolverType::TENET_AUG : augmented-LASSO EN (default) — builds the
+     *                              row-augmented system internally and solves with
+     *                              an inner TLASSO.
+     *
+     *  Both variants are mathematically equivalent for lambda2 > 0 and should
+     *  produce the same active sets. Exposed primarily so solver equivalence
+     *  can be validated directly. (gvs_type is always forced to EN by TRexSPCA;
+     *  IEN is not used.)
+     */
+    tg::ENSolverType en_solver = tg::ENSolverType::TENET_AUG;
 
     // ====================================
     // Base T-Rex Sub-Selector

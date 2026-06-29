@@ -64,6 +64,7 @@ enum class SolverTypeForTRex {
     TLARS,      // Terminating LARS
     TLASSO,     // Terminating LASSO
     TENET,      // Terminating ENET
+    TENET_AUG,  // Terminating ENET via augmented LASSO (GVS only)
     TSTEPWISE,  // Terminating Stepwise
     TSTAGEWISE, // Terminating Stagewise
     //TIENET,   // Terminating Informed ENET (future) // TODO - add when implemented
@@ -145,6 +146,13 @@ struct SolverConfig {
     /** @brief Enable verbose output from the solver. */
     bool verbose   = false;
 
+    /** @brief Internal scaling mode applied by the solver to its own columns.
+     *  In TRex context X/D are pre-normalized, so this is usually L2; set to
+     *  ZSCORE only when the caller wants the solver to z-score internally
+     *  (e.g. augmented EN paths that must keep the ridge block consistent).
+     */
+    trex::tsolvers::ScalingMode scaling_mode = trex::tsolvers::ScalingMode::L2;
+
     // --- Execution parameters ---
 
     /** @brief Early stopping threshold (number of active dummies). */
@@ -210,7 +218,7 @@ Eigen::MatrixXd dispatchSolver(const SolverConfig& cfg) {
         if constexpr (std::is_same_v<TSolver, lars::TENET_Solver>) {
 
             TSolver solver(cfg.X, cfg.D, cfg.y, cfg.hyperparams.lambda2, cfg.normalize,
-                           cfg.intercept, cfg.verbose);
+                           cfg.intercept, cfg.verbose, cfg.scaling_mode);
             solver.setTolerance(cfg.hyperparams.tol);
             solver.executeStep(cfg.T_stop, cfg.early_stop);
             pathMatrix = solver.getBetaPath();
@@ -219,7 +227,7 @@ Eigen::MatrixXd dispatchSolver(const SolverConfig& cfg) {
         } else if constexpr (std::is_same_v<TSolver, afs::TAFS_Solver>) {
 
             TSolver solver(cfg.X, cfg.D, cfg.y, cfg.hyperparams.rho_afs, cfg.normalize,
-                            cfg.intercept, cfg.verbose);
+                            cfg.intercept, cfg.verbose, cfg.scaling_mode);
             solver.setTolerance(cfg.hyperparams.tol);
             solver.executeStep(cfg.T_stop, cfg.early_stop);
             pathMatrix = solver.getBetaPath();
@@ -229,7 +237,30 @@ Eigen::MatrixXd dispatchSolver(const SolverConfig& cfg) {
 
             auto variant =
                 static_cast<omp::NCGMPVariant>(cfg.hyperparams.ncgmp_variant);
-            TSolver solver(cfg.X, cfg.D, cfg.y, variant, cfg.normalize, cfg.intercept, cfg.verbose);
+            TSolver solver(cfg.X, cfg.D, cfg.y, variant, cfg.normalize, cfg.intercept,
+                           cfg.verbose, cfg.scaling_mode);
+            solver.setTolerance(cfg.hyperparams.tol);
+            solver.executeStep(cfg.T_stop, cfg.early_stop);
+            pathMatrix = solver.getBetaPath();
+            if (!cfg.solver_file.empty()) solver.save(cfg.solver_file);
+
+        } else if constexpr (std::is_same_v<TSolver, omp::TOMP_Solver>) {
+
+            // Bare TOMP_Solver's public ctor carries an algorithm_type before
+            // scaling_mode; pass it explicitly so scaling_mode binds correctly.
+            TSolver solver(cfg.X, cfg.D, cfg.y, cfg.normalize, cfg.intercept,
+                           cfg.verbose, omp::SolverTypeOMPBased::TOMP, cfg.scaling_mode);
+            solver.setTolerance(cfg.hyperparams.tol);
+            solver.executeStep(cfg.T_stop, cfg.early_stop);
+            pathMatrix = solver.getBetaPath();
+            if (!cfg.solver_file.empty()) solver.save(cfg.solver_file);
+
+        } else if constexpr (std::is_same_v<TSolver, lars::TLARS_Solver>) {
+
+            // Bare TLARS_Solver's public ctor carries an algorithm_type before
+            // scaling_mode; pass it explicitly so scaling_mode binds correctly.
+            TSolver solver(cfg.X, cfg.D, cfg.y, cfg.normalize, cfg.intercept,
+                           cfg.verbose, lars::SolverTypeLarsBased::TLARS, cfg.scaling_mode);
             solver.setTolerance(cfg.hyperparams.tol);
             solver.executeStep(cfg.T_stop, cfg.early_stop);
             pathMatrix = solver.getBetaPath();
@@ -237,7 +268,8 @@ Eigen::MatrixXd dispatchSolver(const SolverConfig& cfg) {
 
         } else {
 
-            TSolver solver(cfg.X, cfg.D, cfg.y, cfg.normalize, cfg.intercept, cfg.verbose);
+            TSolver solver(cfg.X, cfg.D, cfg.y, cfg.normalize, cfg.intercept, cfg.verbose,
+                           cfg.scaling_mode);
             solver.setTolerance(cfg.hyperparams.tol);
             solver.executeStep(cfg.T_stop, cfg.early_stop);
             pathMatrix = solver.getBetaPath();
@@ -271,6 +303,9 @@ inline Eigen::MatrixXd dispatchByType(SolverTypeForTRex solver_type, const Solve
         case SolverTypeForTRex::TLASSO:     return dispatchSolver<lars::TLASSO_Solver>(cfg);
         case SolverTypeForTRex::TSTEPWISE:  return dispatchSolver<lars::TSTEPWISE_Solver>(cfg);
         case SolverTypeForTRex::TENET:      return dispatchSolver<lars::TENET_Solver>(cfg);
+        case SolverTypeForTRex::TENET_AUG:  throw std::invalid_argument(
+                "trex_solver_dispatch: TENET_AUG is a GVS-only solver; "
+                "use TRexGVSSelector with gvs_type=EN.");
         case SolverTypeForTRex::TSTAGEWISE: return dispatchSolver<lars::TSTAGEWISE_Solver>(cfg);
 
         // OMP family

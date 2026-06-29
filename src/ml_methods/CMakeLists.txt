@@ -8,7 +8,7 @@
 # Organization:
 # -------------
 # src/ml_methods/
-# |-- standardization
+# |-- scaler_methods
 # |-- clustering
 # |-- model_selection
 # ==================================================================================
@@ -97,9 +97,9 @@ target_sources(trex_ml_methods PUBLIC
         ${CMAKE_CURRENT_SOURCE_DIR}/pca/pca.hpp
         ${CMAKE_CURRENT_SOURCE_DIR}/ridge_regression/ridge.hpp
         ${CMAKE_CURRENT_SOURCE_DIR}/svd/svd.hpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/standardization/data_transformer.hpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/standardization/lp_norm_scaler.hpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/standardization/z_score_scaler.hpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/scaler_methods/data_transformer.hpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/scaler_methods/lp_norm_scaler.hpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/scaler_methods/z_score_scaler.hpp
 )
 # ==================================================================================
 
@@ -108,7 +108,7 @@ target_sources(trex_ml_methods PUBLIC
 # 5. Include Subdirectories
 # ==================================================================================
 # Sources and headers from subfolders are appended to target
-add_subdirectory(standardization)
+add_subdirectory(scaler_methods)
 add_subdirectory(clustering)
 add_subdirectory(model_selection)
 add_subdirectory(pca)

@@ -97,6 +97,12 @@ struct ExperimentRunnerConfig {
     sd::SolverTypeForTRex solver_type = sd::SolverTypeForTRex::TLARS;
     sd::SolverHyperparameters solver_params{};
 
+    // --- Scaling ---
+    /** @brief Internal column-scaling mode applied by each solver.
+     *  L2 (default) preserves prior behaviour; ZSCORE makes solvers z-score
+     *  their own columns (needed for augmented-EN consistency). */
+    trex::tsolvers::ScalingMode scaling_mode = trex::tsolvers::ScalingMode::L2;
+
     // --- Warm start ---
     bool use_warm_start = false;
 
@@ -461,6 +467,7 @@ private:
             .normalize = false,
             .intercept = false,
             .verbose = false,
+            .scaling_mode = cfg.scaling_mode,
             .T_stop = cfg.T_stop,
             .early_stop = true,
             .use_warm_start = cfg.use_warm_start && warm_start_mgr_.hasSolver(k),

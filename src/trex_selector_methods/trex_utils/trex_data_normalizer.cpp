@@ -13,6 +13,9 @@
 #include <utils/logging/logger.hpp>
 #include <trex_selector_methods/trex_utils/trex_data_normalizer.hpp>
 
+// std includes
+#include <cmath>
+
 // utils includes
 #include <utils/openmp/utils_openmp.hpp>
 
@@ -26,9 +29,17 @@ namespace trex::trex_selector_methods::utils::data_normalizer {
 void centerAndL2NormalizeX(Eigen::Ref<Eigen::MatrixXd> X,
                            NormalizationParams& params,
                            double eps,
-                           bool verbose) {
+                           bool verbose,
+                           ScalingMode mode) {
 
     const Eigen::Index p = X.cols();
+    const Eigen::Index n = X.rows();
+
+    // z-score divides by sample SD = ||x_c|| / sqrt(n-1); fall back to L2 if n<2.
+    const double sd_factor =
+        (mode == ScalingMode::ZSCORE && n > 1)
+            ? std::sqrt(static_cast<double>(n - 1))
+            : 1.0;
 
     // Allocate storage for normalization parameters
     params.X_means.resize(p);
@@ -45,25 +56,27 @@ void centerAndL2NormalizeX(Eigen::Ref<Eigen::MatrixXd> X,
         // Center column j
         X.col(j).array() -= mean_j;
 
-        // Compute L2 norm of centered column j
-        double l2norm_j = X.col(j).norm();
+        // Compute the scale divisor of centered column j:
+        //   L2     -> ||x_c||
+        //   ZSCORE -> ||x_c|| / sqrt(n-1)  (sample SD)
+        double scale_j = X.col(j).norm() / sd_factor;
 
         // Handle near-zero norm case
-        if (l2norm_j < eps) {
+        if (scale_j < eps) {
             if (verbose) {
                 #pragma omp critical
                 {
-                    TREX_WARN( "Warning: Column " << j << " has near-zero L2 norm ("
-                              << l2norm_j
-                              << "). Setting norm to 1.0 to avoid division by zero." );
+                    TREX_WARN( "Warning: Column " << j << " has near-zero scale ("
+                              << scale_j
+                              << "). Setting scale to 1.0 to avoid division by zero." );
                 }
             }
-            l2norm_j = 1.0;
+            scale_j = 1.0;
         }
-        params.X_l2norms(j) = l2norm_j;
+        params.X_l2norms(j) = scale_j;
 
         // Normalize column j
-        X.col(j).array() /= l2norm_j;
+        X.col(j).array() /= scale_j;
     }
 }
 
@@ -90,9 +103,16 @@ void denormalizeX(Eigen::Ref<Eigen::MatrixXd> X,
 
 void centerAndL2NormalizeMatrix(Eigen::Ref<Eigen::MatrixXd> M,
                                  double eps,
-                                 bool verbose) {
+                                 bool verbose,
+                                 ScalingMode mode) {
 
     const Eigen::Index p = M.cols();
+    const Eigen::Index n = M.rows();
+
+    const double sd_factor =
+        (mode == ScalingMode::ZSCORE && n > 1)
+            ? std::sqrt(static_cast<double>(n - 1))
+            : 1.0;
 
     #pragma omp parallel for if (p > 100)
     for (Eigen::Index j = 0; j < p; ++j) {
@@ -100,20 +120,20 @@ void centerAndL2NormalizeMatrix(Eigen::Ref<Eigen::MatrixXd> M,
         // Center column j
         M.col(j).array() -= M.col(j).mean();
 
-        // Compute L2 norm
-        double l2norm_j = M.col(j).norm();
+        // Compute the scale divisor (L2 norm, or sample SD for ZSCORE)
+        double scale_j = M.col(j).norm() / sd_factor;
 
-        if (l2norm_j < eps) {
+        if (scale_j < eps) {
             if (verbose) {
                 #pragma omp critical
                 TREX_WARN( "Warning: Dummy column " << j
-                          << " has near-zero L2 norm. Skipping normalization." );
+                          << " has near-zero scale. Skipping normalization." );
             }
-            l2norm_j = 1.0;
+            scale_j = 1.0;
         }
 
         // Normalize column j
-        M.col(j).array() /= l2norm_j;
+        M.col(j).array() /= scale_j;
     }
 }
 

@@ -27,11 +27,12 @@
 #include <pybind11/eigen.h>
 
 // ml_methods includes
-#include <ml_methods/standardization/z_score_scaler.hpp>
-#include <ml_methods/standardization/lp_norm_scaler.hpp>
-#include <ml_methods/standardization/data_transformer.hpp>
-#include <ml_methods/model_selection/ridge_cv.hpp>
-#include <ml_methods/model_selection/ridge_gcv.hpp>
+#include <ml_methods/scaler_methods/z_score_scaler.hpp>
+#include <ml_methods/scaler_methods/lp_norm_scaler.hpp>
+#include <ml_methods/scaler_methods/data_transformer.hpp>
+// ml_methods includes (model_selection: ridge_cv/ridge_gcv moved to TRex_Research — bindings TBD)
+// #include <ml_methods/model_selection/ridge_cv.hpp>
+// #include <ml_methods/model_selection/ridge_gcv.hpp>
 #include <ml_methods/svd/svd.hpp>
 #include <ml_methods/pca/pca.hpp>
 #include <ml_methods/ridge_regression/ridge.hpp>
@@ -52,7 +53,7 @@ inline void bind_ml_methods(py::module& m) {
     // =================================================================================
     // Data Standardization bindings
     // =================================================================================
-    using namespace trex::ml_methods::standardization;
+    using namespace trex::ml_methods::scaler_methods;
 
     // Abstract DataTransformer can't bind easily without trampoline class.
 
@@ -149,9 +150,11 @@ inline void bind_ml_methods(py::module& m) {
 
 
     // =========================================================================
-    // Ridge Regression CV bindings
+    // Ridge Regression CV bindings (ridge_cv / ridge_gcv moved to TRex_Research
+    // — Python bindings for ridge_cv_svd and enet_cv_ccd are TBD)
     // =========================================================================
 
+    /*
     using namespace trex::ml_methods::model_selection;
 
     /**
@@ -161,86 +164,20 @@ inline void bind_ml_methods(py::module& m) {
      *          regression coefficients, GCV scores, and the effective degrees of freedom.
      *          `best_index` tracks the index of the theoretically optimal lambda.
      */
-    py::class_<ridge_path>(m, "RidgePath")
-        .def(py::init<>())
-        .def_readwrite("lambdas", &ridge_path::lambdas)
-        .def_readwrite("coefficients", &ridge_path::coefficients)
-        .def_readwrite("gcv_scores", &ridge_path::gcv_scores)
-        .def_readwrite("df_effective", &ridge_path::df_effective)
-        .def_readwrite("best_index", &ridge_path::best_index);
+    // py::class_<ridge_path>(m, "RidgePath")
+    //     .def(py::init<>())
+    //     .def_readwrite("lambdas", &ridge_path::lambdas)
+    //     .def_readwrite("coefficients", &ridge_path::coefficients)
+    //     .def_readwrite("gcv_scores", &ridge_path::gcv_scores)
+    //     .def_readwrite("df_effective", &ridge_path::df_effective)
+    //     .def_readwrite("best_index", &ridge_path::best_index);
 
-    /**
-     * @brief Efficiently solves Ridge Regression while computing Generalized Cross-Validation (
-     *        GCV).
-     *
-     * @details Utilizing an SVD-based backend, this class provides a highly optimized mechanism
-     *          to perform ridge regression across a multitude of lambda penalty values. Instead
-     *          of explicit K-Fold cross-validation, it computes the exact GCV score analytically
-     *          to rapidly identify the optimal L2 penalty.
-     */
-    py::class_<ridge_gcv>(m, "RidgeGCV")
-        .def(py::init<>())
-        .def("fit",[](ridge_gcv& self,
-                               Eigen::Ref<const Eigen::MatrixXd> X, // NOLINT(performance-unnecessary-value-param)
-                               Eigen::Ref<const Eigen::VectorXd> y  // NOLINT(performance-unnecessary-value-param)
-                            ) {
-            self.fit(X, y); // NOLINT(performance-unnecessary-value-param)
-            return &self;
-        })
-        .def("solve", &ridge_gcv::solve, py::arg("lambda_val"))
-        .def("gcv", &ridge_gcv::gcv, py::arg("lambda_val"))
-        .def("predict", [](const ridge_gcv& self,
-                                    Eigen::Ref<const Eigen::MatrixXd> X_new, // NOLINT(performance-unnecessary-value-param)
-                                    double lambda_val) {
-            return self.predict(X_new, lambda_val); // NOLINT(performance-unnecessary-value-param)
-        }, py::arg("X_new"), py::arg("lambda_val"))
-        .def("predict_path", [](const ridge_gcv& self,
-                                    Eigen::Ref<const Eigen::MatrixXd> X_new, // NOLINT(performance-unnecessary-value-param)
-                                    Eigen::Ref<const Eigen::VectorXd> lambdas // NOLINT(performance-unnecessary-value-param)
-                                ) {
-            return self.predict_path(X_new, lambdas); // NOLINT(performance-unnecessary-value-param)
-        }, py::arg("X_new"), py::arg("lambdas"))
-        .def("solve_path", &ridge_gcv::solve_path, py::arg("lambdas"))
-        .def("gcv_optimal", &ridge_gcv::gcv_optimal, py::arg("num_grid") = 200,
-             py::arg("tol") = 1e-8)
-        .def("default_lambda_grid", &ridge_gcv::default_lambda_grid,
-             py::arg("num_lambda") = 100, py::arg("ratio") = 1000.0)
-        .def("n_samples", &ridge_gcv::n_samples)
-        .def("n_features", &ridge_gcv::n_features)
-        .def("rank", &ridge_gcv::rank);
+    // py::class_<ridge_gcv>(m, "RidgeGCV")
+    //     ... (full binding TBD after TRex_Research merge)
 
-
-    /**
-     * @brief Performs explicit K-Fold cross-validation for Ridge Regression model selection.
-     *
-     * @details Sweeps through a grid of lambda values, splitting the data into partitions
-     *          to estimate the out-of-sample Mean Squared Error (MSE). Methods such as
-     *          `cv_min()` and `cv_1se()` extract the optimal lambda using standard
-     *          statistical heuristics.
-     */
-    py::class_<ridge_cv>(m, "RidgeCV")
-        .def(py::init<>())
-        .def("fit", [](ridge_cv& self,
-                       Eigen::Ref<const Eigen::MatrixXd> X, // NOLINT(performance-unnecessary-value-param)
-                       Eigen::Ref<const Eigen::VectorXd> y, // NOLINT(performance-unnecessary-value-param)
-                       int num_folds,
-                       Eigen::Index n_lambda = 100,
-                       double lambda_ratio = 1000.0,
-                       unsigned int seed = 0) {
-            self.fit(X, y, num_folds, n_lambda, lambda_ratio, seed); // NOLINT(performance-unnecessary-value-param)
-            return &self;
-        }, py::arg("X"), py::arg("y"),
-           py::arg("num_folds") = 10,
-           py::arg("n_lambda") = 100,
-           py::arg("lambda_ratio") = 1000.0,
-           py::arg("seed") = 0)
-        .def("cv_min", &ridge_cv::cv_min)
-        .def("cv_1se", &ridge_cv::cv_1se)
-        .def("index_min", &ridge_cv::index_min)
-        .def("index_1se", &ridge_cv::index_1se)
-        .def("get_lambdas", &ridge_cv::lambdas)
-        .def("get_cv_errors", &ridge_cv::cv_mse)
-        .def("get_cv_std", &ridge_cv::cv_sem);
+    // py::class_<ridge_cv>(m, "RidgeCV")
+    //     ... (full binding TBD after TRex_Research merge)
+    */
 
 
     // =================================================================================

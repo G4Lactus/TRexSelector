@@ -138,11 +138,8 @@ target_sources(trex_tsolvers PUBLIC
         ${CMAKE_CURRENT_SOURCE_DIR}/linear_model/omp_based/tncgmp_solver.hpp
         ${CMAKE_CURRENT_SOURCE_DIR}/linear_model/omp_based/tacgp_solver.hpp
         ${CMAKE_CURRENT_SOURCE_DIR}/linear_model/omp_based/tools_solver.hpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/linear_model/omp_based/norm_corrective_omp/norm_corrective_gmp.hpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/linear_model/omp_based/ools/ools.hpp
         ${CMAKE_CURRENT_SOURCE_DIR}/linear_model/afs_based.hpp
         ${CMAKE_CURRENT_SOURCE_DIR}/linear_model/afs_based/tafs_solver.hpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/linear_model/afs_based/afs_based_plain/afs.hpp
 )
 # ==============================================================================
 

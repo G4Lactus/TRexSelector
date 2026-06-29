@@ -82,7 +82,8 @@ TRexSelector::TRexSelector(
     dummy_gen_(n_,
                trex_ctrl_.dummy_distribution,
                seed_,
-               verbose_),
+               verbose_,
+               trex_ctrl_.scaling_mode),
     warm_start_mgr_(trex_ctrl_.K,
                     trex_ctrl_.use_memory_mapping
                         ? wsm::WarmStartMode::SERIALIZED
@@ -98,7 +99,7 @@ TRexSelector::TRexSelector(
     eps_ = (trex_ctrl_.solver_params.tol > 0.0) ?
             trex_ctrl_.solver_params.tol : std::numeric_limits<double>::epsilon();
     dn::centerY(y_, norm_params_);
-    dn::centerAndL2NormalizeX(*X_, norm_params_, eps_, verbose_);
+    dn::centerAndL2NormalizeX(*X_, norm_params_, eps_, verbose_, trex_ctrl_.scaling_mode);
     X_is_normalized_ = true;
 
     // 3. Initialize memory-mapped D manager (if requested)
@@ -367,12 +368,23 @@ er::ExperimentRunnerConfig TRexSelector::buildRunnerConfig(
     cfg.existing_cols_on_disk = existing_cols_on_disk;
     cfg.solver_type           = trex_ctrl_.solver_type;
     cfg.solver_params         = trex_ctrl_.solver_params;
+    cfg.scaling_mode          = (trex_ctrl_.scaling_mode == dn::ScalingMode::ZSCORE)
+                                    ? trex::tsolvers::ScalingMode::ZSCORE
+                                    : trex::tsolvers::ScalingMode::L2;
     cfg.use_warm_start        = use_warm_start;
     cfg.use_memory_mapping    = trex_ctrl_.use_memory_mapping;
     cfg.max_outer_threads     = trex_ctrl_.max_outer_threads;
     cfg.max_inner_threads     = trex_ctrl_.max_inner_threads;
     cfg.verbose               = verbose_;
-    cfg.eps                   = eps_;
+    // Coefficient-activeness threshold for the beta paths. This must match the
+    // R reference (random_experiments uses eps = .Machine$double.eps), NOT the
+    // solver convergence tolerance (solver_params.tol, default 1e-6). Using the
+    // larger solver tol here delays detection of a freshly-entered dummy whose
+    // coefficient is still below 1e-6, shifting the "T-th dummy entered"
+    // milestone to a later LARS step where extra original predictors have
+    // entered. That systematically inflates phi_T_mat and causes over-selection
+    // (higher FDR) relative to the R reference.
+    cfg.eps                   = std::numeric_limits<double>::epsilon();
 
     return cfg;
 }
@@ -440,10 +452,11 @@ Eigen::VectorXd TRexSelector::computeFDPHat(
         const double sum_deflated =
             selected_mask.select(one_minus_phi_prime.array(), 0.0).sum();
 
+        // Clamp to [0, 1]: guards against negative FDP estimates (which arise
+        // when Phi_prime > 1). Selection-neutral (the rules only test
+        // FDP_hat <= tFDR, tFDR > 0) but keeps the reported estimate sane.
         fdp_hat(i) = std::max(
-            0.0,
-            std::min(1.0, sum_deflated / static_cast<double>(num_sel_var))
-        );
+            0.0, std::min(1.0, sum_deflated / static_cast<double>(num_sel_var)));
 
     }
 
@@ -498,6 +511,7 @@ Eigen::VectorXd TRexSelector::computePhiPrime(
         }
     }
 
+    // Clamp to [0, 1]: guards against negative deflated relative occurrences.
     return (phi_T_mat_mod * phi_scale).cwiseMax(0.0).cwiseMin(1.0);
 }
 

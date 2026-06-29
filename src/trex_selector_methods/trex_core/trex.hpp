@@ -111,8 +111,17 @@ struct TRexControlParameter {
     // L-Loop Strategy
     // ===================================
 
-    /** @brief Strategy for L-loop calibration (default: HCONCAT). */
-    LLoopStrategy lloop_strategy = LLoopStrategy::HCONCAT;
+    /** @brief Strategy for L-loop calibration (default: STANDARD).
+     *
+     *  STANDARD redraws a fresh set of dummies at every L-loop iteration,
+     *  matching the CRAN R reference (random_experiments / add_dummies_GVS),
+     *  which regenerates dummies from scratch each time the dummy count
+     *  grows.  This keeps the K dummy realisations independent of one another
+     *  and of the previous iteration, which is essential for unbiased FDR
+     *  calibration.  HCONCAT (append-and-reuse) is faster but reuses earlier
+     *  draws across iterations, so it is no longer the default.
+     */
+    LLoopStrategy lloop_strategy = LLoopStrategy::STANDARD;
 
     // ==================================
     // T-Loop Early Stopping
@@ -178,6 +187,18 @@ struct TRexControlParameter {
 
     /** @brief Bundled hyperparameters for all solver algorithms. */
     sd::SolverHyperparameters solver_params{};
+
+    // ===================================
+    // Data Scaling
+    // ===================================
+
+    /** @brief Column scaling convention applied to X (and dummies) after
+     *  centering. ScalingMode::L2 (default) divides each column by its L2 norm;
+     *  ScalingMode::ZSCORE divides by the sample SD (n-1) to unit variance
+     *  (glmnet `standardize=TRUE` convention). For the plain LASSO path the two
+     *  are equivalent (uniform column rescaling), but they differ for the
+     *  Elastic-Net ridge term — see TRexGVSSelector. */
+    dn::ScalingMode scaling_mode = dn::ScalingMode::L2;
 
 };
 

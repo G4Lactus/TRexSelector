@@ -75,16 +75,21 @@ public:
      * @param distribution  Distribution for dummy generation (default: Normal).
      * @param seed          Base random seed (< 0 for non-deterministic).
      * @param verbose       Enable warnings for near-zero norm columns.
+     * @param scaling_mode  Column scaling convention applied to generated
+     *                      dummies (default: L2). Must match the scaling used
+     *                      for X so dummy and predictor columns share a scale.
      */
     explicit DummyGenerator(
         std::size_t n,
         dummygen::Distribution distribution = dummygen::Distribution::Normal(),
         int seed = -1,
-        bool verbose = false)
+        bool verbose = false,
+        data_normalizer::ScalingMode scaling_mode = data_normalizer::ScalingMode::L2)
         : n_(n),
         distribution_(distribution),
         seed_(seed),
-        verbose_(verbose)
+        verbose_(verbose),
+        scaling_mode_(scaling_mode)
     {}
 
     /** @brief Destructor of DummyGenerator */
@@ -176,7 +181,8 @@ public:
         utils::data_normalizer::centerAndL2NormalizeMatrix(
             target,
             std::numeric_limits<double>::epsilon(),
-            verbose_
+            verbose_,
+            scaling_mode_
         );
     }
 
@@ -214,7 +220,8 @@ public:
         utils::data_normalizer::centerAndL2NormalizeMatrix(
             target,
             std::numeric_limits<double>::epsilon(),
-            verbose_
+            verbose_,
+            scaling_mode_
         );
     }
 
@@ -257,7 +264,8 @@ public:
         utils::data_normalizer::centerAndL2NormalizeMatrix(
             new_block,
             std::numeric_limits<double>::epsilon(),
-            verbose_
+            verbose_,
+            scaling_mode_
         );
     }
 
@@ -291,7 +299,8 @@ public:
         utils::data_normalizer::centerAndL2NormalizeMatrix(
             target,
             std::numeric_limits<double>::epsilon(),
-            verbose_
+            verbose_,
+            scaling_mode_
         );
     }
 
@@ -544,6 +553,9 @@ private:
 
     /** @brief Flag to print progress. */
     bool verbose_;
+
+    /** @brief Column scaling convention applied to generated dummies. */
+    data_normalizer::ScalingMode scaling_mode_;
 
     // ==========================================================================
     // State — STANDARD/HCONCAT/SKIP

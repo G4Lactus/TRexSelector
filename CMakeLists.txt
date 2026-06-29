@@ -302,6 +302,7 @@ endif()
 # This simply forces ms-vscode.cmake-tools to parse and provide IntelliSense for
 # the R package source files that are otherwise built externally by `R CMD INSTALL`.
 file(GLOB_RECURSE R_BINDINGS_SOURCES "R/TRexSelector/src/*.cpp")
+if(R_BINDINGS_SOURCES)
 add_library(r_bindings_ide_only EXCLUDE_FROM_ALL ${R_BINDINGS_SOURCES})
 target_include_directories(r_bindings_ide_only PRIVATE
     "${CMAKE_CURRENT_SOURCE_DIR}/src"
@@ -311,3 +312,4 @@ target_include_directories(r_bindings_ide_only PRIVATE
     "/Library/Frameworks/R.framework/Resources/library/BH/include"
     "/Library/Frameworks/R.framework/Resources/library/Rcereal/include"
 )
+endif()

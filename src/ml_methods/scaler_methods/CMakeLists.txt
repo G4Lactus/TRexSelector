@@ -1,6 +1,6 @@
-# src/ml_methods/standardization/CMakeLists.txt
+# src/ml_methods/scaler_methods/CMakeLists.txt
 # ==================================================================================
-# CMake configuration for the standardization module of ml_methods.
+# CMake configuration for the scaler_methods module of ml_methods.
 #
 # This module provides data standardization and normalization methods for the T-Rex
 # framework:
@@ -8,7 +8,7 @@
 # Organization:
 # -------------
 # src/ml_methods/
-# |-- standardization
+# |-- scaler_methods
 #     |-- data_transformer.hpp
 #     |-- lp_norm_scaler.hpp/.cpp
 #     |-- z_score_scaler.hpp/.cpp

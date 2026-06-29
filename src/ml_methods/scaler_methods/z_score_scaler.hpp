@@ -13,8 +13,8 @@
  *    |--ZScoreScaler.cpp  (class implementation)
  */
 // ===================================================================================
-#ifndef ML_METHODS_STANDARDIZATION_Z_SCORE_SCALER_HPP
-#define ML_METHODS_STANDARDIZATION_Z_SCORE_SCALER_HPP
+#ifndef ML_METHODS_SCALER_METHODS_Z_SCORE_SCALER_HPP
+#define ML_METHODS_SCALER_METHODS_Z_SCORE_SCALER_HPP
 // ===================================================================================
 
 // std includes
@@ -22,14 +22,14 @@
 #include <string>
 
 // ml_methods includes
-#include <ml_methods/standardization/data_transformer.hpp>
+#include <ml_methods/scaler_methods/data_transformer.hpp>
 
 // ===================================================================================
 
-// namespace embedding: trex::ml_methods::standardization
+// namespace embedding: trex::ml_methods::scaler_methods
 namespace trex {
 namespace ml_methods {
-namespace standardization {
+namespace scaler_methods {
 
 // ===================================================================================
 
@@ -227,8 +227,8 @@ protected:
 };
 
 // ===================================================================================
-} /* End of namespace standardization */
+} /* End of namespace scaler_methods */
 } /* End of namespace ml_methods */
 } /* End of namespace trex */
 // ===================================================================================
-#endif /* End of ML_METHODS_STANDARDIZATION_Z_SCORE_SCALER_HPP */
+#endif /* End of ML_METHODS_SCALER_METHODS_Z_SCORE_SCALER_HPP */

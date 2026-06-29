@@ -29,9 +29,11 @@
 // GVS header
 #include <trex_selector_methods/trex_gvs/trex_gvs.hpp>
 
-// Ridge lambda-selection (header-only): GCV-optimal and k-fold CV.
-#include <ml_methods/model_selection/ridge_gcv.hpp>
-#include <ml_methods/model_selection/ridge_cv.hpp>
+// Ridge lambda-selection (header-only): two retained k-fold CV variants.
+//   SVD  -> ridge_cv_svd           (JacobiSVD direct ridge)
+//   CCD  -> enet_cv_ccd            (glmnet-faithful coordinate descent, alpha=0)
+#include <ml_methods/model_selection/ridge_cv_svd.hpp>
+#include <ml_methods/model_selection/enet_cv_ccd.hpp>
 
 // Data normalization helpers
 #include <trex_selector_methods/trex_utils/trex_data_normalizer.hpp>
@@ -41,6 +43,7 @@
 
 // Concrete solver types (for direct in-memory warm-start)
 #include <tsolvers/linear_model/lars_based/tenet_solver.hpp>
+#include <tsolvers/linear_model/lars_based/tenet_aug_solver.hpp>
 #include <tsolvers/linear_model/lars_based/tlars_solver.hpp>
 #include <tsolvers/linear_model/lars_based/tlasso_solver.hpp>
 
@@ -61,8 +64,8 @@ namespace mm   = trex::trex_selector_methods::utils::memmap_manager;
 // Static helper: return a copy of `p` with `use_memory_mapping` forced to
 // false, so the base ctor does not pre-allocate `memmap_mgr_` (which would
 // use the base row count `n_` instead of the GVS effective row count
-// `n_eff_ = n_ + M` required for IEN). GVS re-allocates the manager in
-// `onSelectBegin()` once `n_eff_` is known.
+// `n_eff_ = n_ + M` required for IEN).
+// GVS re-allocates the manager in `onSelectBegin()` once `n_eff_` is known.
 static tc::TRexControlParameter stripMmapForBase(
     const tc::TRexControlParameter& p)
 {
@@ -85,7 +88,9 @@ TRexGVSSelector::TRexGVSSelector(
     int                          seed,
     bool                         verbose
 ) :
-    tc::TRexSelector(X, y, tFDR, stripMmapForBase(trex_control), seed, verbose),
+    tc::TRexSelector(X, y, tFDR,
+                     stripMmapForBase(trex_control),
+                     seed, verbose),
     gvs_ctrl_(std::move(gvs_control)),
     gvs_use_mmap_(trex_control.use_memory_mapping)
 {
@@ -100,9 +105,14 @@ TRexGVSSelector::TRexGVSSelector(
     }
     // ---- Solver-type compatibility checks ---------------------------------
     if (gvs_ctrl_.gvs_type == GVSType::EN) {
-        if (trex_ctrl_.solver_type != sd::SolverTypeForTRex::TENET) {
+        // EN picks its concrete solver from en_solver (TENET / TENET_AUG), so
+        // the base solver_type must name a member of that TENET family.
+        if (trex_ctrl_.solver_type != sd::SolverTypeForTRex::TENET &&
+            trex_ctrl_.solver_type != sd::SolverTypeForTRex::TENET_AUG) {
             throw std::invalid_argument(
-                "TRexGVSSelector: gvs_type = EN requires solver_type = TENET.");
+                "TRexGVSSelector: gvs_type = EN requires solver_type = TENET or "
+                "TENET_AUG (matching en_solver)."
+            );
         }
     } else { // IEN
         if (trex_ctrl_.solver_type != sd::SolverTypeForTRex::TLASSO) {
@@ -168,11 +178,9 @@ void TRexGVSSelector::validateGVSParameters() const {
             "Supported: Single, Complete, Average, WPGMA.");
     }
 
-    if (gvs_ctrl_.lambda_2 < 0.0) {
-        throw std::invalid_argument(
-            "TRexGVSSelector: lambda_2 must be >= 0. Got: " +
-            std::to_string(gvs_ctrl_.lambda_2));
-    }
+    // Note: lambda_2 < 0 is the "auto-compute" sentinel (R's NULL); it is a
+    // valid input, so it is not rejected here. lambda_2 == 0 is the degenerate
+    // (pure-TLASSO) case; lambda_2 > 0 is a fixed ridge penalty.
 
     // Validate prior_groups (length p, 0-based, contiguous in [0, M-1]).
     if (!gvs_ctrl_.prior_groups.empty()) {
@@ -336,9 +344,13 @@ void TRexGVSSelector::finalizeSetup() {
         const auto p_m = static_cast<Eigen::Index>(cols.size());
         gvs_setup_.cluster_sizes[m] = static_cast<std::size_t>(p_m);
 
-        // Group covariance computation: Sigma_m = (1 / (n-1)) * X_m^T X_m
-        // Note: X_ is L2-normalized but NOT YET divided by sqrt(n - 1): done here.
-        // The Diagonal of X_m^T X_m is 1.0 per column.
+        // Group covariance computation: Sigma_m = (1 / (n-1)) * X_m^T X_m.
+        // This auto-adapts to the column scaling chosen for X_:
+        //   - ScalingMode::L2     -> ||x_j|| = 1, so diag(Sigma_m) = 1/(n-1)
+        //                            (dummies sampled unit-L2, matching X_).
+        //   - ScalingMode::ZSCORE -> ||x_j|| = sqrt(n-1), so diag(Sigma_m) = 1
+        //                            (dummies sampled unit-SD, matching X_).
+        // In both cases the sampled dummy columns share the scale of X_.
         Eigen::MatrixXd Sigma_m(p_m, p_m);
         for (Eigen::Index i = 0; i < p_m; ++i) {
             for (Eigen::Index j = i; j < p_m; ++j) {
@@ -388,69 +400,86 @@ void TRexGVSSelector::finalizeSetup() {
 
 double TRexGVSSelector::computeLambda2() const {
 
-    if (gvs_ctrl_.lambda_2 > 0.0) {
+    if (gvs_ctrl_.lambda_2 >= 0.0) {
+        // Fixed user value (>= 0). lambda_2 == 0 -> degenerate TLASSO (no ridge).
         return gvs_ctrl_.lambda_2;
     }
+    // lambda_2 < 0: "not supplied" sentinel -> auto-compute below.
 
-    // Auto-compute lambda_2 and convert from glmnet to LARS units:
-    //   lambda_lars = lambda_glmnet * (n - 1) * p / 2
+    // Auto-compute lambda_2 and convert to LARS units:
+    //   lambda_lars = lambda_cv * p / 2
     //
-    // The (n-1) factor corrects for the column-normalization difference between C++ and R:
-    //   C++ : centerAndL2NormalizeX → column L2 norm = 1
-    //   R   : scale(X)              → column L2 norm = sqrt(n-1)
-    // Ridge-regression optimal lambda scales as the square of column norms, so the glmnet-unit
-    // lambda returned by cv.glmnet on R's SD-normalized X is (n-1) times larger than what
-    // ridge_cv returns on the L2-normalized X.
-    // Applying the (n-1) factor here recovers the same effective ridge penalty that R's
-    // trex_GVS() uses (cv.glmnet(alpha=0)$lambda.1se * p / 2).
+    // CV is entered with X centered and L2-normalised (||x_j||_2 = 1) and y centered,
+    // as prepared by the base-class constructor. Each CV method extracts per-fold
+    // copies of (X_train, X_test, y_train, y_test) and re-normalises them for
+    // themselves, so no fold leaks global statistics.
     //
-    // Method notes:
-    //   GCV    — closed-form GCV via SVD; introduced as a large-data shortcut (large n and p make
-    //            K-fold CV prohibitively expensive). Not present in the original R reference.
-    //   CV_MIN — K-fold CV, lambda minimising mean MSE. Matches R's lambda.min.
-    //   CV_1SE — K-fold CV, glmnet-style 1SE rule (largest lambda within 1 SE of the CV minimum).
-    //            Intentionally selects a larger lambda_2 than CV_MIN, making EN more ridge-like:
-    //            correlated variables couple and enter the LARS path together. On high-correlation
-    //            DGPs this produces TPR = 1.0 at controlled FDR — expected behaviour, not a bug.
-    //            Matches R's lambda.1se and is the default in the R reference implementation.
+    // Two retained variants (selected by lambda2_method):
+    //   * CV_*_SVD (ridge_cv_svd, JacobiSVD): normalises each fold column to unit
+    //     L2-norm; the grid is anchored at c_max = max_j|x_j^T y_c|, so lambda_cv is on
+    //     the unit-L2 scale.
+    //   * CV_*_CCD (enet_cv_ccd, alpha=0, coordinate descent): glmnet-faithful;
+    //     standardises X/y internally (overwriting the base-class L2-normalisation),
+    //     anchors at glmnet's alpha=0 lambda_max and applies fdev/devmax early-termination.
+    //     Returns lambda on glmnet's reported scale (matches cv.glmnet(alpha=0)); the p/2
+    //     factor below converts to LARS units exactly as R's lm_dummy does
+    //     (lambda_2_lars = lambda * ncol(X) / 2).
     //
-    // Both EN and IEN fit on the original (X, y).  Fitting on the IEN augmented reference system
-    // [X; G_ref] was investigated and reverted: for high-correlation DGPs (rho ≈ 0.99) it inflates
-    // lambda_2 by ~3 orders of magnitude, driving all active-group columns (real and dummy) to near-
-    // identical normalised structure (bottom row ≈ 0.97), which collapses T-Rex FDR control in the
-    // same way as small lambda_2 — TPP is unchanged at ≈ 0.02.  The root cause of IEN TPP ≈ 0.02
-    // on the Hastie all-active DGP is not lambda_2 calibration; see assembleD() / drawClusterDummyLayer().
+    // Both EN and IEN fit on the original (X, y).  Fitting on the IEN augmented reference
+    // system [X; G_ref] was investigated and reverted: for high-correlation DGPs (rho ≈ 0.99)
+    // it inflates lambda_2 by ~3 orders of magnitude, driving all active-group columns to
+    // near-identical normalised structure (bottom row ≈ 0.97), which collapses T-Rex FDR
+    // control in the same way as small lambda_2.  See buildENDAugmentation() /
+    // buildIENDAugmentation() / drawClusterDummyLayer().
     namespace ms = trex::ml_methods::model_selection;
 
-    double lambda_glmnet = 0.0;
+    double lambda_cv = 0.0;
     switch (gvs_ctrl_.lambda2_method) {
-        case LambdaSelectionMethod::GCV: {
-            ms::ridge_gcv gcv;
-            gcv.fit(*X_, y_);
-            lambda_glmnet = gcv.gcv_optimal();
-            break;
-        }
-        case LambdaSelectionMethod::CV_MIN: {
-            ms::ridge_cv cv;
+        // == SVD-based CV (ridge_cv_svd, JacobiSVD direct ridge) =====================
+        case LambdaSelectionMethod::CV_MIN_SVD: {
+            ms::ridge_cv_svd cv;
             cv.fit(*X_, y_,
                    gvs_ctrl_.cv_n_folds,
                    gvs_ctrl_.cv_n_lambda,
                    /*lambda_ratio=*/1000.0,
                    resolved_cv_seed_);
-            lambda_glmnet = cv.cv_min();
+            lambda_cv = cv.cv_min();
             break;
         }
-        case LambdaSelectionMethod::CV_1SE: {
-            // Selects the largest lambda within 1 SE of the CV minimum — more regularised than
-            // CV_MIN. See the block comment above for the expected high-TPR / controlled-FDR
-            // behaviour this induces on high-correlation DGPs.
-            ms::ridge_cv cv;
+        case LambdaSelectionMethod::CV_1SE_SVD: {
+            // Largest lambda within 1 SE of the CV minimum (SVD path).
+            ms::ridge_cv_svd cv;
             cv.fit(*X_, y_,
                    gvs_ctrl_.cv_n_folds,
                    gvs_ctrl_.cv_n_lambda,
                    /*lambda_ratio=*/1000.0,
                    resolved_cv_seed_);
-            lambda_glmnet = cv.cv_1se();
+            lambda_cv = cv.cv_1se();
+            break;
+        }
+
+        // == CCD-based CV (enet_cv_ccd, alpha=0, glmnet-faithful) ===========
+        case LambdaSelectionMethod::CV_MIN_CCD: {
+            ms::enet_cv_ccd cv;
+            cv.fit(*X_, y_,
+                   /*alpha=*/0.0,
+                   gvs_ctrl_.cv_n_folds,
+                   gvs_ctrl_.cv_n_lambda,
+                   /*lambda_min_ratio=*/-1.0,   // auto: 1e-4 (n>p) or 1e-2 (n<=p)
+                   resolved_cv_seed_);
+            lambda_cv = cv.cv_min();
+            break;
+        }
+        case LambdaSelectionMethod::CV_1SE_CCD: {
+            // glmnet-faithful 1SE rule via coordinate descent (default). See CV_MIN_CCD.
+            ms::enet_cv_ccd cv;
+            cv.fit(*X_, y_,
+                   /*alpha=*/0.0,
+                   gvs_ctrl_.cv_n_folds,
+                   gvs_ctrl_.cv_n_lambda,
+                   /*lambda_min_ratio=*/-1.0,
+                   resolved_cv_seed_);
+            lambda_cv = cv.cv_1se();
             break;
         }
         default:
@@ -458,31 +487,23 @@ double TRexGVSSelector::computeLambda2() const {
                 "TRexGVSSelector::computeLambda2: unknown LambdaSelectionMethod.");
     }
 
-    // Scaling by (n_ - 1) to account for the difference between C++ column-L2
-    // normalization (||x_j||_2 = 1) and R's scale(X) SD-normalization
-    // (||x_j||_2 = sqrt(n-1)).
-    // Ridge regression optimal lambda scales as the square of column norms:
-    // lambda_SD = lambda_L2 * (n-1).
-    //
-    // R's cv.glmnet receives the SD-normalized X and therefore returns a lambda
-    // that is (n - 1) times larger than what ridge_cv computes on the
-    // L2-normalized X.
-    // The conversion factor p/2 is identical in both; only
-    // the glmnet-unit lambda scale differs.
-
-    return lambda_glmnet *
-            static_cast<double>(n_ - 1) *
-            static_cast<double>(p_) / 2.0;
-
+    return lambda_cv * static_cast<double>(p_) / 2.0;
 
 }
 
 
 // ===================================================================================
-// IEN: build augmented X_aug, y_aug, and reusable bottom blocks
+// IEN: build augmented design X_aug (+ reusable bottom block)
 // ===================================================================================
+//
+// R reference (lm_dummy.R, GVS_type == "IEN"):
+//   X_Dummy <- sqrt(l2) * rbind((1/sqrt(l2)) * X_Dummy,
+//                               (1/sqrt(cluster_sizes)) * IEN_cl_id_vectors)
+//   X_Dummy <- scale(X_Dummy)
+// The data block keeps its scale (sqrt(l2) * 1/sqrt(l2) = 1); only the bottom
+// group-indicator block carries sqrt(l2)/sqrt(p_m). No global d2 factor for IEN.
 
-void TRexGVSSelector::buildIENAugmentation() {
+void TRexGVSSelector::buildIENXAugmentation() {
 
     const auto n     = static_cast<Eigen::Index>(n_);
     const auto p     = static_cast<Eigen::Index>(p_);
@@ -491,6 +512,7 @@ void TRexGVSSelector::buildIENAugmentation() {
     const double sqrt_lambda2 = std::sqrt(lambda2_);
 
     // ---- ien_bottom_block_p_ : (M x p) row m = (sqrt(lambda2) / sqrt(p_m)) * 1_m -----
+    // Reused by buildIENDAugmentation for every dummy layer's bottom block.
     ien_bottom_block_p_ = Eigen::MatrixXd::Zero(M, p);
     for (std::size_t m = 0; m < gvs_setup_.max_clusters; ++m) {
         const double scale =
@@ -500,23 +522,87 @@ void TRexGVSSelector::buildIENAugmentation() {
         }
     }
 
-    // ---- X_aug_ : (n + M) x p ------------------------------------------
+    // ---- X_aug_ : (n + M) x p = [ X ; bottom_block ] -------------------------
     X_aug_.resize(n_aug, p);
-    X_aug_.topRows(n) =  *X_;                       // copy normalized X
-    X_aug_.bottomRows(M) = ien_bottom_block_p_;  // copy bottom block
+    X_aug_.topRows(n)    = *X_;                  // already-scaled real variables
+    X_aug_.bottomRows(M) = ien_bottom_block_p_;  // group-indicator ridge block
 
-    // ---- y_aug_ : (n + M) x 1, [y; 0_M] ---------------------------------
+    // ---- R's scale() over all (n + M) rows. Restores within-cluster scale
+    // homogeneity (the bottom-block contribution sqrt(lambda2 / p_m) would
+    // otherwise inflate the column L2 by a p_m-dependent factor). Uses the same
+    // column-scaling convention (L2 or z-score) as X_.
+    const bool zscore = (trex_ctrl_.scaling_mode == dn::ScalingMode::ZSCORE);
+    normalizeAugmentedColumns(X_aug_, eps_, zscore);
+}
+
+
+// ===================================================================================
+// IEN: build augmented response y_aug = [ y ; 0_M ], then center
+// ===================================================================================
+
+void TRexGVSSelector::buildIENyAugmentation() {
+
+    const auto n     = static_cast<Eigen::Index>(n_);
+    const auto M     = static_cast<Eigen::Index>(gvs_setup_.max_clusters);
+    const auto n_aug = n + M;
+
+    // y_aug_ = [ y ; 0_M ], then centered (R: y <- y - mean(y); no d2, no scale).
     y_aug_.resize(n_aug);
     y_aug_.head(n) = y_;
     y_aug_.tail(M).setZero();
+    y_aug_.array() -= y_aug_.mean();
+}
 
-    // ---- Per-column centering + unit-L2 normalization over (n + M) rows.
-    // Counterpart of R's scale() step in .lm_dummy_gvs().
-    // Restores within-cluster scale homogeneity (each column's bottom-
-    // block contribution sqrt(lambda2 / p_m) would otherwise inflate the
-    // column L2 by a p_m-dependent factor).
-    // y_aug_ mean is ~0 to floating-point precision; subtract for parity.
-    normalizeAugmentedColumns(X_aug_, eps_);
+
+// ===================================================================================
+// EN (Zou-Hastie): build augmented design X_aug for the TENET_AUG variant
+// ===================================================================================
+//
+// R reference (lm_dummy.R, GVS_type == "EN"):
+//   d2 = 1/sqrt(1+l2),  d1 = sqrt(l2)
+//   X_Dummy <- d2 * rbind(X_Dummy, diag(rep(d1, p_dummy)))   # whole matrix * d2
+//   X_Dummy <- scale(X_Dummy)
+// The global d2 factor is applied EXPLICITLY (faithful to R) even though the
+// subsequent per-column scale() divides each column by its own norm; this keeps
+// the C++ path a 1:1 mirror of the reference.
+
+void TRexGVSSelector::buildENXAugmentation(std::size_t num_dummies) {
+
+    const auto   n     = static_cast<Eigen::Index>(n_);
+    const auto   p     = static_cast<Eigen::Index>(p_);
+    const auto   L     = static_cast<Eigen::Index>(num_dummies);
+    const auto   n_aug = n + p + L;
+    const double d1    = std::sqrt(lambda2_);             // ridge magnitude
+    const double d2    = 1.0 / std::sqrt(1.0 + lambda2_); // Zou-Hastie global factor
+
+    // ---- X_aug_ : (n + p + L) x p = d2 * [ X ; d1*I_p ; 0_{L x p} ] ----------
+    X_aug_.setZero(n_aug, p);
+    X_aug_.topRows(n) = d2 * (*X_);          // d2 * already-scaled real variables
+    for (Eigen::Index j = 0; j < p; ++j) {
+        X_aug_(n + j, j) = d2 * d1;          // d2*d1 * I_p ridge block (rows [n, n+p))
+    }
+    // Bottom L rows stay 0 (dummy-ridge placeholder; D_aug carries d2*d1*I_L there).
+
+    // ---- R's scale() over all (n + p + L) rows. -----------------------------
+    const bool zscore = (trex_ctrl_.scaling_mode == dn::ScalingMode::ZSCORE);
+    normalizeAugmentedColumns(X_aug_, eps_, zscore);
+}
+
+
+// ===================================================================================
+// EN (Zou-Hastie): build augmented response y_aug = [ y ; 0_{p+L} ], then center
+// ===================================================================================
+
+void TRexGVSSelector::buildENyAugmentation(std::size_t num_dummies) {
+
+    const auto n     = static_cast<Eigen::Index>(n_);
+    const auto p     = static_cast<Eigen::Index>(p_);
+    const auto L     = static_cast<Eigen::Index>(num_dummies);
+    const auto n_aug = n + p + L;
+
+    // y_aug_ = [ y ; 0_{p+L} ], then centered (R: y <- y - mean(y); no d2, no scale).
+    y_aug_.setZero(n_aug);
+    y_aug_.head(n) = y_;
     y_aug_.array() -= y_aug_.mean();
 }
 
@@ -526,25 +612,34 @@ void TRexGVSSelector::buildIENAugmentation() {
 // ===================================================================================
 
 template <typename Derived>
-void TRexGVSSelector::normalizeAugmentedColumns(Eigen::MatrixBase<Derived>& M, double eps) {
+void TRexGVSSelector::normalizeAugmentedColumns(Eigen::MatrixBase<Derived>& M, double eps,
+                                               bool zscore) {
     const Eigen::Index n_rows = M.rows();
     if (n_rows == 0) return;
     const double inv_n = 1.0 / static_cast<double>(n_rows);
+
+    // z-score divides by sample SD = ||x_c|| / sqrt(rows-1); fall back to L2
+    // if rows < 2. Mirrors centerAndL2NormalizeX so dummies share the exact
+    // column-scaling convention applied to the real variables in X_.
+    const double sd_factor =
+        (zscore && n_rows > 1)
+            ? std::sqrt(static_cast<double>(n_rows - 1))
+            : 1.0;
 
     for (Eigen::Index j = 0; j < M.cols(); ++j) {
         // Center.
         const double mean_j = M.col(j).sum() * inv_n;
         M.col(j).array() -= mean_j;
 
-        // Unit-L2 normalize.
-        const double norm_j = M.col(j).norm();
-        if (norm_j < eps) {
+        // Rescale (unit-L2 or unit-SD depending on `zscore`).
+        const double scale_j = M.col(j).norm() / sd_factor;
+        if (scale_j < eps) {
             throw std::runtime_error(
                 "TRexGVSSelector::normalizeAugmentedColumns: column " +
                 std::to_string(j) +
-                " has L2 norm below eps after centering (degenerate column).");
+                " has scale below eps after centering (degenerate column).");
         }
-        M.col(j) /= norm_j;
+        M.col(j) /= scale_j;
     }
 }
 
@@ -558,8 +653,7 @@ Eigen::MatrixXd TRexGVSSelector::drawClusterDummyLayer(std::mt19937& rng) const 
     const auto n_rows = static_cast<Eigen::Index>(n_);
     const auto p = static_cast<Eigen::Index>(p_);
 
-    Eigen::MatrixXd layer(n_rows, p);
-
+    Eigen::MatrixXd layer = Eigen::MatrixXd::Zero(n_rows, p);
     std::normal_distribution<double> N01(0.0, 1.0);
 
     for (std::size_t m = 0; m < gvs_setup_.max_clusters; ++m) {
@@ -567,7 +661,12 @@ Eigen::MatrixXd TRexGVSSelector::drawClusterDummyLayer(std::mt19937& rng) const 
         const auto& cols = gvs_setup_.clusters_list[m];
         const auto p_m = static_cast<Eigen::Index>(cols.size());
 
-        // Z ~ N(0, I) of shape (n_rows x p_m).
+        // skip empty clusters (should not happen)
+        if (p_m == 0) {
+            continue;
+        }
+
+        // drawn univariate Z ~ N(0, I) of shape (n_rows x p_m).
         Eigen::MatrixXd Z(n_rows, p_m);
         for (Eigen::Index j = 0; j < p_m; ++j) {
             for (Eigen::Index i = 0; i < n_rows; ++i) {
@@ -575,7 +674,7 @@ Eigen::MatrixXd TRexGVSSelector::drawClusterDummyLayer(std::mt19937& rng) const 
             }
         }
 
-        // block = Z * L_m^T  (rows of block ~ N(0, Sigma_m)).
+        // coloring transform: block = Z * L_m^T  (rows of block ~ N(0, Sigma_m)).
         Eigen::MatrixXd block = Z * gvs_setup_.cholesky_lower_list[m].transpose();
 
         // Scatter into output columns.
@@ -589,65 +688,71 @@ Eigen::MatrixXd TRexGVSSelector::drawClusterDummyLayer(std::mt19937& rng) const 
 
 
 // ===================================================================================
-// Assemble per-experiment dummy matrix D_k
+// EN: assemble one experiment's dummy matrix D_k into `dst`
 // ===================================================================================
+//
+// Handles BOTH EN sub-variants (dst sized by the caller):
+//   - plain EN (TENET)     : dst is (n x L); D = [ MVN layers ].  No augmentation.
+//   - EN-aug   (TENET_AUG) : dst is (n+p+L x L);
+//       D_aug = d2 * [ MVN ; 0_{p x L} ; d1*I_L ]  (d2 = 1/sqrt(1+l2), d1 = sqrt(l2)).
+// Mirrors R lm_dummy.R: the dummy columns are part of X_Dummy and so receive the
+// same global d2 factor as the real variables (applied EXPLICITLY for fidelity;
+// it cancels under the caller's per-column scaling). Column scaling: caller.
 
-Eigen::MatrixXd TRexGVSSelector::assembleD(std::size_t k,
-                                           std::size_t num_dummies) const {
+template <typename Derived>
+void TRexGVSSelector::buildENDAugmentation(std::size_t k,
+                                           std::size_t num_dummies,
+                                           Eigen::MatrixBase<Derived>& dst) const {
 
-    const auto n     = static_cast<Eigen::Index>(n_);
-    const auto p     = static_cast<Eigen::Index>(p_);
-    const auto L     = static_cast<Eigen::Index>(num_dummies);
-    const auto M     = static_cast<Eigen::Index>(gvs_setup_.max_clusters);
-    const bool ien    = (gvs_ctrl_.gvs_type == GVSType::IEN);
-    const auto n_eff  = ien ? (n + M) : n;
+    const auto n = static_cast<Eigen::Index>(n_);
+    const auto p = static_cast<Eigen::Index>(p_);
+    const auto L = static_cast<Eigen::Index>(num_dummies);
+    const bool en_aug = (gvs_ctrl_.en_solver == ENSolverType::TENET_AUG);
 
-    Eigen::MatrixXd D(n_eff, L);
+    const double d1 = std::sqrt(lambda2_);
+    const double d2 = en_aug ? (1.0 / std::sqrt(1.0 + lambda2_)) : 1.0;
+
+    // EN-aug has structural zero rows (X-ridge placeholder + off-diagonal); wipe
+    // the (possibly reused mmap) buffer first. Plain EN fills every row below.
+    if (en_aug) {
+        dst.setZero();
+    }
 
     const auto& layers = dummy_layers_[k];
     Eigen::Index col = 0;
 
-    // Top n rows: MVN draws.
+    // Top n rows: d2 * MVN draws (d2 == 1 for plain EN).
     for (const auto& layer : layers) {
-        D.block(0, col, n, p) = layer;
+        dst.block(0, col, n, p) = d2 * layer;
         col += p;
     }
-    // Bottom rows: IEN group-ridge block (IEN only; plain EN has no bottom rows).
-    if (ien) {
-        col = 0;
-        for (std::size_t li = 0; li < layers.size(); ++li) {
-            D.block(n, col, M, p) = ien_bottom_block_p_;
-            col += p;
+
+    if (en_aug) {
+        // Bottom L rows [n+p, n+p+L): d2*d1 * I_L dummy-ridge block.
+        for (Eigen::Index j = 0; j < L; ++j) {
+            dst(n + p + j, j) = d2 * d1;
         }
     }
-
-    return D;
 }
 
 
 // ===================================================================================
-// Assemble per-experiment dummy matrix directly into a mmap'd buffer
+// IEN: assemble one experiment's dummy matrix D_k into `dst`
 // ===================================================================================
+//
+// dst is (n + M x L). D_aug = [ MVN ; B repeated per layer ], where B =
+// ien_bottom_block_p_ (M x p). No global d2 factor for IEN (see
+// buildIENXAugmentation). Column scaling: caller.
 
-void TRexGVSSelector::writeAssembledDIntoMap(
-    std::size_t k,
-    std::size_t num_dummies,
-    Eigen::Map<Eigen::MatrixXd>& dst) const
-{
-    const auto n   = static_cast<Eigen::Index>(n_);
-    const auto p   = static_cast<Eigen::Index>(p_);
-    const auto M   = static_cast<Eigen::Index>(gvs_setup_.max_clusters);
-    const bool ien    = (gvs_ctrl_.gvs_type == GVSType::IEN);
+template <typename Derived>
+void TRexGVSSelector::buildIENDAugmentation(std::size_t k,
+                                            std::size_t num_dummies,
+                                            Eigen::MatrixBase<Derived>& dst) const {
 
-    if (dst.cols() != static_cast<Eigen::Index>(num_dummies)) {
-        throw std::runtime_error(
-            "TRexGVSSelector::writeAssembledDIntoMap: column-count mismatch.");
-    }
-    const auto expected_rows = ien ? (n + M) : n;
-    if (dst.rows() != expected_rows) {
-        throw std::runtime_error(
-            "TRexGVSSelector::writeAssembledDIntoMap: row-count mismatch.");
-    }
+    const auto n = static_cast<Eigen::Index>(n_);
+    const auto p = static_cast<Eigen::Index>(p_);
+    const auto M = static_cast<Eigen::Index>(gvs_setup_.max_clusters);
+    (void)num_dummies;  // implied by dummy_layers_[k].size() * p
 
     const auto& layers = dummy_layers_[k];
     Eigen::Index col = 0;
@@ -657,13 +762,11 @@ void TRexGVSSelector::writeAssembledDIntoMap(
         dst.block(0, col, n, p) = layer;
         col += p;
     }
-    // Bottom rows: IEN group-ridge block.
-    if (ien) {
-        col = 0;
-        for (std::size_t li = 0; li < layers.size(); ++li) {
-            dst.block(n, col, M, p) = ien_bottom_block_p_;
-            col += p;
-        }
+    // Bottom M rows: group-indicator ridge block, identical under every layer.
+    col = 0;
+    for (std::size_t li = 0; li < layers.size(); ++li) {
+        dst.block(n, col, M, p) = ien_bottom_block_p_;
+        col += p;
     }
 }
 
@@ -738,6 +841,22 @@ TRexGVSSelector::ExpAgg TRexGVSSelector::runKExperiments(
     const auto p_idx     = static_cast<Eigen::Index>(p_);
     const auto T_idx     = static_cast<Eigen::Index>(T_stop);
     const bool ien                           = (gvs_ctrl_.gvs_type == GVSType::IEN);
+    const bool en_aug    = (gvs_ctrl_.gvs_type == GVSType::EN &&
+                            gvs_ctrl_.en_solver == ENSolverType::TENET_AUG);
+    // IEN and EN-aug are both solved as a plain TLASSO on an externally
+    // augmented system (augmentation built outside the solver).
+    const bool augmented = ien || en_aug;
+
+    // Single scaling convention for the whole pipeline: X (base class),
+    // dummies D_k (prepareDummiesForLStep), and the solvers below all follow
+    // trex_ctrl_.scaling_mode. The solvers receive already-scaled X/D_k
+    // (normalize=false, intercept=false), so this only governs any internal
+    // augmented-column handling; propagating it keeps the convention coherent
+    // (mirrors the base-class conversion in trex.cpp buildSolverConfig()).
+    const tsolvers::ScalingMode solver_scaling =
+        (trex_ctrl_.scaling_mode == dn::ScalingMode::ZSCORE)
+            ? tsolvers::ScalingMode::ZSCORE
+            : tsolvers::ScalingMode::L2;
 
     // Per-experiment phi_T contributions; summed after the parallel section.
     std::vector<Eigen::MatrixXd> phi_T_per_k(K);
@@ -775,18 +894,34 @@ TRexGVSSelector::ExpAgg TRexGVSSelector::runKExperiments(
                 beta_path = solvers_cache_[k]->getBetaPath();
 
             } else {
-                // -- Fresh construction branch: D_solver_maps_[k] was bound by
-                //    prepareDummiesForLStep (in-memory or mmap). --
+                // -- Fresh construction branch:
+                //    D_solver_maps_[k] was bound by prepareDummiesForLStep (in-memory or mmap).
+                //    X_solver_map_, D_solver_maps_[k], and y_solver_map are already
+                //    normalized, either:
+                //    - centered + L2-normalized (ScalingMode::L2) or
+                //    - centered + sample-SD-normalized (ScalingMode::ZSCORE)
                 std::unique_ptr<tsolvers::TSolver_Base> solver;
-                if (ien) {
+                if (augmented) {
+                    // IEN and EN-aug (TENET_AUG) both run a plain TLASSO on the
+                    // externally-augmented system: X_solver_map_, D, and
+                    // y_solver_map_ already carry the ridge rows and the chosen
+                    // column scaling (buildIEN*/buildEN* helpers
+                    // + normalizeAugmentedColumns). No in-solver augmentation and
+                    // no beta/d2 rescaling is required -- the global Zou-Hastie
+                    // d2 factor (EN-aug) cancels under per-column normalization.
                     solver = std::make_unique<lars::TLASSO_Solver>(
                         *X_solver_map_,
                         *D_solver_maps_[k],
                         *y_solver_map_,
                         /*normalize=*/false,
                         /*intercept=*/false,
-                        /*verbose=*/false);
-                } else {
+                        /*verbose=*/false,
+                        solver_scaling
+                    );
+                }
+                // Plain EN (TENET): LARS-EN path algorithm with Gram-matrix
+                // ridge modification (augmentation handled inside the solver).
+                else {
                     solver = std::make_unique<lars::TENET_Solver>(
                         *X_solver_map_,
                         *D_solver_maps_[k],
@@ -794,7 +929,9 @@ TRexGVSSelector::ExpAgg TRexGVSSelector::runKExperiments(
                         lambda2_,
                         /*normalize=*/false,
                         /*intercept=*/false,
-                        /*verbose=*/false);
+                        /*verbose=*/false,
+                        solver_scaling
+                    );
                 }
 
                 solver->executeStep(T_stop, /*early_stop=*/true);
@@ -821,6 +958,7 @@ TRexGVSSelector::ExpAgg TRexGVSSelector::runKExperiments(
     // Average over K experiments.
     phi_T_acc /= static_cast<double>(K);
 
+    // Combine outputs into a single struct
     ExpAgg out;
     out.phi_T_mat = std::move(phi_T_acc);
     out.Phi       = out.phi_T_mat.col(T_idx - 1);
@@ -869,6 +1007,24 @@ void TRexGVSSelector::prepareDummiesForLStep(LStepContext& ctx)
 {
     const std::size_t K     = trex_ctrl_.K;
     const std::size_t LL    = ctx.L_iter;
+
+    // EN-aug: the augmented height (n + p + L) depends on the current dummy
+    // count L, so (re)build X_aug_/y_aug_ and rebind the solver maps for this
+    // L-step *before* sizing any D buffer. IEN/plain EN bound theirs once in
+    // onSelectBegin and keep a fixed height.
+    const bool en_aug = (gvs_ctrl_.gvs_type == GVSType::EN &&
+                         gvs_ctrl_.en_solver == ENSolverType::TENET_AUG);
+    const bool ien    = (gvs_ctrl_.gvs_type == GVSType::IEN);
+    if (en_aug) {
+        buildENXAugmentation(ctx.num_dummies);
+        buildENyAugmentation(ctx.num_dummies);
+        n_eff_ = n_ + p_ + ctx.num_dummies;
+        X_solver_map_ = std::make_unique<Eigen::Map<Eigen::MatrixXd>>(
+            X_aug_.data(), X_aug_.rows(), X_aug_.cols());
+        y_solver_map_ = std::make_unique<Eigen::Map<Eigen::VectorXd>>(
+            y_aug_.data(), y_aug_.size());
+    }
+
     const auto        n_eff_idx = static_cast<Eigen::Index>(n_eff_);
 
     // Three of the four supported strategies follow the redraw-all path.
@@ -908,9 +1064,21 @@ void TRexGVSSelector::prepareDummiesForLStep(LStepContext& ctx)
     // ---- Generate / extend per-experiment dummy layers -------------------
     for (std::size_t k = 0; k < K; ++k) {
 
-        std::mt19937 rng(trex::utils::datageneration::dummygen::mix_seed(
-            trex::utils::datageneration::dummygen::mix_seed(
-                static_cast<std::uint32_t>(base_seed), k), LL));
+        // Seed the FULL mt19937 state via std::seed_seq.  Seeding mt19937 from
+        // a single 32-bit value (e.g. a scalar mix_seed result) leaves nearby
+        // seeds able to emit correlated initial output — fatal for T-Rex,
+        // whose FDR calibration assumes the K dummy realisations are mutually
+        // independent and independent of X.  seed_seq scrambles the supplied
+        // entropy words across the entire 624-word generator state, so every
+        // (experiment k, L-iteration LL) draws a decorrelated dummy stream.
+        std::seed_seq seq{
+            static_cast<std::uint32_t>(base_seed & 0xFFFFFFFFu),
+            static_cast<std::uint32_t>(base_seed >> 32),
+            static_cast<std::uint32_t>(k),
+            static_cast<std::uint32_t>(LL),
+            0x9E3779B9u  // golden-ratio constant for extra avalanche mixing
+        };
+        std::mt19937 rng(seq);
 
         if (redraw_all) {
             // Redraw all LL layers from scratch.
@@ -928,6 +1096,10 @@ void TRexGVSSelector::prepareDummiesForLStep(LStepContext& ctx)
     }
 
     // ---- (Re)build solver-side D buffers + invalidate solver cache -------
+    // Dummies must share the column-scaling convention applied to X_ so that
+    // real variables and dummies sit on a common scale (otherwise the
+    // dummy-based FDR calibration is biased under z-score scaling).
+    const bool zscore_dummies = (trex_ctrl_.scaling_mode == dn::ScalingMode::ZSCORE);
     if (gvs_use_mmap_) {
         // Memory-mapped path: write directly into the per-K mmap buffers
         // pre-allocated in onSelectBegin().
@@ -937,15 +1109,25 @@ void TRexGVSSelector::prepareDummiesForLStep(LStepContext& ctx)
         const auto num_d_idx = static_cast<Eigen::Index>(ctx.num_dummies);
         for (std::size_t k = 0; k < K; ++k) {
             // getDMap returns an Eigen::Map view onto the first
-            // `num_dummies` columns of file k (n_eff x num_dummies).
-            auto dmap = memmap_mgr_->getDMap(k, ctx.num_dummies);
-            if (dmap.rows() != n_eff_idx || dmap.cols() != num_d_idx) {
+            // `num_dummies` columns of file k. For IEN / plain EN its row
+            // count already equals n_eff_idx. For EN-aug the file was sized to
+            // the maximum height (n + p + max_dummies), so reinterpret its
+            // flat, column-major buffer as a contiguous (n_eff_idx x
+            // num_dummies) matrix for this L-step (capacity is guaranteed
+            // because n_eff_idx * num_dummies <= file rows * num_dummies).
+            auto base_map = memmap_mgr_->getDMap(k, ctx.num_dummies);
+            if (n_eff_idx * num_d_idx > base_map.rows() * base_map.cols()) {
                 throw std::runtime_error(
                     "TRexGVSSelector::prepareDummiesForLStep: "
-                    "mmap returned unexpected shape.");
+                    "mmap buffer too small for assembled D.");
             }
-            writeAssembledDIntoMap(k, ctx.num_dummies, dmap);
-            normalizeAugmentedColumns(dmap, eps_);
+            Eigen::Map<Eigen::MatrixXd> dmap(base_map.data(), n_eff_idx, num_d_idx);
+            if (ien) {
+                buildIENDAugmentation(k, ctx.num_dummies, dmap);
+            } else {
+                buildENDAugmentation(k, ctx.num_dummies, dmap);
+            }
+            normalizeAugmentedColumns(dmap, eps_, zscore_dummies);
             // Bind the long-lived Map for runKExperiments. The owning
             // storage is the mmap file managed by memmap_mgr_.
             D_solver_maps_[k] = std::make_unique<Eigen::Map<Eigen::MatrixXd>>(
@@ -958,12 +1140,20 @@ void TRexGVSSelector::prepareDummiesForLStep(LStepContext& ctx)
         D_solver_maps_.clear();
         D_solver_maps_.resize(K);
         for (std::size_t k = 0; k < K; ++k) {
-            D_solver_bufs_[k] = assembleD(k, ctx.num_dummies);
-            // Per-column centering + unit-L2 normalization over n_eff rows
-            // (external counterpart of R's scale() on the augmented system).
-            // Re-applied every L-iteration regardless of strategy: solver cache
-            // is cleared each L-iteration, so the cost is amortised.
-            normalizeAugmentedColumns(D_solver_bufs_[k], eps_);
+            // Build cluster associated dummy matrix D_k
+            if (ien) {
+                buildIENDAugmentation(k, ctx.num_dummies, D_solver_bufs_[k]);
+            } else {
+                buildENDAugmentation(k, ctx.num_dummies, D_solver_bufs_[k]);
+            }
+
+            // Per-column centering + normalization over all rows, using the
+            // same column-scaling convention (L2 or z-score) as X_ so the
+            // dummies and the real variables sit on a common scale (required
+            // for unbiased dummy-based FDR calibration).
+            // Re-applied every L-iteration regardless of strategy:
+            // the solver cache is cleared each L-iteration, so the cost is amortised.
+            normalizeAugmentedColumns(D_solver_bufs_[k], eps_, zscore_dummies);
             D_solver_maps_[k] = std::make_unique<Eigen::Map<Eigen::MatrixXd>>(
                 D_solver_bufs_[k].data(),
                 D_solver_bufs_[k].rows(),
@@ -1010,8 +1200,11 @@ void TRexGVSSelector::onSelectBegin() {
 
     // 3. Build augmentation if needed; set up effective shapes.
     const bool ien    = (gvs_ctrl_.gvs_type == GVSType::IEN);
+    const bool en_aug = (gvs_ctrl_.gvs_type == GVSType::EN &&
+                         gvs_ctrl_.en_solver == ENSolverType::TENET_AUG);
     if (ien) {
-        buildIENAugmentation();
+        buildIENXAugmentation();
+        buildIENyAugmentation();
         n_eff_ = n_ + gvs_setup_.max_clusters;
 
         // Solver-side X and y are the augmented buffers (long-lived members).
@@ -1021,7 +1214,14 @@ void TRexGVSSelector::onSelectBegin() {
         y_solver_map_ = std::make_unique<Eigen::Map<Eigen::VectorXd>>(
             y_aug_.data(), y_aug_.size());
 
-    } else { // EN: no augmentation, solver sees original X and y.
+    } else if (en_aug) {
+        // EN-aug height (n + p + L) depends on the per-L-step dummy count L, so
+        // X_aug_/y_aug_ and the solver maps are (re)built in
+        // prepareDummiesForLStep. n_eff_ here is provisional until the first
+        // L-step rebinds it.
+        n_eff_ = n_;
+
+    } else { // plain EN (TENET): no augmentation, solver sees original X and y.
         n_eff_ = n_;
 
         X_solver_map_ = std::make_unique<Eigen::Map<Eigen::MatrixXd>>(
@@ -1037,8 +1237,15 @@ void TRexGVSSelector::onSelectBegin() {
     //    parallel-K loop in runKExperiments).
     if (gvs_use_mmap_) {
         const std::size_t max_dummies = trex_ctrl_.max_dummy_multiplier * p_;
+        // EN-aug needs room for the largest possible augmented height
+        // (n + p + max_dummies); the flat backing buffer is reinterpreted per
+        // L-step as a contiguous (n + p + L) x L matrix in
+        // prepareDummiesForLStep. IEN / plain EN have fixed heights, so the
+        // file rows equal n_eff_ directly.
+        const std::size_t mmap_rows =
+            en_aug ? (n_ + p_ + max_dummies) : n_eff_;
         memmap_mgr_ = std::make_unique<mm::MemmapManager>(
-            n_eff_, max_dummies, trex_ctrl_.K, /*shared=*/false, verbose_);
+            mmap_rows, max_dummies, trex_ctrl_.K, /*shared=*/false, verbose_);
         memmap_mgr_->initialize();
     }
 }

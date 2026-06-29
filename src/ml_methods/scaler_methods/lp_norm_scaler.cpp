@@ -1,46 +1,49 @@
 // ===================================================================================
-// z_score_scaler.cpp
+// lp_norm_scaler.cpp
 // ===================================================================================
 /**
- * @file z_score_scaler.cpp
+ * @file lp_norm_scaler.cpp
  *
- * @brief Implementation of the ZScoreScaler class for feature scaling.
+ * @brief Implementation of the LpNormScaler class for L1/L2 normalization and centering.
  *
- * @details The class is separated into a header (ZScoreScaler.hpp) and source file
- * (ZScoreScaler.cpp) for better organization.
- * |--ZScoreScaler
- *    |--ZScoreScaler.hpp  (class declaration)
- *    |--ZScoreScaler.cpp  (class implementation)
+ * @details The class is separated into a header (LpNormScaler.hpp) and source file
+ *  (LpNormScaler.cpp) for better organization.
+ * |--LpNormScaler
+ *    |--LpNormScaler.hpp  (class declaration)
+ *    |--LpNormScaler.cpp  (class implementation)
+ * Serialization is implemented in the header to allow for template binding with Cereal.
  */
 // ===================================================================================
 
 #include <algorithm>
 
-#include <ml_methods/standardization/z_score_scaler.hpp>
 #include <utils/openmp/utils_openmp.hpp>
+#include <ml_methods/scaler_methods/lp_norm_scaler.hpp>
 
 // ===================================================================================
 
 namespace trex {
 namespace ml_methods {
-namespace standardization {
+namespace scaler_methods {
 
 // ===================================================================================
 
-DataTransformer& ZScoreScaler::fit(Eigen::Map<Eigen::MatrixXd>& X,
-                                   double min_std_threshold) {
+DataTransformer& LpNormScaler::fit(
+    Eigen::Map<Eigen::MatrixXd>& X,
+    double min_norm_threshold
+    )
+{
 
     Eigen::Index ncols = X.cols();
     Eigen::Index nrows = X.rows();
 
     if (nrows == 0 || ncols == 0) {
-        throw std::invalid_argument(
-            get_name() + "::fit: Empty matrix provided");
+        throw std::invalid_argument(get_name() + "::fit: Empty matrix provided");
     }
 
     // Allocate storage
     means_.resize(ncols);
-    scales_.resize(ncols);
+    norms_.resize(ncols);
     dropped_indices_.clear();
 
     #pragma omp parallel
@@ -53,22 +56,31 @@ DataTransformer& ZScoreScaler::fit(Eigen::Map<Eigen::MatrixXd>& X,
             // Compute mean
             means_[j] = with_mean_ ? X.col(j).mean() : 0.0;
 
-            // Compute standard deviation
-            if (with_std_) {
-                // Use expression templates to avoid allocation
-                auto col_centered = X.col(j).array() - means_[j];
-                double variance = col_centered.square().sum() / static_cast<double>((nrows - 1));
-                double std_val = std::sqrt(variance);
+            // Compute norm
+            if (with_norm_) {
+                double norm_val;
+
+                if (with_mean_) {
+                    // Use expression templates to avoid allocation
+                    auto col_centered = X.col(j).array() - means_[j];
+                    norm_val = (norm_type_ == NormType::L2)
+                        ? col_centered.matrix().norm()
+                        : col_centered.matrix().template lpNorm<1>();
+                } else {
+                    norm_val = (norm_type_ == NormType::L2)
+                        ? X.col(j).norm()
+                        : X.col(j).template lpNorm<1>();
+                }
 
                 // Check threshold
-                if (std_val < min_std_threshold) {
+                if (norm_val < min_norm_threshold) {
                     thread_dropped.push_back(j);
-                    scales_[j] = 1.0;  // Prevent division by zero
+                    norms_[j] = 1.0;  // Prevent division by zero
                 } else {
-                    scales_[j] = std_val;
+                    norms_[j] = norm_val;
                 }
             } else {
-                scales_[j] = 1.0;  // No scaling
+                norms_[j] = 1.0;  // No normalization
             }
         }
 
@@ -91,7 +103,7 @@ DataTransformer& ZScoreScaler::fit(Eigen::Map<Eigen::MatrixXd>& X,
 }
 
 
-void ZScoreScaler::transform_inplace(Eigen::Map<Eigen::MatrixXd>& X) const {
+void LpNormScaler::transform_inplace(Eigen::Map<Eigen::MatrixXd>& X) const {
 
     const std::string transformer_name = get_name();
 
@@ -99,10 +111,11 @@ void ZScoreScaler::transform_inplace(Eigen::Map<Eigen::MatrixXd>& X) const {
         throw std::logic_error(transformer_name + "::transform_inplace: Not fitted");
     }
 
-    if (X.cols() != static_cast<Eigen::Index>(scales_.size())) {
+    if (X.cols() != static_cast<Eigen::Index>(norms_.size())) {
         throw std::invalid_argument(
-            transformer_name + "::transform_inplace: Expected " +
-            std::to_string(scales_.size()) + " features, got " +
+            transformer_name +
+            "::transform_inplace: Expected " +
+            std::to_string(norms_.size()) + " features, got " +
             std::to_string(X.cols()));
     }
 
@@ -124,32 +137,34 @@ void ZScoreScaler::transform_inplace(Eigen::Map<Eigen::MatrixXd>& X) const {
         }
 
         // Scale
-        if (with_std_ && scales_[j] > 0) {
-            X.col(j).array() /= scales_[j];
+        if (with_norm_ && norms_[j] > 0) {
+            X.col(j).array() /= norms_[j];
         }
     }
 }
 
 
-void ZScoreScaler::inverse_transform_inplace(Eigen::Map<Eigen::MatrixXd>& X_scaled) const {
+void LpNormScaler::inverse_transform_inplace(Eigen::Map<Eigen::MatrixXd>& X_normed) const {
 
     const std::string transformer_name = get_name();
 
     if (!fitted_) {
-        throw std::logic_error(transformer_name + "::inverse_transform_inplace: Not fitted");
+        throw std::logic_error(
+            transformer_name + "::inverse_transform_inplace: Not fitted");
     }
 
-    if (X_scaled.cols() != static_cast<Eigen::Index>(scales_.size())) {
+    if (X_normed.cols() != static_cast<Eigen::Index>(norms_.size())) {
         throw std::invalid_argument(
-            transformer_name + "::inverse_transform_inplace: Expected " +
-            std::to_string(scales_.size()) + " features, got " +
-            std::to_string(X_scaled.cols()));
+            transformer_name +
+            "::inverse_transform_inplace: Expected " +
+            std::to_string(norms_.size()) + " features, got " +
+            std::to_string(X_normed.cols()));
     }
 
     const bool has_dropped = !dropped_indices_.empty();
 
     #pragma omp parallel for schedule(static)
-    for (Eigen::Index j = 0; j < X_scaled.cols(); ++j) {
+    for (Eigen::Index j = 0; j < X_normed.cols(); ++j) {
 
         // Skip dropped columns
         if (has_dropped &&
@@ -159,19 +174,19 @@ void ZScoreScaler::inverse_transform_inplace(Eigen::Map<Eigen::MatrixXd>& X_scal
         }
 
         // Unscale (inverse order of transform)
-        if (with_std_ && scales_[j] > 0) {
-            X_scaled.col(j).array() *= scales_[j];
+        if (with_norm_ && norms_[j] > 0) {
+            X_normed.col(j).array() *= norms_[j];
         }
 
         // Uncenter
         if (with_mean_) {
-            X_scaled.col(j).array() += means_[j];
+            X_normed.col(j).array() += means_[j];
         }
     }
 }
 
-// ===================================================================================
 
-} /* End of namespace standardization */
+// ===================================================================================
+} /* End of namespace scaler_methods */
 } /* End of namespace ml_methods */
 } /* End of namespace trex */

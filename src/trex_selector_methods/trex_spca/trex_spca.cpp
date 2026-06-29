@@ -21,7 +21,7 @@
 // ml_methods includes
 #include <ml_methods/pca/pca.hpp>
 #include <ml_methods/ridge_regression/ridge.hpp>
-#include <ml_methods/standardization/lp_norm_scaler.hpp>
+#include <ml_methods/scaler_methods/lp_norm_scaler.hpp>
 
 // ==============================================================================
 
@@ -52,7 +52,9 @@ TRexSPCA::TRexSPCA(Eigen::Map<Eigen::MatrixXd>& X,
     , spca_ctrl_(std::move(spca_ctrl))
     , seed_(seed)
     , verbose_(verbose)
-    , scaler_(std_scaler::LpNormScaler::NormType::L2, /*with_mean=*/true, /*with_norm=*/false)
+    , scaler_(std_scaler::LpNormScaler::NormType::L2,
+              /*with_mean=*/true,
+              /*with_norm=*/false)   // center-only: ordinary PCA must be a covariance PCA
 {
     if (M_ > std::min(X_->rows(), X_->cols())) {
         throw std::invalid_argument(
@@ -69,7 +71,7 @@ TRexSPCA::~TRexSPCA() {
     // Safety net: if select() was interrupted by an exception after centering X
     // but before restoring it, restore X here so the caller's data is not corrupted.
     if (X_is_centered_) {
-        scaler_.inverse_transform_inplace(*X_);  // X += means
+        scaler_.inverse_transform_inplace(*X_);  // X += means (center-only scaler)
         X_is_centered_ = false;
     }
 }
@@ -90,13 +92,15 @@ TRexSPCAResult TRexSPCA::select() {
     result_.active_sets.resize(static_cast<std::size_t>(M_));
 
     // 0. Center X column-wise (mean subtraction only, no L2 scaling).
-    //    scaler_ is a member so the destructor can restore X on exception.
+    //    Covariance PCA: column scales carry the factor signal, so they must
+    //    NOT be normalized. scaler_ is a member so the destructor can restore
+    //    X on exception.
     scaler_.fit(*X_);
     scaler_.transform_inplace(*X_);  // X -= means
     X_is_centered_ = true;
 
-    // 1. Compute ordinary PCA on the centered X.
-    pca::PCAResult ord_pca = pca::PCA(false).fit(*X_, M_);
+    // 1. Compute ordinary PCA on the centered X (no further preprocessing).
+    pca::PCAResult ord_pca = pca::PCA(*X_, M_, /*center=*/false, /*normalize=*/false).fit();
 
     // 2. Per-PC loop.
     for (Eigen::Index m = 0; m < M_; ++m) {
@@ -117,9 +121,15 @@ TRexSPCAResult TRexSPCA::select() {
         tc::TRexControlParameter trex_ctrl = spca_ctrl_.trex_ctrl;
         tg::TRexGVSControlParameter gvs_ctrl = spca_ctrl_.gvs_ctrl;
 
-        // EN + TENET: always override to EN/TENET (IEN is not used by TRexSPCA).
+        // EN + TENETAug: always override (IEN is not used by TRexSPCA).
+        // GVSType::EN + en_solver routes to TENET_Solver / TENETAug_Solver in
+        // TRexGVSSelector. The solver variant is user-selectable via
+        // spca_ctrl_.en_solver (both are equivalent for lambda2 > 0).
         gvs_ctrl.gvs_type     = tg::GVSType::EN;
-        trex_ctrl.solver_type = sd::SolverTypeForTRex::TENET;
+        gvs_ctrl.en_solver    = spca_ctrl_.en_solver;
+        trex_ctrl.solver_type = (spca_ctrl_.en_solver == tg::ENSolverType::TENET_AUG)
+            ? sd::SolverTypeForTRex::TENET_AUG
+            : sd::SolverTypeForTRex::TENET;
 
         std::vector<Eigen::Index> active_set;
         {
@@ -164,7 +174,7 @@ TRexSPCAResult TRexSPCA::select() {
     adjustExplainedVariance(result_, *X_);
 
     // 7. Restore X to its original (uncentered) state.
-    scaler_.inverse_transform_inplace(*X_);  // X += means
+    scaler_.inverse_transform_inplace(*X_);  // X += means (center-only scaler)
     X_is_centered_ = false;
 
     return result_;
@@ -191,7 +201,9 @@ void TRexSPCA::assembleActiveSetLoadings(
     }
 
     // Ridge regression on the active subset; normalize and scatter back.
-    Eigen::VectorXd beta_ridge = ridge::RidgeSolver::solve(X_active, z_m, spca_ctrl_.lambda2_ridge_loadings);
+    Eigen::VectorXd beta_ridge = ridge::RidgeSolver::solve(
+        X_active, z_m, spca_ctrl_.lambda2_ridge_loadings
+    );
     beta_ridge.normalize();
 
     for (Eigen::Index i = 0; i < k; ++i) {
@@ -264,5 +276,5 @@ void TRexSPCA::adjustExplainedVariance(
 
 
 // ==============================================================================
-} /* namespace trex::trex_selector_methods::trex_spca */
+} /* End of namespace trex::trex_selector_methods::trex_spca */
 // ==============================================================================

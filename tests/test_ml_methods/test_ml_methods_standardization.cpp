@@ -11,15 +11,15 @@
 #include <sstream>
 #include <cereal/archives/portable_binary.hpp>
 
-#include <ml_methods/standardization/z_score_scaler.hpp>
-#include <ml_methods/standardization/lp_norm_scaler.hpp>
+#include <ml_methods/scaler_methods/z_score_scaler.hpp>
+#include <ml_methods/scaler_methods/lp_norm_scaler.hpp>
 
 // ========================================================================================
 
 // Embed into test namespace
-namespace trex::test::ml_methods::standardization {
+namespace trex::test::ml_methods::scaler_methods {
 
-using namespace trex::ml_methods::standardization;
+using namespace trex::ml_methods::scaler_methods;
 
 // ========================================================================================
 // ZScoreScaler Tests
@@ -282,4 +282,4 @@ TEST(StandardizationTest, LpNormScalerSerialization) {
 }
 
 // ========================================================================================
-} /* End of namespace trex::test::ml_methods::standardization */
+} /* End of namespace trex::test::ml_methods::scaler_methods */
