@@ -7,26 +7,29 @@
  * @brief Abstract base class as template for data normalization and transformation.
  */
 // ===================================================================================
-
 #ifndef ML_METHODS_STANDARDIZATION_DATA_TRANSFORMER_HPP
 #define ML_METHODS_STANDARDIZATION_DATA_TRANSFORMER_HPP
-
 // ===================================================================================
 
+// std includes
 #include <string>
 #include <vector>
 
+// Eigen includes
 #include <Eigen/Dense>
 
+// Cereal serialization includes
 #include <cereal/archives/portable_binary.hpp>
 #include <cereal/types/vector.hpp>
 #include <cereal/types/string.hpp>
 #include <cereal/types/polymorphic.hpp>
 
+// utils includes
 #include <utils/serialization/utils_cereal_eigen.hpp>
 
 // ===================================================================================
 
+// Namespace embedding: trex::ml_methods::standardization
 namespace trex {
 namespace ml_methods {
 namespace standardization {
@@ -179,9 +182,8 @@ protected:
 };
 
 // ===================================================================================
-
 } /* End of namespace standardization */
 } /* End of namespace ml_methods */
 } /* End of namespace trex */
-
-#endif /* ML_METHODS_STANDARDIZATION_DATA_TRANSFORMER_HPP */
+// ===================================================================================
+#endif /* End of ML_METHODS_STANDARDIZATION_DATA_TRANSFORMER_HPP */
