@@ -16,6 +16,7 @@
 #include <tsolvers/linear_model/lars_based/tstepwise_solver.hpp>
 #include <tsolvers/linear_model/lars_based/tstagewise_solver.hpp>
 #include <tsolvers/linear_model/lars_based/tenet_solver.hpp>
+#include <tsolvers/linear_model/lars_based/tenet_aug_solver.hpp>
 
 // ====================================================================
 #endif /* TSOLVERS_LINEAR_MODEL_LARS_BASED_HPP */
