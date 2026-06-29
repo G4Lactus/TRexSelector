@@ -18,6 +18,8 @@
 // ===================================================================================
 
 // std includes
+#include <algorithm>
+#include <cmath>
 #include <random>
 
 // Eigen includes
@@ -51,8 +53,9 @@ namespace trex::ml_methods::clustering::hierarchical::agglomerative {
 enum class DistanceMetric {
     Euclidean,       /* Exact: ||x - y||^2, squared Euclidean distance. Required for Ward,
                         Centroid, Median. (Equivalent to SciPy's metric='sqeuclidean') */
-    Correlation,     /* Exact: 1 - |corr(x_i, x_j)|. Assumes data is centered and L2 normalized.
-                        Safe for all topologies.*/
+    Correlation,     /* Exact: 1 - |corr(x_i, x_j)|, with corr normalized by column norms.
+                        Requires centered data; scale-invariant (works for unit-L2 OR z-scored
+                        columns). Safe for all topologies.*/
     Manhattan,       /* Exact L1 norm ||x - y||_1. Manhattan distance is sum of absolute
                         differences. */
     Correlation_LSH_Filter, /* Locality-Sensitive Hashing: approximation for correlation distance,
@@ -115,15 +118,22 @@ public:
         Eigen::Index p = data_.cols();
         Eigen::Index limit = (precompute_limit == -1) ? p : precompute_limit;
 
-        if constexpr (SelectedMetric == DistanceMetric::Euclidean) {
+        // Precompute squared column norms for metrics that need them.
+        // Correlation normalizes the dot product by these norms (true Pearson),
+        // making the distance scale-invariant; Correlation_LSH_Filter reuses them
+        // for its exact recheck after the Hamming gate.
+        if constexpr (SelectedMetric == DistanceMetric::Euclidean ||
+                      SelectedMetric == DistanceMetric::Correlation ||
+                      SelectedMetric == DistanceMetric::Correlation_LSH_Filter) {
             sq_norms_.resize(p);
             #pragma omp parallel for schedule(static)
             for (Eigen::Index j = 0; j < limit; ++j) {
                 sq_norms_(j) = data_.col(j).squaredNorm();
             }
         }
-        else if constexpr (SelectedMetric == DistanceMetric::Correlation_LSH_Filter ||
-                           SelectedMetric == DistanceMetric::Correlation_LSH_Approx) {
+
+        if constexpr (SelectedMetric == DistanceMetric::Correlation_LSH_Filter ||
+                      SelectedMetric == DistanceMetric::Correlation_LSH_Approx) {
             lsh_signatures_.resize(p, 0);
             random_planes_.resize(n, 64);
             std::mt19937 rng(42);
@@ -149,11 +159,14 @@ public:
      * @param i The index of the column to update.
      */
     void update_node(Eigen::Index i) {
-        if constexpr (SelectedMetric == DistanceMetric::Euclidean) {
+        if constexpr (SelectedMetric == DistanceMetric::Euclidean ||
+                      SelectedMetric == DistanceMetric::Correlation ||
+                      SelectedMetric == DistanceMetric::Correlation_LSH_Filter) {
             sq_norms_(i) = data_.col(i).squaredNorm();
         }
-        else if constexpr (SelectedMetric == DistanceMetric::Correlation_LSH_Filter ||
-                           SelectedMetric == DistanceMetric::Correlation_LSH_Approx) {
+
+        if constexpr (SelectedMetric == DistanceMetric::Correlation_LSH_Filter ||
+                      SelectedMetric == DistanceMetric::Correlation_LSH_Approx) {
             uint64_t signature = 0;
             Eigen::Matrix<RealScalar, 1, 64> projections =
                 data_.col(i).transpose() * random_planes_;
@@ -202,10 +215,17 @@ public:
             return dist > 0.0 ? dist : 0.0;
         }
 
-        // Exact Correlation distance (1 - |corr|) requires centered and normalized data
+        // Exact Correlation distance (1 - |corr|). Normalizes the dot product by the
+        // column norms => true Pearson correlation on centered data, independent of
+        // the column scale (unit-L2 or z-scored). A zero-norm (constant) column is
+        // treated as maximally dissimilar.
         else if constexpr (SelectedMetric == DistanceMetric::Correlation) {
-            Scalar dot_val = data_.col(i).dot(data_.col(j));
-            return RealScalar(1.0) - std::abs(dot_val);
+            const RealScalar denom = std::sqrt(sq_norms_(i) * sq_norms_(j));
+            if (denom <= RealScalar(0.0)) { return RealScalar(1.0); }
+            const Scalar dot_val = data_.col(i).dot(data_.col(j));
+            const RealScalar corr =
+                std::min(std::abs(dot_val) / denom, RealScalar(1.0));
+            return RealScalar(1.0) - corr;
         }
 
         // Correlation LSH Gatekeeper Filter with fixed Hamming threshold
@@ -213,8 +233,12 @@ public:
             const int HAMMING_THRESHOLD = 14;
             int bit_diff = __builtin_popcountll(lsh_signatures_[i] ^ lsh_signatures_[j]);
             if (bit_diff <= HAMMING_THRESHOLD) {
-                Scalar dot_val = data_.col(i).dot(data_.col(j));
-                return RealScalar(1.0) - std::abs(dot_val);
+                const RealScalar denom = std::sqrt(sq_norms_(i) * sq_norms_(j));
+                if (denom <= RealScalar(0.0)) { return RealScalar(1.0); }
+                const Scalar dot_val = data_.col(i).dot(data_.col(j));
+                const RealScalar corr =
+                    std::min(std::abs(dot_val) / denom, RealScalar(1.0));
+                return RealScalar(1.0) - corr;
             } else {
                 return 1.0;
             }
