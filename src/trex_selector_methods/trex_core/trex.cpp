@@ -4,7 +4,7 @@
 /**
  * @file trex.cpp
  *
- * @brief Implementation of TRexSelector variable selection algorithm.
+ * @brief Implementation of core TRexSelector variable selection algorithm.
  */
 // ===================================================================================
 
@@ -99,7 +99,8 @@ TRexSelector::TRexSelector(
     eps_ = (trex_ctrl_.solver_params.tol > 0.0) ?
             trex_ctrl_.solver_params.tol : std::numeric_limits<double>::epsilon();
     dn::centerY(y_, norm_params_);
-    dn::centerAndL2NormalizeX(*X_, norm_params_, eps_, verbose_, trex_ctrl_.scaling_mode);
+    dn::centerAndL2NormalizeX(*X_, norm_params_, eps_,
+                             verbose_, trex_ctrl_.scaling_mode);
     X_is_normalized_ = true;
 
     // 3. Initialize memory-mapped D manager (if requested)
