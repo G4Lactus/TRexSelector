@@ -834,6 +834,7 @@ void TRexSelector::runLLoopCalibration_SKIPL(
                                  er::ExperimentStrategy::Standard,
                                  /*seed_factor=*/trex_ctrl_.max_dummy_multiplier,
                                  /*existing_on_disk=*/0);
+    lloop_last_Phi_ = view.Phi;
     exp_results = std::move(view.exp_results);
     FDP_hat     = std::move(view.FDP_hat);
 
@@ -868,6 +869,7 @@ void TRexSelector::runLLoopCalibration(
         StepView view = evaluateStep(num_dummies_, T_stop_,
                                      /*use_warm_start=*/false,
                                      ctx.strategy, seed_factor, existing_on_disk);
+        lloop_last_Phi_ = view.Phi;
         exp_results = std::move(view.exp_results);
         FDP_hat     = std::move(view.FDP_hat);
 
@@ -1083,7 +1085,7 @@ void TRexSelector::runTLoop(
     // exists even when the while-guard rejects the first check.
     StepView seed;
     seed.exp_results = exp_results;
-    seed.Phi         = exp_results.Phi;
+    seed.Phi         = lloop_last_Phi_;
     seed.FDP_hat     = FDP_hat;
     appendTRow(0, seed);
     Eigen::Index row_idx = 1;
@@ -1098,7 +1100,7 @@ void TRexSelector::runTLoop(
         const double v_star = (v_star_idx < v_len) ? voting_grid_(v_star_idx) : 0.0;
         if (v_star > eps_) {
             prev_num_selected =
-                static_cast<std::size_t>((exp_results.Phi.array() > v_star).count());
+                static_cast<std::size_t>((lloop_last_Phi_.array() > v_star).count());
         }
     }
 

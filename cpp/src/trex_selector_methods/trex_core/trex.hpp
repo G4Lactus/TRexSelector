@@ -315,6 +315,15 @@ protected:
     /** @brief Optimization point for dummy calibration. */
     std::size_t opt_point_;
 
+    /** @brief Deflated Phi (length p) from the last L-loop `evaluateStep`.
+     *
+     *  Captured at the end of the L-loop so that the T-loop seed row (T = 1)
+     *  carries the *deflated* Phi rather than the raw experiment Phi. For the
+     *  base (non-deflating) selector this equals `exp_results.Phi`; for
+     *  dependency-aware variants it is the deflated calibration-level Phi,
+     *  mirroring R's `Phi_mat <- matrix(Phi, nrow = 1)` seed. */
+    Eigen::VectorXd lloop_last_Phi_;
+
     /** @brief Current dummy multiplier in L-loop. */
     std::size_t dummy_multiplier_LL_{0};
 
