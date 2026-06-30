@@ -283,7 +283,7 @@ struct TRexGVSControlParameter {
      *            (enet_cv_ccd, alpha=0) with glmnet's fdev/devmax path early
      *            stopping. Default: CV_1SE_CCD.
      */
-    LambdaSelectionMethod lambda2_method = LambdaSelectionMethod:: CV_1SE_CCD;
+    LambdaSelectionMethod lambda2_method = LambdaSelectionMethod::CV_1SE_CCD;
 
     /** @brief Number of folds for k-fold cross-validation used by the
      *  `lambda2_method` CV paths. Default: 10 (matches R's `cv.glmnet`).
