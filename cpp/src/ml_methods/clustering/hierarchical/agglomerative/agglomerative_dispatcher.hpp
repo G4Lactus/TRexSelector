@@ -63,7 +63,8 @@ public:
      * @return std::vector<MergeStep> The standard, chronologically sorted merge matrix.
      */
     template <typename MatrixType, typename DistancePolicyType, LinkageMethod Method>
-    static std::vector<MergeStep> cluster(const MatrixType& data, bool use_mmap = false) {
+    static std::vector<MergeStep> cluster(const MatrixType& data, bool use_mmap = false,
+                                          bool verbose = true) {
 
         Eigen::Index num_objs = data.cols();
 
@@ -92,7 +93,7 @@ public:
                 // the Lance-Williams UPGMA formula and violates reducibility, causing NNChain
                 // cycles for non-perfectly-separated data.
                 using Policy = ProjectedGeometricUpdatePolicy<MatrixType, DistancePolicyType, Method>;
-                NNChain<MatrixType, Policy> nnchain(data, use_mmap);
+                NNChain<MatrixType, Policy> nnchain(data, use_mmap, verbose);
                 nnchain.cluster();
                 return DendrogramUtils::format_nnchain_merges(nnchain.get_merges(), num_objs);
             }
@@ -100,7 +101,7 @@ public:
                 // Average (all metrics), or Ward with non-LSH_Approx metrics:
                 // use the exact Lance-Williams Matrix Engine.
                 using Policy = BlockTiledMatrixPolicy<MatrixType, DistancePolicyType, Method>;
-                NNChain<MatrixType, Policy> nnchain(data, use_mmap);
+                NNChain<MatrixType, Policy> nnchain(data, use_mmap, verbose);
                 nnchain.cluster();
                 return DendrogramUtils::format_nnchain_merges(nnchain.get_merges(), num_objs);
             }
@@ -116,7 +117,7 @@ public:
             using Policy = BlockTiledMatrixPolicy<MatrixType, DistancePolicyType, Method>;
 
             // Pass the use_mmap flag down through NNChain into the BlockTiled constructor
-            NNChain<MatrixType, Policy> nnchain(data, use_mmap);
+            NNChain<MatrixType, Policy> nnchain(data, use_mmap, verbose);
             nnchain.cluster();
             return DendrogramUtils::format_nnchain_merges(nnchain.get_merges(),
                                                             num_objs);
@@ -125,7 +126,7 @@ public:
         else if constexpr (Method == LinkageMethod::Centroid || Method == LinkageMethod::Median) {
             // Non-reducible methods MUST use the O(1) Matrix Policy to survive GenericLinkage
             using Policy = BlockTiledMatrixPolicy<MatrixType, DistancePolicyType, Method>;
-            GenericLinkage<MatrixType, Policy> generic_linkage(data, use_mmap);
+            GenericLinkage<MatrixType, Policy> generic_linkage(data, use_mmap, verbose);
             generic_linkage.cluster();
             return DendrogramUtils::format_nnchain_merges(generic_linkage.get_merges(),
                                                           num_objs);

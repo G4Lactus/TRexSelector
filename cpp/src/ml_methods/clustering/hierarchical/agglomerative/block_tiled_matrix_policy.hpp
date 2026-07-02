@@ -192,8 +192,9 @@ public:
      *
      * @param data The input data matrix (columns are objects to cluster).
      * @param use_mmap If true, the distance matrix is stored on disk using memory mapping.
+     * @param verbose If true, emit backend-allocation log messages (default: true).
      */
-    BlockTiledMatrixPolicy(const MatrixType& data, bool use_mmap = false)
+    BlockTiledMatrixPolicy(const MatrixType& data, bool use_mmap = false, bool verbose = true)
         : use_mmap_(use_mmap), dist_policy_(data)
     {
         namespace fs = std::filesystem;
@@ -236,15 +237,19 @@ public:
                 fs::remove(temp_filepath_, ec);
                 throw std::runtime_error(std::string("Boost mmap failed: ") + e.what());
             }
-            TREX_INFO( "  -> [Backend] Mmap allocated " << (file_size_bytes / (1ULL << 30))
-                                                        << " GB on NVMe.\n");
+            if (verbose) {
+                TREX_INFO( "  -> [Backend] Mmap allocated " << (file_size_bytes / (1ULL << 30))
+                                                            << " GB on NVMe.\n");
+            }
         }
         else {
             // Use physical RAM
             ram_backend_.assign(total_elements, 0.0);
             data_ptr_ = ram_backend_.data();
-            TREX_INFO( "  -> [Backend] RAM allocated "
-                << (total_elements * sizeof(RealScalar) / (1ULL << 20)) << " MB.\n");
+            if (verbose) {
+                TREX_INFO( "  -> [Backend] RAM allocated "
+                    << (total_elements * sizeof(RealScalar) / (1ULL << 20)) << " MB.\n");
+            }
         }
 
         id_to_idx_.assign(num_original_ * 2 - 1, -1);

@@ -91,7 +91,8 @@ public:
     /**
      * @brief Constructor. Reads the massive dataset once, projects it to 64D, and stores in RAM.
      */
-    ProjectedGeometricUpdatePolicy(const MatrixType& data, bool /*use_mmap*/ = false)
+    ProjectedGeometricUpdatePolicy(const MatrixType& data, bool /*use_mmap*/ = false,
+                                   bool verbose = true)
         : num_original_(data.cols())
     {
         Eigen::Index N = data.rows();
@@ -113,8 +114,10 @@ public:
             }
         }
 
-        TREX_INFO( "  -> [Backend] Projecting data to 64D ("
-                  << (64 * num_original_ * sizeof(RealScalar) / (1024*1024)) << " MB RAM)..." );
+        if (verbose) {
+            TREX_INFO( "  -> [Backend] Projecting data to 64D ("
+                      << (64 * num_original_ * sizeof(RealScalar) / (1024*1024)) << " MB RAM)..." );
+        }
 
         // 2. Compress the dataset in cache-friendly chunks (avoids RAM spikes)
         const Eigen::Index chunk_size = 5000;
