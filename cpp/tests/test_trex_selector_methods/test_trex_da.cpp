@@ -27,6 +27,7 @@ namespace trex::test::trex_selector_methods::trex_da {
 using namespace trex::trex_selector_methods::trex_da;
 using namespace trex::trex_selector_methods::trex_core;
 using namespace trex::utils::datageneration::datagen;
+namespace dn = trex::trex_selector_methods::utils::data_normalizer;
 
 // ========================================================================================
 
@@ -110,6 +111,73 @@ TEST(TRexDATest, Method_NN_LowDimensional) {
 /** @brief Test TRexDASelector with EQUI method in low-dimensional setting */
 TEST(TRexDATest, Method_EQUI_LowDimensional) {
     run_trex_da_test(300, 100, DAMethod::EQUI);
+}
+
+
+// ========================================================================================
+// Scaling-mode parity
+// ========================================================================================
+
+/**
+ * @brief Runs TRexDASelector under a given scaling mode and returns the
+ *        selected-variable indicator vector.
+ *
+ * The DA correlation estimators for NN (pairwise Pearson correlation) and EQUI
+ * (mean off-diagonal correlation from unit-norm columns) are normalization-
+ * agnostic, so L2 and ZSCORE scaling must yield bit-identical selections.
+ */
+Eigen::VectorXi run_trex_da_select(Eigen::Index n,
+                                   Eigen::Index p,
+                                   DAMethod method,
+                                   dn::ScalingMode scaling_mode)
+{
+    std::vector<std::size_t> support = {1, 2, 3};
+    std::vector<double> coefs = {5.0, -3.0, 2.0};
+
+    SyntheticData data(n, p, support, coefs, 1.0, 42);
+
+    auto X = data.getX();
+    auto y = data.getY();
+
+    Eigen::Map<Eigen::MatrixXd> X_map(X.data(), X.rows(), X.cols());
+    Eigen::Map<Eigen::VectorXd> y_map(y.data(), y.size());
+
+    TRexControlParameter trex_ctrl;
+    trex_ctrl.K = 3;
+    trex_ctrl.max_dummy_multiplier = 2;
+    trex_ctrl.scaling_mode = scaling_mode;
+
+    TRexDAControlParameter da_ctrl;
+    da_ctrl.method = method;
+
+    TRexDASelector trex(X_map, y_map, 0.1, da_ctrl, trex_ctrl, 42, false);
+    trex.select();
+
+    return trex.getDAResult().selected_var;
+}
+
+/** @brief DA-NN selections must be identical under L2 and ZSCORE scaling. */
+TEST(TRexDATest, Method_NN_ScalingModeParity) {
+    Eigen::VectorXi sel_l2 =
+        run_trex_da_select(300, 100, DAMethod::NN, dn::ScalingMode::L2);
+    Eigen::VectorXi sel_zscore =
+        run_trex_da_select(300, 100, DAMethod::NN, dn::ScalingMode::ZSCORE);
+
+    ASSERT_EQ(sel_l2.size(), sel_zscore.size());
+    EXPECT_TRUE((sel_l2.array() == sel_zscore.array()).all())
+        << "L2 and ZSCORE scaling produced different DA-NN selections.";
+}
+
+/** @brief DA-EQUI selections must be identical under L2 and ZSCORE scaling. */
+TEST(TRexDATest, Method_EQUI_ScalingModeParity) {
+    Eigen::VectorXi sel_l2 =
+        run_trex_da_select(300, 100, DAMethod::EQUI, dn::ScalingMode::L2);
+    Eigen::VectorXi sel_zscore =
+        run_trex_da_select(300, 100, DAMethod::EQUI, dn::ScalingMode::ZSCORE);
+
+    ASSERT_EQ(sel_l2.size(), sel_zscore.size());
+    EXPECT_TRUE((sel_l2.array() == sel_zscore.array()).all())
+        << "L2 and ZSCORE scaling produced different DA-EQUI selections.";
 }
 
 
