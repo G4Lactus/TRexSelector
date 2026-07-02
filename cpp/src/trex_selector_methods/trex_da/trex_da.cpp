@@ -550,7 +550,7 @@ void TRexDASelector::setupDA_NN() {
     da_setup_.kap = 0;
 
     // Build gr_j_list pair-wise: for each ordered pair (j, k) with j < k,
-    // compute the correlation as X.col(j).dot(X.col(k)) (X is L2-normalised),
+    // compute the true Pearson correlation |<x_j, x_k>| / (||x_j|| ||x_k||),
     // then for every rho level r where |cor| >= rho_grid(r) record the
     // symmetric neighbour relation.
     //
@@ -559,9 +559,23 @@ void TRexDASelector::setupDA_NN() {
     da_setup_.gr_j_list.assign(
         p_, std::vector<std::vector<Eigen::Index>>(grid_len));
 
+    // Precompute per-column inverse norms so the pairwise correlation is a true
+    // Pearson correlation independent of the scaling mode. X is already centered
+    // by the base normalizer; under ScalingMode::L2 the norms are ~1 (this
+    // reduces to the raw dot product), while under ScalingMode::ZSCORE the
+    // columns carry a common sqrt(n-1) scale that must be divided out. A
+    // near-zero norm (constant column) yields inv_norm = 0 so it has no
+    // neighbours at any positive rho threshold.
+    const Eigen::VectorXd col_norms = X_->colwise().norm();
+    Eigen::VectorXd inv_norms(p);
+    for (Eigen::Index j = 0; j < p; ++j) {
+        inv_norms(j) = (col_norms(j) > eps_) ? (1.0 / col_norms(j)) : 0.0;
+    }
+
     for (Eigen::Index j = 0; j < p; ++j) {
         for (Eigen::Index k = j + 1; k < p; ++k) {
-            const double abs_cor = std::abs(X_->col(j).dot(X_->col(k)));
+            const double abs_cor =
+                std::abs(X_->col(j).dot(X_->col(k))) * inv_norms(j) * inv_norms(k);
             for (std::size_t r = 0; r < grid_len; ++r) {
                 const double rho_threshold =
                     da_setup_.rho_grid(static_cast<Eigen::Index>(r));
@@ -649,6 +663,14 @@ double TRexDASelector::estimateAR1Correlation() const {
     // --------------------
     // ρ̂_i = Σ_{t=0}^{p-2} x_{i, t} * x_{i, t + 1} / Σ_{t=0}^{p-1} x_{i, t}^2
     // (X is already centered)
+    //
+    // Scaling-mode note: this estimator is only *approximately* invariant to the
+    // per-column scaling. Each column t carries its own scale factor s_t, so the
+    // ratio above cancels it exactly only when the factors are (near) constant
+    // across the lag — which holds for the stationary AR(1) design this method
+    // targets (all columns share ~equal variance/norm). It is therefore left
+    // unnormalized on purpose; do NOT "fix" it by dividing per-column without
+    // re-validating the AR1 FDR/TPR numbers.
 
     const auto n = static_cast<Eigen::Index>(n_);
     const auto p = static_cast<Eigen::Index>(p_);
@@ -678,18 +700,28 @@ double TRexDASelector::estimateAR1Correlation() const {
 // ===================================================================================
 
 double TRexDASelector::estimateEquiCorrelation() const {
-    // Mean of off-diagonal correlation matrix elements.
-    // Since X is centered and L2-normalized: cor_mat = X^T * X
-    // Efficient computation via row sums: Σ_all = ||row_sums||²
+    // Mean of the off-diagonal entries of the Pearson correlation matrix.
+    //
+    // Let u_j = x_j / ||x_j|| be the unit-norm version of each (already
+    // centered) column. Then corr_jk = u_j · u_k, the full sum of the
+    // correlation matrix equals || Σ_j u_j ||², and its diagonal is exactly p
+    // (u_j · u_j = 1). This holds regardless of the scaling mode: under
+    // ScalingMode::L2 the columns are already unit-norm, while under
+    // ScalingMode::ZSCORE the common sqrt(n-1) scale is divided out here.
 
     const auto p = static_cast<Eigen::Index>(p_);
 
-    // Compute row sums of X
-    Eigen::VectorXd row_sums = X_->rowwise().sum();
-    double sum_all = row_sums.squaredNorm();
+    // Accumulate the row sums of the unit-norm columns: Σ_j x_j / ||x_j||.
+    Eigen::VectorXd row_sums = Eigen::VectorXd::Zero(X_->rows());
+    for (Eigen::Index j = 0; j < p; ++j) {
+        const double norm_j = X_->col(j).norm();
+        if (norm_j > eps_) {
+            row_sums += X_->col(j) / norm_j;
+        }
+    }
+    const double sum_all = row_sums.squaredNorm();
 
-    // Mean off-diagonal = (sum_all - p) / (p * (p - 1))
-    // Diagonal of X^T*X = 1.0 per column (L2-normalized), so diagonal sum = p
+    // Mean off-diagonal = (Σ_all - diag_sum) / (p * (p - 1)), diag_sum = p.
     return (sum_all - static_cast<double>(p)) /
            (static_cast<double>(p) * (static_cast<double>(p) - 1.0));
 }
@@ -924,15 +956,12 @@ TRexDASelector::DASelectionResult TRexDASelector::selectVariables_BT(
 
     // Number of T rows to use (remove last if T_stop > 1, matching R convention)
     std::size_t n_T = (T_stop > 1) ? (T_stop - 1) : T_stop;
-    // Ensure we don't exceed actual rows
+    // don't exceed actual rows
     if (!FDP_hat_array_BT.empty()) {
         n_T = std::min(n_T, static_cast<std::size_t>(FDP_hat_array_BT[0].rows()));
     }
 
-    // Build R_array (counts of variables with Phi > V) and find the FDP-
-    // feasible argmax. Tie-breaking matches the base-class
-    // selectedVariables(): iterate VV outer, TT inner, with an unconditional
-    // `>=` update so the largest VV (then TT, then r) wins on ties.
+    // Build R_array (counts of variables with Phi > V).
     std::vector<Eigen::MatrixXd> R_array(rho_grid_len);
     for (std::size_t r = 0; r < rho_grid_len; ++r) {
         R_array[r] = Eigen::MatrixXd::Zero(
@@ -945,18 +974,28 @@ TRexDASelector::DASelectionResult TRexDASelector::selectVariables_BT(
         }
     }
 
+    // Argmax selection — according to R's select_var_fun_DA_BT:
+    //   1. val_max = max of R over FDP-FEASIBLE cells (FDP_hat <= tFDR).
+    //
+    //   2. Candidate set = ALL cells (feasible OR infeasible) whose R count
+    //      equals val_max. Scanning infeasible cells follows the reference
+    //      (which(R_array == val_max) is evaluated over the whole array,
+    //      while val_max itself is restricted to the feasible region).
+    //
+    //   3. Tie-break among candidates: max VV, then max RR (rho), then max TT
+    //      ("largest voting grid).
+
+    // Step 1: val_max over feasible cells only.
     double val_max = -1.0;
-    Eigen::Index best_TT = 0, best_VV = 0;
-    std::size_t best_RR = 0;
-    for (Eigen::Index VV = 0; VV < v_len; ++VV) {
+    bool any_feasible = false;
+    for (std::size_t r = 0; r < rho_grid_len; ++r) {
         for (Eigen::Index TT = 0; TT < static_cast<Eigen::Index>(n_T); ++TT) {
-            for (std::size_t r = 0; r < rho_grid_len; ++r) {
-                if (FDP_hat_array_BT[r](TT, VV) <= tFDR_ &&
-                    R_array[r](TT, VV) >= val_max) {
-                    val_max = R_array[r](TT, VV);
-                    best_TT = TT;
-                    best_VV = VV;
-                    best_RR = r;
+            for (Eigen::Index VV = 0; VV < v_len; ++VV) {
+                if (FDP_hat_array_BT[r](TT, VV) <= tFDR_) {
+                    any_feasible = true;
+                    if (R_array[r](TT, VV) > val_max) {
+                        val_max = R_array[r](TT, VV);
+                    }
                 }
             }
         }
@@ -965,15 +1004,39 @@ TRexDASelector::DASelectionResult TRexDASelector::selectVariables_BT(
     DASelectionResult result;
     result.R_array_BT = R_array;
 
-    if (val_max < 0.0) {
-        // No valid selection found
+    if (!any_feasible) {
+        // No FDP-feasible cell exists -> no selection.
         result.selected_var = Eigen::VectorXi::Zero(p);
         result.v_thresh = 1.0;
         result.rho_thresh = tc::AUTO_ESTIMATE_CORRELATION;
         return result;
     }
 
-    // Select variables
+    // Steps 2-3: scan the R_array for cells equal to val_max and pick
+    // the winner by lexicographic priority (max VV, then max RR, then max TT).
+    bool found = false;
+    Eigen::Index best_TT = 0, best_VV = -1;
+    std::size_t best_RR = 0;
+    for (std::size_t r = 0; r < rho_grid_len; ++r) {
+        for (Eigen::Index TT = 0; TT < static_cast<Eigen::Index>(n_T); ++TT) {
+            for (Eigen::Index VV = 0; VV < v_len; ++VV) {
+                if (R_array[r](TT, VV) != val_max) {
+                    continue;
+                }
+                if (!found ||
+                    VV > best_VV ||
+                    (VV == best_VV && r > best_RR) ||
+                    (VV == best_VV && r == best_RR && TT > best_TT)) {
+                    best_VV = VV;
+                    best_RR = r;
+                    best_TT = TT;
+                    found = true;
+                }
+            }
+        }
+    }
+
+    // Select variables & compile results
     double best_threshold = voting_grid(best_VV);
     result.selected_var = Eigen::VectorXi::Zero(p);
     for (Eigen::Index j = 0; j < p; ++j) {
@@ -984,7 +1047,8 @@ TRexDASelector::DASelectionResult TRexDASelector::selectVariables_BT(
 
     result.v_thresh = best_threshold;
     result.rho_thresh = rho_grid(static_cast<Eigen::Index>(best_RR));
-    result.R_mat = R_array[best_RR];  // populate base R_mat with selected rho level
+    // populate base R_mat with selected rho level
+    result.R_mat = R_array[best_RR];
 
     return result;
 }
