@@ -538,15 +538,24 @@ double ScreenTRexSelector::estimateAR1Correlation() const {
 
 double ScreenTRexSelector::estimateEquiCorrelation() const {
     /*
-        For L2-normalized columns: Var(row_sums) = p + p(p-1)ρ̄
-            → ρ̄ = (‖row_sums‖² − p) / (p(p−1))
+        Let u_j = x_j / ‖x_j‖ be the unit-norm version of each (already
+        centered) column. Then corr_jk = u_j · u_k, the full sum of the
+        correlation matrix equals ‖Σ_j u_j‖², and its diagonal is exactly p
+        (u_j · u_j = 1). This holds regardless of the scaling mode: under
+        ScalingMode::L2 the columns are already unit-norm, while under
+        ScalingMode::ZSCORE the common sqrt(n-1) scale is divided out here
+        (matches TRexDASelector::estimateEquiCorrelation).
+            → ρ̄ = (‖Σ_j u_j‖² − p) / (p(p−1))
         Sequential column access — cache-friendly for memory-mapped X.
     */
     Eigen::VectorXd row_sums =
         Eigen::VectorXd::Zero(static_cast<Eigen::Index>(n_));
 
     for (std::size_t j = 0; j < p_; ++j) {
-        row_sums.noalias() += X_->col(static_cast<Eigen::Index>(j));
+        const double norm_j = X_->col(static_cast<Eigen::Index>(j)).norm();
+        if (norm_j > eps_) {
+            row_sums.noalias() += X_->col(static_cast<Eigen::Index>(j)) / norm_j;
+        }
     }
 
     const double sum_sq    = row_sums.squaredNorm();
@@ -653,8 +662,9 @@ double ScreenTRexSelector::estimateBlockEquiCorrelation() const {
     /*
         Average within-block equi-correlation.
         Partition p columns into n_blocks contiguous blocks.
-        For each block k of size b_k, compute:
-            row_sums_k = sum of X columns in block k
+        For each block k of size b_k, accumulate UNIT-NORM columns
+        u_j = x_j / ‖x_j‖ (scale-mode agnostic — see estimateEquiCorrelation):
+            row_sums_k = sum of u_j for j in block k
             rho_k = (||row_sums_k||^2 - b_k) / (b_k * (b_k - 1))
         Return weighted average: sum(b_k * rho_k) / p.
     */
@@ -675,7 +685,10 @@ double ScreenTRexSelector::estimateBlockEquiCorrelation() const {
         Eigen::VectorXd row_sums =
             Eigen::VectorXd::Zero(static_cast<Eigen::Index>(n_));
         for (std::size_t j = col_start; j < col_start + bk; ++j) {
-            row_sums.noalias() += X_->col(static_cast<Eigen::Index>(j));
+            const double norm_j = X_->col(static_cast<Eigen::Index>(j)).norm();
+            if (norm_j > eps_) {
+                row_sums.noalias() += X_->col(static_cast<Eigen::Index>(j)) / norm_j;
+            }
         }
 
         const double sum_sq = row_sums.squaredNorm();
