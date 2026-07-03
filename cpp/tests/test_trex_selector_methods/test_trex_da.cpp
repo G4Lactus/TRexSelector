@@ -181,6 +181,63 @@ TEST(TRexDATest, Method_EQUI_ScalingModeParity) {
 }
 
 
+/**
+ * @brief Runs a DA-BT selection under a given BT candidate-cell policy and
+ *        returns the selected-variable indicator vector.
+ */
+Eigen::VectorXi run_trex_da_bt_select(Eigen::Index n,
+                                      Eigen::Index p,
+                                      BTSelectionMode bt_mode)
+{
+    std::vector<std::size_t> support = {1, 2, 3};
+    std::vector<double> coefs = {5.0, -3.0, 2.0};
+
+    SyntheticData data(n, p, support, coefs, 1.0, 42);
+
+    auto X = data.getX();
+    auto y = data.getY();
+
+    Eigen::Map<Eigen::MatrixXd> X_map(X.data(), X.rows(), X.cols());
+    Eigen::Map<Eigen::VectorXd> y_map(y.data(), y.size());
+
+    TRexControlParameter trex_ctrl;
+    trex_ctrl.K = 3;
+    trex_ctrl.max_dummy_multiplier = 2;
+
+    TRexDAControlParameter da_ctrl;
+    da_ctrl.method            = DAMethod::BT;
+    da_ctrl.bt_selection_mode = bt_mode;
+
+    TRexDASelector trex(X_map, y_map, 0.1, da_ctrl, trex_ctrl, 42, false);
+    trex.select();
+
+    return trex.getDAResult().selected_var;
+}
+
+/** @brief DA-BT bt_selection_mode: FeasibleOnly is the default, and both policies
+ *  produce a valid binary indicator of length p. */
+TEST(TRexDATest, Method_BT_SelectionModeField) {
+    const Eigen::Index n = 150, p = 300;
+
+    // The default candidate policy must be the FDR-controlling FeasibleOnly.
+    TRexDAControlParameter da_default;
+    EXPECT_EQ(da_default.bt_selection_mode, BTSelectionMode::FeasibleOnly);
+
+    Eigen::VectorXi sel_feasible =
+        run_trex_da_bt_select(n, p, BTSelectionMode::FeasibleOnly);
+    Eigen::VectorXi sel_rfaithful =
+        run_trex_da_bt_select(n, p, BTSelectionMode::RFaithful);
+
+    // Both policies return a valid binary indicator of length p.
+    ASSERT_EQ(sel_feasible.size(), p);
+    ASSERT_EQ(sel_rfaithful.size(), p);
+    EXPECT_GE(sel_feasible.minCoeff(), 0);
+    EXPECT_LE(sel_feasible.maxCoeff(), 1);
+    EXPECT_GE(sel_rfaithful.minCoeff(), 0);
+    EXPECT_LE(sel_rfaithful.maxCoeff(), 1);
+}
+
+
 /** @brief Test TRexDASelector with AR1 method and SKIPL L loop strategy */
 TEST(TRexDATest, Method_AR1_SKIPL) {
     run_trex_da_test(150, 300, DAMethod::AR1, 3, LLoopStrategy::SKIPL);
