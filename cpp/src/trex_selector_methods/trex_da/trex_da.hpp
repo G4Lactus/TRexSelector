@@ -25,6 +25,14 @@
  *  - BT, NN, and PRIOR_GROUPS ("BT-style") perform 3D calibration over
  *    (T_stop, V, rho_grid);
  *  - AR1 and EQUI stay on the 2D (T_stop, V) grid of the base class.
+ *
+ * FDR limitation (BT-style): at very high-within-group correlation (rho >~ 0.9)
+ * and with no independent ("white") predictors, the equiangular TLARS solver
+ * can exceed the target FDR because the true signal and its
+ * collinear shadows become statistically exchangeable; this is inherent to the
+ * method (it also appears in the R reference). Mitigate with the default
+ * BTSelectionMode::FeasibleOnly and by preferring a greedy solver (TOMP) in
+ * high-correlation designs.
  */
 // ===================================================================================
 
@@ -77,6 +85,27 @@ enum class DAMethod {
     PRIOR_GROUPS
 };
 
+
+/**
+ * @brief Candidate-cell policy for BT-style variable selection.
+ *
+ * @details
+ *  In selectVariables_BT the winning selection count `val_max` is the largest
+ *  count over FDP-feasible cells (FDP_hat <= tFDR). This flag controls which
+ *  cells may then win the tie-break among those equal to `val_max`.
+ */
+enum class BTSelectionMode {
+    /** @brief Only FDP-feasible cells (FDP_hat <= tFDR) may be selected. This
+     *  controls the realized FDR and is the default. */
+    FeasibleOnly,
+
+    /** @brief Any cell whose count equals `val_max` may win, including
+     *  FDP-infeasible ones. Reproduces the R reference `select_var_fun_DA_BT`
+     *  (which scans the whole R_array), including its tendency to inflate the
+     *  realized FDR at high within-group correlation. */
+    RFaithful
+};
+
 // ===================================================================================
 // Control Parameters
 // ===================================================================================
@@ -113,8 +142,16 @@ struct TRexDAControlParameter {
     std::vector<std::vector<Eigen::Index>> prior_groups;
 
     /** @brief Optional semantic labels for each prior-group level (e.g. correlation thresholds).
-     *  Must have the same length as prior_groups. Defaults to 0, 1, 2, ... */
+     *  Must have the same length as prior_groups. Defaults to 0, 1, 2, ... .
+     */
     std::vector<double> rho_grid_labels;
+
+    /** @brief Candidate-cell policy for BT-style selection (default: FeasibleOnly).
+     *  FeasibleOnly restricts selection to FDP-feasible cells (FDR-controlling);
+     *  RFaithful reproduces the R reference by also admitting infeasible cells.
+     *  See BTSelectionMode.
+     */
+    BTSelectionMode bt_selection_mode = BTSelectionMode::FeasibleOnly;
 };
 
 // ===================================================================================

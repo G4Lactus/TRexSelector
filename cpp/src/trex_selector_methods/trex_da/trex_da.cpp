@@ -974,16 +974,13 @@ TRexDASelector::DASelectionResult TRexDASelector::selectVariables_BT(
         }
     }
 
-    // Argmax selection — according to R's select_var_fun_DA_BT:
+    // Argmax selection (cf. R's select_var_fun_DA_BT):
     //   1. val_max = max of R over FDP-FEASIBLE cells (FDP_hat <= tFDR).
-    //
-    //   2. Candidate set = ALL cells (feasible OR infeasible) whose R count
-    //      equals val_max. Scanning infeasible cells follows the reference
-    //      (which(R_array == val_max) is evaluated over the whole array,
-    //      while val_max itself is restricted to the feasible region).
-    //
-    //   3. Tie-break among candidates: max VV, then max RR (rho), then max TT
-    //      ("largest voting grid).
+    //   2. Candidate set among cells whose R count equals val_max — either
+    //      FDP-feasible only (default, FDR-controlling) or ALL cells including
+    //      infeasible ones (RFaithful, reproduces the reference which evaluates
+    //      which(R_array == val_max) over the whole array). See bt_selection_mode.
+    //   3. Tie-break among candidates: max VV, then max RR (rho), then max TT.
 
     // Step 1: val_max over feasible cells only.
     double val_max = -1.0;
@@ -1012,8 +1009,14 @@ TRexDASelector::DASelectionResult TRexDASelector::selectVariables_BT(
         return result;
     }
 
-    // Steps 2-3: scan the R_array for cells equal to val_max and pick
-    // the winner by lexicographic priority (max VV, then max RR, then max TT).
+    // Steps 2-3: scan the R_array for cells equal to val_max and pick the winner
+    // by tie-break priority max VV -> max RR (rho) -> max TT. Candidate eligibility
+    // depends on da_ctrl_.bt_selection_mode: FeasibleOnly (default) restricts to
+    // FDP-feasible cells (FDR-controlling); RFaithful also admits infeasible cells,
+    // reproducing the R reference (which scans the whole R_array).
+    const bool feasible_only =
+        (da_ctrl_.bt_selection_mode == BTSelectionMode::FeasibleOnly);
+
     bool found = false;
     Eigen::Index best_TT = 0, best_VV = -1;
     std::size_t best_RR = 0;
@@ -1021,6 +1024,10 @@ TRexDASelector::DASelectionResult TRexDASelector::selectVariables_BT(
         for (Eigen::Index TT = 0; TT < static_cast<Eigen::Index>(n_T); ++TT) {
             for (Eigen::Index VV = 0; VV < v_len; ++VV) {
                 if (R_array[r](TT, VV) != val_max) {
+                    continue;
+                }
+                if (feasible_only &&
+                    FDP_hat_array_BT[r](TT, VV) > tFDR_) {
                     continue;
                 }
                 if (!found ||
