@@ -575,7 +575,9 @@ void TRexDASelector::setupDA_NN() {
     for (Eigen::Index j = 0; j < p; ++j) {
         for (Eigen::Index k = j + 1; k < p; ++k) {
             const double abs_cor =
-                std::abs(X_->col(j).dot(X_->col(k))) * inv_norms(j) * inv_norms(k);
+                std::abs(X_->col(j).dot(X_->col(k))) *
+                           inv_norms(j) *
+                           inv_norms(k);
             for (std::size_t r = 0; r < grid_len; ++r) {
                 const double rho_threshold =
                     da_setup_.rho_grid(static_cast<Eigen::Index>(r));
@@ -664,9 +666,9 @@ double TRexDASelector::estimateAR1Correlation() const {
     // ρ̂_i = Σ_{t=0}^{p-2} x_{i, t} * x_{i, t + 1} / Σ_{t=0}^{p-1} x_{i, t}^2
     // (X is already centered)
     //
-    // Scaling-mode note: this estimator is only *approximately* invariant to the
-    // per-column scaling. Each column t carries its own scale factor s_t, so the
-    // ratio above cancels it exactly only when the factors are (near) constant
+    // A note on the Scaling-mode: this estimator is only *approximately* invariant
+    // to the per-column scaling. Each column t carries its own scale factor s_t,
+    // so the ratio above cancels it exactly only when the factors are (near) constant
     // across the lag — which holds for the stationary AR(1) design this method
     // targets (all columns share ~equal variance/norm). It is therefore left
     // unnormalized on purpose; do NOT "fix" it by dividing per-column without
@@ -738,19 +740,23 @@ std::vector<hac::MergeStep> TRexDASelector::runClustering() const {
     switch (da_ctrl_.hc_linkage) {
         case hac::LinkageMethod::Single:
             return hac::AgglomerativeClustering::cluster<
-                MapType, CorrDist, hac::LinkageMethod::Single>(*X_, false, verbose_);
+                MapType, CorrDist, hac::LinkageMethod::Single>(*X_,
+                    false, verbose_);
 
         case hac::LinkageMethod::Complete:
             return hac::AgglomerativeClustering::cluster<
-                MapType, CorrDist, hac::LinkageMethod::Complete>(*X_, false, verbose_);
+                MapType, CorrDist, hac::LinkageMethod::Complete>(*X_,
+                    false, verbose_);
 
         case hac::LinkageMethod::Average:
             return hac::AgglomerativeClustering::cluster<
-                MapType, CorrDist, hac::LinkageMethod::Average>(*X_, false, verbose_);
+                MapType, CorrDist, hac::LinkageMethod::Average>(*X_,
+                    false, verbose_);
 
         case hac::LinkageMethod::WPGMA:
             return hac::AgglomerativeClustering::cluster<
-                MapType, CorrDist, hac::LinkageMethod::WPGMA>(*X_, false, verbose_);
+                MapType, CorrDist, hac::LinkageMethod::WPGMA>(*X_,
+                    false, verbose_);
 
         default:
             throw std::invalid_argument("Unsupported linkage method for DA-BT.");
@@ -774,6 +780,7 @@ DACorrectionResult TRexDASelector::daCorrect(
     const auto p = static_cast<Eigen::Index>(p_);
     const auto T = static_cast<Eigen::Index>(T_stop);
     const std::size_t kap = da_setup_.kap;
+
 
     // ── AR1 ─────────────────────────────────────────────────────────────────
     if (da_ctrl_.method == DAMethod::AR1) {
@@ -812,6 +819,7 @@ DACorrectionResult TRexDASelector::daCorrect(
         }
     }
 
+
     // ── EQUI ────────────────────────────────────────────────────────────────
     else if (da_ctrl_.method == DAMethod::EQUI &&
              std::abs(da_setup_.cor_coef) > da_ctrl_.rho_thr_DA) {
@@ -844,6 +852,7 @@ DACorrectionResult TRexDASelector::daCorrect(
             }
         }
     }
+
 
     // ── BT-style (BT, NN, PRIOR_GROUPS) ─────────────────────────────────────
     if (da_setup_.use_BT_style) {
