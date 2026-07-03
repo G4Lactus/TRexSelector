@@ -69,6 +69,7 @@ Upper layers link lower layers via `target_link_libraries(... PUBLIC ...)` — t
 
 - Logistic model solvers (`tsolvers/logistic_model/`) are planned but not yet implemented.
 - See [notes/Issues_with_GVS_TRex.md](../notes/Issues_with_GVS_TRex.md) for known GVS variant issues.
+- **DA-BT high-correlation FDR limit:** with no independent ("white") predictors and very high within-group correlation (ρ≳0.9), T-Rex+DA+BT can exceed the target FDR under the equiangular TLARS solver — the true signal and its collinear shadows are statistically exchangeable (inherent; also present in the R reference). Mitigations: the default `BTSelectionMode::FeasibleOnly` and preferring a greedy solver (TOMP) for high-correlation designs.
 
 **Previously noted debt that has been resolved:**
 
