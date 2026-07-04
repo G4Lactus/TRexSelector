@@ -5,10 +5,7 @@
     "license": "GPL-3.0-only",
     "dependencies": [
         "eigen3",
-        {
-            "name": "boost-headers",
-            "version>=": "1.80.0"
-        },
+        "boost-headers",
         "cereal",
         {
             "name": "libomp",
