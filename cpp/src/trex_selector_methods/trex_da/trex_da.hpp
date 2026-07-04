@@ -152,6 +152,12 @@ struct TRexDAControlParameter {
      *  See BTSelectionMode.
      */
     BTSelectionMode bt_selection_mode = BTSelectionMode::FeasibleOnly;
+
+    /** @brief Base T-Rex algorithmic control parameters (nested).
+     *  DA imposes no restrictions on solver_type / lloop_strategy, so the
+     *  base class's own defaults are used as-is.
+     */
+    tc::TRexControlParameter trex_ctrl;
 };
 
 // ===================================================================================
@@ -278,8 +284,9 @@ public:
      * @param X             Feature matrix (n x p) — Eigen::Map, not copied.
      * @param y             Response vector (n x 1) — Eigen::Map, copied internally.
      * @param tFDR          Target FDR level (default: 0.1).
-     * @param da_control    DA-specific control parameters.
-     * @param trex_control  Base T-Rex algorithmic control parameters.
+     * @param trex_da_ctrl  DA-specific control parameters, nesting the base
+     *                      T-Rex algorithmic control parameters as
+     *                      `trex_da_ctrl.trex_ctrl`.
      * @param seed          Random seed (< 0 for non-deterministic).
      * @param verbose       Enable verbose output (default: true).
      */
@@ -287,8 +294,7 @@ public:
         Eigen::Map<Eigen::MatrixXd>& X,
         Eigen::Map<Eigen::VectorXd>& y,
         double tFDR = 0.1,
-        TRexDAControlParameter da_control  = TRexDAControlParameter(),
-        tc::TRexControlParameter trex_control = tc::TRexControlParameter(),
+        TRexDAControlParameter trex_da_ctrl = TRexDAControlParameter(),
         int  seed    = -1,
         bool verbose = true
     );
@@ -335,8 +341,8 @@ protected:
     // DA Data Members
     // ============================================================
 
-    /** @brief DA-specific control parameters. */
-    TRexDAControlParameter da_ctrl_;
+    /** @brief DA-specific control parameters (nests the base trex_ctrl). */
+    TRexDAControlParameter trex_da_ctrl_;
 
     /** @brief Precomputed neighborhood / correlation structure. */
     DASetupResult da_setup_;

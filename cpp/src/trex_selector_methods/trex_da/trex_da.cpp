@@ -39,22 +39,21 @@ TRexDASelector::TRexDASelector(
     Eigen::Map<Eigen::MatrixXd>& X,
     Eigen::Map<Eigen::VectorXd>& y,
     double tFDR,
-    TRexDAControlParameter da_control,
-    tc::TRexControlParameter trex_control,
+    TRexDAControlParameter trex_da_ctrl,
     int seed,
     bool verbose
 ) :
-    TRexSelector(X, y, tFDR, trex_control, seed, verbose),
-    da_ctrl_(std::move(da_control))
+    TRexSelector(X, y, tFDR, trex_da_ctrl.trex_ctrl, seed, verbose),
+    trex_da_ctrl_(std::move(trex_da_ctrl))
 {
     // Resolve hc_grid_length default
-    if (da_ctrl_.hc_grid_length == 0) {
-        da_ctrl_.hc_grid_length = std::min<std::size_t>(20, p_);
+    if (trex_da_ctrl_.hc_grid_length == 0) {
+        trex_da_ctrl_.hc_grid_length = std::min<std::size_t>(20, p_);
     }
 
     // Prior groups override method
-    if (!da_ctrl_.prior_groups.empty()) {
-        da_ctrl_.method = DAMethod::PRIOR_GROUPS;
+    if (!trex_da_ctrl_.prior_groups.empty()) {
+        trex_da_ctrl_.method = DAMethod::PRIOR_GROUPS;
     }
 
     validateDAParameters();
@@ -67,8 +66,8 @@ TRexDASelector::TRexDASelector(
 
 void TRexDASelector::validateDAParameters() const {
 
-    if (!da_ctrl_.prior_groups.empty()) {
-        for (const auto& level : da_ctrl_.prior_groups) {
+    if (!trex_da_ctrl_.prior_groups.empty()) {
+        for (const auto& level : trex_da_ctrl_.prior_groups) {
             if (level.size() != p_) {
                 throw std::invalid_argument(
                     "Each prior_groups level must have length p = " +
@@ -76,22 +75,22 @@ void TRexDASelector::validateDAParameters() const {
                     ". Got: " + std::to_string(level.size()));
             }
         }
-        if (!da_ctrl_.rho_grid_labels.empty() &&
-            da_ctrl_.rho_grid_labels.size() != da_ctrl_.prior_groups.size()) {
+        if (!trex_da_ctrl_.rho_grid_labels.empty() &&
+            trex_da_ctrl_.rho_grid_labels.size() != trex_da_ctrl_.prior_groups.size()) {
             throw std::invalid_argument(
                 "rho_grid_labels must have the same length as prior_groups.");
         }
     }
 
-    if (da_ctrl_.rho_thr_DA < 0.0 || da_ctrl_.rho_thr_DA > 1.0) {
+    if (trex_da_ctrl_.rho_thr_DA < 0.0 || trex_da_ctrl_.rho_thr_DA > 1.0) {
         throw std::invalid_argument(
             "rho_thr_DA must be in [0, 1]. Got: " +
-            std::to_string(da_ctrl_.rho_thr_DA));
+            std::to_string(trex_da_ctrl_.rho_thr_DA));
     }
 
     // Check linkage method is one of the supported ones
-    if (da_ctrl_.method == DAMethod::BT) {
-        auto lm = da_ctrl_.hc_linkage;
+    if (trex_da_ctrl_.method == DAMethod::BT) {
+        auto lm = trex_da_ctrl_.hc_linkage;
         if (lm != hac::LinkageMethod::Single &&
             lm != hac::LinkageMethod::Complete &&
             lm != hac::LinkageMethod::Average &&
@@ -121,7 +120,7 @@ TRexDASelector::SelectionResult TRexDASelector::select() {
 
     if (verbose_) {
         std::string method_str;
-        switch (da_ctrl_.method) {
+        switch (trex_da_ctrl_.method) {
             case DAMethod::AR1:          method_str = "AR1";          break;
             case DAMethod::EQUI:         method_str = "EQUI";         break;
             case DAMethod::BT:           method_str = "BT";           break;
@@ -314,7 +313,7 @@ TRexDASelector::SelectionResult TRexDASelector::assembleDAResult() {
     da_result_.dummy_factor_L = dummy_multiplier_LL_;
     da_result_.Phi_prime      = Phi_prime_;
     da_result_.voting_grid    = voting_grid_;
-    da_result_.method         = da_ctrl_.method;
+    da_result_.method         = trex_da_ctrl_.method;
     da_result_.cor_coef       = da_setup_.cor_coef;
     da_result_.rho_grid       = da_setup_.rho_grid;
 
@@ -367,10 +366,10 @@ TRexDASelector::SelectionResult TRexDASelector::assembleDAResult() {
 // ===================================================================================
 
 void TRexDASelector::setupDA() {
-    if (!da_ctrl_.prior_groups.empty()) {
+    if (!trex_da_ctrl_.prior_groups.empty()) {
         setupDA_PriorGroups();
     } else {
-        switch (da_ctrl_.method) {
+        switch (trex_da_ctrl_.method) {
             case DAMethod::BT:           setupDA_BT();   break;
             case DAMethod::NN:           setupDA_NN();   break;
             case DAMethod::AR1:          setupDA_AR1();  break;
@@ -387,7 +386,7 @@ void TRexDASelector::setupDA() {
 // ===================================================================================
 
 void TRexDASelector::setupDA_PriorGroups() {
-    const auto& groups = da_ctrl_.prior_groups;
+    const auto& groups = trex_da_ctrl_.prior_groups;
     const std::size_t rho_grid_len = groups.size();
     const auto p = static_cast<Eigen::Index>(p_);
 
@@ -404,14 +403,14 @@ void TRexDASelector::setupDA_PriorGroups() {
     if (da_setup_.opt_point_BT >= rho_grid_len) {
         da_setup_.opt_point_BT = rho_grid_len - 1;
     }
-    da_setup_.cor_coef = da_ctrl_.cor_coef;
+    da_setup_.cor_coef = trex_da_ctrl_.cor_coef;
     da_setup_.kap = 0;
 
     // Build rho_grid
-    if (!da_ctrl_.rho_grid_labels.empty()) {
+    if (!trex_da_ctrl_.rho_grid_labels.empty()) {
         da_setup_.rho_grid.resize(static_cast<Eigen::Index>(rho_grid_len));
         for (std::size_t i = 0; i < rho_grid_len; ++i) {
-            da_setup_.rho_grid(static_cast<Eigen::Index>(i)) = da_ctrl_.rho_grid_labels[i];
+            da_setup_.rho_grid(static_cast<Eigen::Index>(i)) = trex_da_ctrl_.rho_grid_labels[i];
         }
     } else {
         da_setup_.rho_grid = Eigen::VectorXd::LinSpaced(
@@ -441,7 +440,7 @@ void TRexDASelector::setupDA_PriorGroups() {
 
 void TRexDASelector::setupDA_BT() {
     const auto p = static_cast<Eigen::Index>(p_);
-    const std::size_t grid_len = da_ctrl_.hc_grid_length;
+    const std::size_t grid_len = trex_da_ctrl_.hc_grid_length;
 
     // Run hierarchical clustering using correlation distance
     auto merges = runClustering();
@@ -486,7 +485,7 @@ void TRexDASelector::setupDA_BT() {
     if (da_setup_.opt_point_BT >= grid_len) {
         da_setup_.opt_point_BT = grid_len - 1;
     }
-    da_setup_.cor_coef = da_ctrl_.cor_coef;
+    da_setup_.cor_coef = trex_da_ctrl_.cor_coef;
     da_setup_.kap = 0;
 
     // For each rho level, cut dendrogram and build group-mate lists
@@ -528,7 +527,7 @@ void TRexDASelector::setupDA_BT() {
 
 void TRexDASelector::setupDA_NN() {
     const auto p = static_cast<Eigen::Index>(p_);
-    const std::size_t grid_len = da_ctrl_.hc_grid_length;
+    const std::size_t grid_len = trex_da_ctrl_.hc_grid_length;
 
     // Build rho_grid = linspace(0, 1, grid_len)
     da_setup_.rho_grid = Eigen::VectorXd::LinSpaced(
@@ -546,7 +545,7 @@ void TRexDASelector::setupDA_NN() {
     if (da_setup_.opt_point_BT >= grid_len) {
         da_setup_.opt_point_BT = grid_len - 1;
     }
-    da_setup_.cor_coef = da_ctrl_.cor_coef;
+    da_setup_.cor_coef = trex_da_ctrl_.cor_coef;
     da_setup_.kap = 0;
 
     // Build gr_j_list pair-wise: for each ordered pair (j, k) with j < k,
@@ -608,16 +607,16 @@ void TRexDASelector::setupDA_AR1() {
     da_setup_.kap = 0;
 
     // Estimate AR(1) coefficient if not supplied
-    if (da_ctrl_.cor_coef == tc::AUTO_ESTIMATE_CORRELATION) {
+    if (trex_da_ctrl_.cor_coef == tc::AUTO_ESTIMATE_CORRELATION) {
         da_setup_.cor_coef = estimateAR1Correlation();
     } else {
-        da_setup_.cor_coef = da_ctrl_.cor_coef;
+        da_setup_.cor_coef = trex_da_ctrl_.cor_coef;
     }
 
     // Compute window half-width: kap = ceil(log(rho_thr_DA) / log(cor_coef))
-    if (da_setup_.cor_coef > 0.0 && da_setup_.cor_coef < 1.0 && da_ctrl_.rho_thr_DA > 0.0) {
+    if (da_setup_.cor_coef > 0.0 && da_setup_.cor_coef < 1.0 && trex_da_ctrl_.rho_thr_DA > 0.0) {
         da_setup_.kap = static_cast<std::size_t>(
-            std::ceil(std::log(da_ctrl_.rho_thr_DA) / std::log(da_setup_.cor_coef)));
+            std::ceil(std::log(trex_da_ctrl_.rho_thr_DA) / std::log(da_setup_.cor_coef)));
     } else {
         da_setup_.kap = p_;  // fallback: full window
     }
@@ -641,16 +640,16 @@ void TRexDASelector::setupDA_EQUI() {
     da_setup_.kap = 0;
 
     // Estimate equicorrelation if not supplied
-    if (da_ctrl_.cor_coef == tc::AUTO_ESTIMATE_CORRELATION) {
+    if (trex_da_ctrl_.cor_coef == tc::AUTO_ESTIMATE_CORRELATION) {
         da_setup_.cor_coef = estimateEquiCorrelation();
     } else {
-        da_setup_.cor_coef = da_ctrl_.cor_coef;
+        da_setup_.cor_coef = trex_da_ctrl_.cor_coef;
     }
 
     if (verbose_) {
         printProgress(
             "DA-EQUI: cor_coef = " + std::to_string(da_setup_.cor_coef) +
-            " (threshold = " + std::to_string(da_ctrl_.rho_thr_DA) + ")"
+            " (threshold = " + std::to_string(trex_da_ctrl_.rho_thr_DA) + ")"
         );
     }
 }
@@ -737,7 +736,7 @@ std::vector<hac::MergeStep> TRexDASelector::runClustering() const {
     using MapType = Eigen::Map<Eigen::MatrixXd>;
     using CorrDist = hac::DistancePolicy<MapType, hac::DistanceMetric::Correlation>;
 
-    switch (da_ctrl_.hc_linkage) {
+    switch (trex_da_ctrl_.hc_linkage) {
         case hac::LinkageMethod::Single:
             return hac::AgglomerativeClustering::cluster<
                 MapType, CorrDist, hac::LinkageMethod::Single>(*X_,
@@ -783,7 +782,7 @@ DACorrectionResult TRexDASelector::daCorrect(
 
 
     // ── AR1 ─────────────────────────────────────────────────────────────────
-    if (da_ctrl_.method == DAMethod::AR1) {
+    if (trex_da_ctrl_.method == DAMethod::AR1) {
         Eigen::MatrixXd delta = Eigen::MatrixXd::Constant(p, T, 2.0);
 
         for (Eigen::Index t = 0; t < T; ++t) {
@@ -821,8 +820,8 @@ DACorrectionResult TRexDASelector::daCorrect(
 
 
     // ── EQUI ────────────────────────────────────────────────────────────────
-    else if (da_ctrl_.method == DAMethod::EQUI &&
-             std::abs(da_setup_.cor_coef) > da_ctrl_.rho_thr_DA) {
+    else if (trex_da_ctrl_.method == DAMethod::EQUI &&
+             std::abs(da_setup_.cor_coef) > trex_da_ctrl_.rho_thr_DA) {
         Eigen::MatrixXd delta = Eigen::MatrixXd::Constant(p, T, 2.0);
 
         for (Eigen::Index t = 0; t < T; ++t) {
@@ -1020,11 +1019,11 @@ TRexDASelector::DASelectionResult TRexDASelector::selectVariables_BT(
 
     // Steps 2-3: scan the R_array for cells equal to val_max and pick the winner
     // by tie-break priority max VV -> max RR (rho) -> max TT. Candidate eligibility
-    // depends on da_ctrl_.bt_selection_mode: FeasibleOnly (default) restricts to
+    // depends on trex_da_ctrl_.bt_selection_mode: FeasibleOnly (default) restricts to
     // FDP-feasible cells (FDR-controlling); RFaithful also admits infeasible cells,
     // reproducing the R reference (which scans the whole R_array).
     const bool feasible_only =
-        (da_ctrl_.bt_selection_mode == BTSelectionMode::FeasibleOnly);
+        (trex_da_ctrl_.bt_selection_mode == BTSelectionMode::FeasibleOnly);
 
     bool found = false;
     Eigen::Index best_TT = 0, best_VV = -1;
