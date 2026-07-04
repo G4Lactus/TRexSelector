@@ -114,6 +114,9 @@ jobs:
           # above. delvewheel bundles gtest-free runtime DLLs (only the LLVM
           # OpenMP runtime staged at C:\libomp) into the wheel.
           # -----------------------------------------------------------------------
+          # 64-bit only: the vcpkg deps use the x64-windows triplet and there
+          # is no 32-bit audience for this package
+          CIBW_ARCHS_WINDOWS: AMD64
           CIBW_ENVIRONMENT_WINDOWS: >
             CMAKE_ARGS="-DCMAKE_TOOLCHAIN_FILE=C:/vcpkg/scripts/buildsystems/vcpkg.cmake"
           CIBW_BEFORE_BUILD_WINDOWS: pip install delvewheel
