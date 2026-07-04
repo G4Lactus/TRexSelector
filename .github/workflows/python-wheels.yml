@@ -45,17 +45,17 @@ jobs:
 
           # -----------------------------------------------------------------------
           # Linux (manylinux_2_28 = AlmaLinux 8). Its distro packages are too old
-          # (Eigen 3.3.x hits a C++20 LDLT operator== bug under GCC; Boost 1.66 <
-          # required 1.80), so build all header-only deps from source into
-          # /usr/local. OpenMP uses GCC's bundled libgomp (no package needed).
+          # (Boost 1.66 < required 1.80; old Eigen), so build all header-only deps
+          # from source into /usr/local. Eigen 5.0.1 matches the Homebrew Eigen used
+          # for local/macOS builds. OpenMP uses GCC's bundled libgomp (no package).
           # This exact recipe was validated in the manylinux container.
           # -----------------------------------------------------------------------
           CIBW_MANYLINUX_X86_64_IMAGE: manylinux_2_28
           CIBW_BEFORE_ALL_LINUX: |
             set -e
-            # Eigen 3.4.0 (installs Eigen3Config.cmake for find_package(Eigen3 NO_MODULE)).
-            curl -fsSL https://gitlab.com/libeigen/eigen/-/archive/3.4.0/eigen-3.4.0.tar.gz | tar xz -C /tmp
-            cmake -S /tmp/eigen-3.4.0 -B /tmp/eigen-build -DBUILD_TESTING=OFF -DCMAKE_INSTALL_PREFIX=/usr/local
+            # Eigen 5.0.1 (installs Eigen3Config.cmake for find_package(Eigen3 NO_MODULE)).
+            curl -fsSL https://gitlab.com/libeigen/eigen/-/archive/5.0.1/eigen-5.0.1.tar.gz | tar xz -C /tmp
+            cmake -S /tmp/eigen-5.0.1 -B /tmp/eigen-build -DBUILD_TESTING=OFF -DCMAKE_INSTALL_PREFIX=/usr/local
             cmake --install /tmp/eigen-build
             # cereal — install via its CMake so cerealConfig.cmake exists for find_package(cereal).
             curl -fsSL https://github.com/USCiLab/cereal/archive/refs/tags/v1.3.2.tar.gz | tar xz -C /tmp
@@ -73,6 +73,7 @@ jobs:
           CIBW_ENVIRONMENT_MACOS: >
             CMAKE_C_COMPILER=$(brew --prefix llvm)/bin/clang
             CMAKE_CXX_COMPILER=$(brew --prefix llvm)/bin/clang++
+            MACOSX_DEPLOYMENT_TARGET=14.0
 
       - name: Upload wheel artifacts
         uses: actions/upload-artifact@v4
