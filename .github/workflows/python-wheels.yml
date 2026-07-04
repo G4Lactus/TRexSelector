@@ -25,10 +25,41 @@ jobs:
         # which migrated to the bleeding-edge macOS 26 image around 2026-06-15 and
         # breaks delocate-wheel's repair/arch step. macos-14 also yields wheels with
         # a broader minimum-OS compatibility.
-        os: [ubuntu-latest, macos-14]
+        os: [ubuntu-latest, macos-14, windows-latest]
 
     steps:
       - uses: actions/checkout@v5
+
+      # -----------------------------------------------------------------------
+      # Windows: header-only C++ deps via vcpkg (classic mode; the Python
+      # CMake source dir has no vcpkg.json, so the toolchain uses the
+      # packages installed here). gtest is not needed (TREX_BUILD_TESTS=OFF).
+      # -----------------------------------------------------------------------
+      - name: Cache vcpkg binary archives (Windows)
+        if: runner.os == 'Windows'
+        uses: actions/cache@v4
+        with:
+          path: ~\AppData\Local\vcpkg\archives
+          key: vcpkg-wheels-${{ runner.os }}-${{ hashFiles('.github/workflows/python-wheels.yml') }}
+          restore-keys: vcpkg-wheels-${{ runner.os }}-
+
+      - name: Install C++ dependencies (Windows)
+        if: runner.os == 'Windows'
+        run: vcpkg install eigen3 cereal boost-interprocess boost-math boost-random --triplet x64-windows
+
+      # The LLVM OpenMP runtime (libomp140.x86_64.dll) ships with Visual
+      # Studio; stage it at a fixed path so delvewheel can find and bundle it.
+      - name: Stage LLVM OpenMP runtime (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          $dll = Get-Item "C:\Program Files\Microsoft Visual Studio\*\*\VC\Redist\MSVC\*\x64\*OpenMP*\libomp140*.dll" -ErrorAction SilentlyContinue | Select-Object -First 1
+          if (-not $dll) {
+            $dll = Get-ChildItem "C:\Program Files\Microsoft Visual Studio" -Recurse -Filter "libomp140.x86_64.dll" -ErrorAction SilentlyContinue | Select-Object -First 1
+          }
+          if (-not $dll) { throw "libomp140.x86_64.dll not found in the Visual Studio installation" }
+          New-Item -ItemType Directory -Force -Path C:\libomp | Out-Null
+          Copy-Item $dll.FullName -Destination C:\libomp\
+          Write-Host "Staged $($dll.FullName)"
 
       - name: Build wheels
         uses: pypa/cibuildwheel@v2.21.3
@@ -77,6 +108,16 @@ jobs:
             CMAKE_C_COMPILER=$(brew --prefix llvm)/bin/clang
             CMAKE_CXX_COMPILER=$(brew --prefix llvm)/bin/clang++
             MACOSX_DEPLOYMENT_TARGET=14.0
+
+          # -----------------------------------------------------------------------
+          # Windows — MSVC toolchain; deps come from the vcpkg classic install
+          # above. delvewheel bundles gtest-free runtime DLLs (only the LLVM
+          # OpenMP runtime staged at C:\libomp) into the wheel.
+          # -----------------------------------------------------------------------
+          CIBW_ENVIRONMENT_WINDOWS: >
+            CMAKE_ARGS="-DCMAKE_TOOLCHAIN_FILE=C:/vcpkg/scripts/buildsystems/vcpkg.cmake"
+          CIBW_BEFORE_BUILD_WINDOWS: pip install delvewheel
+          CIBW_REPAIR_WHEEL_COMMAND_WINDOWS: delvewheel repair --add-path C:/libomp -w {dest_dir} {wheel}
 
       - name: Upload wheel artifacts
         uses: actions/upload-artifact@v5

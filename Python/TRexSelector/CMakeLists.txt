@@ -38,11 +38,9 @@ target_link_libraries(_core PRIVATE
     trex::utils
 )
 
-# Optimization flags for the _core binding itself (mirrors library flags)
-target_compile_options(_core PRIVATE
-    -O3 -DNDEBUG -funroll-loops
-    $<$<NOT:$<BOOL:${TREX_PORTABLE_BUILD}>>:-march=native -ffast-math>
-)
+# Optimization flags for the _core binding itself (mirrors library flags,
+# GCC/Clang vs MSVC handled by the shared helper from cpp/cmake)
+trex_set_compile_options(_core)
 
 # Install the extension into the trex_selector package directory
 install(TARGETS _core DESTINATION trex_selector)
