@@ -56,7 +56,6 @@ class DummyDistribution:
         StudentT: DummyDistribution.Type
         Laplace: DummyDistribution.Type
         Gumbel: DummyDistribution.Type
-        Holtsmark: DummyDistribution.Type
         Triangle: DummyDistribution.Type
         UniformSphere: DummyDistribution.Type
         Mammen: DummyDistribution.Type
@@ -68,8 +67,6 @@ class DummyDistribution:
     laplace_scale: float
     gumbel_location: float
     gumbel_scale: float
-    holtsmark_location: float
-    holtsmark_scale: float
     triangle_a: float
     triangle_b: float
     triangle_c: float
@@ -95,8 +92,6 @@ class DummyDistribution:
     def laplace(location: float = ..., scale: float = ...) -> DummyDistribution: ...
     @staticmethod
     def gumbel(location: float = ..., scale: float = ...) -> DummyDistribution: ...
-    @staticmethod
-    def holtsmark(location: float = ..., scale: float = ...) -> DummyDistribution: ...
     @staticmethod
     def triangle(a: float = ..., b: float = ..., c: float = ...) -> DummyDistribution: ...
     @staticmethod

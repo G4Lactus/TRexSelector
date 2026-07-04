@@ -216,7 +216,6 @@ inline void bind_trex_core(py::module& m_tsm) {
         .value("StudentT",                    dg::Distribution::Type::StudentT)
         .value("Laplace",                     dg::Distribution::Type::Laplace)
         .value("Gumbel",                      dg::Distribution::Type::Gumbel)
-        .value("Holtsmark",                   dg::Distribution::Type::Holtsmark)
         .value("Triangle",                    dg::Distribution::Type::Triangle)
         .value("UniformSphere",               dg::Distribution::Type::UniformSphere)
         .value("Mammen",                      dg::Distribution::Type::Mammen)
@@ -244,9 +243,6 @@ inline void bind_trex_core(py::module& m_tsm) {
         .def_static("gumbel", &dg::Distribution::Gumbel,
             py::arg("location") = 0.0, py::arg("scale") = 1.0,
             "Create Gumbel distribution.")
-        .def_static("holtsmark", &dg::Distribution::Holtsmark,
-            py::arg("location") = 0.0, py::arg("scale") = 1.0,
-            "Create Holtsmark distribution.")
         .def_static("triangle", &dg::Distribution::Triangle,
             py::arg("a") = -std::sqrt(6.0), py::arg("b") = 0.0, py::arg("c") = std::sqrt(6.0),
             "Create Triangle distribution.")
@@ -266,8 +262,6 @@ inline void bind_trex_core(py::module& m_tsm) {
         .def_readwrite("laplace_scale",                   &dg::Distribution::laplace_scale)
         .def_readwrite("gumbel_location",                 &dg::Distribution::gumbel_location)
         .def_readwrite("gumbel_scale",                    &dg::Distribution::gumbel_scale)
-        .def_readwrite("holtsmark_location",              &dg::Distribution::holtsmark_location)
-        .def_readwrite("holtsmark_scale",                 &dg::Distribution::holtsmark_scale)
         .def_readwrite("triangle_a",                      &dg::Distribution::triangle_a)
         .def_readwrite("triangle_b",                      &dg::Distribution::triangle_b)
         .def_readwrite("triangle_c",                      &dg::Distribution::triangle_c)

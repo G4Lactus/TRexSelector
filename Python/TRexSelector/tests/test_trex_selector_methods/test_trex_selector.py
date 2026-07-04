@@ -263,11 +263,6 @@ class TestDummyDistributionFactories:
         assert d.gumbel_location == pytest.approx(1.0)
         assert d.gumbel_scale == pytest.approx(2.0)
 
-    def test_holtsmark(self):
-        d = DummyDistribution.holtsmark(location=0.0, scale=1.5)
-        assert d.get_type() == DummyDistribution.Type.Holtsmark
-        assert d.holtsmark_scale == pytest.approx(1.5)
-
     def test_triangle(self):
         d = DummyDistribution.triangle(a=-1.0, b=0.0, c=1.0)
         assert d.get_type() == DummyDistribution.Type.Triangle
