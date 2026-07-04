@@ -11,6 +11,7 @@
 
 // std includes
 #include <utils/logging/logger.hpp>
+#include <algorithm>
 #include <cmath>
 #include <stdexcept>
 #include <iostream>

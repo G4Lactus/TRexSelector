@@ -25,9 +25,11 @@
 // ===================================================================================
 
 // std includes
+#include <algorithm>
 #include <cmath>
 #include <cstdint>
 #include <numbers>
+#include <numeric>
 #include <random>
 #include <stdexcept>
 

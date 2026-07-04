@@ -3,6 +3,7 @@
 // ==================================================================================
 
 // std includes
+#include <algorithm>
 #include <fstream>
 #include <stdexcept>
 
