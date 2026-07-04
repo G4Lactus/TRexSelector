@@ -47,7 +47,7 @@ ScreenTRexSelector::ScreenTRexSelector(
                      trex_screen_ctrl.trex_ctrl,
                      seed,
                      verbose),
-    trex_screen_ctrl_(std::move(trex_screen_ctrl))
+    trex_screen_ctrl_(trex_screen_ctrl)
 {
     validateScreenTRexStrategy();
 }
