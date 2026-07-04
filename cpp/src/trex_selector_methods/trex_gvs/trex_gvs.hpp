@@ -321,6 +321,20 @@ struct TRexGVSControlParameter {
      *  Default: false.
      */
     bool tenet_aug_use_lars = false;
+
+    /** @brief Base T-Rex algorithmic control parameters (nested).
+     *  GVS restricts `solver_type` to the solvers it actually drives (see
+     *  `TRexGVSSelector`'s validation): TENET/TENET_AUG for `GVSType::EN`,
+     *  TLASSO for `GVSType::IEN`. The default here overrides the base class's
+     *  own default (TLARS) with TENET, matching the default `gvs_type = EN`
+     *  / `en_solver = TENET`, so a fully-defaulted `TRexGVSControlParameter`
+     *  constructs without throwing.
+     */
+    tc::TRexControlParameter trex_ctrl = [] {
+        tc::TRexControlParameter t;
+        t.solver_type = sd::SolverTypeForTRex::TENET;
+        return t;
+    }();
 };
 
 
@@ -432,8 +446,9 @@ public:
      * @param X            Feature matrix (n x p), Eigen::Map, not copied.
      * @param y            Response vector (n x 1), Eigen::Map, copied internally.
      * @param tFDR         Target FDR level (default: 0.1).
-     * @param gvs_control  GVS-specific control parameters.
-     * @param trex_control Base T-Rex algorithmic control parameters.
+     * @param trex_gvs_ctrl  GVS-specific control parameters, nesting the base
+     *                       T-Rex algorithmic control parameters as
+     *                       `trex_gvs_ctrl.trex_ctrl`.
      * @param seed         Random seed (< 0 for random).
      * @param verbose      Enable verbose output (default: true).
      *
@@ -444,8 +459,7 @@ public:
         Eigen::Map<Eigen::MatrixXd>& X,
         Eigen::Map<Eigen::VectorXd>& y,
         double                       tFDR         = 0.1,
-        TRexGVSControlParameter      gvs_control  = TRexGVSControlParameter(),
-        tc::TRexControlParameter     trex_control = tc::TRexControlParameter(),
+        TRexGVSControlParameter      trex_gvs_ctrl = TRexGVSControlParameter(),
         int                          seed         = -1,
         bool                         verbose      = true
     );
@@ -486,8 +500,8 @@ protected:
     // GVS Data Members
     // ============================================================
 
-    /** @brief GVS-specific control parameters. */
-    TRexGVSControlParameter gvs_ctrl_;
+    /** @brief GVS-specific control parameters (nests the base trex_ctrl). */
+    TRexGVSControlParameter trex_gvs_ctrl_;
 
     /** @brief Pre-computed group structure. */
     GVSSetupResult gvs_setup_;
@@ -497,7 +511,7 @@ protected:
 
     /** @brief Resolved CV fold-permutation seed.
      *
-     *  Computed once in the constructor from `gvs_ctrl_.cv_seed` and `seed_`:
+     *  Computed once in the constructor from `trex_gvs_ctrl_.cv_seed` and `seed_`:
      *  - `cv_seed >= 0`: used directly (explicit override).
      *  - `cv_seed < 0 && seed_ >= 0`: `mix_seed(seed_, 1u)` (deterministic).
      *  - `cv_seed < 0 && seed_ < 0`:  `std::random_device{}()` (entropy).

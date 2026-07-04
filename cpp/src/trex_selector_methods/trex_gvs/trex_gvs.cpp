@@ -83,20 +83,19 @@ TRexGVSSelector::TRexGVSSelector(
     Eigen::Map<Eigen::MatrixXd>& X,
     Eigen::Map<Eigen::VectorXd>& y,
     double                       tFDR,
-    TRexGVSControlParameter      gvs_control,
-    tc::TRexControlParameter     trex_control,
+    TRexGVSControlParameter      trex_gvs_ctrl,
     int                          seed,
     bool                         verbose
 ) :
     tc::TRexSelector(X, y, tFDR,
-                     stripMmapForBase(trex_control),
+                     stripMmapForBase(trex_gvs_ctrl.trex_ctrl),
                      seed, verbose),
-    gvs_ctrl_(std::move(gvs_control)),
-    gvs_use_mmap_(trex_control.use_memory_mapping)
+    trex_gvs_ctrl_(std::move(trex_gvs_ctrl)),
+    gvs_use_mmap_(trex_gvs_ctrl_.trex_ctrl.use_memory_mapping)
 {
     // Resolve CV fold-permutation seed (analogous to permutation_base_seed_ in base).
-    if (gvs_ctrl_.cv_seed >= 0) {
-        resolved_cv_seed_ = static_cast<unsigned int>(gvs_ctrl_.cv_seed);
+    if (trex_gvs_ctrl_.cv_seed >= 0) {
+        resolved_cv_seed_ = static_cast<unsigned int>(trex_gvs_ctrl_.cv_seed);
     } else if (seed_ >= 0) {
         resolved_cv_seed_ = trex::utils::datageneration::dummygen::mix_seed(
             static_cast<std::uint32_t>(seed_), 1u);
@@ -104,7 +103,7 @@ TRexGVSSelector::TRexGVSSelector(
         resolved_cv_seed_ = std::random_device{}();
     }
     // ---- Solver-type compatibility checks ---------------------------------
-    if (gvs_ctrl_.gvs_type == GVSType::EN) {
+    if (trex_gvs_ctrl_.gvs_type == GVSType::EN) {
         // EN picks its concrete solver from en_solver (TENET / TENET_AUG), so
         // the base solver_type must name a member of that TENET family.
         if (trex_ctrl_.solver_type != sd::SolverTypeForTRex::TENET &&
@@ -162,17 +161,17 @@ TRexGVSSelector::TRexGVSSelector(
 
 void TRexGVSSelector::validateGVSParameters() const {
 
-    if (gvs_ctrl_.corr_max < 0.0 || gvs_ctrl_.corr_max > 1.0) {
+    if (trex_gvs_ctrl_.corr_max < 0.0 || trex_gvs_ctrl_.corr_max > 1.0) {
         throw std::invalid_argument(
             "TRexGVSSelector: corr_max must be in [0, 1]. Got: " +
-            std::to_string(gvs_ctrl_.corr_max));
+            std::to_string(trex_gvs_ctrl_.corr_max));
     }
 
     // Reject Ward (non-Euclidean correlation distance).
-    if (gvs_ctrl_.hc_linkage != hac::LinkageMethod::Single &&
-        gvs_ctrl_.hc_linkage != hac::LinkageMethod::Complete &&
-        gvs_ctrl_.hc_linkage != hac::LinkageMethod::Average &&
-        gvs_ctrl_.hc_linkage != hac::LinkageMethod::WPGMA) {
+    if (trex_gvs_ctrl_.hc_linkage != hac::LinkageMethod::Single &&
+        trex_gvs_ctrl_.hc_linkage != hac::LinkageMethod::Complete &&
+        trex_gvs_ctrl_.hc_linkage != hac::LinkageMethod::Average &&
+        trex_gvs_ctrl_.hc_linkage != hac::LinkageMethod::WPGMA) {
         throw std::invalid_argument(
             "TRexGVSSelector: unsupported linkage method. "
             "Supported: Single, Complete, Average, WPGMA.");
@@ -183,16 +182,16 @@ void TRexGVSSelector::validateGVSParameters() const {
     // (pure-TLASSO) case; lambda_2 > 0 is a fixed ridge penalty.
 
     // Validate prior_groups (length p, 0-based, contiguous in [0, M-1]).
-    if (!gvs_ctrl_.prior_groups.empty()) {
-        if (gvs_ctrl_.prior_groups.size() != p_) {
+    if (!trex_gvs_ctrl_.prior_groups.empty()) {
+        if (trex_gvs_ctrl_.prior_groups.size() != p_) {
             throw std::invalid_argument(
                 "TRexGVSSelector: prior_groups length must equal p = " +
                 std::to_string(p_) +
-                ". Got: " + std::to_string(gvs_ctrl_.prior_groups.size()));
+                ". Got: " + std::to_string(trex_gvs_ctrl_.prior_groups.size()));
         }
 
         Eigen::Index max_id = -1;
-        for (auto id : gvs_ctrl_.prior_groups) {
+        for (auto id : trex_gvs_ctrl_.prior_groups) {
             if (id < 0) {
                 throw std::invalid_argument(
                     "TRexGVSSelector: prior_groups must be 0-based "
@@ -203,7 +202,7 @@ void TRexGVSSelector::validateGVSParameters() const {
 
         // check: every id in [0, max_id] must appear at least once.
         std::vector<bool> seen(static_cast<std::size_t>(max_id + 1), false);
-        for (auto id : gvs_ctrl_.prior_groups) {
+        for (auto id : trex_gvs_ctrl_.prior_groups) {
             seen[static_cast<std::size_t>(id)] = true;
         }
         for (std::size_t m = 0; m < seen.size(); ++m) {
@@ -215,8 +214,8 @@ void TRexGVSSelector::validateGVSParameters() const {
         }
 
         // check: every label in group_labels (if provided) they must correspond to a cluster ID.
-        if (!gvs_ctrl_.group_labels.empty() &&
-            gvs_ctrl_.group_labels.size() !=
+        if (!trex_gvs_ctrl_.group_labels.empty() &&
+            trex_gvs_ctrl_.group_labels.size() !=
                 static_cast<std::size_t>(max_id + 1)) {
             throw std::invalid_argument(
                 "TRexGVSSelector: group_labels.size() must equal the number "
@@ -231,7 +230,7 @@ void TRexGVSSelector::validateGVSParameters() const {
 // ===================================================================================
 
 void TRexGVSSelector::setupGVS() {
-    if (!gvs_ctrl_.prior_groups.empty()) {
+    if (!trex_gvs_ctrl_.prior_groups.empty()) {
         setupGVS_PriorGroups();
     } else {
         setupGVS_Cluster();
@@ -246,7 +245,7 @@ void TRexGVSSelector::setupGVS_PriorGroups() {
 
     // Determine M
     Eigen::Index max_id = -1;
-    for (auto id : gvs_ctrl_.prior_groups) {
+    for (auto id : trex_gvs_ctrl_.prior_groups) {
         if (id > max_id) max_id = id;
     }
     const std::size_t M = static_cast<std::size_t>(max_id + 1);
@@ -256,7 +255,7 @@ void TRexGVSSelector::setupGVS_PriorGroups() {
     gvs_setup_.clusters_list.assign(M, {});
     for (Eigen::Index j = 0;
          j < static_cast<Eigen::Index>(p_); ++j) {
-        const Eigen::Index id = gvs_ctrl_.prior_groups[static_cast<std::size_t>(j)];
+        const Eigen::Index id = trex_gvs_ctrl_.prior_groups[static_cast<std::size_t>(j)];
         gvs_setup_.clusters_list[static_cast<std::size_t>(id)].push_back(j);
     }
 
@@ -265,7 +264,7 @@ void TRexGVSSelector::setupGVS_PriorGroups() {
     for (Eigen::Index j = 0;
          j < static_cast<Eigen::Index>(p_); ++j) {
         gvs_setup_.groups_vec(j) = static_cast<int>(
-            gvs_ctrl_.prior_groups[static_cast<std::size_t>(j)]);
+            trex_gvs_ctrl_.prior_groups[static_cast<std::size_t>(j)]);
     }
 }
 
@@ -274,7 +273,7 @@ std::vector<hac::MergeStep> TRexGVSSelector::runClustering() const {
     using MapType = Eigen::Map<Eigen::MatrixXd>;
     using CorrDist = hac::DistancePolicy<MapType, hac::DistanceMetric::Correlation>;
 
-    switch (gvs_ctrl_.hc_linkage) {
+    switch (trex_gvs_ctrl_.hc_linkage) {
         case hac::LinkageMethod::Single:
             return hac::AgglomerativeClustering::cluster<
                 MapType, CorrDist, hac::LinkageMethod::Single>(*X_);
@@ -297,7 +296,7 @@ std::vector<hac::MergeStep> TRexGVSSelector::runClustering() const {
 void TRexGVSSelector::setupGVS_Cluster() {
 
     // Linkage tag
-    switch (gvs_ctrl_.hc_linkage) {
+    switch (trex_gvs_ctrl_.hc_linkage) {
         case hac::LinkageMethod::Single:   gvs_setup_.hc_method_used = "single";   break;
         case hac::LinkageMethod::Complete: gvs_setup_.hc_method_used = "complete"; break;
         case hac::LinkageMethod::Average:  gvs_setup_.hc_method_used = "average";  break;
@@ -308,7 +307,7 @@ void TRexGVSSelector::setupGVS_Cluster() {
     auto merges = runClustering();
 
     // Cut at height = 1 - corr_max
-    const double height = 1.0 - gvs_ctrl_.corr_max;
+    const double height = 1.0 - trex_gvs_ctrl_.corr_max;
 
     // Determine cluster labels
     auto labels = hac::DendrogramUtils::cut_tree_by_height(
@@ -385,8 +384,8 @@ void TRexGVSSelector::finalizeSetup() {
     }
 
     // Group labels (carry through if supplied).
-    if (gvs_ctrl_.group_labels.size() == M) { // supplied labels match number of clusters
-        gvs_setup_.group_labels = gvs_ctrl_.group_labels;
+    if (trex_gvs_ctrl_.group_labels.size() == M) { // supplied labels match number of clusters
+        gvs_setup_.group_labels = trex_gvs_ctrl_.group_labels;
     } else {
         gvs_setup_.group_labels.clear();
     }
@@ -400,9 +399,9 @@ void TRexGVSSelector::finalizeSetup() {
 
 double TRexGVSSelector::computeLambda2() const {
 
-    if (gvs_ctrl_.lambda_2 >= 0.0) {
+    if (trex_gvs_ctrl_.lambda_2 >= 0.0) {
         // Fixed user value (>= 0). lambda_2 == 0 -> degenerate TLASSO (no ridge).
-        return gvs_ctrl_.lambda_2;
+        return trex_gvs_ctrl_.lambda_2;
     }
     // lambda_2 < 0: "not supplied" sentinel -> auto-compute below.
 
@@ -434,13 +433,13 @@ double TRexGVSSelector::computeLambda2() const {
     namespace ms = trex::ml_methods::model_selection;
 
     double lambda_cv = 0.0;
-    switch (gvs_ctrl_.lambda2_method) {
+    switch (trex_gvs_ctrl_.lambda2_method) {
         // == SVD-based CV (ridge_cv_svd, JacobiSVD direct ridge) =====================
         case LambdaSelectionMethod::CV_MIN_SVD: {
             ms::ridge_cv_svd cv;
             cv.fit(*X_, y_,
-                   gvs_ctrl_.cv_n_folds,
-                   gvs_ctrl_.cv_n_lambda,
+                   trex_gvs_ctrl_.cv_n_folds,
+                   trex_gvs_ctrl_.cv_n_lambda,
                    /*lambda_ratio=*/1000.0,
                    resolved_cv_seed_);
             lambda_cv = cv.cv_min();
@@ -450,8 +449,8 @@ double TRexGVSSelector::computeLambda2() const {
             // Largest lambda within 1 SE of the CV minimum (SVD path).
             ms::ridge_cv_svd cv;
             cv.fit(*X_, y_,
-                   gvs_ctrl_.cv_n_folds,
-                   gvs_ctrl_.cv_n_lambda,
+                   trex_gvs_ctrl_.cv_n_folds,
+                   trex_gvs_ctrl_.cv_n_lambda,
                    /*lambda_ratio=*/1000.0,
                    resolved_cv_seed_);
             lambda_cv = cv.cv_1se();
@@ -463,8 +462,8 @@ double TRexGVSSelector::computeLambda2() const {
             ms::enet_cv_ccd cv;
             cv.fit(*X_, y_,
                    /*alpha=*/0.0,
-                   gvs_ctrl_.cv_n_folds,
-                   gvs_ctrl_.cv_n_lambda,
+                   trex_gvs_ctrl_.cv_n_folds,
+                   trex_gvs_ctrl_.cv_n_lambda,
                    /*lambda_min_ratio=*/-1.0,   // auto: 1e-4 (n>p) or 1e-2 (n<=p)
                    resolved_cv_seed_);
             lambda_cv = cv.cv_min();
@@ -475,8 +474,8 @@ double TRexGVSSelector::computeLambda2() const {
             ms::enet_cv_ccd cv;
             cv.fit(*X_, y_,
                    /*alpha=*/0.0,
-                   gvs_ctrl_.cv_n_folds,
-                   gvs_ctrl_.cv_n_lambda,
+                   trex_gvs_ctrl_.cv_n_folds,
+                   trex_gvs_ctrl_.cv_n_lambda,
                    /*lambda_min_ratio=*/-1.0,
                    resolved_cv_seed_);
             lambda_cv = cv.cv_1se();
@@ -707,7 +706,7 @@ void TRexGVSSelector::buildENDAugmentation(std::size_t k,
     const auto n = static_cast<Eigen::Index>(n_);
     const auto p = static_cast<Eigen::Index>(p_);
     const auto L = static_cast<Eigen::Index>(num_dummies);
-    const bool en_aug = (gvs_ctrl_.en_solver == ENSolverType::TENET_AUG);
+    const bool en_aug = (trex_gvs_ctrl_.en_solver == ENSolverType::TENET_AUG);
 
     const double d1 = std::sqrt(lambda2_);
     const double d2 = en_aug ? (1.0 / std::sqrt(1.0 + lambda2_)) : 1.0;
@@ -840,9 +839,9 @@ TRexGVSSelector::ExpAgg TRexGVSSelector::runKExperiments(
     const std::size_t K                      = trex_ctrl_.K;
     const auto p_idx     = static_cast<Eigen::Index>(p_);
     const auto T_idx     = static_cast<Eigen::Index>(T_stop);
-    const bool ien                           = (gvs_ctrl_.gvs_type == GVSType::IEN);
-    const bool en_aug    = (gvs_ctrl_.gvs_type == GVSType::EN &&
-                            gvs_ctrl_.en_solver == ENSolverType::TENET_AUG);
+    const bool ien                           = (trex_gvs_ctrl_.gvs_type == GVSType::IEN);
+    const bool en_aug    = (trex_gvs_ctrl_.gvs_type == GVSType::EN &&
+                            trex_gvs_ctrl_.en_solver == ENSolverType::TENET_AUG);
     // IEN and EN-aug are both solved as a plain TLASSO on an externally
     // augmented system (augmentation built outside the solver).
     const bool augmented = ien || en_aug;
@@ -1012,9 +1011,9 @@ void TRexGVSSelector::prepareDummiesForLStep(LStepContext& ctx)
     // count L, so (re)build X_aug_/y_aug_ and rebind the solver maps for this
     // L-step *before* sizing any D buffer. IEN/plain EN bound theirs once in
     // onSelectBegin and keep a fixed height.
-    const bool en_aug = (gvs_ctrl_.gvs_type == GVSType::EN &&
-                         gvs_ctrl_.en_solver == ENSolverType::TENET_AUG);
-    const bool ien    = (gvs_ctrl_.gvs_type == GVSType::IEN);
+    const bool en_aug = (trex_gvs_ctrl_.gvs_type == GVSType::EN &&
+                         trex_gvs_ctrl_.en_solver == ENSolverType::TENET_AUG);
+    const bool ien    = (trex_gvs_ctrl_.gvs_type == GVSType::IEN);
     if (en_aug) {
         buildENXAugmentation(ctx.num_dummies);
         buildENyAugmentation(ctx.num_dummies);
@@ -1199,9 +1198,9 @@ void TRexGVSSelector::onSelectBegin() {
     }
 
     // 3. Build augmentation if needed; set up effective shapes.
-    const bool ien    = (gvs_ctrl_.gvs_type == GVSType::IEN);
-    const bool en_aug = (gvs_ctrl_.gvs_type == GVSType::EN &&
-                         gvs_ctrl_.en_solver == ENSolverType::TENET_AUG);
+    const bool ien    = (trex_gvs_ctrl_.gvs_type == GVSType::IEN);
+    const bool en_aug = (trex_gvs_ctrl_.gvs_type == GVSType::EN &&
+                         trex_gvs_ctrl_.en_solver == ENSolverType::TENET_AUG);
     if (ien) {
         buildIENXAugmentation();
         buildIENyAugmentation();
@@ -1272,7 +1271,7 @@ TRexGVSSelector::SelectionResult TRexGVSSelector::finalizeSelectionResult(
 
     // GVS-specific fields.
     gvs_result_.lambda2_used   = lambda2_;
-    gvs_result_.gvs_type       = gvs_ctrl_.gvs_type;
+    gvs_result_.gvs_type       = trex_gvs_ctrl_.gvs_type;
     gvs_result_.max_clusters   = gvs_setup_.max_clusters;
     gvs_result_.hc_method_used = gvs_setup_.hc_method_used;
     gvs_result_.groups_vec     = gvs_setup_.groups_vec;
