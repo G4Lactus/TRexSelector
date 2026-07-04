@@ -397,15 +397,24 @@ er::ExperimentRunnerConfig TRexSelector::buildRunnerConfig(
 
 Eigen::VectorXd TRexSelector::createVotingGrid() const {
     const double v_start = 0.5;
-    const double v_end = 1.0 - eps_;
-    const double v_step = 1.0 / static_cast<double>(trex_ctrl_.K);
+    const double v_end   = 1.0 - eps_;
+    const double v_step  = 1.0 / static_cast<double>(trex_ctrl_.K);
 
-    const std::size_t v_len = static_cast<std::size_t>(
-        std::floor((v_end - v_start) / v_step)) + 1;
+    // Regular grid points: 0.5, 0.5 + 1/K, ... strictly below 1.0.
+    std::vector<double> v;
+    v.reserve(trex_ctrl_.K / 2 + 2);
+    for (std::size_t i = 0; v_start + static_cast<double>(i) * v_step < 1.0; ++i) {
+        v.push_back(v_start + static_cast<double>(i) * v_step);
+    }
 
-    Eigen::VectorXd grid(v_len);
-    for (Eigen::Index i = 0; i < static_cast<Eigen::Index>(v_len); ++i) {
-        grid(i) = v_start + static_cast<double>(i) * v_step;
+    // Floating-point-robust sentinel for "selected in all K experiments".
+    // Avoid reliance on bit-exact agreement between grid's arithmetic and
+    // independently-accumulated Phi values in the experiment runner.
+    v.push_back(v_end);
+
+    Eigen::VectorXd grid(static_cast<Eigen::Index>(v.size()));
+    for (Eigen::Index i = 0; i < static_cast<Eigen::Index>(v.size()); ++i) {
+        grid(i) = v[static_cast<std::size_t>(i)];
     }
     return grid;
 }
