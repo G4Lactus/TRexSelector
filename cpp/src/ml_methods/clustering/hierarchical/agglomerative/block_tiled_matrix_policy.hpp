@@ -67,6 +67,16 @@ namespace detail {
         double gamma = 0.0;
     };
 
+    /** @brief Value-dependent `false` for the `else` of an `if constexpr` chain
+     *  over the non-type LinkageMethod parameter. A plain
+     *  `static_assert(sizeof(SelectedMethod) == 0)` is non-dependent there
+     *  (the size of an enum value is a compile-time constant), so GCC evaluates
+     *  it even in the discarded branch and fires spuriously. Gating on a
+     *  value-dependent template defers evaluation until the branch is actually
+     *  instantiated (i.e. only for a genuinely unsupported method). */
+    template <LinkageMethod>
+    inline constexpr bool unsupported_linkage_v = false;
+
     /**
      * @brief Computes the Lance-Williams coefficients for the specified linkage method.
      *
@@ -115,7 +125,7 @@ namespace detail {
             coeffs.beta = -n_L / total_n;
 
         } else {
-            static_assert(sizeof(SelectedMethod) == 0,
+            static_assert(unsupported_linkage_v<SelectedMethod>,
                           "Unsupported Linkage Method for Matrix Policy.");
         }
         return coeffs;
