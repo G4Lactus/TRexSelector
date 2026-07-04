@@ -21,7 +21,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, macos-latest]
+        # Pin macOS to a stable arm64 runner (macos-14) rather than macos-latest,
+        # which migrated to the bleeding-edge macOS 26 image around 2026-06-15 and
+        # breaks delocate-wheel's repair/arch step. macos-14 also yields wheels with
+        # a broader minimum-OS compatibility.
+        os: [ubuntu-latest, macos-14]
 
     steps:
       - uses: actions/checkout@v4
@@ -36,18 +40,30 @@ jobs:
           CIBW_BUILD: "cp39-* cp310-* cp311-* cp312-*"
           CIBW_SKIP: "*-musllinux_*"
 
+          # Surface the compiler/CMake output so build failures are diagnosable
+          CIBW_BUILD_VERBOSITY: "1"
+
           # -----------------------------------------------------------------------
           # Linux (manylinux_2_28 — dnf/yum based)
           # -----------------------------------------------------------------------
           CIBW_MANYLINUX_X86_64_IMAGE: manylinux_2_28
           CIBW_BEFORE_ALL_LINUX: |
+            # Eigen (via EPEL) + LLVM OpenMP runtime from the distro.
             dnf install -y epel-release || true
-            dnf install -y eigen3-devel boost-devel libomp-devel || \
-              yum install -y epel-release && yum install -y eigen3-devel boost-devel libomp-devel
-            # cereal is header-only — install from GitHub release tarball
+            dnf install -y eigen3-devel libomp-devel || \
+              ( yum install -y epel-release && yum install -y eigen3-devel libomp-devel )
+            # cereal is header-only — install from GitHub release tarball.
             curl -fsSL https://github.com/USCiLab/cereal/archive/refs/tags/v1.3.2.tar.gz \
               | tar xz -C /tmp
             cp -r /tmp/cereal-1.3.2/include/cereal /usr/local/include/cereal
+            # Boost: manylinux_2_28 (AlmaLinux 8) ships Boost 1.66, but the project
+            # requires >= 1.80. We only use header-only components (random, math),
+            # so install a modern header-only Boost into /usr/local/include, where
+            # find_package(Boost) locates it (and there is no distro boost-devel to
+            # shadow it, since we no longer install boost-devel).
+            curl -fsSL https://archives.boost.io/release/1.85.0/source/boost_1_85_0.tar.gz \
+              | tar xz -C /tmp
+            cp -r /tmp/boost_1_85_0/boost /usr/local/include/boost
 
           # -----------------------------------------------------------------------
           # macOS — Homebrew LLVM required for OpenMP
