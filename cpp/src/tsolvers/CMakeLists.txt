@@ -111,13 +111,7 @@ target_compile_definitions(trex_tsolvers PUBLIC
     $<$<BOOL:${TREX_USE_BLAS_LAPACK}>:EIGEN_USE_BLAS>
 )
 
-# NOTE: -ffast-math and -march=native are gated behind NOT TREX_PORTABLE_BUILD (wheel/PyPI builds).
-target_compile_options(trex_tsolvers PRIVATE
-    -Wno-deprecated-declarations
-    $<$<CONFIG:Debug>:-g -O0 -Wall -Wextra>
-    $<$<CONFIG:Release>:-O3 -DNDEBUG -funroll-loops>
-    $<$<AND:$<CONFIG:Release>,$<NOT:$<BOOL:${TREX_PORTABLE_BUILD}>>>:-march=native -ffast-math>
-)
+trex_set_compile_options(trex_tsolvers)
 # ==============================================================================
 
 

@@ -55,8 +55,17 @@ endif()
 # ============================================================================
 # User-configurable options
 # ============================================================================
-option(TREX_USE_BLAS_LAPACK "Use BLAS/LAPACK backends for Eigen" ON)
+# On Windows there is no system BLAS/LAPACK to find (Accelerate/OpenBLAS), so
+# default to Eigen's built-in backends there.
+if(WIN32)
+    option(TREX_USE_BLAS_LAPACK "Use BLAS/LAPACK backends for Eigen" OFF)
+else()
+    option(TREX_USE_BLAS_LAPACK "Use BLAS/LAPACK backends for Eigen" ON)
+endif()
 option(TREX_PORTABLE_BUILD "Disable -march=native for portable/wheel builds. Set ON when building for PyPI or CI." OFF)
+
+# Shared per-target compiler flags (GCC/Clang vs MSVC)
+include(cmake/TRexCompilerOptions.cmake)
 
 # C++ Standard
 set(CMAKE_CXX_STANDARD 20)
@@ -79,6 +88,14 @@ if(APPLE)
     set(OpenMP_CXX_LIB_NAMES   "libomp")
     set(OpenMP_libomp_LIBRARY  "${HOMEBREW_LLVM_PREFIX}/lib/libomp.dylib"
         CACHE FILEPATH "libomp path - pinned to stable Homebrew symlink" FORCE)
+endif()
+if(MSVC)
+    if(CMAKE_VERSION VERSION_LESS 3.30)
+        message(FATAL_ERROR "MSVC builds need CMake >= 3.30 (OpenMP_RUNTIME_MSVC support)")
+    endif()
+    # MSVC's default OpenMP 2.0 rejects the unsigned loop indices used in the
+    # solvers (error C3016); the LLVM runtime (-openmp:llvm) supports them.
+    set(OpenMP_RUNTIME_MSVC "llvm")
 endif()
 find_package(OpenMP REQUIRED)
 

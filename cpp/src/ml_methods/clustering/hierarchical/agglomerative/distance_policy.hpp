@@ -19,6 +19,7 @@
 
 // std includes
 #include <algorithm>
+#include <bit>
 #include <cmath>
 #include <random>
 
@@ -231,7 +232,7 @@ public:
         // Correlation LSH Gatekeeper Filter with fixed Hamming threshold
         else if constexpr (SelectedMetric == DistanceMetric::Correlation_LSH_Filter) {
             const int HAMMING_THRESHOLD = 14;
-            int bit_diff = __builtin_popcountll(lsh_signatures_[i] ^ lsh_signatures_[j]);
+            int bit_diff = std::popcount(lsh_signatures_[i] ^ lsh_signatures_[j]);
             if (bit_diff <= HAMMING_THRESHOLD) {
                 const RealScalar denom = std::sqrt(sq_norms_(i) * sq_norms_(j));
                 if (denom <= RealScalar(0.0)) { return RealScalar(1.0); }
@@ -246,7 +247,7 @@ public:
 
         // Correlation LSH Approximation
         else if constexpr (SelectedMetric == DistanceMetric::Correlation_LSH_Approx) {
-            int bit_diff = __builtin_popcountll(lsh_signatures_[i] ^ lsh_signatures_[j]);
+            int bit_diff = std::popcount(lsh_signatures_[i] ^ lsh_signatures_[j]);
             double theta = M_PI * (static_cast<double>(bit_diff) / 64.0);
             double approx_corr = std::cos(theta);
             return 1.0 - std::abs(approx_corr);

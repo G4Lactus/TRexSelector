@@ -17,7 +17,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-24.04, macos-latest]
+        os: [ubuntu-24.04, macos-latest, windows-latest]
 
     steps:
       - uses: actions/checkout@v5
@@ -46,6 +46,18 @@ jobs:
         run: brew install eigen boost cereal googletest llvm libomp
 
       # -----------------------------------------------------------------------
+      # Windows: dependencies come from vcpkg (manifest cpp/vcpkg.json) during
+      # configure; cache the vcpkg binary archives to keep reruns fast
+      # -----------------------------------------------------------------------
+      - name: Cache vcpkg binary archives (Windows)
+        if: runner.os == 'Windows'
+        uses: actions/cache@v4
+        with:
+          path: ~\AppData\Local\vcpkg\archives
+          key: vcpkg-${{ runner.os }}-${{ hashFiles('cpp/vcpkg.json') }}
+          restore-keys: vcpkg-${{ runner.os }}-
+
+      # -----------------------------------------------------------------------
       # Configure
       # -----------------------------------------------------------------------
       - name: Configure (Ubuntu)
@@ -64,11 +76,21 @@ jobs:
             -DCMAKE_CXX_COMPILER="$(brew --prefix llvm)/bin/clang++" \
             -DTREX_PORTABLE_BUILD=ON
 
+      - name: Configure (Windows)
+        if: runner.os == 'Windows'
+        run: >
+          cmake -S cpp -B cpp/build/ci
+          -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_INSTALLATION_ROOT/scripts/buildsystems/vcpkg.cmake"
+          -DTREX_PORTABLE_BUILD=ON
+          -DTREX_USE_BLAS_LAPACK=OFF
+
       # -----------------------------------------------------------------------
       # Build + Test
       # -----------------------------------------------------------------------
+      # --config / -C Release: needed for the multi-config VS generator on
+      # Windows; harmless no-ops for the single-config Makefile builds
       - name: Build
-        run: cmake --build cpp/build/ci --parallel
+        run: cmake --build cpp/build/ci --config Release --parallel
 
       - name: Test
-        run: ctest --test-dir cpp/build/ci --output-on-failure
+        run: ctest --test-dir cpp/build/ci -C Release --output-on-failure

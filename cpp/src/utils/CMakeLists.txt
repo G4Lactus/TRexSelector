@@ -64,15 +64,16 @@ target_compile_definitions(trex_utils PUBLIC
     # Only route Eigen through an external BLAS when it is available;
     # TREX_USE_BLAS_LAPACK=OFF (Python/portable builds) keeps Eigen self-contained.
     $<$<BOOL:${TREX_USE_BLAS_LAPACK}>:EIGEN_USE_BLAS>
+    # MSVC: expose M_PI from <cmath>; stop <windows.h> from defining min/max macros
+    $<$<CXX_COMPILER_ID:MSVC>:_USE_MATH_DEFINES;NOMINMAX>
 )
 
-# NOTE: -ffast-math and -march=native are gated behind NOT TREX_PORTABLE_BUILD (wheel/PyPI builds).
-target_compile_options(trex_utils PRIVATE
-    -Wno-deprecated-declarations
-    $<$<CONFIG:Debug>:-g -O0 -Wall -Wextra>
-    $<$<CONFIG:Release>:-O3 -DNDEBUG -funroll-loops>
-    $<$<AND:$<CONFIG:Release>,$<NOT:$<BOOL:${TREX_PORTABLE_BUILD}>>>:-march=native -ffast-math>
+target_compile_options(trex_utils PUBLIC
+    # Eigen/GTest-heavy TUs exceed MSVC's default COFF section limit
+    $<$<CXX_COMPILER_ID:MSVC>:/bigobj>
 )
+
+trex_set_compile_options(trex_utils)
 # ==================================================================================
 
 
