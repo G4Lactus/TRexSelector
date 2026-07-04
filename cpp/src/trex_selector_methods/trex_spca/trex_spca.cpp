@@ -118,16 +118,15 @@ TRexSPCAResult TRexSPCA::select() {
                 static_cast<std::uint32_t>(seed_), m) & 0x7FFFFFFFu)
             : -1;
 
-        tc::TRexControlParameter trex_ctrl = spca_ctrl_.trex_ctrl;
         tg::TRexGVSControlParameter gvs_ctrl = spca_ctrl_.gvs_ctrl;
 
         // EN + TENETAug: always override (IEN is not used by TRexSPCA).
         // GVSType::EN + en_solver routes to TENET_Solver / TENETAug_Solver in
         // TRexGVSSelector. The solver variant is user-selectable via
         // spca_ctrl_.en_solver (both are equivalent for lambda2 > 0).
-        gvs_ctrl.gvs_type     = tg::GVSType::EN;
-        gvs_ctrl.en_solver    = spca_ctrl_.en_solver;
-        trex_ctrl.solver_type = (spca_ctrl_.en_solver == tg::ENSolverType::TENET_AUG)
+        gvs_ctrl.gvs_type            = tg::GVSType::EN;
+        gvs_ctrl.en_solver           = spca_ctrl_.en_solver;
+        gvs_ctrl.trex_ctrl.solver_type = (spca_ctrl_.en_solver == tg::ENSolverType::TENET_AUG)
             ? sd::SolverTypeForTRex::TENET_AUG
             : sd::SolverTypeForTRex::TENET;
 
@@ -136,7 +135,6 @@ TRexSPCAResult TRexSPCA::select() {
             Eigen::Map<Eigen::VectorXd> z_map(z_m.data(), n);
             tg::TRexGVSSelector gvs(*X_, z_map, tFDR_,
                                     gvs_ctrl,
-                                    trex_ctrl,
                                     seed_pc, /*verbose=*/false);
             gvs.select();
 

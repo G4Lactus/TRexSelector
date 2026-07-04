@@ -114,8 +114,8 @@ struct TRexSPCAControlParameter {
     /** @brief GVS-specific control parameters forwarded to each per-PC TRexGVSSelector run.
      *
      *  EN + TENET is always used: gvs_ctrl.gvs_type is overridden to EN
-     *  and trex_ctrl.solver_type is overridden to TENET internally.
-     *  (IEN is not used by TRexSPCA.)
+     *  and gvs_ctrl.trex_ctrl.solver_type is overridden to TENET/TENET_AUG
+     *  internally (matching en_solver). (IEN is not used by TRexSPCA.)
      *
      *  The GVS ridge penalty is controlled via:
      *    - gvs_ctrl.lambda_2       : set > 0.0 to supply a fixed value; 0.0 (default)
@@ -140,14 +140,10 @@ struct TRexSPCAControlParameter {
      */
     tg::ENSolverType en_solver = tg::ENSolverType::TENET_AUG;
 
-    // ====================================
-    // Base T-Rex Sub-Selector
-    // ====================================
-
-    /** @brief Base T-Rex algorithmic control parameters forwarded to each per-PC
-     *  TRexGVSSelector run.
-     */
-    tc::TRexControlParameter trex_ctrl;
+    // Note: the base T-Rex algorithmic control parameters are configured via
+    // `gvs_ctrl.trex_ctrl` (TRexGVSControlParameter now nests its own
+    // trex_ctrl) — there is no separate top-level trex_ctrl here, avoiding a
+    // duplicate/out-of-sync copy.
 };
 
 
