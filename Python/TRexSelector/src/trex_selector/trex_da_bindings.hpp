@@ -59,8 +59,14 @@ public:
         this->y_map_ = std::make_unique<Eigen::Map<Eigen::VectorXd>>(y.data(),
                                                                   y.size());
 
+        // The refactored C++ constructor takes a single DA control struct that
+        // nests the base algorithmic parameters as `trex_ctrl`. Merge the
+        // separately-supplied `trex_control` into that nested field.
+        TRexDAControlParameter da_ctrl = da_control;
+        da_ctrl.trex_ctrl = trex_control;
+
         this->selector_ = std::make_unique<TRexDASelector>(
-            *(this->X_map_), *(this->y_map_), tFDR, da_control, trex_control, seed, verbose
+            *(this->X_map_), *(this->y_map_), tFDR, da_ctrl, seed, verbose
         );
     }
 
@@ -87,6 +93,11 @@ inline void bind_trex_da(py::module& m) {
         .value("PRIOR_GROUPS", DAMethod::PRIOR_GROUPS, "Prior group correlation structures.")
         .export_values();
 
+    py::enum_<BTSelectionMode>(m, "BTSelectionMode", "Cell-selection policy for the BT (binary-tree) DA method.")
+        .value("FeasibleOnly", BTSelectionMode::FeasibleOnly, "Only FDP-feasible cells may be selected (default; controls realized FDR).")
+        .value("RFaithful",    BTSelectionMode::RFaithful,    "Reproduces the R reference; may inflate FDR at high within-group correlation.")
+        .export_values();
+
     py::class_<TRexDAControlParameter>(m, "TRexDAControlParameter", "Control parameters for TRexDASelector.")
         .def(py::init<>())
         .def_readwrite("method", &TRexDAControlParameter::method, "The data augmentation method to use.")
@@ -94,8 +105,10 @@ inline void bind_trex_da(py::module& m) {
         .def_readwrite("rho_thr_DA", &TRexDAControlParameter::rho_thr_DA, "Correlation threshold for DA.")
         .def_readwrite("hc_linkage", &TRexDAControlParameter::hc_linkage, "Hierarchical clustering linkage method.")
         .def_readwrite("hc_grid_length", &TRexDAControlParameter::hc_grid_length, "Grid length for hierarchical clustering.")
+        .def_readwrite("bt_selection_mode", &TRexDAControlParameter::bt_selection_mode, "Cell-selection policy for the BT method (FeasibleOnly or RFaithful).")
         .def_readwrite("prior_groups", &TRexDAControlParameter::prior_groups, "Prior groupings provided to the selector.")
-        .def_readwrite("rho_grid_labels", &TRexDAControlParameter::rho_grid_labels, "Labels for the correlation grid.");
+        .def_readwrite("rho_grid_labels", &TRexDAControlParameter::rho_grid_labels, "Labels for the correlation grid.")
+        .def_readwrite("trex_ctrl", &TRexDAControlParameter::trex_ctrl, "Nested base T-Rex algorithmic control parameters (overridden by the separate trex_control argument to TRexDASelector).");
 
     py::class_<TRexDASelector::DASelectionResult, TRexSelector::SelectionResult>(m, "DASelectionResult", "Extended SelectionResult holding specific DA outputs.")
         .def_readonly("rho_thresh", &TRexDASelector::DASelectionResult::rho_thresh, "The threshold applied for rho.")

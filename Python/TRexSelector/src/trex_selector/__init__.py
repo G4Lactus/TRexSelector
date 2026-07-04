@@ -8,9 +8,10 @@ from . import utils
 
 # Import the compiled C++ extension inside the nested modules
 from .trex_selector_methods import (
-    LLoopStrategy, TRexControlParameter, SelectionResult, TRexSelector as PyTRexSelector,
-    TRexDASelector as PyTRexDASelector, TRexDAControlParameter, DAMethod, DASelectionResult,
-    TRexGVSSelector as PyTRexGVSSelector, TRexGVSControlParameter, GVSType, GVSSelectionResult,
+    LLoopStrategy, ScalingMode, TRexControlParameter, SelectionResult, TRexSelector as PyTRexSelector,
+    TRexDASelector as PyTRexDASelector, TRexDAControlParameter, DAMethod, BTSelectionMode, DASelectionResult,
+    TRexGVSSelector as PyTRexGVSSelector, TRexGVSControlParameter, GVSType, ENSolverType,
+                        LambdaSelectionMethod, GVSSelectionResult,
     TRexScreeningSelector as PyTRexScreeningSelector, ScreenTRexControlParameter, ScreenTRexMethod,
                              ScreenTRexSelectionResult,
     TRexBiobankScreeningSelector as PyBiobankScreeningSelector, BiobankScreenTRexControl,
@@ -163,13 +164,10 @@ class TRexGVSSelector(TRexSelector):
         if trex_control is None:
             trex_control = TRexControlParameter()
 
-        # Derive solver_type from gvs_type — mirrors R package behaviour.
-        # EN (Ordinary Elastic Net) requires TENET;
-        # IEN (Informed EN) requires TLASSO.
-        trex_control.solver_type = (SolverTypeForTRex.TLASSO
-                                    if gvs_control.gvs_type == GVSType.IEN
-                                    else SolverTypeForTRex.TENET)
-
+        # The C++ wrapper authoritatively derives the required solver_type from
+        # gvs_control.gvs_type and gvs_control.en_solver (EN -> TENET/TENET_AUG,
+        # IEN -> TLASSO), overriding trex_control.solver_type. No Python-side
+        # derivation is needed here.
         self._selector: PyTRexGVSSelector = PyTRexGVSSelector(self.X, self.y, tFDR,
                                                               gvs_control,
                                                               trex_control,
@@ -347,6 +345,7 @@ class TRexSPCASelector:
 
 __all__ = [
     "LLoopStrategy",
+    "ScalingMode",
     "SolverTypeForTRex",
     "SolverHyperparameters",
     "DummyDistribution",
@@ -356,10 +355,13 @@ __all__ = [
     "TRexDASelector",
     "TRexDAControlParameter",
     "DAMethod",
+    "BTSelectionMode",
     "DASelectionResult",
     "TRexGVSSelector",
     "TRexGVSControlParameter",
     "GVSType",
+    "ENSolverType",
+    "LambdaSelectionMethod",
     "GVSSelectionResult",
     "TRexScreeningSelector",
     "ScreenTRexControlParameter",

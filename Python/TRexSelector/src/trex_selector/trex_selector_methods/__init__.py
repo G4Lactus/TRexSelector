@@ -1,6 +1,7 @@
 # Core TRex Selector Methods classes
 from .._core.trex_selector_methods import (
     LLoopStrategy,
+    ScalingMode,
     SolverTypeForTRex,
     SolverHyperparameters,
     DummyDistribution,
@@ -9,11 +10,14 @@ from .._core.trex_selector_methods import (
     TRexSelector,
     # DA-TRex
     DAMethod,
+    BTSelectionMode,
     TRexDAControlParameter,
     DASelectionResult,
     TRexDASelector,
     # GVS-TRex
     GVSType,
+    ENSolverType,
+    LambdaSelectionMethod,
     TRexGVSControlParameter,
     GVSSelectionResult,
     TRexGVSSelector,
@@ -30,11 +34,12 @@ from .._core.trex_selector_methods import (
     SPCAMode,
     TRexSPCAControlParameter,
     TRexSPCAResult,
-    TRexSPCA,
+    TRexSPCASelector,
 )
 
 __all__ = [
     "LLoopStrategy",
+    "ScalingMode",
     "SolverTypeForTRex",
     "SolverHyperparameters",
     "DummyDistribution",
@@ -42,10 +47,13 @@ __all__ = [
     "SelectionResult",
     "TRexSelector",
     "DAMethod",
+    "BTSelectionMode",
     "TRexDAControlParameter",
     "DASelectionResult",
     "TRexDASelector",
     "GVSType",
+    "ENSolverType",
+    "LambdaSelectionMethod",
     "TRexGVSControlParameter",
     "GVSSelectionResult",
     "TRexGVSSelector",
@@ -59,5 +67,5 @@ __all__ = [
     "SPCAMode",
     "TRexSPCAControlParameter",
     "TRexSPCAResult",
-    "TRexSPCA",
+    "TRexSPCASelector",
 ]

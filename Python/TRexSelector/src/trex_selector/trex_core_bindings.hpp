@@ -20,6 +20,8 @@
 #include <trex_selector_methods/trex_core/trex.hpp>
 #include <trex_selector_methods/trex_utils/trex_solver_dispatch.hpp>
 #include <utils/datageneration/utils_dummygen.hpp>
+
+// std includes
 #include <numbers>
 
 // =====================================================================================
@@ -159,6 +161,13 @@ public:
 inline void bind_trex_core(py::module& m_tsm) {
     namespace sd = trex::trex_selector_methods::utils::solver_dispatch;
     namespace dg = trex::utils::datageneration::dummygen;
+    namespace dn = trex::trex_selector_methods::utils::data_normalizer;
+
+    // Bind ScalingMode enum
+    py::enum_<dn::ScalingMode>(m_tsm, "ScalingMode", "Column scaling convention applied to X (and dummies) after centering.")
+        .value("L2",     dn::ScalingMode::L2,     "Divide each centered column by its L2 norm (unit L2 norm).")
+        .value("ZSCORE", dn::ScalingMode::ZSCORE, "Divide each centered column by its sample SD (n-1); glmnet standardize=TRUE convention.")
+        .export_values();
 
     // Bind LLoopStrategy enum
     py::enum_<LLoopStrategy>(m_tsm, "LLoopStrategy", "L-loop strategy controlling how dummy variables are constructed in each experiment.")
@@ -184,6 +193,7 @@ inline void bind_trex_core(py::module& m_tsm) {
         .value("TNCGMP",     sd::SolverTypeForTRex::TNCGMP,     "Terminating Norm-Corrected Generalized Matching Pursuit.")
         .value("TOOLS",      sd::SolverTypeForTRex::TOOLS,      "Terminating Orthogonal Least Squares.")
         .value("TAFS",       sd::SolverTypeForTRex::TAFS,       "Terminating AFS.")
+        .value("TENET_AUG",  sd::SolverTypeForTRex::TENET_AUG,  "Terminating Elastic Net via augmented LASSO (GVS).")
         .export_values();
 
     // Bind SolverHyperparameters struct
@@ -284,6 +294,7 @@ inline void bind_trex_core(py::module& m_tsm) {
         .def_readwrite("max_inner_threads",   &TRexControlParameter::max_inner_threads,   "Thread count for inner solver operations.")
         .def_readwrite("solver_type",         &TRexControlParameter::solver_type,         "Solver algorithm to use for T-Rex.")
         .def_readwrite("solver_params",       &TRexControlParameter::solver_params,       "Hyperparameters for the selected solver.")
+        .def_readwrite("scaling_mode",        &TRexControlParameter::scaling_mode,        "Column scaling convention applied to X after centering (L2 or ZSCORE).")
         .def_readwrite("dummy_distribution",  &TRexControlParameter::dummy_distribution,  "Distribution used to generate dummy variables.");
 
     // Bind TRexSelector::SelectionResult

@@ -118,15 +118,9 @@ def test_ml_methods_symbols_importable():
         ZScoreScaler,
         LpNormScaler,
         NormType,
-        RidgeCV,
-        RidgeGCV,
-        RidgePath,
     )
     assert callable(ZScoreScaler)
     assert callable(LpNormScaler)
-    assert callable(RidgeCV)
-    assert callable(RidgeGCV)
-    assert callable(RidgePath)
     assert NormType.L1 is not None
     assert NormType.L2 is not None
 

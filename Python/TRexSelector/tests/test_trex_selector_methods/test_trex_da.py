@@ -61,6 +61,10 @@ def test_da_control_parameter_fields():
     ctrl.rho_thr_DA = 0.5
     assert ctrl.rho_thr_DA == pytest.approx(0.5)
 
+    # bt_selection_mode
+    ctrl.bt_selection_mode = trex_selector.BTSelectionMode.RFaithful
+    assert ctrl.bt_selection_mode == trex_selector.BTSelectionMode.RFaithful
+
 
 # ---------------------------------------------------------------------------
 # Properties inherited from TRexSelector base

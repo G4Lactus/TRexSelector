@@ -57,8 +57,14 @@ public:
         this->y_map_ = std::make_unique<Eigen::Map<Eigen::VectorXd>>(y.data(),
                                                                   y.size());
 
+        // The refactored C++ constructor takes a single screening control
+        // struct that nests the base algorithmic parameters as `trex_ctrl`.
+        // Merge the separately-supplied `trex_control` into that nested field.
+        ScreenTRexControlParameter screen_ctrl = screen_control;
+        screen_ctrl.trex_ctrl = trex_control;
+
         this->selector_ = std::make_unique<ScreenTRexSelector>(
-            *(this->X_map_), *(this->y_map_), screen_control, trex_control, seed, verbose
+            *(this->X_map_), *(this->y_map_), screen_ctrl, seed, verbose
         );
     }
 
@@ -92,7 +98,8 @@ inline void bind_trex_screen(py::module& m) {
         .def_readwrite("trex_method", &ScreenTRexControlParameter::trex_method, "Screening method variant to use (see ScreenTRexMethod).")
         .def_readwrite("rho_thr_DA", &ScreenTRexControlParameter::rho_thr_DA, "Correlation threshold passed to the inner DA step. Only applies for TREX_DA_AR1 and TREX_DA_EQUI.")
         .def_readwrite("cor_coef",   &ScreenTRexControlParameter::cor_coef,   "Fixed correlation coefficient for AR1 or equicorrelated structure. Estimated automatically if <= -1. Only applies for TREX_DA_AR1 and TREX_DA_EQUI.")
-        .def_readwrite("n_blocks",   &ScreenTRexControlParameter::n_blocks,   "Number of equicorrelated blocks. Only applies for TREX_DA_BLOCK_EQUI.");
+        .def_readwrite("n_blocks",   &ScreenTRexControlParameter::n_blocks,   "Number of equicorrelated blocks. Only applies for TREX_DA_BLOCK_EQUI.")
+        .def_readwrite("trex_ctrl",  &ScreenTRexControlParameter::trex_ctrl,  "Nested base T-Rex algorithmic control parameters (overridden by the separate trex_control argument to TRexScreeningSelector).");
 
     py::class_<ScreenTRexSelectionResult, TRexSelector::SelectionResult>(m, "ScreenTRexSelectionResult", "SelectionResult extended with screening-specific fields.")
         .def_readonly("estimated_FDR", &ScreenTRexSelectionResult::estimated_FDR, "Estimated false discovery rate.")

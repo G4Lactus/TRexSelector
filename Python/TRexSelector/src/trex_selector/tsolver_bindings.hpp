@@ -23,6 +23,7 @@
 #include <tsolvers/linear_model/lars_based/tstepwise_solver.hpp>
 #include <tsolvers/linear_model/lars_based/tstagewise_solver.hpp>
 #include <tsolvers/linear_model/lars_based/tenet_solver.hpp>
+#include <tsolvers/linear_model/lars_based/tenet_aug_solver.hpp>
 
 // OMP-based solvers
 #include <tsolvers/linear_model/omp_based/tomp_solver.hpp>
@@ -425,6 +426,51 @@ inline void bind_tsolvers_module(py::module& m) {
              "Get the total number of variable removals during solution path.")
         .def("getCyclingRatio", &PySolverWrapper<TENET_Solver>::getCyclingRatio,
              "Get the cycling ratio (removals / additions).");
+
+
+    // TENETAug: Elastic Net via augmented LASSO (constructor takes lambda2)
+    py::class_<PySolverWrapper<TENETAug_Solver>>(m_lars, "TENETAug_Solver")
+        .def(py::init<Eigen::Ref<Eigen::MatrixXd>, Eigen::Ref<Eigen::MatrixXd>,
+            Eigen::Ref<Eigen::VectorXd>, double, bool, bool, bool>(),
+             py::arg("X"),
+             py::arg("D"),
+             py::arg("y"),
+             py::arg("lambda2"),
+             py::arg("normalize") = true,
+             py::arg("intercept") = true,
+             py::arg("verbose") = false,
+             "Initializes the augmented-LASSO Elastic Net solver with an explicit"
+             " secondary L2 penalty `lambda2`.")
+        .def("executeStep", &PySolverWrapper<TENETAug_Solver>::executeStep,
+             py::arg("T_stop") = 0,
+             py::arg("early_stop") = true,
+             "Executes the underlying augmented TLASSO path up to constraint `T_stop`."
+             " Pass 0 or -1 to calculate the full sequential path.")
+        .def("getBeta", &PySolverWrapper<TENETAug_Solver>::getBeta,
+            py::arg("step") = -1)
+        .def("getIntercept", &PySolverWrapper<TENETAug_Solver>::getIntercept,
+            py::arg("step") = -1)
+        .def("getBetaPath", &PySolverWrapper<TENETAug_Solver>::getBetaPath)
+        .def("solverTypeToString", &PySolverWrapper<TENETAug_Solver>::solverTypeToString)
+        .def("getCp", &PySolverWrapper<TENETAug_Solver>::getCp)
+        .def("getCpWithSigma", &PySolverWrapper<TENETAug_Solver>::getCpWithSigma,
+                    py::arg("sigma_hat_sq"))
+        .def("getRSS", &PySolverWrapper<TENETAug_Solver>::getRSS)
+        .def("getR2", &PySolverWrapper<TENETAug_Solver>::getR2)
+        .def("getDoF", &PySolverWrapper<TENETAug_Solver>::getDoF)
+        .def("getResiduals", &PySolverWrapper<TENETAug_Solver>::getResiduals)
+        .def("getActions", &PySolverWrapper<TENETAug_Solver>::getActions)
+        .def("getActives", &PySolverWrapper<TENETAug_Solver>::getActives)
+        .def("getInactives", &PySolverWrapper<TENETAug_Solver>::getInactives)
+        .def("getDroppedIndices", &PySolverWrapper<TENETAug_Solver>::getDroppedIndices)
+        .def("getNumActives", &PySolverWrapper<TENETAug_Solver>::getNumActives)
+        .def("getDummyStartIndex", &PySolverWrapper<TENETAug_Solver>::getDummyStartIndex)
+        .def("getNumSteps", &PySolverWrapper<TENETAug_Solver>::getNumSteps)
+        .def("isConnected", &PySolverWrapper<TENETAug_Solver>::isConnected)
+        .def("reconnect", &PySolverWrapper<TENETAug_Solver>::reconnect, py::arg("X"),
+                    py::arg("D"))
+        .def("restore", &PySolverWrapper<TENETAug_Solver>::restore, py::arg("X"),
+                    py::arg("D"), py::arg("y"));
 
 
     // -------------------------------------------------------------------------

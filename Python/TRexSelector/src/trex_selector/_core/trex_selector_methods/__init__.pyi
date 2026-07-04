@@ -14,6 +14,10 @@ class LLoopStrategy:
     PERMUTATION_DIRECT: LLoopStrategy
     DIRECT: LLoopStrategy
 
+class ScalingMode:
+    L2: ScalingMode
+    ZSCORE: ScalingMode
+
 class SolverTypeForTRex:
     TLARS: SolverTypeForTRex
     TLASSO: SolverTypeForTRex
@@ -27,6 +31,7 @@ class SolverTypeForTRex:
     TNCGMP: SolverTypeForTRex
     TOOLS: SolverTypeForTRex
     TAFS: SolverTypeForTRex
+    TENET_AUG: SolverTypeForTRex
 
 # ---------------------------------------------------------------------------
 # SolverHyperparameters
@@ -119,6 +124,7 @@ class TRexControlParameter:
     max_inner_threads: int
     solver_type: SolverTypeForTRex
     solver_params: SolverHyperparameters
+    scaling_mode: ScalingMode
     dummy_distribution: DummyDistribution
     def __init__(self) -> None: ...
 
@@ -184,14 +190,20 @@ class DAMethod:
     NN: DAMethod
     PRIOR_GROUPS: DAMethod
 
+class BTSelectionMode:
+    FeasibleOnly: BTSelectionMode
+    RFaithful: BTSelectionMode
+
 class TRexDAControlParameter:
     method: DAMethod
     cor_coef: float
     rho_thr_DA: float
     hc_linkage: LinkageMethod
     hc_grid_length: int
+    bt_selection_mode: BTSelectionMode
     prior_groups: list[list[int]] # nested list of groups
     rho_grid_labels: list[float]
+    trex_ctrl: TRexControlParameter
     def __init__(self) -> None: ...
 
 class DASelectionResult(SelectionResult):
@@ -225,12 +237,30 @@ class GVSType:
     EN: GVSType
     IEN: GVSType
 
+class ENSolverType:
+    TENET: ENSolverType
+    TENET_AUG: ENSolverType
+
+class LambdaSelectionMethod:
+    CV_1SE_SVD: LambdaSelectionMethod
+    CV_MIN_SVD: LambdaSelectionMethod
+    CV_1SE_CCD: LambdaSelectionMethod
+    CV_MIN_CCD: LambdaSelectionMethod
+
 class TRexGVSControlParameter:
     gvs_type: GVSType
+    en_solver: ENSolverType
     corr_max: float
     hc_linkage: LinkageMethod
     lambda_2: float
+    lambda2_method: LambdaSelectionMethod
+    cv_n_folds: int
+    cv_n_lambda: int
+    cv_seed: int
     prior_groups: list[int] # flat list
+    group_labels: list[str]
+    tenet_aug_use_lars: bool
+    trex_ctrl: TRexControlParameter
     def __init__(self) -> None: ...
 
 class GVSSelectionResult(SelectionResult):
@@ -239,6 +269,7 @@ class GVSSelectionResult(SelectionResult):
     max_clusters: int
     hc_method_used: str
     groups_vec: np.ndarray
+    group_labels: list[str]
 
 class TRexGVSSelector(TRexSelector):
     def __init__(
@@ -272,6 +303,7 @@ class ScreenTRexControlParameter:
     rho_thr_DA: float
     cor_coef: float
     n_blocks: int
+    trex_ctrl: TRexControlParameter
     def __init__(self) -> None: ...
 
 class ScreenTRexSelectionResult(SelectionResult):
@@ -356,9 +388,10 @@ class TRexSPCAControlParameter:
     gvs_ctrl: TRexGVSControlParameter
     """TRexGVSControlParameter forwarded to each per-PC GVS run.
     Set gvs_ctrl.gvs_type = GVSType.EN (default) or GVSType.IEN.
-    Set gvs_ctrl.lambda_2 > 0 to bypass auto-determination."""
-    trex_ctrl: TRexControlParameter
-    """TRexControlParameter forwarded to each per-PC T-Rex run."""
+    Set gvs_ctrl.lambda_2 > 0 to bypass auto-determination.
+    The base T-Rex parameters are configured via gvs_ctrl.trex_ctrl."""
+    en_solver: ENSolverType
+    """EN solver variant for the per-PC GVS(EN) sub-selector (default TENET_AUG)."""
     def __init__(self) -> None: ...
 
 class TRexSPCAResult:
@@ -372,8 +405,6 @@ class TRexSPCAResult:
     """Marginal adjusted explained variance per component (M-vector)."""
     cumulative_ev: np.ndarray
     """Cumulative percentage of explained variance (M-vector)."""
-    gvs_type: GVSType
-    """GVS variant (EN or IEN) used for per-PC sub-selection."""
     def __init__(self) -> None: ...
 
 class TRexSPCASelector:

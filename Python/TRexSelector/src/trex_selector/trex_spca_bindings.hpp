@@ -117,9 +117,11 @@ inline void bind_trex_spca(py::module& m) {
         .def_readwrite("gvs_ctrl",              &TRexSPCAControlParameter::gvs_ctrl,
                        "TRexGVSControlParameter forwarded to each per-PC GVS run. "
                        "Set gvs_ctrl.gvs_type = GVSType.EN or IEN. "
-                       "Set gvs_ctrl.lambda_2 > 0 to bypass auto-determination.")
-        .def_readwrite("trex_ctrl",             &TRexSPCAControlParameter::trex_ctrl,
-                       "TRexControlParameter forwarded to each per-PC T-Rex run.");
+                       "Set gvs_ctrl.lambda_2 > 0 to bypass auto-determination. "
+                       "The base T-Rex parameters are configured via gvs_ctrl.trex_ctrl.")
+        .def_readwrite("en_solver",             &TRexSPCAControlParameter::en_solver,
+                       "EN solver variant for the per-PC GVS(EN) sub-selector "
+                       "(TENET or TENET_AUG; default TENET_AUG).");
 
 
     // =========================================================================
@@ -138,9 +140,7 @@ inline void bind_trex_spca(py::module& m) {
         .def_readwrite("adjusted_ev",  &TRexSPCAResult::adjusted_ev,
                        "Marginal adjusted explained variance per component (M-vector).")
         .def_readwrite("cumulative_ev",&TRexSPCAResult::cumulative_ev,
-                       "Cumulative percentage of explained variance (M-vector).")
-        .def_readwrite("gvs_type",     &TRexSPCAResult::gvs_type,
-                       "GVS variant (EN or IEN) used for per-PC sub-selection.");
+                       "Cumulative percentage of explained variance (M-vector).");
 
 
     // =========================================================================

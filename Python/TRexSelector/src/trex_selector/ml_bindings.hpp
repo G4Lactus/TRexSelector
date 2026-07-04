@@ -44,6 +44,54 @@ namespace py = pybind11;
 // =====================================================================================
 
 /**
+ * @brief Zero-copy Python wrapper preserving the historical PCA API shape.
+ *
+ * @details The refactored C++ PCA constructs with (X, M, center, normalize) and
+ *          preprocesses X in place, with a no-argument fit() and an X-taking
+ *          restore(X). This wrapper keeps the Python-facing contract
+ *          `PCA(center, normalize)` + `fit(X, M)` + no-arg `restore()` by holding
+ *          an Eigen::Map into the (Fortran-contiguous) numpy buffer between calls.
+ */
+class PyPCA {
+public:
+    explicit PyPCA(bool center = true, bool normalize = true)
+        : center_(center), normalize_(normalize) {}
+
+    trex::ml_methods::pca::PCAResult fit(Eigen::Ref<Eigen::MatrixXd> X, Eigen::Index M) {
+        x_map_ = std::make_unique<Eigen::Map<Eigen::MatrixXd>>(X.data(), X.rows(), X.cols());
+        pca_ = std::make_unique<trex::ml_methods::pca::PCA>(*x_map_, M, center_, normalize_);
+        return pca_->fit();
+    }
+
+    Eigen::MatrixXd transform(const Eigen::Ref<const Eigen::MatrixXd>& X_new) const {
+        ensureFitted();
+        return pca_->transform(X_new);
+    }
+
+    void restore() {
+        ensureFitted();
+        pca_->restore(*x_map_);
+    }
+
+    const Eigen::RowVectorXd& getMeans() const { ensureFitted(); return pca_->getMeans(); }
+    const Eigen::RowVectorXd& getNorms() const { ensureFitted(); return pca_->getNorms(); }
+    const Eigen::MatrixXd&     getLoadings() const { ensureFitted(); return pca_->getLoadings(); }
+    const Eigen::VectorXd&     getExplainedVariance() const { ensureFitted(); return pca_->getExplainedVariance(); }
+
+private:
+    void ensureFitted() const {
+        if (!pca_) throw std::runtime_error("PCA: call fit() before accessing results.");
+    }
+
+    bool center_;
+    bool normalize_;
+    std::unique_ptr<Eigen::Map<Eigen::MatrixXd>>   x_map_;
+    std::unique_ptr<trex::ml_methods::pca::PCA>    pca_;
+};
+
+// =====================================================================================
+
+/**
  * @brief Bind machine learning methods to a Python module.
  *
  * @param m The Python module to which the methods will be bound.
@@ -150,34 +198,10 @@ inline void bind_ml_methods(py::module& m) {
 
 
     // =========================================================================
-    // Ridge Regression CV bindings (ridge_cv / ridge_gcv moved to TRex_Research
-    // — Python bindings for ridge_cv_svd and enet_cv_ccd are TBD)
+    // Ridge Regression CV bindings intentionally omitted: ridge_cv / ridge_gcv
+    // were moved to TRex_Research. Python bindings for ridge_cv_svd and
+    // enet_cv_ccd are out of scope here (see project notes).
     // =========================================================================
-
-    /*
-    using namespace trex::ml_methods::model_selection;
-
-    /**
-     * @brief Stores the comprehensive results of a ridge regression parameter sweep.
-     *
-     * @details A strict data structure holding evaluated lambdas, their corresponding
-     *          regression coefficients, GCV scores, and the effective degrees of freedom.
-     *          `best_index` tracks the index of the theoretically optimal lambda.
-     */
-    // py::class_<ridge_path>(m, "RidgePath")
-    //     .def(py::init<>())
-    //     .def_readwrite("lambdas", &ridge_path::lambdas)
-    //     .def_readwrite("coefficients", &ridge_path::coefficients)
-    //     .def_readwrite("gcv_scores", &ridge_path::gcv_scores)
-    //     .def_readwrite("df_effective", &ridge_path::df_effective)
-    //     .def_readwrite("best_index", &ridge_path::best_index);
-
-    // py::class_<ridge_gcv>(m, "RidgeGCV")
-    //     ... (full binding TBD after TRex_Research merge)
-
-    // py::class_<ridge_cv>(m, "RidgeCV")
-    //     ... (full binding TBD after TRex_Research merge)
-    */
 
 
     // =================================================================================
@@ -235,25 +259,26 @@ inline void bind_ml_methods(py::module& m) {
      * @details When center=true, X is modified in-place during fit() and restored
      *          when restore() is called or the object is destroyed.
      */
-    py::class_<PCA>(m, "PCA")
-        .def(py::init<bool>(), py::arg("center") = true)
+    py::class_<PyPCA>(m, "PCA")
+        .def(py::init<bool, bool>(), py::arg("center") = true, py::arg("normalize") = true)
         .def("fit",
-            [](PCA& self, Eigen::Ref<Eigen::MatrixXd> X, Eigen::Index M) {
-                Eigen::Map<Eigen::MatrixXd> X_map(X.data(), X.rows(), X.cols());
-                return self.fit(X_map, M);
+            [](PyPCA& self, Eigen::Ref<Eigen::MatrixXd> X, Eigen::Index M) {
+                return self.fit(X, M);
             },
             py::arg("X"), py::arg("M"))
         .def("transform",
-            [](PCA& self,
+            [](PyPCA& self,
                Eigen::Ref<const Eigen::MatrixXd> X_new // NOLINT(performance-unnecessary-value-param)
             ) {
                 return self.transform(X_new);
             },
             py::arg("X_new"))
-        .def("restore", &PCA::restore)
-        .def("get_mean",               &PCA::getMean)
-        .def("get_loadings",           &PCA::getLoadings)
-        .def("get_explained_variance", &PCA::getExplainedVariance);
+        .def("restore", &PyPCA::restore)
+        .def("get_mean",               &PyPCA::getMeans)
+        .def("get_means",              &PyPCA::getMeans)
+        .def("get_norms",              &PyPCA::getNorms)
+        .def("get_loadings",           &PyPCA::getLoadings)
+        .def("get_explained_variance", &PyPCA::getExplainedVariance);
 
 
     // =================================================================================

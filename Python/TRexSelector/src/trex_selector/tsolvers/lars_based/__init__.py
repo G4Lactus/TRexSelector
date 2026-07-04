@@ -3,7 +3,8 @@ from ..._core.tsolvers.lars_based import (
     TLASSO_Solver,
     TSTEPWISE_Solver,
     TSTAGEWISE_Solver,
-    TENET_Solver
+    TENET_Solver,
+    TENETAug_Solver
 )
 
 __all__ = [
@@ -11,5 +12,6 @@ __all__ = [
     "TLASSO_Solver",
     "TSTEPWISE_Solver",
     "TSTAGEWISE_Solver",
-    "TENET_Solver"
+    "TENET_Solver",
+    "TENETAug_Solver"
 ]

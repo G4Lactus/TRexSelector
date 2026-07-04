@@ -9,6 +9,7 @@ from trex_selector.tsolvers.lars_based import (
     TSTEPWISE_Solver,
     TSTAGEWISE_Solver,
     TENET_Solver,
+    TENETAug_Solver,
 )
 from trex_selector.tsolvers.omp_based import (
     TOMP_Solver,
@@ -40,6 +41,9 @@ def make_tstagewise(X, D, y):
 
 def make_tenet(X, D, y):
     return TENET_Solver(X, D, y, 0.1)
+
+def make_tenet_aug(X, D, y):
+    return TENETAug_Solver(X, D, y, 0.1)
 
 def make_tomp(X, D, y):
     return TOMP_Solver(X, D, y)
@@ -108,6 +112,22 @@ def test_tncgmp_fully_corrective(solver_data):
     X, D, y, n, p = solver_data
     solver = TNCGMP_Solver(X, D, y, NCGMPVariant.FullyCorrective)
     assert solver is not None
+
+
+def test_tenet_aug_requires_lambda2(solver_data):
+    """TENETAug needs a lambda2 positional argument."""
+    X, D, y, n, p = solver_data
+    with pytest.raises(Exception):
+        TENETAug_Solver(X, D, y)  # missing lambda2
+
+
+def test_tenet_aug_execute_and_beta(solver_data):
+    X, D, y, n, p = solver_data
+    solver = make_tenet_aug(X, D, y)
+    solver.executeStep(T_stop=0, early_stop=True)
+    beta = solver.getBeta()
+    assert isinstance(beta, np.ndarray)
+    assert isinstance(solver.solverTypeToString(), str)
 
 
 # ---------------------------------------------------------------------------

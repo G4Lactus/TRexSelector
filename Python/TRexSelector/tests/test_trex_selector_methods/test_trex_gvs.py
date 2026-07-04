@@ -59,6 +59,42 @@ def test_gvs_control_new_fields():
     assert gvs_ctrl.lambda_2 == pytest.approx(0.01)
 
 
+def test_gvs_control_en_solver_and_cv_fields():
+    gvs_ctrl = trex_selector.TRexGVSControlParameter()
+
+    # en_solver
+    gvs_ctrl.en_solver = trex_selector.ENSolverType.TENET_AUG
+    assert gvs_ctrl.en_solver == trex_selector.ENSolverType.TENET_AUG
+
+    # lambda2_method
+    gvs_ctrl.lambda2_method = trex_selector.LambdaSelectionMethod.CV_MIN_CCD
+    assert gvs_ctrl.lambda2_method == trex_selector.LambdaSelectionMethod.CV_MIN_CCD
+
+    # CV knobs
+    gvs_ctrl.cv_n_folds = 5
+    gvs_ctrl.cv_n_lambda = 250
+    gvs_ctrl.cv_seed = 7
+    assert gvs_ctrl.cv_n_folds == 5
+    assert gvs_ctrl.cv_n_lambda == 250
+    assert gvs_ctrl.cv_seed == 7
+
+    # tenet_aug_use_lars
+    gvs_ctrl.tenet_aug_use_lars = True
+    assert gvs_ctrl.tenet_aug_use_lars is True
+
+
+def test_gvs_en_tenet_aug_runs(signal_data, fast_control):
+    X, y, n, p = signal_data
+    gvs_ctrl = trex_selector.TRexGVSControlParameter()
+    gvs_ctrl.gvs_type = trex_selector.GVSType.EN
+    gvs_ctrl.en_solver = trex_selector.ENSolverType.TENET_AUG
+    sel = trex_selector.TRexGVSSelector(X, y, gvs_control=gvs_ctrl,
+                                        trex_control=fast_control, verbose=False)
+    res = sel.select()
+    assert res is not None
+    assert res.gvs_type == trex_selector.GVSType.EN
+
+
 def test_gvs_prior_groups(signal_data, fast_control):
     X, y, n, p = signal_data
 

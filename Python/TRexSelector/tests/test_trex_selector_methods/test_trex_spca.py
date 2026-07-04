@@ -29,8 +29,8 @@ TFDR = 0.2
 
 def make_ctrl(**kwargs):
     ctrl = TRexSPCAControlParameter()
-    ctrl.trex_ctrl.K = kwargs.get("K", 3)
-    ctrl.trex_ctrl.max_dummy_multiplier = kwargs.get("max_dummy_multiplier", 3)
+    ctrl.gvs_ctrl.trex_ctrl.K = kwargs.get("K", 3)
+    ctrl.gvs_ctrl.trex_ctrl.max_dummy_multiplier = kwargs.get("max_dummy_multiplier", 3)
     ctrl.mode = kwargs.get("mode", SPCAMode.ActiveSet)
     if "lambda2_ridge_loadings" in kwargs:
         ctrl.lambda2_ridge_loadings = kwargs["lambda2_ridge_loadings"]
@@ -62,7 +62,8 @@ def test_spca_control_default_gvs_type():
 
 def test_spca_control_default_lambda_2():
     ctrl = TRexSPCAControlParameter()
-    assert ctrl.gvs_ctrl.lambda_2 == 0.0
+    # -1.0 is the "not supplied" sentinel that triggers auto-selection of lambda_2.
+    assert ctrl.gvs_ctrl.lambda_2 == -1.0
 
 
 def test_spca_control_thresholded_mode():

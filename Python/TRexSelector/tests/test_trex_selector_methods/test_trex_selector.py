@@ -122,6 +122,10 @@ def test_trex_control_new_fields():
     ctrl.dummy_distribution = trex_selector.DummyDistribution.student_t(df=5.0)
     assert ctrl.dummy_distribution.get_type() == trex_selector.DummyDistribution.Type.StudentT
 
+    # Scaling mode
+    ctrl.scaling_mode = trex_selector.ScalingMode.ZSCORE
+    assert ctrl.scaling_mode == trex_selector.ScalingMode.ZSCORE
+
 
 def test_trex_control_with_tlasso_solver(signal_data):
     X, y, n, p = signal_data
