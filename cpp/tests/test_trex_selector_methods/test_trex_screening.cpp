@@ -50,43 +50,36 @@ protected:
 
 /** @brief Test of validation constraints */
 TEST_F(TRexScreeningTest, Validation_ThrowsOnInvalidLLoopStrategy) {
-    TRexControlParameter tc_params;
     ScreenTRexControlParameter screen_params;
 
     // Supported
-    tc_params.lloop_strategy = LLoopStrategy::STANDARD;
-    EXPECT_NO_THROW(ScreenTRexSelector(X_map, y_map,
-                                       screen_params, tc_params));
+    screen_params.trex_ctrl.lloop_strategy = LLoopStrategy::STANDARD;
+    EXPECT_NO_THROW(ScreenTRexSelector(X_map, y_map, screen_params));
 
-    tc_params.lloop_strategy = LLoopStrategy::PERMUTATION;
-    EXPECT_NO_THROW(ScreenTRexSelector(X_map, y_map,
-                                       screen_params, tc_params));
+    screen_params.trex_ctrl.lloop_strategy = LLoopStrategy::PERMUTATION;
+    EXPECT_NO_THROW(ScreenTRexSelector(X_map, y_map, screen_params));
 
     // Unsupported: SKIPL, HCONCAT, DIRECT, etc.
-    tc_params.lloop_strategy = LLoopStrategy::SKIPL;
-    EXPECT_THROW(ScreenTRexSelector(X_map, y_map,
-                                    screen_params, tc_params),
+    screen_params.trex_ctrl.lloop_strategy = LLoopStrategy::SKIPL;
+    EXPECT_THROW(ScreenTRexSelector(X_map, y_map, screen_params),
                                     std::invalid_argument);
 
-    tc_params.lloop_strategy = LLoopStrategy::HCONCAT;
-    EXPECT_THROW(ScreenTRexSelector(X_map, y_map, screen_params,
-         tc_params), std::invalid_argument);
+    screen_params.trex_ctrl.lloop_strategy = LLoopStrategy::HCONCAT;
+    EXPECT_THROW(ScreenTRexSelector(X_map, y_map, screen_params),
+                 std::invalid_argument);
 }
 
 
 /** @brief Test execution of Ordinary Screening */
 TEST_F(TRexScreeningTest, Execution_OrdinaryScreenTRexDoesNotThrow) {
-    TRexControlParameter tc_params;
-    tc_params.K = 5; // Reduced K for quick unit testing
-    tc_params.lloop_strategy = LLoopStrategy::STANDARD;
-
     ScreenTRexControlParameter screen_params;
     screen_params.trex_method = ScreenTRexMethod::TREX;
     screen_params.use_bootstrap_CI = false;
+    screen_params.trex_ctrl.K = 5; // Reduced K for quick unit testing
+    screen_params.trex_ctrl.lloop_strategy = LLoopStrategy::STANDARD;
 
     EXPECT_NO_THROW({
-        ScreenTRexSelector selector(X_map, y_map,
-                                    screen_params, tc_params);
+        ScreenTRexSelector selector(X_map, y_map, screen_params);
         auto result = selector.select();
 
         // Ensure static execution values
@@ -100,18 +93,15 @@ TEST_F(TRexScreeningTest, Execution_OrdinaryScreenTRexDoesNotThrow) {
 
 /** @brief Test of Boostrap CI Screening */
 TEST_F(TRexScreeningTest, Execution_BootstrapScreenTRexDoesNotThrow) {
-    TRexControlParameter tc_params;
-    tc_params.K = 5;
-    tc_params.lloop_strategy = LLoopStrategy::STANDARD;
-
     ScreenTRexControlParameter screen_params;
     screen_params.trex_method = ScreenTRexMethod::TREX;
     screen_params.use_bootstrap_CI = true;
     screen_params.R_boot = 50; // Small bootstrap resamples for fast testing
+    screen_params.trex_ctrl.K = 5;
+    screen_params.trex_ctrl.lloop_strategy = LLoopStrategy::STANDARD;
 
     EXPECT_NO_THROW({
-        ScreenTRexSelector selector(X_map, y_map,
-                                    screen_params, tc_params);
+        ScreenTRexSelector selector(X_map, y_map, screen_params);
 
         auto result = selector.getScreenResult();
         selector.select();
@@ -126,14 +116,12 @@ TEST_F(TRexScreeningTest, Execution_BootstrapScreenTRexDoesNotThrow) {
 TEST_F(TRexScreeningTest, DataIntegrity_XRestoredAfterSelect) {
     Eigen::MatrixXd X_copy = X;
 
-    TRexControlParameter tc_params;
-    tc_params.K = 3;
-    tc_params.max_dummy_multiplier = 2;
-    tc_params.lloop_strategy = LLoopStrategy::STANDARD;
-
     ScreenTRexControlParameter screen_params;
+    screen_params.trex_ctrl.K = 3;
+    screen_params.trex_ctrl.max_dummy_multiplier = 2;
+    screen_params.trex_ctrl.lloop_strategy = LLoopStrategy::STANDARD;
 
-    ScreenTRexSelector selector(X_map, y_map, screen_params, tc_params, 42, false);
+    ScreenTRexSelector selector(X_map, y_map, screen_params, 42, false);
     selector.select();
 
     EXPECT_TRUE(X.isApprox(X_copy, 1e-12))
@@ -146,15 +134,13 @@ TEST_F(TRexScreeningTest, DataIntegrity_XRestoredAfterSelect) {
 TEST_F(TRexScreeningTest, DataIntegrity_XRestoredOnDestruction) {
     Eigen::MatrixXd X_copy = X;
 
-    TRexControlParameter tc_params;
-    tc_params.K = 3;
-    tc_params.max_dummy_multiplier = 2;
-    tc_params.lloop_strategy = LLoopStrategy::STANDARD;
-
     ScreenTRexControlParameter screen_params;
+    screen_params.trex_ctrl.K = 3;
+    screen_params.trex_ctrl.max_dummy_multiplier = 2;
+    screen_params.trex_ctrl.lloop_strategy = LLoopStrategy::STANDARD;
 
     {
-        ScreenTRexSelector selector(X_map, y_map, screen_params, tc_params, 42, false);
+        ScreenTRexSelector selector(X_map, y_map, screen_params, 42, false);
         // X is now normalized. Destructor fires here.
     }
 
@@ -198,8 +184,9 @@ Eigen::VectorXi run_screen_trex_select(Eigen::Index n,
 
     ScreenTRexControlParameter screen_ctrl;
     screen_ctrl.trex_method = method;
+    screen_ctrl.trex_ctrl = trex_ctrl;
 
-    ScreenTRexSelector selector(X_map, y_map, screen_ctrl, trex_ctrl, 42, false);
+    ScreenTRexSelector selector(X_map, y_map, screen_ctrl, 42, false);
     auto result = selector.select();
 
     return result.selected_var;

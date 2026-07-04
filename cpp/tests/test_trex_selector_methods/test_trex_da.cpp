@@ -63,9 +63,9 @@ void run_trex_da_test(Eigen::Index n,
 
     TRexDAControlParameter da_ctrl;
     da_ctrl.method = method;
+    da_ctrl.trex_ctrl = trex_ctrl;
 
-    TRexDASelector trex(X_map, y_map, 0.1, da_ctrl,
-                       trex_ctrl, 42, false);
+    TRexDASelector trex(X_map, y_map, 0.1, da_ctrl, 42, false);
 
     // Test the select() execution safely
     auto result = trex.select();
@@ -149,8 +149,9 @@ Eigen::VectorXi run_trex_da_select(Eigen::Index n,
 
     TRexDAControlParameter da_ctrl;
     da_ctrl.method = method;
+    da_ctrl.trex_ctrl = trex_ctrl;
 
-    TRexDASelector trex(X_map, y_map, 0.1, da_ctrl, trex_ctrl, 42, false);
+    TRexDASelector trex(X_map, y_map, 0.1, da_ctrl, 42, false);
     trex.select();
 
     return trex.getDAResult().selected_var;
@@ -207,8 +208,9 @@ Eigen::VectorXi run_trex_da_bt_select(Eigen::Index n,
     TRexDAControlParameter da_ctrl;
     da_ctrl.method            = DAMethod::BT;
     da_ctrl.bt_selection_mode = bt_mode;
+    da_ctrl.trex_ctrl         = trex_ctrl;
 
-    TRexDASelector trex(X_map, y_map, 0.1, da_ctrl, trex_ctrl, 42, false);
+    TRexDASelector trex(X_map, y_map, 0.1, da_ctrl, 42, false);
     trex.select();
 
     return trex.getDAResult().selected_var;
@@ -252,14 +254,12 @@ TEST(TRexDATest, Validation_ThrowsOnInvalidParameters) {
     Eigen::Map<Eigen::MatrixXd> X_map(X.data(), X.rows(), X.cols());
     Eigen::Map<Eigen::VectorXd> y_map(y.data(), y.size());
 
-    TRexControlParameter tc_params;
     TRexDAControlParameter da_params;
 
     // 1. Invalid rho_thr_DA
     da_params.rho_thr_DA = 1.5; // Bounds are [0, 1]
     EXPECT_THROW({
-        TRexDASelector selector(X_map, y_map, 0.1, da_params,
-                                tc_params);
+        TRexDASelector selector(X_map, y_map, 0.1, da_params);
     }, std::invalid_argument);
 
     da_params.rho_thr_DA = 0.5; // Reset to valid
@@ -267,8 +267,7 @@ TEST(TRexDATest, Validation_ThrowsOnInvalidParameters) {
     // 2. Prior Groups Length Mismatch
     da_params.prior_groups = {{1, 1, 1, 1, 1}}; // Incorrect length (p = 10)
     EXPECT_THROW({
-        TRexDASelector selector(X_map, y_map, 0.1, da_params,
-                                tc_params);
+        TRexDASelector selector(X_map, y_map, 0.1, da_params);
     }, std::invalid_argument);
 
     da_params.prior_groups.clear(); // Reset
@@ -279,8 +278,7 @@ TEST(TRexDATest, Validation_ThrowsOnInvalidParameters) {
     da_params.hc_linkage =
         static_cast<trex::ml_methods::clustering::hierarchical::agglomerative::LinkageMethod>(999);
     EXPECT_THROW({
-        TRexDASelector selector(X_map, y_map, 0.1, da_params,
-                                 tc_params);
+        TRexDASelector selector(X_map, y_map, 0.1, da_params);
     }, std::invalid_argument);
 }
 
@@ -298,10 +296,10 @@ TEST(TRexDATest, Method_AR1_SKIPL_DoesNotThrow) {
 
     TRexDAControlParameter da_params;
     da_params.method = DAMethod::AR1;
+    da_params.trex_ctrl = tc_params;
 
     EXPECT_NO_THROW({
-        TRexDASelector selector(X_map, y_map, 0.1, da_params,
-                                tc_params);
+        TRexDASelector selector(X_map, y_map, 0.1, da_params);
         auto result = selector.select();
         // Since SKIPL is used, verify initialized dummies
         EXPECT_EQ(result.T_stop >= 1, true);
@@ -328,8 +326,9 @@ TEST(TRexDATest, DataIntegrity_XRestoredAfterSelect) {
 
     TRexDAControlParameter da_ctrl;
     da_ctrl.method = DAMethod::AR1;
+    da_ctrl.trex_ctrl = trex_ctrl;
 
-    TRexDASelector trex(X_map, y_map, 0.1, da_ctrl, trex_ctrl, 42, false);
+    TRexDASelector trex(X_map, y_map, 0.1, da_ctrl, 42, false);
     trex.select();
 
     EXPECT_TRUE(X.isApprox(X_copy, 1e-12))
@@ -353,9 +352,10 @@ TEST(TRexDATest, DataIntegrity_XRestoredOnDestruction) {
 
     TRexDAControlParameter da_ctrl;
     da_ctrl.method = DAMethod::AR1;
+    da_ctrl.trex_ctrl = trex_ctrl;
 
     {
-        TRexDASelector trex(X_map, y_map, 0.1, da_ctrl, trex_ctrl, 42, false);
+        TRexDASelector trex(X_map, y_map, 0.1, da_ctrl, 42, false);
         // X is now normalized. Destructor fires here.
     }
 

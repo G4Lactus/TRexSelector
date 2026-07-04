@@ -67,11 +67,11 @@ TEST_F(TRexBiobankScreeningTest, Validation_ThrowsOnMismatchedPhenotypeCalls) {
 /** @brief Standard single execution works cleanly */
 TEST_F(TRexBiobankScreeningTest, Execution_SinglePhenotypeDoesNotThrow) {
     BiobankScreenTRexControl control;
-    control.screen_ctrl.trex_method = ScreenTRexMethod::TREX;
+    control.trex_screen_ctrl.trex_method = ScreenTRexMethod::TREX;
 
     // As identified, we must override internal defaults to standard!
-    control.trex_ctrl.lloop_strategy = LLoopStrategy::STANDARD;
-    control.trex_ctrl.K = 5;
+    control.trex_screen_ctrl.trex_ctrl.lloop_strategy = LLoopStrategy::STANDARD;
+    control.trex_screen_ctrl.trex_ctrl.K = 5;
 
     BiobankScreenTRex selector(X_map, y_map, control);
     EXPECT_NO_THROW({
@@ -88,8 +88,8 @@ TEST_F(TRexBiobankScreeningTest, Execution_FallbackLogicActivation) {
     control.upper_bound_FDR = 0.00;
 
     // Prevent the Screen-TRex components from crashing under SKIPL
-    control.trex_ctrl.lloop_strategy = LLoopStrategy::STANDARD;
-    control.trex_ctrl.K = 2; // Keep loop overhead low
+    control.trex_screen_ctrl.trex_ctrl.lloop_strategy = LLoopStrategy::STANDARD;
+    control.trex_screen_ctrl.trex_ctrl.K = 2; // Keep loop overhead low
 
     BiobankScreenTRex selector(X_map, y_map, control);
     auto result = selector.screenPhenotype();

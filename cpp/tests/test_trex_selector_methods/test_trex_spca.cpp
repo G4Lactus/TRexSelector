@@ -49,8 +49,8 @@ protected:
         TRexSPCAControlParameter ctrl;
         ctrl.mode                           = mode;
         ctrl.lambda2_ridge_loadings         = 1e-6;
-        ctrl.trex_ctrl.K                    = 3;
-        ctrl.trex_ctrl.max_dummy_multiplier = 2;
+        ctrl.gvs_ctrl.trex_ctrl.K                    = 3;
+        ctrl.gvs_ctrl.trex_ctrl.max_dummy_multiplier = 2;
         return ctrl;
     }
 
