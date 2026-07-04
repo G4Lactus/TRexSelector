@@ -19,6 +19,13 @@ set(TREX_USE_BLAS_LAPACK OFF CACHE BOOL "Disable BLAS for Python" FORCE)
 # Disable Tests to avoid linker errors with executable targets
 set(TREX_BUILD_TESTS     OFF CACHE BOOL "Disable Tests for Python"  FORCE)
 
+# The cpp/ libraries are static and get linked into the _core shared object.
+# On Linux, static archives must be compiled position-independent (-fPIC) to be
+# linkable into a .so, otherwise the linker errors with
+# "relocation R_X86_64_32S ... recompile with -fPIC". (macOS/Clang emits PIC by
+# default, so this only bites the manylinux wheel build.)
+set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+
 # Add the cpp/ directory containing the core TRexSelector C++ library
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../../cpp ${CMAKE_CURRENT_BINARY_DIR}/trex_core)
 
