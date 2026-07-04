@@ -88,11 +88,20 @@ find_package(Eigen3 REQUIRED NO_MODULE)
 # Cereal (required for serialization)
 find_package(cereal REQUIRED)
 
-# Boost: require at least 1.80
+# Boost: require at least 1.80.
+# Use the legacy FindBoost module (module mode) rather than config mode: it
+# locates header-only Boost installs that ship no BoostConfig.cmake (e.g. the
+# manylinux Python-wheel builds that drop Boost headers into /usr/local/include),
+# while still finding Homebrew/apt Boost. CMake 3.30+ defaults to config mode
+# (CMP0167 NEW), which fails on such header-only installs.
 if(POLICY CMP0167)
-    cmake_policy(SET CMP0167 NEW)
+    cmake_policy(SET CMP0167 OLD)
 endif()
-find_package(Boost 1.80 REQUIRED COMPONENTS headers)
+# No COMPONENTS: Boost is used header-only (Boost.Interprocess / Boost.Random /
+# Boost.Math). The FindBoost module still provides the Boost::headers target
+# (CMake >= 3.15). Requesting "COMPONENTS headers" would fail in module mode,
+# since header-only Boost has no designated component library.
+find_package(Boost 1.80 REQUIRED)
 
 if(TREX_USE_BLAS_LAPACK)
     # BLAS/LAPACK with priority order
