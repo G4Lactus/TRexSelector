@@ -83,11 +83,19 @@ target_link_libraries(trex_tsolvers
         Eigen3::Eigen                   # Core linear algebra
         cereal::cereal                  # Serialization
         OpenMP::OpenMP_CXX              # Parallel computing
-
-    PRIVATE
-        BLAS::BLAS                      # BLAS backend (imported target — portable across machines)
-        LAPACK::LAPACK                  # LAPACK backend (imported target — portable across machines)
 )
+
+# BLAS/LAPACK imported targets exist only when TREX_USE_BLAS_LAPACK is ON.
+# Python and portable/no-BLAS builds disable them, so link conditionally to
+# avoid referencing targets (BLAS::BLAS / LAPACK::LAPACK) that were never
+# created by find_package.
+if(TREX_USE_BLAS_LAPACK)
+    target_link_libraries(trex_tsolvers
+        PRIVATE
+            BLAS::BLAS                  # BLAS backend (imported target)
+            LAPACK::LAPACK              # LAPACK backend (imported target)
+    )
+endif()
 # ==============================================================================
 
 
@@ -98,7 +106,9 @@ target_link_libraries(trex_tsolvers
 target_compile_features(trex_tsolvers PUBLIC cxx_std_20)
 
 target_compile_definitions(trex_tsolvers PUBLIC
-    EIGEN_USE_BLAS              # Use BLAS backend in Eigen
+    # Only route Eigen through an external BLAS when it is available;
+    # TREX_USE_BLAS_LAPACK=OFF (Python/portable builds) keeps Eigen self-contained.
+    $<$<BOOL:${TREX_USE_BLAS_LAPACK}>:EIGEN_USE_BLAS>
 )
 
 # NOTE: -ffast-math and -march=native are gated behind NOT TREX_PORTABLE_BUILD (wheel/PyPI builds).

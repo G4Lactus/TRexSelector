@@ -34,7 +34,9 @@ jobs:
             libboost-all-dev \
             libcereal-dev \
             libgtest-dev \
-            libomp-dev
+            libomp-dev \
+            libopenblas-dev \
+            liblapack-dev
 
       # -----------------------------------------------------------------------
       # macOS: install via Homebrew; use Homebrew LLVM for OpenMP support

@@ -189,6 +189,17 @@
             "group": {"kind": "test"},
             "problemMatcher": [],
             "detail": "Run pytest test suite"
+        },
+        // Compound macro: editable rebuild of the C++ extension, then run tests.
+        // Runs the two tasks above in sequence; stops if the build fails.
+        // Requires the trex-dev conda env to be active in the integrated terminal.
+        {
+            "label": "Python: Rebuild & Test",
+            "dependsOrder": "sequence",
+            "dependsOn": ["Python: Install (Editable)", "Python: Test"],
+            "group": {"kind": "build"},
+            "problemMatcher": [],
+            "detail": "scikit-build-core editable rebuild, then pytest (sequential; aborts on build failure)"
         }
     ]
 }

@@ -58,7 +58,9 @@ target_link_libraries(trex_selector_methods PUBLIC
 target_compile_features(trex_selector_methods PUBLIC cxx_std_20)
 
 target_compile_definitions(trex_selector_methods PUBLIC
-    EIGEN_USE_BLAS
+    # Only route Eigen through an external BLAS when it is available;
+    # TREX_USE_BLAS_LAPACK=OFF (Python/portable builds) keeps Eigen self-contained.
+    $<$<BOOL:${TREX_USE_BLAS_LAPACK}>:EIGEN_USE_BLAS>
 )
 
 # NOTE: -ffast-math and -march=native are gated behind NOT TREX_PORTABLE_BUILD (wheel/PyPI builds).
