@@ -107,15 +107,15 @@ struct BiobankScreenTRexControl {
      */
     double upper_bound_FDR = 0.15;
 
-    /** @brief Control parameters forwarded to the Screen-TRex selector. */
-    ts::ScreenTRexControlParameter screen_ctrl;
-
-    /** @brief Algorithmic control forwarded to both Screen-TRex and the fallback T-Rex. */
-    tc::TRexControlParameter trex_ctrl;
+    /** @brief Control parameters forwarded to the Screen-TRex selector (nests
+     *  its own base trex_ctrl, shared by both the Screen-TRex path and the
+     *  fallback plain T-Rex path — single source of truth for the base
+     *  algorithmic control). */
+    ts::ScreenTRexControlParameter trex_screen_ctrl;
 
     /** @brief Default constructor: sets lloop_strategy to STANDARD for ScreenTRexSelector compatibility. */
     BiobankScreenTRexControl() {
-        trex_ctrl.lloop_strategy = tc::LLoopStrategy::STANDARD;
+        trex_screen_ctrl.trex_ctrl.lloop_strategy = tc::LLoopStrategy::STANDARD;
     }
 };
 
@@ -151,7 +151,7 @@ protected:
     Eigen::Map<Eigen::MatrixXd>* Y_;
 
     /** @brief Control parameters for Biobank Screen-TRex */
-    BiobankScreenTRexControl biosctrex_ctrl_;
+    BiobankScreenTRexControl bio_ctrl_;
 
     /** @brief Random seed for reproducibility */
     int seed_;
@@ -170,14 +170,14 @@ public:
      *
      * @param X Design matrix (n x p)
      * @param y Phenotype vector (n x 1)
-     * @param biosctrex_ctrl Control parameters for Biobank Screen-TRex (moved)
+     * @param bio_ctrl Control parameters for Biobank Screen-TRex (moved)
      * @param seed Random seed for reproducibility (default: -1, random)
      * @param verbose If true, print progress messages (default: false)
      */
     BiobankScreenTRex(
         Eigen::Map<Eigen::MatrixXd>& X,
         Eigen::Map<Eigen::VectorXd>& y,
-        BiobankScreenTRexControl biosctrex_ctrl,
+        BiobankScreenTRexControl bio_ctrl,
         int seed = -1,
         bool verbose = false
     );
@@ -188,14 +188,14 @@ public:
      *
      * @param X Design matrix (n x p)
      * @param Y Phenotype matrix (n x q)
-     * @param biosctrex_ctrl Control parameters for Biobank Screen-TRex (moved)
+     * @param bio_ctrl Control parameters for Biobank Screen-TRex (moved)
      * @param seed Random seed for reproducibility (default: -1, random)
      * @param verbose If true, print progress messages (default: false)
      */
     BiobankScreenTRex(
         Eigen::Map<Eigen::MatrixXd>& X,
         Eigen::Map<Eigen::MatrixXd>& Y,
-        BiobankScreenTRexControl biosctrex_ctrl,
+        BiobankScreenTRexControl bio_ctrl,
         int seed = -1,
         bool verbose = false
     );

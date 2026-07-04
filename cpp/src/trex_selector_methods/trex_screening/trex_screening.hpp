@@ -76,6 +76,13 @@ struct ScreenTRexControlParameter {
 
     /** @brief Number of blocks for block-equicorrelated DA variant (default: 5). */
     std::size_t n_blocks = 5;
+
+    /** @brief Base T-Rex algorithmic control parameters (nested).
+     *  Screen-TRex only accepts `lloop_strategy` in {STANDARD, PERMUTATION}
+     *  (validated by `validateScreenTRexStrategy()`); the base class's own
+     *  default (STANDARD) already satisfies this, so no override is needed.
+     */
+    tc::TRexControlParameter trex_ctrl;
 };
 
 
@@ -135,8 +142,8 @@ protected:
     // Screen-TRex Data Members
     // ==========================================================================
 
-    /** @brief Screen-TRex control parameters. */
-    ScreenTRexControlParameter screen_ctrl_;
+    /** @brief Screen-TRex control parameters (nests the base trex_ctrl). */
+    ScreenTRexControlParameter trex_screen_ctrl_;
 
     /** @brief Sum of betas for original features across K experiments (p × 1). */
     Eigen::MatrixXd accumulated_beta_mat_;
@@ -157,9 +164,10 @@ public:
      *
      * @param X             Feature matrix (n × p) — Eigen::Map, not copied.
      * @param y             Response vector (n × 1) — Eigen::Map, copied internally.
-     * @param screen_control Screen-TRex specific parameters.
-     * @param trex_control  Algorithmic control (solver, dummy strategy, memmap).
-     *                      Only STANDARD and PERMUTATION lloop_strategy are accepted.
+     * @param trex_screen_ctrl Screen-TRex specific parameters, nesting the base
+     *                      algorithmic control (solver, dummy strategy, memmap)
+     *                      as `trex_screen_ctrl.trex_ctrl`. Only STANDARD and
+     *                      PERMUTATION lloop_strategy are accepted.
      * @param seed          Random seed (< 0 for non-deterministic).
      * @param verbose       Enable verbose output.
      *
@@ -168,8 +176,7 @@ public:
     ScreenTRexSelector(
         Eigen::Map<Eigen::MatrixXd>& X,
         Eigen::Map<Eigen::VectorXd>& y,
-        ScreenTRexControlParameter   screen_control = ScreenTRexControlParameter(),
-        tc::TRexControlParameter     trex_control   = tc::TRexControlParameter(),
+        ScreenTRexControlParameter   trex_screen_ctrl = ScreenTRexControlParameter(),
         int  seed    = -1,
         bool verbose = true
     );

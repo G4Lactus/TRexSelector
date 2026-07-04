@@ -33,13 +33,13 @@ namespace ts = trex::trex_selector_methods::trex_screening;
 BiobankScreenTRex::BiobankScreenTRex(
     Eigen::Map<Eigen::MatrixXd>& X,
     Eigen::Map<Eigen::VectorXd>& y,
-    BiobankScreenTRexControl biosctrex_ctrl,
+    BiobankScreenTRexControl bio_ctrl,
     int seed,
     bool verbose
 ) : X_(&X),
     y_(y),
     Y_(nullptr),
-    biosctrex_ctrl_(biosctrex_ctrl),
+    bio_ctrl_(bio_ctrl),
     seed_(seed),
     verbose_(verbose)
 {
@@ -52,13 +52,13 @@ BiobankScreenTRex::BiobankScreenTRex(
 BiobankScreenTRex::BiobankScreenTRex(
     Eigen::Map<Eigen::MatrixXd>& X,
     Eigen::Map<Eigen::MatrixXd>& Y,
-    BiobankScreenTRexControl biosctrex_ctrl,
+    BiobankScreenTRexControl bio_ctrl,
     int seed,
     bool verbose
 ) : X_(&X),
     y_(),
     Y_(&Y),
-    biosctrex_ctrl_(biosctrex_ctrl),
+    bio_ctrl_(bio_ctrl),
     seed_(seed),
     verbose_(verbose)
 {
@@ -99,9 +99,9 @@ std::vector<BiobankScreenTRexResult> BiobankScreenTRex::screenPhenotypes() {
     if (verbose_) {
         TREX_INFO( "=== Biobank Screen-TRex (Algorithm 1) ===" );
         TREX_INFO( "Phenotypes: " << num_phenotypes );
-        TREX_INFO( "FDR range: [" << biosctrex_ctrl_.lower_bound_FDR
-                  << ", " << biosctrex_ctrl_.upper_bound_FDR << "]" );
-        TREX_INFO( "Fallback target FDR: " << biosctrex_ctrl_.target_FDR_trex << "\n" );
+        TREX_INFO( "FDR range: [" << bio_ctrl_.lower_bound_FDR
+                  << ", " << bio_ctrl_.upper_bound_FDR << "]" );
+        TREX_INFO( "Fallback target FDR: " << bio_ctrl_.target_FDR_trex << "\n" );
     }
 
     for (std::size_t pheno_idx = 0; pheno_idx < num_phenotypes; ++pheno_idx) {
@@ -155,13 +155,12 @@ BiobankScreenTRexResult BiobankScreenTRex::screenSinglePhenotype(
     }
 
     // Run ordinary Screen-TRex (collects Phi, beta_mat, dummy_betas)
-    biosctrex_ctrl_.screen_ctrl.use_bootstrap_CI = false;
+    bio_ctrl_.trex_screen_ctrl.use_bootstrap_CI = false;
 
     ts::ScreenTRexSelector sctrex(
         *X_,
         y_map,
-        biosctrex_ctrl_.screen_ctrl,
-        biosctrex_ctrl_.trex_ctrl,
+        bio_ctrl_.trex_screen_ctrl,
         seed_,
         false
     );
@@ -205,8 +204,8 @@ BiobankScreenTRexResult BiobankScreenTRex::runFallbackTRexSelector(
     tc::TRexSelector trex_selector(
         *X_,
         y_map,
-        biosctrex_ctrl_.target_FDR_trex,
-        biosctrex_ctrl_.trex_ctrl,
+        bio_ctrl_.target_FDR_trex,
+        bio_ctrl_.trex_screen_ctrl.trex_ctrl,
         seed_,
         false
     );
@@ -218,7 +217,7 @@ BiobankScreenTRexResult BiobankScreenTRex::runFallbackTRexSelector(
     BiobankScreenTRexResult result;
     result.phenotype_index = phenotype_index;
     result.selected_indices = trex_selector.getSelectedIndices();
-    result.estimated_FDR = biosctrex_ctrl_.target_FDR_trex;
+    result.estimated_FDR = bio_ctrl_.target_FDR_trex;
     result.method_used = "T-Rex (fallback)";
     result.used_fallback_trex = true;
     return result;
@@ -252,8 +251,8 @@ BiobankScreenTRexResult BiobankScreenTRex::applyDecisionLogic(
     final_result.used_fallback_trex = false;
 
     // FDR bounds from control
-    const double alpha_l = biosctrex_ctrl_.lower_bound_FDR;
-    const double alpha_u = biosctrex_ctrl_.upper_bound_FDR;
+    const double alpha_l = bio_ctrl_.lower_bound_FDR;
+    const double alpha_u = bio_ctrl_.upper_bound_FDR;
 
     // Alpha estimates (Diagnostic storage)
     const double alpha_hat = sctrex_result_ordinary.estimated_FDR;

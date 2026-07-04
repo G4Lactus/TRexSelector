@@ -39,16 +39,15 @@ namespace dummygen = trex::utils::datageneration::dummygen;
 ScreenTRexSelector::ScreenTRexSelector(
     Eigen::Map<Eigen::MatrixXd>& X,
     Eigen::Map<Eigen::VectorXd>& y,
-    ScreenTRexControlParameter   screen_control,
-    tc::TRexControlParameter     trex_control,
+    ScreenTRexControlParameter   trex_screen_ctrl,
     int  seed,
     bool verbose
 ) : tc::TRexSelector(X, y,
                      /*tFDR=*/0.0,  // Screen-TRex does not use FDR calibration
-                     trex_control,
+                     trex_screen_ctrl.trex_ctrl,
                      seed,
                      verbose),
-    screen_ctrl_(screen_control)
+    trex_screen_ctrl_(std::move(trex_screen_ctrl))
 {
     validateScreenTRexStrategy();
 }
@@ -85,13 +84,13 @@ tc::TRexSelector::SelectionResult ScreenTRexSelector::select() {
 
     if (verbose_) {
         const std::string mode =
-            screen_ctrl_.use_bootstrap_CI ? "Confidence-Based" : "Ordinary";
+            trex_screen_ctrl_.use_bootstrap_CI ? "Confidence-Based" : "Ordinary";
         std::string variant = "TRex";
-        if (screen_ctrl_.trex_method == ScreenTRexMethod::TREX_DA_AR1) {
+        if (trex_screen_ctrl_.trex_method == ScreenTRexMethod::TREX_DA_AR1) {
             variant = "DA-AR1";
-        } else if (screen_ctrl_.trex_method == ScreenTRexMethod::TREX_DA_EQUI) {
+        } else if (trex_screen_ctrl_.trex_method == ScreenTRexMethod::TREX_DA_EQUI) {
             variant = "DA-EQUI";
-        } else if (screen_ctrl_.trex_method == ScreenTRexMethod::TREX_DA_BLOCK_EQUI) {
+        } else if (trex_screen_ctrl_.trex_method == ScreenTRexMethod::TREX_DA_BLOCK_EQUI) {
             variant = "DA-BLOCK-EQUI";
         }
         printProgress("Starting Screen-TRex [" + mode + ", " + variant
@@ -110,12 +109,12 @@ tc::TRexSelector::SelectionResult ScreenTRexSelector::select() {
     Eigen::VectorXd Phi = exp_results.phi_T_mat.col(0);
 
     // 4. Dependency-Aware adjustment (modifies Phi in-place)
-    if (screen_ctrl_.trex_method != ScreenTRexMethod::TREX) {
+    if (trex_screen_ctrl_.trex_method != ScreenTRexMethod::TREX) {
         applyDependencyAwareAdjustment(Phi);
     }
 
     // 5. Selection
-    if (screen_ctrl_.use_bootstrap_CI) {
+    if (trex_screen_ctrl_.use_bootstrap_CI) {
         performBootstrapSelection(Phi, beta_means, screen_result_);
     } else {
         performOrdinarySelection(Phi, screen_result_);
@@ -349,14 +348,14 @@ void ScreenTRexSelector::performBootstrapSelection(
 
     // Bootstrap resampling of non-zero dummy betas
     std::vector<double> boot_means;
-    boot_means.reserve(screen_ctrl_.R_boot);
+    boot_means.reserve(trex_screen_ctrl_.R_boot);
 
     std::mt19937_64 gen(
         seed_ >= 0 ? static_cast<uint64_t>(seed_)
                    : static_cast<uint64_t>(std::random_device{}()));
     std::uniform_int_distribution<std::size_t> dist(0, n_dummies - 1);
 
-    for (std::size_t r = 0; r < screen_ctrl_.R_boot; ++r) {
+    for (std::size_t r = 0; r < trex_screen_ctrl_.R_boot; ++r) {
         double sum = 0.0;
         for (std::size_t i = 0; i < n_dummies; ++i) {
             sum += collected_dummy_betas_[dist(gen)];
@@ -370,7 +369,7 @@ void ScreenTRexSelector::performBootstrapSelection(
     Eigen::VectorXi optimal_mask =
         Eigen::VectorXi::Zero(static_cast<Eigen::Index>(p_));
 
-    for (double gamma = 0.0; gamma < 1.0; gamma += screen_ctrl_.ci_grid_step) {
+    for (double gamma = 0.0; gamma < 1.0; gamma += trex_screen_ctrl_.ci_grid_step) {
 
         const auto ci = calculateBootstrapCI(
             boot_means, t0, gamma);
@@ -448,9 +447,9 @@ std::pair<double, double> ScreenTRexSelector::calculateBootstrapCI(
 void ScreenTRexSelector::applyDependencyAwareAdjustment(Eigen::VectorXd& Phi) {
 
     // Use supplied correlation or estimate it
-    double rho = screen_ctrl_.cor_coef;
+    double rho = trex_screen_ctrl_.cor_coef;
     if (rho == tc::AUTO_ESTIMATE_CORRELATION) {
-        switch (screen_ctrl_.trex_method) {
+        switch (trex_screen_ctrl_.trex_method) {
             case ScreenTRexMethod::TREX_DA_AR1:
                 rho = estimateAR1Correlation();
                 break;
@@ -473,7 +472,7 @@ void ScreenTRexSelector::applyDependencyAwareAdjustment(Eigen::VectorXd& Phi) {
 
     // Compute adjustment deltas
     const Eigen::VectorXd DA_delta = [&]() -> Eigen::VectorXd {
-        switch (screen_ctrl_.trex_method) {
+        switch (trex_screen_ctrl_.trex_method) {
             case ScreenTRexMethod::TREX_DA_AR1:
                 return computeDA_AR1_Delta(Phi, rho);
             case ScreenTRexMethod::TREX_DA_EQUI:
@@ -583,7 +582,7 @@ Eigen::VectorXd ScreenTRexSelector::computeDA_AR1_Delta(
     */
     const double valid_rho = std::min(0.999, std::max(0.001, std::abs(rho)));
     const int kap = std::max(1, static_cast<int>(
-        std::ceil(std::log(screen_ctrl_.rho_thr_DA) / std::log(valid_rho))));
+        std::ceil(std::log(trex_screen_ctrl_.rho_thr_DA) / std::log(valid_rho))));
 
     if (verbose_) {
         printProgress("DA-AR1: window size κ = " + std::to_string(kap));
@@ -627,11 +626,11 @@ Eigen::VectorXd ScreenTRexSelector::computeDA_EQUI_Delta(
     Eigen::VectorXd DA_delta =
         Eigen::VectorXd::Ones(static_cast<Eigen::Index>(p_));
 
-    if (std::abs(rho) <= screen_ctrl_.rho_thr_DA) {
+    if (std::abs(rho) <= trex_screen_ctrl_.rho_thr_DA) {
         if (verbose_) {
             printProgress("DA-EQUI: skipped (|ρ| = "
                 + std::to_string(std::abs(rho)) + " ≤ ρ_thr_DA = "
-                + std::to_string(screen_ctrl_.rho_thr_DA) + ").");
+                + std::to_string(trex_screen_ctrl_.rho_thr_DA) + ").");
         }
         return DA_delta;
     }
@@ -668,7 +667,7 @@ double ScreenTRexSelector::estimateBlockEquiCorrelation() const {
             rho_k = (||row_sums_k||^2 - b_k) / (b_k * (b_k - 1))
         Return weighted average: sum(b_k * rho_k) / p.
     */
-    const std::size_t n_blocks = screen_ctrl_.n_blocks;
+    const std::size_t n_blocks = trex_screen_ctrl_.n_blocks;
     const std::size_t base_size = p_ / n_blocks;
     const std::size_t remainder = p_ % n_blocks;
 
@@ -716,16 +715,16 @@ Eigen::VectorXd ScreenTRexSelector::computeDA_BLOCK_EQUI_Delta(
     Eigen::VectorXd DA_delta =
         Eigen::VectorXd::Ones(static_cast<Eigen::Index>(p_));
 
-    if (std::abs(rho) <= screen_ctrl_.rho_thr_DA) {
+    if (std::abs(rho) <= trex_screen_ctrl_.rho_thr_DA) {
         if (verbose_) {
             printProgress("DA-BLOCK-EQUI: skipped (|rho| = "
                 + std::to_string(std::abs(rho)) + " <= rho_thr_DA = "
-                + std::to_string(screen_ctrl_.rho_thr_DA) + ").");
+                + std::to_string(trex_screen_ctrl_.rho_thr_DA) + ").");
         }
         return DA_delta;
     }
 
-    const std::size_t n_blocks = screen_ctrl_.n_blocks;
+    const std::size_t n_blocks = trex_screen_ctrl_.n_blocks;
     const std::size_t base_size = p_ / n_blocks;
     const std::size_t remainder = p_ % n_blocks;
 
