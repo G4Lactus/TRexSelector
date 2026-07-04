@@ -5,7 +5,9 @@
     "license": "GPL-3.0-only",
     "dependencies": [
         "eigen3",
-        "boost-headers",
+        "boost-interprocess",
+        "boost-math",
+        "boost-random",
         "cereal",
         {
             "name": "libomp",

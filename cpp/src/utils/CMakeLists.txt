@@ -50,6 +50,7 @@ target_link_libraries(trex_utils PUBLIC
     Eigen3::Eigen
     cereal::cereal
     OpenMP::OpenMP_CXX
+    Boost::headers
 )
 # ==================================================================================
 
