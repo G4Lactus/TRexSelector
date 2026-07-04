@@ -161,34 +161,31 @@
         {
             "type": "shell",
             "label": "Python: Install (Editable)",
-            "command": "pip",
-            "args": ["install", "-e", ".[dev]"],
+            "command": "conda run --no-capture-output -n trex-dev pip install -e '.[dev]'",
             "options": {"cwd": "${workspaceFolder}/Python/TRexSelector"},
             "group": {"kind": "build"},
             "problemMatcher": [],
-            "detail": "Editable install with dev deps; builds C++ extension via scikit-build-core"
+            "detail": "Editable install in the trex-dev env; builds C++ extension via scikit-build-core. Extras quoted so zsh does not glob '.[dev]'."
         },
         // Build a distributable wheel (Release, via scikit-build-core)
         {
             "type": "shell",
             "label": "Python: Build (Wheel)",
-            "command": "pip",
-            "args": ["wheel", ".", "-w", "dist/"],
+            "command": "conda run --no-capture-output -n trex-dev pip wheel . -w dist/",
             "options": {"cwd": "${workspaceFolder}/Python/TRexSelector"},
             "group": {"kind": "build"},
             "problemMatcher": [],
-            "detail": "Build distributable wheel (pip wheel . -w dist/)"
+            "detail": "Build distributable wheel in the trex-dev env (pip wheel . -w dist/)"
         },
         // Run pytest suite
         {
             "type": "shell",
             "label": "Python: Test",
-            "command": "pytest",
-            "args": ["tests/", "-v"],
+            "command": "conda run --no-capture-output -n trex-dev pytest tests/ -v",
             "options": {"cwd": "${workspaceFolder}/Python/TRexSelector"},
             "group": {"kind": "test"},
             "problemMatcher": [],
-            "detail": "Run pytest test suite"
+            "detail": "Run pytest test suite in the trex-dev env"
         },
         // Compound macro: editable rebuild of the C++ extension, then run tests.
         // Runs the two tasks above in sequence; stops if the build fails.
