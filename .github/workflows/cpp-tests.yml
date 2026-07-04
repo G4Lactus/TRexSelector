@@ -20,7 +20,7 @@ jobs:
         os: [ubuntu-24.04, macos-latest]
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       # -----------------------------------------------------------------------
       # Ubuntu: install all C++ dependencies via apt
