@@ -20,7 +20,9 @@ function(add_trex_test TEST_NAME)
             trex::trex_selector_methods
     )
     target_compile_features(${TEST_NAME} PRIVATE cxx_std_20)
-    gtest_discover_tests(${TEST_NAME})
+    # Default DISCOVERY_TIMEOUT of 5s is flaky under saturated parallel builds
+    # and on slow CI runners
+    gtest_discover_tests(${TEST_NAME} DISCOVERY_TIMEOUT 30)
 endfunction()
 
 # 1. Add the Sanity Test Executable

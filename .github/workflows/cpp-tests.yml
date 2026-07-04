@@ -76,6 +76,20 @@ jobs:
             -DCMAKE_CXX_COMPILER="$(brew --prefix llvm)/bin/clang++" \
             -DTREX_PORTABLE_BUILD=ON
 
+      # The LLVM OpenMP runtime (libomp140.x86_64.dll) ships with Visual Studio
+      # but is not on PATH; test executables need it at gtest discovery time
+      # (post-build) and when ctest runs them.
+      - name: Add LLVM OpenMP runtime to PATH (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          $dll = Get-Item "C:\Program Files\Microsoft Visual Studio\*\*\VC\Redist\MSVC\*\x64\*OpenMP*\libomp140*.dll" -ErrorAction SilentlyContinue | Select-Object -First 1
+          if (-not $dll) {
+            $dll = Get-ChildItem "C:\Program Files\Microsoft Visual Studio" -Recurse -Filter "libomp140.x86_64.dll" -ErrorAction SilentlyContinue | Select-Object -First 1
+          }
+          if (-not $dll) { throw "libomp140.x86_64.dll not found in the Visual Studio installation" }
+          Write-Host "Found OpenMP runtime: $($dll.FullName)"
+          Add-Content -Path $env:GITHUB_PATH -Value $dll.DirectoryName
+
       - name: Configure (Windows)
         if: runner.os == 'Windows'
         run: >

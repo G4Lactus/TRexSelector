@@ -71,6 +71,8 @@ include(cmake/TRexCompilerOptions.cmake)
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
+# No C++20 modules used; skip MSBuild's per-TU module dependency scan
+set(CMAKE_CXX_SCAN_FOR_MODULES OFF)
 # Generate compile_commands.json for IntelliSense
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
