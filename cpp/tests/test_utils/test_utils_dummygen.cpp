@@ -64,11 +64,6 @@ TEST(DummyGenTest, DistributionFactories) {
     EXPECT_DOUBLE_EQ(lap.laplace_scale, 2.0);
     EXPECT_THROW(Distribution::Laplace(0.0, -1.0), std::invalid_argument);
 
-    // Holtsmark check
-    auto holtz = Distribution::Holtsmark(0.0, 1.5);
-    EXPECT_EQ(holtz.type, Distribution::Type::Holtsmark);
-    EXPECT_THROW(Distribution::Holtsmark(0.0, -0.5), std::invalid_argument);
-
     // Constrained Sparse Rademacher check
     auto csr = Distribution::ConstrainedSparseRademacher(0.5);
     EXPECT_EQ(csr.type, Distribution::Type::ConstrainedSparseRademacher);

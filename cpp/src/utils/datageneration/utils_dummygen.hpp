@@ -36,9 +36,7 @@
 
 // Boost includes
 #include <boost/random/laplace_distribution.hpp>
-#include <boost/math/distributions/holtsmark.hpp>
 #include <boost/random/uniform_on_sphere.hpp>
-#include <boost/random/generalized_inverse_gaussian_distribution.hpp>
 #include <boost/random/triangle_distribution.hpp>
 
 // utils includes
@@ -123,9 +121,6 @@ struct Distribution {
         /** @brief Gumbel distribution (Extreme value distribution). */
         Gumbel,
 
-        /** @brief Holtsmark distribution (heavy-tailed, stable with alpha=1.5). */
-        Holtsmark,
-
         /** @brief Triangular distribution with mean 0 and range [-b, b]. */
         Triangle,
 
@@ -171,12 +166,6 @@ struct Distribution {
 
     /** @brief Gumbel distribution: scale parameter (default: 1.0). */
     double gumbel_scale = 1.0;
-
-    /** @brief Holtsmark distribution: location parameter (default: 0.0). */
-    double holtsmark_location = 0.0;
-
-    /** @brief Holtsmark distribution: scale parameter (default: 1.0). */
-    double holtsmark_scale = 1.0;
 
     /** @brief Triangle: lower bound (default: -sqrt(6) for unit variance) */
     double triangle_a = -std::sqrt(6.0);
@@ -340,39 +329,6 @@ struct Distribution {
         Distribution dist(Type::Gumbel);
         dist.gumbel_location = location;
         dist.gumbel_scale = scale;
-        return dist;
-    }
-
-
-    /**
-     * @brief Create Holtsmark distribution.
-     *
-     * @details The Holtsmark distribution is a symmetric stable distribution with shape
-     *          parameter alpha = 3/2 and skewness parameter beta = 0.
-     *
-     *          Properties:
-     *          - Mean: location (well-defined, alpha = 3/2 > 1)
-     *          - Variance: INFINITE (since alpha = 3/2 < 2)
-     *          - All higher moments: infinite
-     *          - Symmetric around location parameter
-     *
-     *          Applications: Plasma physics, astrophysics (Coulomb forces), testing
-     *          robustness to extreme heavy-tailed noise.
-     *
-     * @see https://en.wikipedia.org/wiki/Holtsmark_distribution
-     *
-     * @param location Location parameter (mean, median, mode; default: 0.0)
-     * @param scale Scale parameter (controls dispersion; default: 1.0)
-     *
-     * @return Distribution instance for Holtsmark distribution.
-     */
-    static Distribution Holtsmark(double location = 0.0, double scale = 1.0) {
-        if (scale <= 0.0) {
-            throw std::invalid_argument("Holtsmark distribution scale parameter must be > 0.");
-        }
-        Distribution dist(Type::Holtsmark);
-        dist.holtsmark_location = location;
-        dist.holtsmark_scale = scale;
         return dist;
     }
 
@@ -653,26 +609,6 @@ inline void generate_dummies(
                 std::extreme_value_distribution<double> distribution(adjusted_location, scale);
                 for (std::size_t i = 0; i < n; ++i) {
                     D(i, j) = distribution(gen);
-                }
-            }
-            break;
-        }
-
-
-        /** @brief Generate Holtsmark distributed dummies. */
-        case Distribution::Type::Holtsmark: {
-            double location = dist.holtsmark_location;
-            double scale = dist.holtsmark_scale;
-
-            // Create Boost distribution for inverse transform
-            boost::math::holtsmark_distribution<double> distribution(location, scale);
-            #pragma omp parallel for schedule(static)
-            for (std::size_t j = 0; j < p; ++j) {
-                std::mt19937 gen(mix_seed(base_seed, j));
-                std::uniform_real_distribution<double> uniform_dist(0.0, 1.0);
-                for (std::size_t i = 0; i < n; ++i) {
-                    double u = uniform_dist(gen);
-                    D(i, j) = boost::math::quantile(distribution, u);
                 }
             }
             break;
