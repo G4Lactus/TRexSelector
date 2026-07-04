@@ -44,25 +44,25 @@ jobs:
           CIBW_BUILD_VERBOSITY: "1"
 
           # -----------------------------------------------------------------------
-          # Linux (manylinux_2_28 — dnf/yum based)
+          # Linux (manylinux_2_28 = AlmaLinux 8). Its distro packages are too old
+          # (Eigen 3.3.x hits a C++20 LDLT operator== bug under GCC; Boost 1.66 <
+          # required 1.80), so build all header-only deps from source into
+          # /usr/local. OpenMP uses GCC's bundled libgomp (no package needed).
+          # This exact recipe was validated in the manylinux container.
           # -----------------------------------------------------------------------
           CIBW_MANYLINUX_X86_64_IMAGE: manylinux_2_28
           CIBW_BEFORE_ALL_LINUX: |
-            # Eigen (via EPEL) + LLVM OpenMP runtime from the distro.
-            dnf install -y epel-release || true
-            dnf install -y eigen3-devel libomp-devel || \
-              ( yum install -y epel-release && yum install -y eigen3-devel libomp-devel )
-            # cereal is header-only — install from GitHub release tarball.
-            curl -fsSL https://github.com/USCiLab/cereal/archive/refs/tags/v1.3.2.tar.gz \
-              | tar xz -C /tmp
-            cp -r /tmp/cereal-1.3.2/include/cereal /usr/local/include/cereal
-            # Boost: manylinux_2_28 (AlmaLinux 8) ships Boost 1.66, but the project
-            # requires >= 1.80. We only use header-only components (random, math),
-            # so install a modern header-only Boost into /usr/local/include, where
-            # find_package(Boost) locates it (and there is no distro boost-devel to
-            # shadow it, since we no longer install boost-devel).
-            curl -fsSL https://archives.boost.io/release/1.85.0/source/boost_1_85_0.tar.gz \
-              | tar xz -C /tmp
+            set -e
+            # Eigen 3.4.0 (installs Eigen3Config.cmake for find_package(Eigen3 NO_MODULE)).
+            curl -fsSL https://gitlab.com/libeigen/eigen/-/archive/3.4.0/eigen-3.4.0.tar.gz | tar xz -C /tmp
+            cmake -S /tmp/eigen-3.4.0 -B /tmp/eigen-build -DBUILD_TESTING=OFF -DCMAKE_INSTALL_PREFIX=/usr/local
+            cmake --install /tmp/eigen-build
+            # cereal — install via its CMake so cerealConfig.cmake exists for find_package(cereal).
+            curl -fsSL https://github.com/USCiLab/cereal/archive/refs/tags/v1.3.2.tar.gz | tar xz -C /tmp
+            cmake -S /tmp/cereal-1.3.2 -B /tmp/cereal-build -DJUST_INSTALL_CEREAL=ON -DCMAKE_INSTALL_PREFIX=/usr/local
+            cmake --install /tmp/cereal-build
+            # Boost >= 1.80 (header-only usage); drop headers into /usr/local/include.
+            curl -fsSL https://archives.boost.io/release/1.85.0/source/boost_1_85_0.tar.gz | tar xz -C /tmp
             cp -r /tmp/boost_1_85_0/boost /usr/local/include/boost
 
           # -----------------------------------------------------------------------
