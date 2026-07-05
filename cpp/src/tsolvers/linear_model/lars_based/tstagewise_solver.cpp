@@ -33,8 +33,7 @@ TSTAGEWISE_Solver::TSTAGEWISE_Solver(
     ScalingMode scaling_mode
 )
     : TLARS_Solver(X, D, y, normalize, intercept, verbose,
-                    SolverTypeLarsBased::TSTAGEWISE, scaling_mode),
-      num_removals_(0) {
+                    SolverTypeLarsBased::TSTAGEWISE, scaling_mode) {
 }
 
 // ============================================================================
@@ -43,13 +42,13 @@ TSTAGEWISE_Solver::TSTAGEWISE_Solver(
 
 void TSTAGEWISE_Solver::executeStep(std::size_t T_stop, bool early_stop) {
     validateConnected();
-    Eigen::setNbThreads(1);
+    EigenSingleThreadGuard eigen_single_thread_guard;
 
     while (
         currentStep_ < maxSteps_ &&
         !inactives_.empty() &&
         actives_.size() < effective_n_ &&
-        (count_active_dummies_ < T_stop || !early_stop)
+        (!early_stop || T_stop == 0 || count_active_dummies_ < T_stop)
     ) {
         // ========================================================
         // STEP 1: Find maximum correlation
@@ -70,6 +69,14 @@ void TSTAGEWISE_Solver::executeStep(std::size_t T_stop, bool early_stop) {
 
         if (actives_.empty() || R_.size() == 0) {
             logWarning("Active set or Cholesky is empty; aborting.");
+            // Roll back the aborted step so actions_/lambda_ stay aligned
+            // with the diagnostics arrays (rejections remain recorded in
+            // dropped_indices_) and rebuild inactives_ so dropped columns
+            // cannot be re-selected.
+            actions_.pop_back();
+            lambda_.pop_back();
+            currentStep_--;
+            updateInactiveSet();
             break;
         }
 
@@ -79,7 +86,18 @@ void TSTAGEWISE_Solver::executeStep(std::size_t T_stop, bool early_stop) {
         Eigen::VectorXd w_A = computeStagewiseDirection();
 
         if (actives_.empty()) {
-            logWarning("Active set is empty after NNLS reduction; aborting.");
+            logWarning("Active set is empty after NNLS reduction; terminating.");
+            // The NNLS removals are already recorded in this step's actions;
+            // conclude the step consistently as an empty model: zero
+            // coefficients, residual = y, and diagnostics for this step.
+            ensureBetaPathCapacity(currentStep_ + 1);
+            betaPath_.col(static_cast<Eigen::Index>(currentStep_)).setZero();
+            r_ = y_;
+            RSS_.push_back(r_.dot(r_));
+            R2_.push_back(0.0);
+            updateDummyTracking();
+            DoF_.push_back(intercept_ ? 1 : 0);
+            updateInactiveSet();
             break;
         }
 
@@ -117,6 +135,9 @@ void TSTAGEWISE_Solver::executeStep(std::size_t T_stop, bool early_stop) {
         updateDummyTracking();
         DoF_.push_back(actives_.size() + (intercept_ ? 1 : 0));
     }
+
+    // Drop any spare beta-path capacity now that execution stopped
+    trimBetaPathToRecordedSteps();
 }
 
 // ============================================================================
@@ -185,11 +206,15 @@ void TSTAGEWISE_Solver::processStagewiseNNLS(const Eigen::Ref<const Eigen::Vecto
     // Negative index indicates removal
     actions_.back().push_back(-static_cast<int>(dropped_var));
 
-    // 5. Remove from active set and signs
+    // 5. Refresh correlation for the dropped variable for potential re-entry
+    // (its correlations_ entry is stale from when it entered the active set)
+    refreshDroppedCorrelation(dropped_var);
+
+    // 6. Remove from active set and signs
     actives_.erase(actives_.begin() + drop_idx);
     Sign_.erase(Sign_.begin() + drop_idx);
 
-    // 6. Mark for inactive set rebuild at the end of the step
+    // 7. Mark for inactive set rebuild at the end of the step
     any_dropped_ = true;
     num_removals_++;
 }
@@ -198,42 +223,18 @@ void TSTAGEWISE_Solver::processStagewiseNNLS(const Eigen::Ref<const Eigen::Vecto
 // Internal Helpers & Serialization
 // ============================================================================
 
-double TSTAGEWISE_Solver::getCyclingRatio() const {
-    if (num_additions_ == 0) { return 0.0; }
-    return static_cast<double>(num_removals_) / static_cast<double>(num_additions_);
-}
 
 // ============================================================================
 // De-/Serialization
 // ============================================================================
 
-void TSTAGEWISE_Solver::save(const std::string& filename) const {
-    std::ofstream os(filename, std::ios::binary);
-    if (!os.is_open()) {
-        throw std::runtime_error(
-            concatMsg(solverTypeToString(), "::save: Cannot open '", filename, "'")
-        );
-    }
-    cereal::PortableBinaryOutputArchive oarchive(os);
-    oarchive(*this);
-    logInfo(concatMsg("[", solverTypeToString(), "] saved to '", filename, "'\n"));
-}
+void TSTAGEWISE_Solver::save(const std::string& filename) const { saveImpl(*this, filename); }
 
 
 TSTAGEWISE_Solver TSTAGEWISE_Solver::load(const std::string& filename,
                                           Eigen::Map<Eigen::MatrixXd>& X,
                                           Eigen::Map<Eigen::MatrixXd>& D) {
-    TSTAGEWISE_Solver solver;
-    std::ifstream is(filename, std::ios::binary);
-    if (!is.is_open()) {
-        throw std::runtime_error(
-            solver.concatMsg(solver.solverTypeToString(), "::load: Cannot open '", filename, "'")
-        );
-    }
-    cereal::PortableBinaryInputArchive iarchive(is);
-    iarchive(solver);
-    solver.reconnect(X, D);
-    return solver;
+    return loadImpl<TSTAGEWISE_Solver>(filename, X, D);
 }
 
 // ============================================================================

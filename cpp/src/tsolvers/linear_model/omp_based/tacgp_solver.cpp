@@ -36,11 +36,11 @@ TACGP_Solver::TACGP_Solver(SolverTypeOMPBased solver_type)
 
 void TACGP_Solver::executeStep(std::size_t T_stop, bool early_stop) {
     validateConnected();
-    Eigen::setNbThreads(1);
+    EigenSingleThreadGuard eigen_single_thread_guard;
 
     while (currentStep_ < maxSteps_ &&
            actives_.size() < effective_n_ &&
-           (count_active_dummies_ < T_stop || !early_stop)) {
+           (!early_stop || T_stop == 0 || count_active_dummies_ < T_stop)) {
 
         // =================================================================
         // STEP 1: Find max correlation |c^{n}| among ALL variables
@@ -128,6 +128,9 @@ void TACGP_Solver::executeStep(std::size_t T_stop, bool early_stop) {
 
         updateCorrelations();
     }
+
+    // Drop any spare beta-path capacity now that execution stopped
+    trimBetaPathToRecordedSteps();
 }
 
 
@@ -147,10 +150,20 @@ void TACGP_Solver::computeGradientDirection() {
         direction_[i] = correlations_[static_cast<Eigen::Index>(actives_[i])];
     }
 
-    // Add conjugate correction if previous direction is already included
-    // and active set did not changed since last iteration
-    if (static_cast<std::size_t>(direction_prev_.size()) == k
-        && projected_direction_prev_.size() > 0) {
+    // Conjugate correction (Blumensath & Davies 2008, Sec. III-B/C): when the
+    // active set grew, the previous direction is zero-extended to the current
+    // dimension ("the elements associated with the new dimensions are set to
+    // zero"), which preserves conjugacy — so the correction applies on growth
+    // steps too, not only on re-selection steps. The projected direction
+    // p^{n-1} = X_A d^{n-1} is unaffected by the zero padding.
+    if (projected_direction_prev_.size() > 0 &&
+        static_cast<std::size_t>(direction_prev_.size()) <= k) {
+
+        std::size_t k_prev = static_cast<std::size_t>(direction_prev_.size());
+        if (k_prev < k) {
+            direction_prev_.conservativeResize(static_cast<Eigen::Index>(k));
+            direction_prev_.tail(static_cast<Eigen::Index>(k - k_prev)).setZero();
+        }
 
         b_1_ = computeB_1();
 
@@ -161,7 +174,7 @@ void TACGP_Solver::computeGradientDirection() {
         }
 
     } else {
-        b_1_ = 0.0; // first iteration or active set changed
+        b_1_ = 0.0; // first iteration
     }
 }
 
@@ -197,10 +210,11 @@ double TACGP_Solver::computeB_1() {
     // Combine with negative sign
     double b_1 = - numerator / denominator;
 
-    // Sanity check for huge b_1
+    // Sanity check: a huge correction is amplified numerical garbage;
+    // fall back to the pure gradient direction instead.
     if (std::abs(b_1) > 1e10) {
-        logWarning("Computed b_1 is huge; numerical issue.");
-        return std::copysign(1e10, b_1);
+        logWarning("Computed b_1 is huge; falling back to pure gradient.");
+        return 0.0;
     }
 
     return b_1;
@@ -220,39 +234,13 @@ void TACGP_Solver::storePreviousDirection() {
 // De-/Serialization
 // ==================================================================================
 
-void TACGP_Solver::save(const std::string& filename) const {
-
-    std::ofstream ofs(filename, std::ios::binary);
-    if (!ofs.is_open()) {
-        throw std::runtime_error(
-            concatMsg(solverTypeToString(), "::save: Cannot open '", filename, "'")
-        );
-    }
-    cereal::PortableBinaryOutputArchive oarchive(ofs);
-    oarchive(*this);
-    logInfo(concatMsg("[", solverTypeToString(), "] saved to '", filename, "'\n"));
-}
+void TACGP_Solver::save(const std::string& filename) const { saveImpl(*this, filename); }
 
 
-TACGP_Solver TACGP_Solver::load(
-    const std::string& filename,
-    Eigen::Map<Eigen::MatrixXd>& X,
-    Eigen::Map<Eigen::MatrixXd>& D
-) {
-
-    TACGP_Solver tacgp;
-    std::ifstream is(filename, std::ios::binary);
-    if (!is.is_open()) {
-        throw std::runtime_error(
-            tacgp.concatMsg(tacgp.solverTypeToString(), "::load: Cannot open '", filename, "'")
-        );
-    }
-
-    cereal::PortableBinaryInputArchive iarchive(is);
-    iarchive(tacgp);
-
-    tacgp.reconnect(X, D);
-    return tacgp;
+TACGP_Solver TACGP_Solver::load(const std::string& filename,
+                              Eigen::Map<Eigen::MatrixXd>& X,
+                              Eigen::Map<Eigen::MatrixXd>& D) {
+    return loadImpl<TACGP_Solver>(filename, X, D);
 }
 
 // ==================================================================================

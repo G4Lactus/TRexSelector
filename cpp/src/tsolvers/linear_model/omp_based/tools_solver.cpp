@@ -31,7 +31,7 @@ TOOLS_Solver::TOOLS_Solver(
     bool verbose,
     ScalingMode scaling_mode)
     : TOMP_Solver(X, D, y, normalize, intercept, verbose,
-                  SolverTypeOMPBased::TOMP, scaling_mode)
+                  SolverTypeOMPBased::TOOLS, scaling_mode)
 {
     // State is fully initialized by the TOMP_Solver base constructor
 }
@@ -102,35 +102,12 @@ std::pair<double, std::vector<std::size_t>> TOOLS_Solver::findTiedMaxCorrelation
 // Serialization
 // ==================================================================================
 
-void TOOLS_Solver::save(const std::string& filename) const {
-    std::ofstream ofs(filename, std::ios::binary);
-    if (!ofs.is_open()) {
-        throw std::runtime_error(
-            concatMsg(solverTypeToString(), "::save: Cannot open '", filename, "'")
-        );
-    }
-    cereal::PortableBinaryOutputArchive oarchive(ofs);
-    oarchive(*this);
-    logInfo(concatMsg("[", solverTypeToString(), "] saved to '", filename, "'\n"));
-}
+void TOOLS_Solver::save(const std::string& filename) const { saveImpl(*this, filename); }
 
-TOOLS_Solver TOOLS_Solver::load(
-    const std::string& filename,
-    Eigen::Map<Eigen::MatrixXd>& X,
-    Eigen::Map<Eigen::MatrixXd>& D
-) {
-    TOOLS_Solver tools;
-    std::ifstream is(filename, std::ios::binary);
-    if (!is.is_open()) {
-        throw std::runtime_error(
-            tools.concatMsg(tools.solverTypeToString(), "::load: Cannot open '", filename, "'")
-        );
-    }
-    cereal::PortableBinaryInputArchive iarchive(is);
-    iarchive(tools);
-
-    tools.reconnect(X, D);
-    return tools;
+TOOLS_Solver TOOLS_Solver::load(const std::string& filename,
+                              Eigen::Map<Eigen::MatrixXd>& X,
+                              Eigen::Map<Eigen::MatrixXd>& D) {
+    return loadImpl<TOOLS_Solver>(filename, X, D);
 }
 
 // ==================================================================================

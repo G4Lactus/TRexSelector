@@ -51,6 +51,21 @@ TNCGMP_Solver::TNCGMP_Solver(
             "  Max steps: ", maxSteps_, "\n"
     ));
 
+    // The LineSearch (MP) variant stores one dense beta-path column per step
+    // and may take up to 20 * p_tot steps; warn when a full-path run could
+    // allocate an excessive amount of memory (use T_stop to stop early).
+    if (variant_ == NCGMPVariant::LineSearch) {
+        double worst_case_gib = static_cast<double>(p_tot) *
+                                static_cast<double>(maxSteps_) * 8.0 /
+                                (1024.0 * 1024.0 * 1024.0);
+        if (worst_case_gib > 1.0) {
+            logWarning(concatMsg(
+                "LineSearch worst-case beta path is ~", worst_case_gib,
+                " GiB (", p_tot, " x ", maxSteps_,
+                " doubles); rely on T_stop early stopping."));
+        }
+    }
+
     r_ = y_;
     betaPath_.resize(static_cast<Eigen::Index>(p_tot), 1);
     betaPath_.col(0).setZero();
@@ -72,11 +87,20 @@ TNCGMP_Solver::TNCGMP_Solver() : TSolver_Base() {}
 
 void TNCGMP_Solver::executeStep(std::size_t T_stop, bool early_stop) {
     validateConnected();
-    Eigen::setNbThreads(1);
+    EigenSingleThreadGuard eigen_single_thread_guard;
 
-    while (currentStep_ < maxSteps_ && !inactives_.empty() &&
-           (variant_ == NCGMPVariant::LineSearch || actives_.size() < effective_n_) &&
-           (count_active_dummies_ < T_stop || !early_stop)) {
+    // Fully Corrective: collinear rejections must not create standalone
+    // actions_ entries (they would desync actions_ from the per-step
+    // diagnostics arrays); they are prepended to the next successful step.
+    std::vector<int> pending_drop_actions;
+
+    // Line Search (MP) re-selects active atoms, so it is not bounded by the
+    // inactive set or the active-set size; it stops via maxSteps_, T_stop,
+    // or vanishing correlations.
+    while (currentStep_ < maxSteps_ &&
+           (variant_ == NCGMPVariant::LineSearch ||
+            (!inactives_.empty() && actives_.size() < effective_n_)) &&
+           (!early_stop || T_stop == 0 || count_active_dummies_ < T_stop)) {
 
         // 1. Linear Minimization Oracle (LMO) - Max Correlation
         auto [Cmax, new_vars] = findTiedMaxCorrelations();
@@ -98,11 +122,7 @@ void TNCGMP_Solver::executeStep(std::size_t T_stop, bool early_stop) {
             currentStep_++;
 
             // Expand beta path
-            Eigen::Index p_tot = static_cast<Eigen::Index>(p_original_ + num_dummies_);
-            if (currentStep_ >= static_cast<std::size_t>(betaPath_.cols())) {
-                betaPath_.conservativeResize(
-                    p_tot, static_cast<Eigen::Index>(currentStep_ + 1));
-            }
+            ensureBetaPathCapacity(currentStep_ + 1);
             betaPath_.col(static_cast<Eigen::Index>(currentStep_)) =
                 betaPath_.col(static_cast<Eigen::Index>(currentStep_ - 1));
             betaPath_.col(static_cast<Eigen::Index>(currentStep_))(
@@ -113,11 +133,15 @@ void TNCGMP_Solver::executeStep(std::size_t T_stop, bool early_stop) {
             if (std::find(actives_.begin(), actives_.end(), j_new) ==
                 actives_.end()) {
                 actives_.push_back(j_new);
+                // Keep the actives/inactives partition invariant intact for
+                // the public getters (re-selection scans all non-dropped
+                // columns via the variant-aware overrides below)
+                std::erase(inactives_, j_new);
                 if (j_new >= dummy_start_idx_) { count_active_dummies_++; }
             }
             actions_.push_back({static_cast<int>(j_new)});
 
-            rebuildInactiveSetForLineSearch();
+            updateInactiveSet();
 
         } else {
             // Variant 1: Fully Corrective (Orthogonal Matching Pursuit)
@@ -126,7 +150,7 @@ void TNCGMP_Solver::executeStep(std::size_t T_stop, bool early_stop) {
 
             if (last_updateR_rank_ == static_cast<int>(actives_.size())) {
                 dropped_indices_.push_back(j_new);
-                actions_.push_back({-static_cast<int>(j_new)});
+                pending_drop_actions.push_back(-static_cast<int>(j_new));
                 any_dropped_ = true;
                 logWarning(concatMsg("Variable ", j_new, " collinear; dropped."));
                 updateInactiveSet();
@@ -134,7 +158,9 @@ void TNCGMP_Solver::executeStep(std::size_t T_stop, bool early_stop) {
             } else {
                 R_ = newR;
                 actives_.push_back(j_new);
-                actions_.push_back({static_cast<int>(j_new)});
+                pending_drop_actions.push_back(static_cast<int>(j_new));
+                actions_.push_back(std::move(pending_drop_actions));
+                pending_drop_actions.clear();
                 std::erase(inactives_, j_new);
                 if (j_new >= dummy_start_idx_) { count_active_dummies_++; }
             }
@@ -152,6 +178,9 @@ void TNCGMP_Solver::executeStep(std::size_t T_stop, bool early_stop) {
 
         updateCorrelations();
     }
+
+    // Drop any spare beta-path capacity now that execution stopped
+    trimBetaPathToRecordedSteps();
 }
 
 // ==================================================================================
@@ -159,11 +188,23 @@ void TNCGMP_Solver::executeStep(std::size_t T_stop, bool early_stop) {
 // ==================================================================================
 
 void TNCGMP_Solver::updateCorrelations() {
-    #pragma omp parallel for schedule(static)
-    for (std::size_t i = 0; i < inactives_.size(); ++i) {
-        std::size_t j = inactives_[i];
-        correlations_(static_cast<Eigen::Index>(j)) = getColumn(j).dot(r_);
+    if (variant_ == NCGMPVariant::LineSearch) {
+        // MP re-selection: refresh ALL non-dropped variables (actives included)
+        refreshAllCorrelations();
+    } else {
+        // Fully Corrective (OMP): inactive variables only
+        refreshInactiveCorrelations();
     }
+}
+
+
+std::pair<double, std::vector<std::size_t>>
+TNCGMP_Solver::findTiedMaxCorrelations() const {
+    // Line Search (MP) allows re-selection: scan all non-dropped variables.
+    // Fully Corrective (OMP) uses the base inactive-only scan.
+    return (variant_ == NCGMPVariant::LineSearch)
+               ? findTiedMaxCorrelationsAllNonDropped()
+               : TSolver_Base::findTiedMaxCorrelations();
 }
 
 void TNCGMP_Solver::updateBetaPathAndResiduals() {
@@ -184,10 +225,7 @@ void TNCGMP_Solver::updateBetaPathAndResiduals() {
             beta_A(static_cast<Eigen::Index>(i));
     }
 
-    if (currentStep_ >= static_cast<std::size_t>(betaPath_.cols())) {
-        betaPath_.conservativeResize(p_tot,
-                                     static_cast<Eigen::Index>(currentStep_ + 1));
-    }
+    ensureBetaPathCapacity(currentStep_ + 1);
     betaPath_.col(static_cast<Eigen::Index>(currentStep_)) = beta_hat;
 
     r_ = y_;
@@ -197,52 +235,16 @@ void TNCGMP_Solver::updateBetaPathAndResiduals() {
     }
 }
 
-void TNCGMP_Solver::rebuildInactiveSetForLineSearch() {
-    // In Line Search (MP), we DO NOT remove active variables from the inactive set
-    // because standard MP allows re-selecting the same atom multiple times.
-    if (!any_dropped_) return;
-
-    inactives_.clear();
-    std::size_t p_tot = p_original_ + num_dummies_;
-    for (std::size_t j = 0; j < p_tot; ++j) {
-        if (std::ranges::find(dropped_indices_, j) == dropped_indices_.end()) {
-            inactives_.push_back(j);
-        }
-    }
-    any_dropped_ = false;
-}
-
 // ==================================================================================
 // Serialization
 // ==================================================================================
 
-void TNCGMP_Solver::save(const std::string& filename) const {
-    std::ofstream ofs(filename, std::ios::binary);
-    if (!ofs.is_open()) {
-        throw std::runtime_error(concatMsg(solverTypeToString(),
-                                "::save: Cannot open '", filename, "'"));
-    }
-    cereal::PortableBinaryOutputArchive oarchive(ofs);
-    oarchive(*this);
-    logInfo(concatMsg("[", solverTypeToString(), "] saved to '", filename, "'\n"));
-}
+void TNCGMP_Solver::save(const std::string& filename) const { saveImpl(*this, filename); }
 
-TNCGMP_Solver TNCGMP_Solver::load(
-    const std::string& filename,
-    Eigen::Map<Eigen::MatrixXd>& X,
-    Eigen::Map<Eigen::MatrixXd>& D) {
-
-    TNCGMP_Solver solver;
-    std::ifstream is(filename, std::ios::binary);
-    if (!is.is_open()) {
-        throw std::runtime_error(solver.concatMsg(solver.solverTypeToString(),
-                                 "::load: Cannot open '", filename, "'"));
-    }
-    cereal::PortableBinaryInputArchive iarchive(is);
-    iarchive(solver);
-
-    solver.reconnect(X, D);
-    return solver;
+TNCGMP_Solver TNCGMP_Solver::load(const std::string& filename,
+                                  Eigen::Map<Eigen::MatrixXd>& X,
+                                  Eigen::Map<Eigen::MatrixXd>& D) {
+    return loadImpl<TNCGMP_Solver>(filename, X, D);
 }
 
 // ==================================================================================

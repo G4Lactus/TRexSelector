@@ -49,11 +49,14 @@ void preprocessMatStatistics(
             ? std::sqrt(static_cast<double>(nrows - 1))
             : 1.0;
 
+    // Force Eigen single-threaded inside the OpenMP region below and restore
+    // the previous global setting on exit (must not leak into the host process).
+    const int prev_eigen_threads = Eigen::nbThreads();
+    Eigen::setNbThreads(1);
+
     // Single parallel region to minimize thread-spawning overhead
     #pragma omp parallel
     {
-        // Enforce Eigen uses only 1 thread inside this OpenMP region
-        Eigen::setNbThreads(1);
 
         // --------------------------------------------------------------------
         // Phase 1: Centering
@@ -77,10 +80,25 @@ void preprocessMatStatistics(
             // Thread-local buffer to avoid critical section bottleneck
             std::vector<std::size_t> thread_dropped;
 
-            #pragma omp for schedule(static) nowait
+            // NOTE: no `nowait` here — the implicit barrier guarantees that all
+            // reads of dropped_indices (dedupe check below) complete before any
+            // thread mutates it in the critical merge section.
+            #pragma omp for schedule(static)
             for (Eigen::Index j = 0; j < pcols; ++j) {
                 double norm_j = X.col(j).norm();
+
+                // Scale-aware degeneracy threshold: after centering, a
+                // numerically constant column keeps only rounding residue of
+                // order |mean| * eps per entry; the factor nrows gives
+                // headroom for error accumulation in the mean computation.
+                // Without centering, the absolute floor suffices (only truly
+                // zero columns are degenerate).
                 double min_norm = eps * std::sqrt(static_cast<double>(nrows));
+                if (center) {
+                    min_norm = std::max(
+                        min_norm,
+                        eps * static_cast<double>(nrows) * std::abs(meansx(j)));
+                }
 
                 // The drop test is on the raw L2-norm (variance proxy) and is
                 // independent of the scaling mode. The stored divisor, however,
@@ -117,6 +135,8 @@ void preprocessMatStatistics(
             }
         }
     } // End of #pragma omp parallel
+
+    Eigen::setNbThreads(prev_eigen_threads);
 
     // Ensure dropped indices are sorted for consistent downstream logic (C++20)
     if (normalize && !dropped_indices.empty()) {

@@ -47,8 +47,6 @@ protected:
     // STAGEWISE specific states
     // ========================================================================
 
-    /** @brief Number of coefficient removals performed. */
-    std::size_t num_removals_{0};
 
 public:
     // ========================================================================
@@ -112,12 +110,6 @@ public:
     // Specific Getters and Setters for T-Stagewise
     // ========================================================================
 
-    /** @brief Get the number of coefficient removals performed. */
-    std::size_t getNumRemovals() const { return num_removals_; }
-
-    /** @brief Get the cycling ratio. */
-    double getCyclingRatio() const;
-
     // ========================================================================
     // De-/Serialization
     // ========================================================================
@@ -134,8 +126,7 @@ public:
     template<class Archive>
     void serialize(Archive& archive) {
         archive(
-            cereal::base_class<TLARS_Solver>(this),
-            CEREAL_NVP(num_removals_)
+            cereal::base_class<TLARS_Solver>(this)
         );
     }
 

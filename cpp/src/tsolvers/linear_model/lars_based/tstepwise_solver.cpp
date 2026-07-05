@@ -30,13 +30,13 @@ void TSTEPWISE_Solver::executeStep(std::size_t T_stop, bool early_stop) {
     validateConnected();
 
     // Set openMP dominance for the entire algorithm
-    Eigen::setNbThreads(1);
+    EigenSingleThreadGuard eigen_single_thread_guard;
 
     while (
         currentStep_ < maxSteps_ &&
         !inactives_.empty() &&
         actives_.size() < effective_n_ &&
-        (count_active_dummies_ < T_stop || !early_stop)
+        (!early_stop || T_stop == 0 || count_active_dummies_ < T_stop)
     ) {
 
         // ========================================================
@@ -64,6 +64,14 @@ void TSTEPWISE_Solver::executeStep(std::size_t T_stop, bool early_stop) {
 
         if (actives_.empty() || R_.size() == 0) {
             logWarning("Active set or Cholesky is empty; aborting.");
+            // Roll back the aborted step so actions_/lambda_ stay aligned
+            // with the diagnostics arrays (rejections remain recorded in
+            // dropped_indices_) and rebuild inactives_ so dropped columns
+            // cannot be re-selected.
+            actions_.pop_back();
+            lambda_.pop_back();
+            currentStep_--;
+            updateInactiveSet();
             break;
         }
 
@@ -103,6 +111,9 @@ void TSTEPWISE_Solver::executeStep(std::size_t T_stop, bool early_stop) {
         zeroAllSigns();
         recomputeCorrelations();
     }
+
+    // Drop any spare beta-path capacity now that execution stopped
+    trimBetaPathToRecordedSteps();
 }
 
 
@@ -117,13 +128,8 @@ void TSTEPWISE_Solver::zeroAllSigns() {
 }
 
 void TSTEPWISE_Solver::recomputeCorrelations() {
-    // Full recomputation: X_inactive^T * r
-    #pragma omp parallel for schedule(static)
-    for (std::size_t i = 0; i < inactives_.size(); ++i) {
-        Eigen::Index j = static_cast<Eigen::Index>(inactives_[i]);
-        // getColumn safely routes between the X and D matrices
-        correlations_(j) = getColumn(j).dot(r_);
-    }
+    // Full recomputation X^T r over inactives (shared base helper)
+    refreshInactiveCorrelations();
 }
 
 
@@ -131,36 +137,13 @@ void TSTEPWISE_Solver::recomputeCorrelations() {
 // Serialization Implementation
 // ============================================================================
 
-void TSTEPWISE_Solver::save(const std::string& filename) const {
-    std::ofstream ofs(filename, std::ios::binary);
-    if (!ofs.is_open()) {
-        throw std::runtime_error(
-            concatMsg(solverTypeToString(), "::save: Cannot open '", filename, "'")
-        );
-    }
-    cereal::PortableBinaryOutputArchive oarchive(ofs);
-    oarchive(*this);
-    logInfo(concatMsg("[", solverTypeToString(), "] saved to '", filename, "'\n"));
-}
+void TSTEPWISE_Solver::save(const std::string& filename) const { saveImpl(*this, filename); }
 
 
 TSTEPWISE_Solver TSTEPWISE_Solver::load(const std::string& filename,
                                         Eigen::Map<Eigen::MatrixXd>& X,
                                         Eigen::Map<Eigen::MatrixXd>& D) {
-    TSTEPWISE_Solver tstepwise;
-    std::ifstream is(filename, std::ios::binary);
-    if (!is.is_open()) {
-        throw std::runtime_error(
-            tstepwise.concatMsg(tstepwise.solverTypeToString(),
-                                "::load: Cannot open '", filename, "'")
-        );
-    }
-
-    cereal::PortableBinaryInputArchive iarchive(is);
-    iarchive(tstepwise);
-
-    tstepwise.reconnect(X, D);
-    return tstepwise;
+    return loadImpl<TSTEPWISE_Solver>(filename, X, D);
 }
 
 // ============================================================================

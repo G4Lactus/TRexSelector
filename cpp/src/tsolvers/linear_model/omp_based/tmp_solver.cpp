@@ -34,11 +34,11 @@ TMP_Solver::TMP_Solver(SolverTypeOMPBased solver_type)
 
 void TMP_Solver::executeStep(std::size_t T_stop, bool early_stop) {
     validateConnected();
-    Eigen::setNbThreads(1);
+    EigenSingleThreadGuard eigen_single_thread_guard;
 
     while (currentStep_ < maxSteps_ &&
            actives_.size() < effective_n_ &&
-           (count_active_dummies_ < T_stop || !early_stop)) {
+           (!early_stop || T_stop == 0 || count_active_dummies_ < T_stop)) {
 
         // ==========================================================
         // STEP 1: Find max |c^{n}| among ALL variables
@@ -105,6 +105,9 @@ void TMP_Solver::executeStep(std::size_t T_stop, bool early_stop) {
         // ==========================================================
         updateCorrelations();
     }
+
+    // Drop any spare beta-path capacity now that execution stopped
+    trimBetaPathToRecordedSteps();
 }
 
 // ==================================================================================
@@ -124,10 +127,7 @@ void TMP_Solver::subtractAtom(std::size_t col_idx) {
 void TMP_Solver::updateBetaPath() {
     Eigen::Index p_tot = static_cast<Eigen::Index>(p_original_ + num_dummies_);
 
-    if (currentStep_ >= static_cast<std::size_t>(betaPath_.cols())) {
-        betaPath_.conservativeResize(p_tot,
-                                     static_cast<Eigen::Index>(currentStep_ + 1));
-    }
+    ensureBetaPathCapacity(currentStep_ + 1);
 
     Eigen::VectorXd beta_hat = Eigen::VectorXd::Zero(p_tot);
 
@@ -146,32 +146,8 @@ void TMP_Solver::updateBetaPath() {
 
 std::pair<double, std::vector<std::size_t>>
 TMP_Solver::findTiedMaxCorrelations() const {
-    double Cmax = 0.0;
-    std::vector<std::size_t> tied;
-    tied.reserve(10);
-    std::size_t p = p_original_ + num_dummies_;
-
-    std::unordered_set<std::size_t> dropped_set;
-    if (!dropped_indices_.empty()) {
-        dropped_set = std::unordered_set<std::size_t>(dropped_indices_.begin(),
-                                                       dropped_indices_.end());
-    }
-
-    for (std::size_t j = 0; j < p; ++j) {
-        if (dropped_set.find(j) != dropped_set.end()) continue;
-
-        double abs_corr = std::abs(correlations_[static_cast<Eigen::Index>(j)]);
-
-        if (abs_corr > Cmax + eps_) {
-            Cmax = abs_corr;
-            tied.clear();
-            tied.push_back(j);
-        } else if (abs_corr >= Cmax - eps_) {
-            tied.push_back(j);
-        }
-    }
-
-    return {Cmax, tied};
+    // Scan ALL non-dropped variables (atom re-selection is allowed in MP)
+    return findTiedMaxCorrelationsAllNonDropped();
 }
 
 std::vector<int>
@@ -191,6 +167,10 @@ TMP_Solver::updateActiveSet(const std::vector<std::size_t>& new_vars) {
             actives_.push_back(j_new);
             num_additions_++;
 
+            // Keep the actives/inactives partition invariant intact for the
+            // public getters (selection itself scans all non-dropped columns)
+            std::erase(inactives_, j_new);
+
             active_coefficients_.conservativeResize(
                 static_cast<Eigen::Index>(actives_.size()));
             active_coefficients_(
@@ -209,75 +189,19 @@ TMP_Solver::updateActiveSet(const std::vector<std::size_t>& new_vars) {
 
 void TMP_Solver::updateCorrelations() {
     // c^n = X^T r for ALL non-dropped variables (to allow re-selection)
-    std::size_t p           = p_original_ + num_dummies_;
-    std::size_t num_dropped = dropped_indices_.size();
-
-    if (num_dropped == 0) {
-        #pragma omp parallel for schedule(static)
-        for (Eigen::Index j = 0; j < static_cast<Eigen::Index>(p); ++j) {
-            correlations_[j] = getColumn(j).dot(r_);
-        }
-        return;
-    }
-
-    if (num_dropped > 500) {
-        std::unordered_set<std::size_t> dropped_set(dropped_indices_.begin(),
-                                                     dropped_indices_.end());
-        #pragma omp parallel for schedule(static)
-        for (Eigen::Index j = 0; j < static_cast<Eigen::Index>(p); ++j) {
-            correlations_[j] = dropped_set.contains(static_cast<std::size_t>(j))
-                                ? 0.0
-                                : getColumn(j).dot(r_);
-        }
-    } else {
-        #pragma omp parallel for schedule(static)
-        for (Eigen::Index j = 0; j < static_cast<Eigen::Index>(p); ++j) {
-            bool is_dropped = false;
-            for (auto idx : dropped_indices_) {
-                if (idx == static_cast<std::size_t>(j)) { is_dropped = true; break; }
-            }
-            correlations_[j] = is_dropped ? 0.0 : getColumn(j).dot(r_);
-        }
-    }
+    refreshAllCorrelations();
 }
 
 // ==================================================================================
 // De-/Serialization
 // ==================================================================================
 
-void TMP_Solver::save(const std::string& filename) const {
+void TMP_Solver::save(const std::string& filename) const { saveImpl(*this, filename); }
 
-    std::ofstream ofs(filename, std::ios::binary);
-    if (!ofs.is_open()) {
-        throw std::runtime_error(
-            concatMsg(solverTypeToString(), "::save: Cannot open '", filename, "'")
-        );
-    }
-
-    cereal::PortableBinaryOutputArchive oarchive(ofs);
-    oarchive(*this);
-    logInfo(concatMsg("[", solverTypeToString(), "] saved to '", filename, "'\n"));
-}
-
-TMP_Solver TMP_Solver::load(
-    const std::string& filename,
-    Eigen::Map<Eigen::MatrixXd>& X,
-    Eigen::Map<Eigen::MatrixXd>& D
-) {
-    TMP_Solver tmp;
-    std::ifstream is(filename, std::ios::binary);
-    if (!is.is_open()) {
-        throw std::runtime_error(
-            tmp.concatMsg(tmp.solverTypeToString(),
-                          "::load: Cannot open '", filename, "'")
-        );
-    }
-
-    cereal::PortableBinaryInputArchive iarchive(is);
-    iarchive(tmp);
-
-    tmp.reconnect(X, D);
-    return tmp;
+TMP_Solver TMP_Solver::load(const std::string& filename,
+                            Eigen::Map<Eigen::MatrixXd>& X,
+                            Eigen::Map<Eigen::MatrixXd>& D) {
+    return loadImpl<TMP_Solver>(filename, X, D);
 }
 
 // ==================================================================================

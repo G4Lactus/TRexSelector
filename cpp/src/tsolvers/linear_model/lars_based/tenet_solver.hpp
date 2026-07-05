@@ -43,6 +43,10 @@ namespace trex::tsolvers::linear_model::lars_based {
  *  - L2 penalty (Ridge): Gram matrix modification G_A -> G_A + λ₂I
  *  - When λ₂ = 0, reduces to T-Lasso
  *
+ * @note getResiduals() returns the AUGMENTED residual vector of length
+ * n + p_total (observation part first, penalty part after), not the
+ * n-vector returned by the sibling solvers.
+ *
  * References:
  *  - Zou & Hastie (2005). "Regularization and variable selection via the elastic net"
  */
@@ -56,7 +60,6 @@ protected:
     double d1_{0.0};      ///< Derived parameter: sqrt(lambda2)
     double d2_{0.0};      ///< Derived parameter: 1 / sqrt(1 + lambda2)
     double l1norm_{0.0};  ///< L1 norm of active coefficients (scaled by d2)
-    std::size_t num_removals_{0}; ///< Monotonic counter of variable removals
 
     // ============================================================================
     // Protected constructor for inheritance
@@ -131,18 +134,6 @@ public:
     // ============================================================================
 
     /**
-     * @brief Get total number of variable removals (negative actions).
-     * @return Monotonic count of all variable drops throughout solution path.
-     */
-    std::size_t getNumRemovals() const noexcept { return num_removals_; }
-
-    /**
-     * @brief Get cycling ratio (removals / additions).
-     * @return Ratio, or 0.0 if no additions yet.
-     */
-    double getCyclingRatio() const;
-
-    /**
      * @brief Compute Mallows' Cp for each step of the solution path.
      * @return Vector of Cp values (NaN for steps where it is undefined).
      */
@@ -185,8 +176,7 @@ public:
             CEREAL_NVP(lambda2_),
             CEREAL_NVP(d1_),
             CEREAL_NVP(d2_),
-            CEREAL_NVP(l1norm_),
-            CEREAL_NVP(num_removals_)
+            CEREAL_NVP(l1norm_)
         );
     }
 
@@ -219,11 +209,6 @@ protected:
     // ============================================================================
     // EN-specific Cholesky & Correlation Updates
     // ============================================================================
-
-    /**
-     * @brief Initialize correlations for the augmented EN residuals.
-     */
-    void initializeCorrelations();
 
     /**
      * @brief Update correlations using the EN-specific formula after a step.
@@ -280,21 +265,11 @@ private:
                              const Eigen::Ref<const Eigen::VectorXd>& u2) const;
 
     /**
-     * @brief Compute minimum positive step size to coefficient zero-crossing.
-     * @param gamhat  Step size from EN joining-time logic.
-     * @param drops   Output: marks which active variables cross zero at gamhat.
-     * @param w_A     Equiangular direction weights for active set.
-     * @return Minimum crossing step size (or gamhat if no crossings).
+     * @brief Refresh the correlation of a variable removed from the active
+     * set using the EN-specific augmented-residual formula (overrides the
+     * plain-residual default used by T-LASSO).
      */
-    double computeGammaSignChange(double gamhat,
-                                  std::vector<bool>& drops,
-                                  const Eigen::Ref<const Eigen::VectorXd>& w_A);
-
-    /**
-     * @brief Remove zero-crossing variables from active set and downdate R.
-     * @param drops Boolean vector marking which active variables to drop.
-     */
-    void processLassoDrops(std::vector<bool>& drops);
+    void refreshDroppedCorrelation(std::size_t dropped_var) override;
 
 // ============================================================================
 }; /* End of class TENET_Solver */

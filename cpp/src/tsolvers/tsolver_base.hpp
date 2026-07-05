@@ -13,8 +13,11 @@
 // ===================================================================================
 
 // std includes
+#include <fstream>
+#include <optional>
 #include <limits>
 #include <sstream>
+#include <stdexcept>
 #include <string>
 #include <random>
 #include <vector>
@@ -22,6 +25,7 @@
 // Cereal includes
 #include <cereal/cereal.hpp>
 #include <cereal/types/vector.hpp>
+#include <cereal/types/string.hpp>
 #include <cereal/archives/portable_binary.hpp>
 #include <cereal/types/polymorphic.hpp>
 
@@ -49,6 +53,26 @@ using ScalingMode = solver_utils::preprocessing::ScalingMode;
 // ===================================================================================
 
 /**
+ * @brief RAII guard forcing Eigen into single-threaded mode for the enclosing
+ * scope (the solvers parallelize with OpenMP themselves; nested Eigen threading
+ * would oversubscribe). Restores the previous global thread count on exit so
+ * the setting does not leak into the host process.
+ */
+class EigenSingleThreadGuard {
+public:
+    EigenSingleThreadGuard() : previous_(Eigen::nbThreads()) { Eigen::setNbThreads(1); }
+    ~EigenSingleThreadGuard() { Eigen::setNbThreads(previous_); }
+
+    EigenSingleThreadGuard(const EigenSingleThreadGuard&) = delete;
+    EigenSingleThreadGuard& operator=(const EigenSingleThreadGuard&) = delete;
+
+private:
+    int previous_;
+};
+
+// ===================================================================================
+
+/**
  * @brief Abstract base class for all terminating variable selection solvers.
  * Provides unified state management, memory-mapping support, and handles the
  * split design matrix (Original Predictors X + Dummy Predictors D) via a
@@ -59,11 +83,13 @@ protected:
     // ==========================================================================
     // Data Members
     // ==========================================================================
-    /** @brief Pointer to the original design matrix X (nullptr allows update). */
-    Eigen::Map<Eigen::MatrixXd>* X_{nullptr};
+    /** @brief View of the original design matrix X (disengaged until connected).
+     *  Stored by value: only the underlying DATA buffer must outlive the
+     *  solver, not the caller's Eigen::Map wrapper object. */
+    std::optional<Eigen::Map<Eigen::MatrixXd>> X_{};
 
-    /** @brief Pointer to the dummy design matrix D (nullptr allows update). */
-    Eigen::Map<Eigen::MatrixXd>* D_{nullptr};
+    /** @brief View of the dummy design matrix D (disengaged until connected). */
+    std::optional<Eigen::Map<Eigen::MatrixXd>> D_{};
 
     /** @brief Response vector y. */
     Eigen::VectorXd y_{};
@@ -214,7 +240,7 @@ protected:
                  ScalingMode scaling_mode = ScalingMode::L2);
 
 public:
-    /** @brief Virtual default destructor. (X_, D_, not owned, not deleted). */
+    /** @brief Virtual default destructor. (X_, D_ are non-owning views). */
     virtual ~TSolver_Base() = default;
 
     /** @brief Deleted copy constructor. */
@@ -228,6 +254,16 @@ public:
 
     /** @brief Sets numerical tolerance for numeric comparisons internally. */
     void setTolerance(double tol) { eps_ = tol; }
+
+    /**
+     * @brief Set the random seed for reproducible tie-breaking.
+     *
+     * @param seed The seed value to initialize the random engine.
+     */
+    void setTieSeed(uint32_t seed) { rng_.seed(seed); }
+
+    /** @brief Get the current random engine state (for serialization and reporting). */
+    const std::mt19937& getRNG() const noexcept { return rng_; }
 
     // ==========================================================================
     // Pure Virtual Interface
@@ -250,7 +286,7 @@ public:
     virtual Eigen::VectorXd getBeta(int step = -1) const;
 
     /** @brief Return the estimated intercept at a given step. */
-    double getIntercept(int step = -1) const;
+    virtual double getIntercept(int step = -1) const;
 
     /** @brief Return the estimated path matrix of regression coefficients. */
     virtual Eigen::MatrixXd getBetaPath() const;
@@ -262,11 +298,14 @@ public:
     std::vector<double> getCp(double sigma_hat_sq) const;
 
     /**
-     * @brief Restore the solver's state with new data matrices and response vector.
+     * @brief Reverse the in-place preprocessing (centering/scaling) applied to
+     * the design matrices at construction.
      *
-     * @param X Reference to the new design matrix (n x p).
-     * @param D Reference to the new dummy design matrix (n x num_dummies).
-     * @param y Reference to the new response vector (n).
+     * @param X Reference to the design matrix (n x p), un-preprocessed in place.
+     * @param D Reference to the dummy matrix (n x num_dummies), un-preprocessed in place.
+     * @param y Reference to the response vector (n); only validated — the
+     *          constructor centers an internal copy, so the caller's y buffer
+     *          is never modified and needs no restoration.
      */
     void restore(Eigen::Map<Eigen::MatrixXd>& X,
                  Eigen::Map<Eigen::MatrixXd>& D,
@@ -323,6 +362,16 @@ public:
     /** @brief Return the indices of active dummy variables at the current step. */
     std::vector<std::size_t> getActiveDummyIndices() const;
 
+    /**
+     * @brief Return all warnings recorded so far (dropped columns, collinear
+     * rejections, numerical issues). Warnings are always recorded and printed
+     * to the warning stream regardless of the verbose flag.
+     */
+    const std::vector<std::string>& getWarnings() const noexcept { return warnings_; }
+
+    /** @brief Clear the recorded warnings. */
+    void clearWarnings() noexcept { warnings_.clear(); }
+
 protected:
     // ==========================================================================
     // Unified Internal Tools
@@ -363,6 +412,31 @@ protected:
     void updateInactiveSet();
 
     // ============================================================================
+    // Beta Path Storage
+    // ============================================================================
+
+    /**
+     * @brief Grow betaPath_ geometrically so appending one column per step is
+     * amortized O(1) instead of a full O(p x steps) copy per step.
+     *
+     * @details New columns are uninitialized; callers must write full columns
+     * indexed by currentStep_ (not by cols(), which may include spare
+     * capacity). Pair with trimBetaPathToRecordedSteps() at the end of
+     * executeStep().
+     *
+     * @param cols_needed Minimum number of columns required.
+     */
+    void ensureBetaPathCapacity(std::size_t cols_needed);
+
+    /**
+     * @brief Shrink betaPath_ back to the recorded path length (RSS_.size())
+     * after execution, restoring the invariant
+     * betaPath_.cols() == recorded steps + 1 for the public accessors and
+     * serialization.
+     */
+    void trimBetaPathToRecordedSteps();
+
+    // ============================================================================
     // Correlation Utilities
     // ============================================================================
 
@@ -383,6 +457,29 @@ protected:
     */
     virtual std::pair<double, std::vector<std::size_t>>
         findTiedMaxCorrelations() const;
+
+    /**
+     * @brief Find all NON-DROPPED columns tied at maximum absolute correlation
+     * (active columns included). Selection scan shared by solvers that allow
+     * atom re-selection (MP/GP families).
+     *
+     * @return {Cmax, tied_indices}
+     */
+    std::pair<double, std::vector<std::size_t>>
+        findTiedMaxCorrelationsAllNonDropped() const;
+
+    /**
+     * @brief Refresh correlations_ as X^T r over all inactive columns.
+     * Shared full-recompute used by the OMP, stepwise, and AFS families.
+     */
+    void refreshInactiveCorrelations();
+
+    /**
+     * @brief Refresh correlations_ as X^T r over ALL non-dropped columns
+     * (active ones included) and zero the dropped entries. Shared by solvers
+     * that allow atom re-selection (MP/GP families).
+     */
+    void refreshAllCorrelations();
 
     // ============================================================================
     // Cholesky update/downdate
@@ -462,16 +559,6 @@ protected:
     std::mt19937 rng_{std::random_device{}()};
 
     /**
-     * @brief Set the random seed for reproducible tie-breaking.
-     *
-     * @param seed The seed value to initialize the random engine.
-     */
-    void setTieSeed(uint32_t seed) { rng_.seed(seed);}
-
-    /** @brief Get the current random seed state (for serialization and reporting). */
-    const std::mt19937& getRNG() const noexcept { return rng_; }
-
-    /**
      * @brief Prune tied dummy candidates to respect T_stop budget.
      *
      * @details If new_vars contains more dummy entries than the remaining budget
@@ -501,9 +588,16 @@ protected:
     /**
     * @brief Log a warning message.
     *
+    * @details Warnings are printed to the warning stream unconditionally
+    * (NOT gated by verbose_) and recorded in warnings_ for programmatic
+    * retrieval via getWarnings().
+    *
     * @param msg The warning message to log.
     */
     void logWarning(const std::string& msg) const;
+
+    /** @brief Recorded warnings (mutable: recording happens in const contexts). */
+    mutable std::vector<std::string> warnings_{};
 
     /**
     *@brief Log an informational message.
@@ -534,6 +628,46 @@ protected:
     friend class cereal::access;
 
     /**
+     * @brief Shared implementation for the per-solver save() methods.
+     *
+     * @tparam Derived Concrete solver type. Cereal resolves the serialize
+     * template on the STATIC type at the archive call site, so the derived
+     * object must be passed explicitly (no virtual dispatch).
+     */
+    template <typename Derived>
+    void saveImpl(const Derived& self, const std::string& filename) const {
+        std::ofstream ofs(filename, std::ios::binary);
+        if (!ofs.is_open()) {
+            throw std::runtime_error(
+                concatMsg(solverTypeToString(), "::save: Cannot open '", filename, "'"));
+        }
+        cereal::PortableBinaryOutputArchive oarchive(ofs);
+        oarchive(self);
+        logInfo(concatMsg("[", solverTypeToString(), "] saved to '", filename, "'\n"));
+    }
+
+    /**
+     * @brief Shared implementation for the per-solver static load() methods:
+     * default-construct, deserialize, and reconnect to the given maps.
+     */
+    template <typename Derived>
+    static Derived loadImpl(const std::string& filename,
+                            Eigen::Map<Eigen::MatrixXd>& X,
+                            Eigen::Map<Eigen::MatrixXd>& D) {
+        Derived solver;
+        std::ifstream is(filename, std::ios::binary);
+        if (!is.is_open()) {
+            throw std::runtime_error(
+                solver.concatMsg(solver.solverTypeToString(),
+                                 "::load: Cannot open '", filename, "'"));
+        }
+        cereal::PortableBinaryInputArchive iarchive(is);
+        iarchive(solver);
+        solver.reconnect(X, D);
+        return solver;
+    }
+
+    /**
      * @brief Serialize all necessary data members to reconstruct the solver's state.
      *
      * @tparam Archive Cereal archive type.
@@ -544,7 +678,17 @@ protected:
      */
     template<class Archive>
     void serialize(Archive& archive) {
-        int& scaling_mode_int = reinterpret_cast<int&>(scaling_mode_);
+        // Enums pass through a local int (reinterpret_cast aliasing is UB);
+        // the assignments after archive() apply loaded values and are no-op
+        // round-trips on save.
+        int scaling_mode = static_cast<int>(scaling_mode_);
+
+        // std::mt19937 streams its full state as text; round-trip through a
+        // string so tie-breaking stays reproducible across save/resume.
+        std::ostringstream rng_out;
+        rng_out << rng_;
+        std::string rng_state = rng_out.str();
+
         archive(
             // Step tracking
             CEREAL_NVP(currentStep_), CEREAL_NVP(maxSteps_),
@@ -556,7 +700,7 @@ protected:
             // Active set
             CEREAL_NVP(actives_), CEREAL_NVP(inactives_),
             CEREAL_NVP(dropped_indices_), CEREAL_NVP(max_actives_),
-            CEREAL_NVP(num_additions_),
+            CEREAL_NVP(num_additions_), CEREAL_NVP(any_dropped_),
 
             // Cholesky Factor
             CEREAL_NVP(R_), CEREAL_NVP(last_updateR_rank_),
@@ -566,16 +710,24 @@ protected:
 
             // Preprocessing
             CEREAL_NVP(normalize_), CEREAL_NVP(intercept_),
-            CEREAL_NVP(verbose_), CEREAL_NVP(scaling_mode_int),
+            CEREAL_NVP(verbose_), cereal::make_nvp("scaling_mode", scaling_mode),
             CEREAL_NVP(meansx_), CEREAL_NVP(normsx_),
             CEREAL_NVP(meansd_), CEREAL_NVP(normsd_),
             CEREAL_NVP(mu_y_), CEREAL_NVP(effective_n_),
+
+            // Numerics, tie-breaking, and diagnostics
+            CEREAL_NVP(eps_), cereal::make_nvp("rng_state", rng_state),
+            CEREAL_NVP(warnings_),
 
             // T-Solver specific
             CEREAL_NVP(num_dummies_), CEREAL_NVP(count_active_dummies_),
             CEREAL_NVP(p_original_), CEREAL_NVP(dummy_start_idx_),
             CEREAL_NVP(dummies_at_step_)
         );
+
+        scaling_mode_ = static_cast<ScalingMode>(scaling_mode);
+        std::istringstream rng_in(rng_state);
+        rng_in >> rng_;
     }
 };
 

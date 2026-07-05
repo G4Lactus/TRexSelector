@@ -11,6 +11,8 @@
 
 // std includes
 #include <cmath>
+#include <fstream>
+#include <stdexcept>
 
 // tsolvers includes
 #include <tsolvers/linear_model/lars_based/tenet_aug_solver.hpp>
@@ -142,6 +144,9 @@ TENETAug_Solver::TENETAug_Solver(
     ScalingMode scaling_mode,
     bool use_lars_inner
 ) {
+    if (lambda2 < 0.0) {
+        throw std::invalid_argument("TENETAug_Solver: lambda2 must be non-negative.");
+    }
     lambda2_ = lambda2;
     use_lars_inner_ = use_lars_inner;
     const double d1 = std::sqrt(lambda2_);
@@ -149,6 +154,16 @@ TENETAug_Solver::TENETAug_Solver(
 
     const std::size_t p = static_cast<std::size_t>(X.cols());
     const std::size_t L = static_cast<std::size_t>(D.cols());
+
+    // Populate the inherited static metadata so the base getters and the
+    // synced diagnostics operate in the original (p + L) index space.
+    p_original_ = p;
+    num_dummies_ = L;
+    dummy_start_idx_ = p;
+    normalize_ = normalize;
+    intercept_ = intercept;
+    verbose_ = verbose;
+    effective_n_ = static_cast<std::size_t>(X.rows()) - (intercept ? 1 : 0);
 
     // Inner-solver scaling configuration. Defaults to whatever the caller
     // requested (used only for the non-augmented lambda2 == 0 path, where the
@@ -191,6 +206,7 @@ TENETAug_Solver::TENETAug_Solver(
 
     buildMaps();
     buildInnerSolver(inner_normalize, inner_intercept, verbose, inner_scaling);
+    syncDiagnosticsFromInner();
 }
 
 // ============================================================================
@@ -199,6 +215,30 @@ TENETAug_Solver::TENETAug_Solver(
 
 void TENETAug_Solver::executeStep(std::size_t T_stop, bool early_stop) {
     inner_->executeStep(T_stop, early_stop);
+    syncDiagnosticsFromInner();
+}
+
+
+void TENETAug_Solver::syncDiagnosticsFromInner() {
+    if (!inner_) { return; }
+
+    RSS_             = inner_->getRSS();
+    R2_              = inner_->getR2();
+    DoF_             = inner_->getDoF();
+    actions_         = inner_->getActions();
+    actives_         = inner_->getActives();
+    inactives_       = inner_->getInactives();
+    dropped_indices_ = inner_->getDroppedIndices();
+    r_               = inner_->getResiduals();
+    currentStep_     = inner_->getNumSteps();
+    count_active_dummies_ = inner_->getActiveDummyIndices().size();
+    is_connected_    = inner_->isConnected();
+    warnings_        = inner_->getWarnings();
+}
+
+
+double TENETAug_Solver::getIntercept(int step) const {
+    return inner_->getIntercept(step);
 }
 
 Eigen::MatrixXd TENETAug_Solver::getBetaPath() const {
@@ -211,6 +251,41 @@ Eigen::MatrixXd TENETAug_Solver::getBetaPath() const {
 
 Eigen::VectorXd TENETAug_Solver::getBeta(int step) const {
     return inner_->getBeta(step) / d2_;
+}
+
+// ============================================================================
+// De-/Serialization
+// ============================================================================
+
+void TENETAug_Solver::save(const std::string& filename) const { saveImpl(*this, filename); }
+
+
+TENETAug_Solver TENETAug_Solver::load(
+    const std::string& filename,
+    Eigen::Map<Eigen::MatrixXd>& X,
+    Eigen::Map<Eigen::MatrixXd>& D
+) {
+    TENETAug_Solver solver;
+    std::ifstream is(filename, std::ios::binary);
+    if (!is.is_open()) {
+        throw std::runtime_error(
+            solver.concatMsg(solver.solverTypeToString(),
+                             "::load: Cannot open '", filename, "'")
+        );
+    }
+    cereal::PortableBinaryInputArchive iarchive(is);
+    iarchive(solver);
+
+    // The wrapper owns its augmented buffers; the passed maps are only
+    // validated against the serialized dimensions (API parity with siblings).
+    if (static_cast<std::size_t>(X.cols()) != solver.p_original_ ||
+        static_cast<std::size_t>(D.cols()) != solver.num_dummies_) {
+        throw std::runtime_error(
+            solver.concatMsg(solver.solverTypeToString(),
+                             "::load: X/D dimensions do not match serialized state.")
+        );
+    }
+    return solver;
 }
 
 // ============================================================================

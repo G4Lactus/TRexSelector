@@ -4,6 +4,7 @@
 
 // std includes
 #include <algorithm>
+#include <cmath>
 #include <fstream>
 #include <iostream>
 #include <stdexcept>
@@ -43,7 +44,11 @@ TAFS_Solver::TAFS_Solver(
 
     std::size_t p_tot = p_original_ + num_dummies_;
     max_actives_ = std::min(p_tot - dropped_indices_.size(), effective_n_);
-    maxSteps_ = 8 * std::min(max_actives_, effective_n_);
+
+    // With shrinkage each step moves only rho of the way to the OLS fit, so
+    // convergence needs on the order of 1/rho more steps than pure stepwise.
+    maxSteps_ = static_cast<std::size_t>(std::ceil(
+        8.0 * static_cast<double>(std::min(max_actives_, effective_n_)) / rho_));
 
     logInfo(concatMsg(
             solverTypeToString(), " sequence\n",
@@ -75,11 +80,11 @@ TAFS_Solver::TAFS_Solver() : TSolver_Base() {}
 
 void TAFS_Solver::executeStep(std::size_t T_stop, bool early_stop) {
     validateConnected();
-    Eigen::setNbThreads(1);
+    EigenSingleThreadGuard eigen_single_thread_guard;
 
     while (currentStep_ < maxSteps_ && !inactives_.empty() &&
            actives_.size() < effective_n_ &&
-           (count_active_dummies_ < T_stop || !early_stop)) {
+           (!early_stop || T_stop == 0 || count_active_dummies_ < T_stop)) {
 
         // 1. Max Correlation Screening
         // -----------------------------------
@@ -98,13 +103,12 @@ void TAFS_Solver::executeStep(std::size_t T_stop, bool early_stop) {
         // 2. Active Set & Cholesky Update
         // -----------------------------------
         for (auto j_new : new_vars) {
-            Eigen::MatrixXd R_backup = R_;
+            // updateR never mutates R_, so only the rank needs restoring on rejection
             int rankR_backup = last_updateR_rank_;
 
             Eigen::MatrixXd newR = updateR(getColumn(j_new), eps_);
 
             if (last_updateR_rank_ == static_cast<int>(actives_.size())) {
-                R_ = R_backup;
                 last_updateR_rank_ = rankR_backup;
                 dropped_indices_.push_back(j_new);
                 actions_this_step.push_back(-static_cast<int>(j_new));
@@ -123,7 +127,12 @@ void TAFS_Solver::executeStep(std::size_t T_stop, bool early_stop) {
 
         if (actives_.empty() || R_.size() == 0) {
             logWarning("Active set or Cholesky is empty; exiting.");
+            // Roll back the aborted step so actions_ stays aligned with the
+            // diagnostics arrays (rejections remain in dropped_indices_) and
+            // rebuild inactives_ so dropped columns cannot be re-selected.
+            actions_.pop_back();
             currentStep_--;
+            updateInactiveSet();
             break;
         }
 
@@ -149,10 +158,7 @@ void TAFS_Solver::executeStep(std::size_t T_stop, bool early_stop) {
 
         // 4. Blending / Shrinkage
         // -----------------------------------
-        if (currentStep_ >= static_cast<std::size_t>(betaPath_.cols())) {
-            betaPath_.conservativeResize(p_tot,
-                                         static_cast<Eigen::Index>(currentStep_ + 1));
-        }
+        ensureBetaPathCapacity(currentStep_ + 1);
 
         Eigen::VectorXd beta_prev = betaPath_.col(static_cast<Eigen::Index>(currentStep_ - 1));
         Eigen::VectorXd beta_blended = (1.0 - rho_) * beta_prev + rho_ * beta_hat;
@@ -181,6 +187,9 @@ void TAFS_Solver::executeStep(std::size_t T_stop, bool early_stop) {
         updateInactiveSet();
         updateCorrelations();
     }
+
+    // Drop any spare beta-path capacity now that execution stopped
+    trimBetaPathToRecordedSteps();
 }
 
 // ==================================================================================
@@ -188,44 +197,19 @@ void TAFS_Solver::executeStep(std::size_t T_stop, bool early_stop) {
 // ==================================================================================
 
 void TAFS_Solver::updateCorrelations() {
-    #pragma omp parallel for schedule(static)
-    for (std::size_t i = 0; i < inactives_.size(); ++i) {
-        std::size_t j = inactives_[i];
-        correlations_(static_cast<Eigen::Index>(j)) = getColumn(j).dot(r_);
-    }
+    refreshInactiveCorrelations();
 }
 
 // ==================================================================================
 // Serialization
 // ==================================================================================
 
-void TAFS_Solver::save(const std::string& filename) const {
-    std::ofstream ofs(filename, std::ios::binary);
-    if (!ofs.is_open()) {
-        throw std::runtime_error(concatMsg(solverTypeToString(),
-                                 "::save: Cannot open '", filename, "'"));
-    }
-    cereal::PortableBinaryOutputArchive oarchive(ofs);
-    oarchive(*this);
-    logInfo(concatMsg("[", solverTypeToString(), "] saved to '", filename, "'\n"));
-}
+void TAFS_Solver::save(const std::string& filename) const { saveImpl(*this, filename); }
 
-TAFS_Solver TAFS_Solver::load(
-    const std::string& filename,
-    Eigen::Map<Eigen::MatrixXd>& X,
-    Eigen::Map<Eigen::MatrixXd>& D
-) {
-    TAFS_Solver solver;
-    std::ifstream is(filename, std::ios::binary);
-    if (!is.is_open()) {
-        throw std::runtime_error(solver.concatMsg(solver.solverTypeToString(),
-                                    "::load: Cannot open '", filename, "'"));
-    }
-    cereal::PortableBinaryInputArchive iarchive(is);
-    iarchive(solver);
-
-    solver.reconnect(X, D);
-    return solver;
+TAFS_Solver TAFS_Solver::load(const std::string& filename,
+                              Eigen::Map<Eigen::MatrixXd>& X,
+                              Eigen::Map<Eigen::MatrixXd>& D) {
+    return loadImpl<TAFS_Solver>(filename, X, D);
 }
 
 // ==================================================================================

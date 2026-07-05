@@ -83,11 +83,11 @@ TOMP_Solver::TOMP_Solver() : TSolver_Base(), algo_type_(SolverTypeOMPBased::TOMP
 void TOMP_Solver::executeStep(std::size_t T_stop, bool early_stop) {
     validateConnected();
     // Set openMP dominance for the entire algorithm
-    Eigen::setNbThreads(1);
+    EigenSingleThreadGuard eigen_single_thread_guard;
 
     while (currentStep_ < maxSteps_ && !inactives_.empty() &&
            actives_.size() < effective_n_ &&
-           (count_active_dummies_ < T_stop || !early_stop)) {
+           (!early_stop || T_stop == 0 || count_active_dummies_ < T_stop)) {
 
         // ========================================================
         // STEP 1: Max correlation
@@ -127,6 +127,9 @@ void TOMP_Solver::executeStep(std::size_t T_stop, bool early_stop) {
         updateInactiveSet();
         updateCorrelations();
     }
+
+    // Drop any spare beta-path capacity now that execution stopped
+    trimBetaPathToRecordedSteps();
 }
 
 // ==================================================================================
@@ -134,11 +137,7 @@ void TOMP_Solver::executeStep(std::size_t T_stop, bool early_stop) {
 // ==================================================================================
 
 void TOMP_Solver::updateCorrelations() {
-    #pragma omp parallel for schedule(static)
-    for (std::size_t i = 0; i < inactives_.size(); ++i) {
-        std::size_t j = inactives_[i];
-        correlations_(static_cast<Eigen::Index>(j)) = getColumn(j).dot(r_);
-    }
+    refreshInactiveCorrelations();
 }
 
 
@@ -192,9 +191,7 @@ void TOMP_Solver::updateBetaPath() {
             beta_A(static_cast<Eigen::Index>(i));
     }
 
-    if (currentStep_ >= static_cast<std::size_t>(betaPath_.cols())) {
-        betaPath_.conservativeResize(p_tot, static_cast<Eigen::Index>(currentStep_ + 1));
-    }
+    ensureBetaPathCapacity(currentStep_ + 1);
     betaPath_.col(static_cast<Eigen::Index>(currentStep_)) = beta_hat;
 }
 
@@ -215,36 +212,13 @@ void TOMP_Solver::updateResiduals() {
 // Serialization
 // ==================================================================================
 
-void TOMP_Solver::save(const std::string& filename) const {
-    std::ofstream ofs(filename, std::ios::binary);
-    if (!ofs.is_open()) {
-        throw std::runtime_error(
-            concatMsg(solverTypeToString(), "::save: Cannot open '", filename, "'")
-        );
-    }
-    cereal::PortableBinaryOutputArchive oarchive(ofs);
-    oarchive(*this);
-    logInfo(concatMsg("[", solverTypeToString(), "] saved to '", filename, "'\n"));
-}
+void TOMP_Solver::save(const std::string& filename) const { saveImpl(*this, filename); }
 
 
-TOMP_Solver TOMP_Solver::load(
-    const std::string& filename,
-    Eigen::Map<Eigen::MatrixXd>& X,
-    Eigen::Map<Eigen::MatrixXd>& D
-) {
-    TOMP_Solver tomp;
-    std::ifstream is(filename, std::ios::binary);
-    if (!is.is_open()) {
-        throw std::runtime_error(
-            tomp.concatMsg(tomp.solverTypeToString(), "::load: Cannot open '", filename, "'")
-        );
-    }
-    cereal::PortableBinaryInputArchive iarchive(is);
-    iarchive(tomp);
-
-    tomp.reconnect(X, D);
-    return tomp;
+TOMP_Solver TOMP_Solver::load(const std::string& filename,
+                              Eigen::Map<Eigen::MatrixXd>& X,
+                              Eigen::Map<Eigen::MatrixXd>& D) {
+    return loadImpl<TOMP_Solver>(filename, X, D);
 }
 
 // ==================================================================================

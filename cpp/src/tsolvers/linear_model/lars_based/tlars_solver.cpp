@@ -103,13 +103,13 @@ void TLARS_Solver::executeStep(std::size_t T_stop, bool early_stop) {
     validateConnected();
 
     // Set openMP dominance for the entire algorithm
-    Eigen::setNbThreads(1);
+    EigenSingleThreadGuard eigen_single_thread_guard;
 
     // Main T-LARS loop with early stopping based on dummy variable count
     while (
         currentStep_ < maxSteps_ && !inactives_.empty() &&
         actives_.size() < effective_n_ &&
-        (count_active_dummies_ < T_stop || !early_stop)
+        (!early_stop || T_stop == 0 || count_active_dummies_ < T_stop)
     ) {
 
         // ========================================================
@@ -132,6 +132,14 @@ void TLARS_Solver::executeStep(std::size_t T_stop, bool early_stop) {
         actions_.emplace_back(updateActiveSet(new_vars));
         if (actives_.empty() || R_.size() == 0) {
             logWarning("Active set or Cholesky is empty; aborting.");
+            // Roll back the aborted step so actions_/lambda_ stay aligned
+            // with the diagnostics arrays (rejections remain recorded in
+            // dropped_indices_) and rebuild inactives_ so dropped columns
+            // cannot be re-selected.
+            actions_.pop_back();
+            lambda_.pop_back();
+            currentStep_--;
+            updateInactiveSet();
             break;
         }
 
@@ -164,6 +172,9 @@ void TLARS_Solver::executeStep(std::size_t T_stop, bool early_stop) {
         updateCorrelations(gamma, a);
         updateInactiveSet();
     }
+
+    // Drop any spare beta-path capacity now that execution stopped
+    trimBetaPathToRecordedSteps();
 }
 
 // ============================================================================
@@ -202,14 +213,13 @@ std::vector<int> TLARS_Solver::updateActiveSet (const std::vector<std::size_t>& 
     any_dropped_ = false;
 
     for (auto j_new : new_vars) {
-        Eigen::MatrixXd R_backup = R_;
+        // updateR never mutates R_, so only the rank needs restoring on rejection
         int rankR_backup = last_updateR_rank_;
         std::size_t active_size_backup = actives_.size();
 
         Eigen::MatrixXd newR = updateR(getColumn(j_new), eps_);
 
         if (last_updateR_rank_ == static_cast<int>(active_size_backup)) {
-            R_ = R_backup;
             last_updateR_rank_ = rankR_backup;
             dropped_indices_.push_back(j_new);
             actions_this_step.push_back(-static_cast<int>(j_new));
@@ -232,13 +242,15 @@ std::vector<int> TLARS_Solver::updateActiveSet (const std::vector<std::size_t>& 
 
 
 void TLARS_Solver::updateBetaPath(const Eigen::Ref<const Eigen::VectorXd>& w_A, double gamma) {
-    Eigen::VectorXd beta_new = betaPath_.col(betaPath_.cols() - 1);
+    // Index by currentStep_, not cols(): betaPath_ may hold spare capacity
+    // (geometric growth); the path is trimmed at the end of executeStep().
+    Eigen::VectorXd beta_new = betaPath_.col(static_cast<Eigen::Index>(currentStep_ - 1));
     for (std::size_t k = 0; k < actives_.size(); ++k) {
         beta_new(static_cast<Eigen::Index>(actives_[k])) += gamma *
             w_A(static_cast<Eigen::Index>(k));
     }
-    betaPath_.conservativeResize(Eigen::NoChange, betaPath_.cols() + 1);
-    betaPath_.col(betaPath_.cols() - 1) = beta_new;
+    ensureBetaPathCapacity(currentStep_ + 1);
+    betaPath_.col(static_cast<Eigen::Index>(currentStep_)) = beta_new;
 }
 
 
@@ -327,6 +339,86 @@ std::pair<double, Eigen::VectorXd> TLARS_Solver::computeStepSize(
 
 
 // ============================================================================
+// Shared LASSO-style drop machinery
+// ============================================================================
+
+double TLARS_Solver::computeGammaSignChange(
+    double gamhat,
+    std::vector<bool>& drops,
+    const Eigen::Ref<const Eigen::VectorXd>& w_A) const
+{
+    // Extract current beta values for active variables
+    Eigen::VectorXd beta_curr(static_cast<Eigen::Index>(actives_.size()));
+    for (std::size_t i = 0; i < actives_.size(); ++i) {
+        beta_curr(static_cast<Eigen::Index>(i)) =
+            betaPath_(static_cast<Eigen::Index>(actives_[i]),
+                      static_cast<Eigen::Index>(currentStep_ - 1));
+    }
+
+    // Zero crossing: z = -beta / w (step size where beta + gamma * w = 0)
+    Eigen::VectorXd z = -beta_curr.array() / w_A.array();
+
+    // Find the smallest positive crossing before the next variable entry
+    double zmin = gamhat;
+    bool any_crossing = false;
+    for (Eigen::Index i = 0; i < z.size(); ++i) {
+        if (z(i) > eps_ && z(i) < zmin) {
+            zmin = z(i);
+            any_crossing = true;
+        }
+    }
+
+    if (any_crossing) {
+        gamhat = zmin;
+        for (Eigen::Index i = 0; i < z.size(); ++i) {
+            drops[static_cast<std::size_t>(i)] = (std::abs(z(i) - zmin) <= eps_);
+        }
+    }
+    return gamhat;
+}
+
+
+void TLARS_Solver::processLassoDrops(std::vector<bool>& drops) {
+    // Process drops in reverse order to maintain index stability
+    for (std::size_t i = actives_.size(); i-- > 0;) {
+        if (!drops[i]) { continue; }
+        std::size_t dropped_var = actives_[i];
+
+        // Track if dropping a dummy
+        if (dropped_var >= dummy_start_idx_ && count_active_dummies_ > 0) {
+            count_active_dummies_--;
+            logInfo(concatMsg("Dummy variable ", dropped_var,
+                              " removed from active set (count: ",
+                              count_active_dummies_, ")"));
+        }
+
+        // Downdate Cholesky factor and zero the coefficient at this step
+        R_ = downdateR(R_, i, eps_);
+        betaPath_(static_cast<Eigen::Index>(dropped_var),
+                  static_cast<Eigen::Index>(currentStep_)) = 0.0;
+
+        // Record negative action (removal) and re-add to inactives_ (cycling)
+        actions_.back().push_back(-static_cast<int>(dropped_var));
+        inactives_.push_back(dropped_var);
+
+        // Refresh correlation for potential re-entry
+        refreshDroppedCorrelation(dropped_var);
+
+        actives_.erase(actives_.begin() + static_cast<Eigen::Index>(i));
+        Sign_.erase(Sign_.begin() + static_cast<Eigen::Index>(i));
+        num_removals_++;
+    }
+}
+
+
+void TLARS_Solver::refreshDroppedCorrelation(std::size_t dropped_var) {
+    Eigen::Index j = static_cast<Eigen::Index>(dropped_var);
+    correlations_(j) = getColumn(dropped_var).dot(r_);
+    correlation_compensation_(j) = 0.0;
+}
+
+
+// ============================================================================
 // Setter
 // ============================================================================
 
@@ -354,37 +446,13 @@ void TLARS_Solver::setKahanRefreshInterval(std::size_t interval) {
 // Serialization Implementation
 // ============================================================================
 
-void TLARS_Solver::save(const std::string& filename) const {
-    std::ofstream ofs(filename, std::ios::binary);
-    if (!ofs.is_open()) {
-        throw std::runtime_error(
-            concatMsg(solverTypeToString(), "::save: Cannot open '", filename, "'")
-        );
-    }
-    cereal::PortableBinaryOutputArchive oarchive(ofs);
-    oarchive(*this);
-    logInfo(concatMsg("[", solverTypeToString(), "] saved to '", filename, "'\n"));
-}
+void TLARS_Solver::save(const std::string& filename) const { saveImpl(*this, filename); }
 
 
-TLARS_Solver TLARS_Solver::load(
-    const std::string& filename,
-    Eigen::Map<Eigen::MatrixXd>& X,
-    Eigen::Map<Eigen::MatrixXd>& D
-) {
-    TLARS_Solver tlars;
-    std::ifstream is(filename, std::ios::binary);
-    if (!is.is_open()) {
-        throw std::runtime_error(
-            tlars.concatMsg(tlars.solverTypeToString(), "::load: Cannot open '", filename, "'")
-        );
-    }
-
-    cereal::PortableBinaryInputArchive iarchive(is);
-    iarchive(tlars);
-
-    tlars.reconnect(X, D);
-    return tlars;
+TLARS_Solver TLARS_Solver::load(const std::string& filename,
+                              Eigen::Map<Eigen::MatrixXd>& X,
+                              Eigen::Map<Eigen::MatrixXd>& D) {
+    return loadImpl<TLARS_Solver>(filename, X, D);
 }
 
 // ==========================================================================

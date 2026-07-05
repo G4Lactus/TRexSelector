@@ -8,6 +8,12 @@
 * @file tmp_solver.hpp
 *
 * @brief Header file for the Terminating Matching Pursuit (T-MP) solver.
+*
+* @note Atom RE-SELECTION: MP may pick the same atom repeatedly; every pick is
+* recorded as a positive entry in getActions(), so an index can appear in
+* several steps while num_additions_ counts only first activations.
+* On correlation ties the lowest index wins, which favors real predictors
+* over dummies (dummies occupy the upper index range).
 */
 // ==================================================================================
 

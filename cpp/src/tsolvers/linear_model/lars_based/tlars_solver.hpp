@@ -91,6 +91,10 @@ protected:
     /** @brief Algorithm variant type. */
     SolverTypeLarsBased algo_type_{SolverTypeLarsBased::TLARS};
 
+    /** @brief Monotonic counter of variable removals. Stays 0 in plain T-LARS;
+     *  maintained by cycling descendants (T-LASSO, T-ENET, T-Stagewise). */
+    std::size_t num_removals_{0};
+
     /** @brief Protected constructor for inheritance. */
     explicit TLARS_Solver(SolverTypeLarsBased type);
 
@@ -194,7 +198,9 @@ public:
     // Specific Getters and Setters for TLARS
     // ============================================================================
 
-    /** @brief Get regularization parameter sequence (lambda = max. correlation per step) */
+    /** @brief Get regularization parameter sequence (lambda = max. correlation per step).
+     *  @note T-ENET uses a different convention: an initial entry followed by
+     *  the decreasing L1 penalty per step, i.e. size() == steps + 1. */
     const std::vector<double>& getLambda() const noexcept { return lambda_; }
 
     /**
@@ -213,6 +219,23 @@ public:
      */
     std::size_t getKahanRefreshInterval() const noexcept { return kahan_refresh_interval_; }
 
+    /**
+     * @brief Get total number of variable removals (negative actions).
+     * @return Monotonic count of all drops throughout the solution path
+     *         (always 0 for non-cycling solvers).
+     */
+    std::size_t getNumRemovals() const noexcept { return num_removals_; }
+
+    /**
+     * @brief Get cycling ratio (removals / additions).
+     * @return Ratio, or 0.0 if no additions yet.
+     */
+    double getCyclingRatio() const {
+        if (num_additions_ == 0) { return 0.0; }
+        return static_cast<double>(num_removals_) /
+               static_cast<double>(num_additions_);
+    }
+
     // ============================================================================
     // De-/Serialization
     // ============================================================================
@@ -228,16 +251,21 @@ public:
      */
     template<class Archive>
     void serialize(Archive& archive) {
-        int& algo_type_int = reinterpret_cast<int&>(algo_type_);
+        // Enum passes through a local int (reinterpret_cast aliasing is UB);
+        // the assignment after archive() applies the loaded value and is a
+        // no-op round-trip on save.
+        int algo_type = static_cast<int>(algo_type_);
         archive(
             cereal::base_class<TSolver_Base>(this),
-            CEREAL_NVP(algo_type_int),
+            cereal::make_nvp("algo_type", algo_type),
             CEREAL_NVP(lambda_),
             CEREAL_NVP(correlation_compensation_),
             CEREAL_NVP(A_A_),
             CEREAL_NVP(Sign_),
-            CEREAL_NVP(kahan_refresh_interval_)
+            CEREAL_NVP(kahan_refresh_interval_),
+            CEREAL_NVP(num_removals_)
         );
+        algo_type_ = static_cast<SolverTypeLarsBased>(algo_type);
     }
 
     /**
@@ -352,6 +380,49 @@ protected:
         double Cmax,
         const Eigen::Ref<const Eigen::VectorXd>& u) const;
 
+    // ============================================================================
+    // Shared LASSO-style drop machinery (used by cycling descendants:
+    // T-LASSO, T-ENET; T-Stagewise reuses the correlation-refresh hook)
+    // ============================================================================
+
+    /**
+     * @brief Compute the minimum positive step size to a coefficient
+     *        zero-crossing (LASSO modification of the LARS step).
+     *
+     * @param gamhat Step size from the LARS entry logic.
+     * @param drops  Output: marks active variables crossing zero at the
+     *               returned step size (size = |actives_|).
+     * @param w_A    Equiangular direction weights for the active set.
+     *
+     * @return Smallest positive crossing step size, or gamhat if no
+     *         coefficient crosses zero before the next variable entry.
+     */
+    double computeGammaSignChange(double gamhat,
+                                  std::vector<bool>& drops,
+                                  const Eigen::Ref<const Eigen::VectorXd>& w_A) const;
+
+    /**
+     * @brief Remove zero-crossing variables from the active set.
+     *
+     * @details Processes drops in reverse index order: downdates the Cholesky
+     * factor, zeroes the coefficient at the current step, records a negative
+     * action, re-adds the variable to inactives_ (cycling), refreshes its
+     * correlation via refreshDroppedCorrelation(), and updates the dummy and
+     * removal counters.
+     *
+     * @param drops Boolean vector marking which active variables to drop.
+     */
+    void processLassoDrops(std::vector<bool>& drops);
+
+    /**
+     * @brief Refresh correlations_ for a variable removed from the active set
+     * so it can compete for re-entry (its entry is stale from activation time).
+     *
+     * @details Default: plain correlation with the current residual plus a
+     * Kahan-compensation reset. Penalized descendants (T-ENET) override with
+     * their augmented formula.
+     */
+    virtual void refreshDroppedCorrelation(std::size_t dropped_var);
 };
 
 // ===================================================================================

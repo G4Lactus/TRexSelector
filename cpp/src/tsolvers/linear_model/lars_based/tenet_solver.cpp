@@ -45,8 +45,7 @@ TENET_Solver::TENET_Solver(
       lambda2_(validateLambda2(lambda2)),
       d1_(std::sqrt(lambda2)),
       d2_(1.0 / std::sqrt(1.0 + lambda2)),
-      l1norm_(0.0),
-      num_removals_(0) {
+      l1norm_(0.0) {
 
     std::size_t p_total = p_original_ + num_dummies_;
 
@@ -68,8 +67,11 @@ TENET_Solver::TENET_Solver(
     r_.head(y_.size()) = y_;
     r_.tail(p_total).setZero();
 
-    // Initialize correlations for all inactives
-    initializeCorrelations();
+    // The TLARS base constructor already computed correlations_ = X^T y over
+    // all inactive columns; at initialization the EN formula only rescales
+    // them by d2 (r_obs = y, penalty residual = 0), so no second O(np) pass
+    // is needed.
+    correlations_ *= d2_;
 }
 
 double TENET_Solver::validateLambda2(double x) {
@@ -86,13 +88,13 @@ double TENET_Solver::validateLambda2(double x) {
 
 void TENET_Solver::executeStep(std::size_t T_stop, bool early_stop) {
     validateConnected();
-    Eigen::setNbThreads(1);
+    EigenSingleThreadGuard eigen_single_thread_guard;
 
     while (
         currentStep_ < maxSteps_ &&
         !inactives_.empty() &&
         actives_.size() < max_actives_ &&
-        (count_active_dummies_ < T_stop || !early_stop)
+        (!early_stop || T_stop == 0 || count_active_dummies_ < T_stop)
     ) {
 
         // ========================================================
@@ -120,6 +122,12 @@ void TENET_Solver::executeStep(std::size_t T_stop, bool early_stop) {
 
         if (actives_.empty() || R_.size() == 0) {
             logWarning("Active set or Cholesky is empty; aborting.");
+            // Roll back the aborted step (the initial lambda_ entry is kept;
+            // rejections remain recorded in dropped_indices_) and rebuild
+            // inactives_ so dropped columns cannot be re-selected.
+            actions_.pop_back();
+            currentStep_--;
+            updateInactiveSet();
             break;
         }
 
@@ -182,7 +190,8 @@ void TENET_Solver::executeStep(std::size_t T_stop, bool early_stop) {
         R2_.push_back(1.0 - rss / RSS_[0]);
 
         // Compute L1 norm for active coefficients
-        const Eigen::VectorXd& beta_current = betaPath_.col(betaPath_.cols() - 1);
+        // Index by currentStep_: betaPath_ may hold spare capacity
+        const Eigen::VectorXd& beta_current = betaPath_.col(static_cast<Eigen::Index>(currentStep_));
         l1norm_ = 0.0;
         for (std::size_t j : actives_) {
             l1norm_ += std::abs(beta_current[static_cast<Eigen::Index>(j)]);
@@ -204,6 +213,9 @@ void TENET_Solver::executeStep(std::size_t T_stop, bool early_stop) {
         // ========================================================
         updateInactiveSet();
     }
+
+    // Drop any spare beta-path capacity now that execution stopped
+    trimBetaPathToRecordedSteps();
 }
 
 
@@ -211,17 +223,6 @@ void TENET_Solver::executeStep(std::size_t T_stop, bool early_stop) {
 // Internal Helper
 // ============================================================================
 
-void TENET_Solver::initializeCorrelations() {
-    std::size_t p_total = p_original_ + num_dummies_;
-    correlations_.resize(static_cast<Eigen::Index>(p_total));
-
-    #pragma omp parallel for schedule(static)
-    for (std::size_t i = 0; i < inactives_.size(); ++i) {
-        std::size_t j = inactives_[i];
-        // use getColumn(j) for split X/D matrix
-        correlations_[static_cast<Eigen::Index>(j)] = d2_ * getColumn(j).dot(y_);
-    }
-}
 
 
 void TENET_Solver::updateCorrelationsENET() {
@@ -371,88 +372,19 @@ double TENET_Solver::computeStepSizeEN(double Cmax,
 }
 
 
-double TENET_Solver::computeGammaSignChange(double gamhat,
-                                            std::vector<bool>& drops,
-                                            const Eigen::Ref<const Eigen::VectorXd>& w_A) {
 
-    // Step 1: Get current active coefficients
-    Eigen::VectorXd beta_curr(static_cast<Eigen::Index>(actives_.size()));
-    for (std::size_t i = 0; i < actives_.size(); ++i) {
-        beta_curr[static_cast<Eigen::Index>(i)] =
-            betaPath_(static_cast<Eigen::Index>(actives_[i]),
-                      static_cast<Eigen::Index>(currentStep_ - 1));
-    }
 
-    // Step 2: Check for zero-crossings
-    // z = -β / w  (step size where β + γw = 0)
-    Eigen::VectorXd z = -beta_curr.array() / w_A.array();
-
-    // Step 3: Find minimum postive crossing time
-    double zmin = gamhat;
-    bool any_crossing = false;
-
-    for (std::size_t i = 0; i < actives_.size(); ++i) {
-        if (z[static_cast<Eigen::Index>(i)] > eps_ && z[static_cast<Eigen::Index>(i)] < zmin) {
-            zmin = z[static_cast<Eigen::Index>(i)];
-            any_crossing = true;
-        }
-    }
-
-    if (any_crossing) {
-        gamhat = zmin;
-        for (std::size_t i = 0; i < actives_.size(); ++i) {
-            if (std::abs(z[static_cast<Eigen::Index>(i)] - zmin) <= eps_) {
-                drops[i] = true;
-            }
-        }
-    }
-
-    return gamhat;
+void TENET_Solver::refreshDroppedCorrelation(std::size_t dropped_var) {
+    // EN-specific correlation for potential re-entry (Zou & Hastie 2005):
+    // C_j = (x_j^T r_obs + d1 * r_coef[j]) * d2 over the augmented residual
+    Eigen::Index n = X_->rows();
+    Eigen::Index j = static_cast<Eigen::Index>(dropped_var);
+    double corr_obs = getColumn(dropped_var).dot(r_.head(n));
+    double corr_pen = d1_ * r_(n + j);
+    correlations_(j) = (corr_obs + corr_pen) * d2_;
+    correlation_compensation_(j) = 0.0;
 }
 
-
-void TENET_Solver::processLassoDrops(std::vector<bool>& drops) {
-
-    std::size_t n = X_->rows();
-    Eigen::VectorXd r_obs = r_.head(n);
-    Eigen::VectorXd r_coef = r_.tail(r_.size() - n);
-
-    for (std::size_t i = actives_.size(); i-- > 0;) {
-        if (drops[i]) {
-            std::size_t dropped_var = actives_[i];
-
-            if (dropped_var >= dummy_start_idx_ && count_active_dummies_ > 0) {
-                count_active_dummies_--;
-                logInfo(concatMsg("Dummy variable ", dropped_var,
-                    " removed from active set (count: ",
-                    count_active_dummies_, ")"));
-            }
-
-            R_ = downdateR(R_, i, eps_);
-            betaPath_(static_cast<Eigen::Index>(dropped_var),
-                      static_cast<Eigen::Index>(currentStep_)) = 0.0;
-            actions_.back().push_back(-static_cast<int>(dropped_var));
-
-            inactives_.push_back(dropped_var);
-
-            // Recompute correlation explicitly for dropped variable
-            Eigen::Index j = static_cast<Eigen::Index>(dropped_var);
-            double corr_obs = getColumn(j).dot(r_obs);
-            double corr_pen = d1_ * r_coef[j];
-            correlations_[j] = (corr_obs + corr_pen) * d2_;
-
-            actives_.erase(actives_.begin() + static_cast<Eigen::Index>(i));
-            Sign_.erase(Sign_.begin() + static_cast<Eigen::Index>(i));
-            num_removals_++;
-        }
-    }
-}
-
-
-double TENET_Solver::getCyclingRatio() const {
-    if (num_additions_ == 0) { return 0.0; }
-    return static_cast<double>(num_removals_) / static_cast<double>(num_additions_);
-}
 
 
 std::vector<double> TENET_Solver::getCp() const {
@@ -461,11 +393,21 @@ std::vector<double> TENET_Solver::getCp() const {
     // If no RSS or DoF information, return empty
     if (RSS_.empty() || DoF_.empty()) { return cp_out; }
 
-    std::size_t n = X_->rows();
+    // Derive n from serialized state so Cp is available on disconnected solvers
+    std::size_t n = effective_n_ + (intercept_ ? 1 : 0);
     double rss_final = RSS_.back();
     double p_total = static_cast<double>(p_original_ + num_dummies_);
 
     if (!fpc::isfinite(rss_final) || rss_final <= 0) {
+        cp_out.assign(RSS_.size(), std::numeric_limits<double>::quiet_NaN());
+        return cp_out;
+    }
+
+    // The residual-variance estimate rss_final / (n - p_total - 1) requires
+    // n > p_total + 1; in the high-dimensional regime (typical for T-Rex,
+    // where p_total = p + num_dummies) Cp is undefined — return NaN instead
+    // of garbage from a negative variance estimate.
+    if (static_cast<double>(n) - p_total - 1.0 <= 0.0) {
         cp_out.assign(RSS_.size(), std::numeric_limits<double>::quiet_NaN());
         return cp_out;
     }
@@ -495,15 +437,20 @@ std::vector<double> TENET_Solver::getCp() const {
 Eigen::VectorXd TENET_Solver::getBeta(int step) const {
     if (betaPath_.cols() == 0) throw std::runtime_error("No path available.");
     std::size_t use_step = (step < 0) ? betaPath_.cols() - 1 : static_cast<std::size_t>(step);
+    if (use_step >= static_cast<std::size_t>(betaPath_.cols())) {
+        throw std::invalid_argument(
+            concatMsg(solverTypeToString(), "::getBeta: step ", step,
+                      " out of range [0, ", betaPath_.cols() - 1, "].")
+        );
+    }
 
     // Recover naive elastic net coefficients (beta_pure = beta_aug / d2)
     Eigen::VectorXd coef = betaPath_.col(static_cast<Eigen::Index>(use_step)) / d2_;
 
-    // Safely scale only the elements covered by normsx_
-    // Prevents silent failures if normsx_ only holds norms for real predictors
-    if (normalize_ && normsx_.size() > 0) {
-        Eigen::Index limit = std::min(coef.size(), normsx_.size());
-        coef.head(limit).array() /= normsx_.head(limit).array();
+    // De-normalize real predictors and dummies with their respective norms
+    if (normalize_) {
+        if (normsx_.size() > 0) coef.head(p_original_).array() /= normsx_.array();
+        if (normsd_.size() > 0) coef.tail(num_dummies_).array() /= normsd_.array();
     }
     return coef;
 }
@@ -514,11 +461,15 @@ Eigen::MatrixXd TENET_Solver::getBetaPath() const {
     // This matches R enet post-processing: beta.pure <- beta.pure / d2
     Eigen::MatrixXd beta_orig = betaPath_ / d2_;
 
-    // Safe scaling limit applied
-    if (normalize_ && normsx_.size() > 0) {
-        Eigen::Index limit = std::min(beta_orig.rows(), normsx_.size());
-        for (Eigen::Index j = 0; j < limit; ++j) {
-            beta_orig.row(j) /= normsx_[j];
+    // De-normalize real predictors and dummies with their respective norms
+    if (normalize_) {
+        for (Eigen::Index j = 0; j < beta_orig.cols(); ++j) {
+            if (normsx_.size() > 0) {
+                beta_orig.col(j).head(p_original_).array() /= normsx_.array();
+            }
+            if (normsd_.size() > 0) {
+                beta_orig.col(j).tail(num_dummies_).array() /= normsd_.array();
+            }
         }
     }
     return beta_orig;
@@ -527,11 +478,11 @@ Eigen::MatrixXd TENET_Solver::getBetaPath() const {
 
 double TENET_Solver::getAlpha() const {
     // Compute mixing parameter α = λ₁/(λ₁ + λ₂)
-    if (currentStep_ >= lambda_.size() || currentStep_ == 0) { return 1.0; }
+    if (lambda_.empty()) { return 1.0; }
 
-    std::size_t idx = (currentStep_ > 0 && currentStep_ <= lambda_.size())
-                      ? currentStep_ - 1
-                      : lambda_.size() - 1;
+    // lambda_ holds the initial penalty plus one entry per step; the current
+    // value lives at index currentStep_.
+    std::size_t idx = std::min(currentStep_, lambda_.size() - 1);
 
     double lambda1 = lambda_[idx];
     double total = lambda1 + lambda2_;
@@ -545,33 +496,13 @@ double TENET_Solver::getAlpha() const {
 // Serialization
 // ============================================================================
 
-void TENET_Solver::save(const std::string& filename) const {
-    std::ofstream os(filename, std::ios::binary);
-    if (!os.is_open()) {
-        throw std::runtime_error(
-            concatMsg(solverTypeToString(), "::save: Cannot open '", filename, "'")
-        );
-    }
-    cereal::PortableBinaryOutputArchive oarchive(os);
-    oarchive(*this);
-    logInfo(concatMsg("[", solverTypeToString(), "] saved to '", filename, "'\n"));
-}
+void TENET_Solver::save(const std::string& filename) const { saveImpl(*this, filename); }
 
 
 TENET_Solver TENET_Solver::load(const std::string& filename,
                                 Eigen::Map<Eigen::MatrixXd>& X,
                                 Eigen::Map<Eigen::MatrixXd>& D) {
-    TENET_Solver tenet;
-    std::ifstream is(filename, std::ios::binary);
-    if (!is.is_open()) {
-        throw std::runtime_error(
-            tenet.concatMsg(tenet.solverTypeToString(), "::load: Cannot open '", filename, "'")
-        );
-    }
-    cereal::PortableBinaryInputArchive iarchive(is);
-    iarchive(tenet);
-    tenet.reconnect(X, D);
-    return tenet;
+    return loadImpl<TENET_Solver>(filename, X, D);
 }
 
 

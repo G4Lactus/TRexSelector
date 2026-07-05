@@ -164,6 +164,16 @@ class TENETAug_Solver : public TSolver_Base {
     void buildMaps();
 
     /**
+     * @brief Copy the inner solver's diagnostic state into the inherited
+     * TSolver_Base members so all base getters (getRSS, getActives,
+     * getNumSteps, ...) report the inner solver's progress.
+     *
+     * Called after construction, after every executeStep(), and after
+     * deserialization.
+     */
+    void syncDiagnosticsFromInner();
+
+    /**
      * @brief Create the inner TLASSO_Solver, forwarding preprocessing flags.
      * @param normalize  Passed to TLASSO_Solver (L2-normalise columns).
      * @param intercept  Passed to TLASSO_Solver (centre columns and y).
@@ -274,6 +284,16 @@ public:
      */
     Eigen::VectorXd getBeta(int step = -1) const override;
 
+    /**
+     * @brief Return the intercept at a given step (forwards to the inner solver).
+     * @param step Step index (-1 = last step).
+     */
+    double getIntercept(int step = -1) const override;
+
+    /** @brief Set the tie-breaking seed on the inner solver (the wrapper's own
+     *  random engine is unused). */
+    void setTieSeed(uint32_t seed) { inner_->setTieSeed(seed); }
+
     // ========================================================================
     // Cereal serialization
     // ========================================================================
@@ -281,10 +301,11 @@ public:
     friend class cereal::access;
 
     /**
-     * @brief Serialize owned buffers and inner solver state.
+     * @brief Serialize owned buffers, wrapper metadata, and inner solver state.
      *
      * @note X_ and D_ (non-owned TSolver_Base pointers) are NOT serialized.
-     * Maps and the inner solver are rebuilt from the owned buffers after load.
+     * On load, the Maps are rebuilt from the owned buffers, the inner solver
+     * is reconnected to them, and the wrapper's diagnostic mirror is refreshed.
      */
     template<class Archive>
     void serialize(Archive& archive) {
@@ -292,12 +313,48 @@ public:
                 CEREAL_NVP(d2_),
                 CEREAL_NVP(eps_),
                 CEREAL_NVP(use_lars_inner_),
+                CEREAL_NVP(p_original_), CEREAL_NVP(num_dummies_),
+                CEREAL_NVP(dummy_start_idx_), CEREAL_NVP(effective_n_),
+                CEREAL_NVP(normalize_), CEREAL_NVP(intercept_),
+                CEREAL_NVP(verbose_),
                 CEREAL_NVP(X_aug_owned_),
                 CEREAL_NVP(D_aug_owned_),
                 CEREAL_NVP(y_aug_owned_));
         archive(CEREAL_NVP(inner_));
-        if (X_aug_owned_.size() > 0) { buildMaps(); }
+
+        // Rebuild maps and reconnect the inner solver ONLY on load (the maps
+        // are null on a freshly deserialized object). Rebuilding during save
+        // would destroy the Map objects the inner solver points into.
+        if (X_aug_owned_.size() > 0 && !X_aug_map_) {
+            buildMaps();
+            if (inner_) {
+                inner_->reconnect(*X_aug_map_, *D_aug_map_);
+                syncDiagnosticsFromInner();
+            }
+        }
     }
+
+    /**
+     * @brief Save the current TENETAug solver state to file (binary serialization).
+     * @param filename Output file path.
+     */
+    void save(const std::string& filename) const;
+
+    /**
+     * @brief Load a TENETAug solver state from file (binary serialization).
+     *
+     * @details The wrapper owns its (augmented) data buffers, so unlike the
+     * other solvers no reconnection to the passed maps happens; X and D are
+     * only validated against the serialized dimensions for API parity.
+     *
+     * @param filename Path to input file.
+     * @param X Map to the original feature matrix (dimension check only).
+     * @param D Map to the original dummy matrix (dimension check only).
+     * @return Deserialized TENETAug_Solver.
+     */
+    static TENETAug_Solver load(const std::string& filename,
+                                Eigen::Map<Eigen::MatrixXd>& X,
+                                Eigen::Map<Eigen::MatrixXd>& D);
 };
 
 // ============================================================================

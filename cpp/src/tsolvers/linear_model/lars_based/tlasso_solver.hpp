@@ -80,15 +80,6 @@ protected:
     // T-LASSO specific state variables
     // ==========================================================================
 
-    /**
-     * @brief Monotonic counter of variable removals (never decremented).
-     *
-     * @details Tracks total number of negative actions (variable drops)
-     *          throughout solution path.
-     *          Forms basis for cycling ratio = num_removals / num_additions.
-     */
-    std::size_t num_removals_{0};
-
     // ==================================================================================
     // Constructor protected for inheritance
     // ==================================================================================
@@ -177,38 +168,6 @@ public:
     // Output & Accessors
     // ==========================================================================
 
-    /**
-     * @brief Get total number of variable removals (negative actions).
-     *
-     * @return Monotonic count of all variable drops throughout solution path.
-     *
-     * @note Never decremented; forms numerator of cycling ratio.
-     */
-    std::size_t getNumRemovals() const noexcept { return num_removals_; }
-
-    /**
-     * @brief Get the cycling ratio (removals / additions).
-     *
-     * @return Ratio of removals to additions, or 0.0 if no additions yet.
-     *
-     * @details
-     *   The cycling ratio = num_removals / num_additions indicates solution
-     *   path complexity.
-     *
-     *   Interpretation:
-     *   - ratio < 0.3: Minimal cycling, stable path
-     *   - ratio 0.3-0.5: Moderate cycling, typical for correlated predictors
-     *   - ratio > 0.5: Heavy cycling, potential issues:
-     *                  * Strong collinearity in design matrix
-     *                  * Numerical instability in Cholesky updates/downdates
-     *                  * Regularization parameter may need tuning
-     *
-     * @note High cycling ratios (>0.5) may suggest numerical issues or
-     *       ill-conditioning.
-     * @note Well-conditioned problems should have low cycling ratios (<0.2).
-     */
-    double getCyclingRatio() const;
-
     // ============================================================================
     // Serialization & State Management
     // ============================================================================
@@ -225,8 +184,7 @@ public:
     template<class Archive>
     void serialize(Archive& archive) {
         archive(
-            cereal::base_class<TLARS_Solver>(this),
-            CEREAL_NVP(num_removals_)
+            cereal::base_class<TLARS_Solver>(this)
         );
     }
 
@@ -255,74 +213,18 @@ public:
                               Eigen::Map<Eigen::MatrixXd>& X,
                               Eigen::Map<Eigen::MatrixXd>& D);
 
-protected:
-
-    // ============================================================================
-    // T-LASSO Internals
-    // ============================================================================
-
-    /**
-     * @brief Compute minimum positive step size (gamma) to coefficient
-     *        zero-crossing.
-     *
-     * @param gamhat Step size from T-LARS logic (first element of pair
-     *               returned by computeStepSize(), representing gamma to
-     *               next variable entry).
-     * @param drops  Output boolean vector marking which active variables
-     *               cross zero at gamma_sign (size = |actives_|).
-     * @param w_A    Current equiangular direction weights for active set.
-     *
-     * @return Smallest positive gamma where any coefficient crosses zero,
-     *         or gamhat if no crossings occur before next variable entry.
-     *
-     * @details
-     * For each active variable j with index i in active set:
-     * - Current coefficient: beta_j = betaPath_(actives_[i], currentStep_ - 1)
-     * - Direction: d_j = w_A(i)
-     * - Zero-crossing when: beta_j + gamma * d_j = 0
-     * - Solve: gamma = -beta_j / d_j (if positive and sign change occurs)
-     *
-     * Returns minimum over all positive gamma values, and marks corresponding
-     * drops[i] = true for variables that cross zero at this gamma.
-     *
-     * Multiple simultaneous crossings (within eps tolerance) are handled
-     * by marking all crossing variables in drops vector.
-     *
-     * @note Only considers positive step sizes; negative crossings ignored.
-     * @note Uses eps_ tolerance for detecting simultaneous crossings.
-     */
-    double computeGammaSignChange(double gamhat,
-                                  std::vector<bool>& drops,
-                                  const Eigen::Ref<const Eigen::VectorXd>& w_A) const;
-
-    /**
-     * @brief Remove all zero-crossing variables from active set and downdate
-     *        Cholesky factor (R).
-     *
-     * @param drops Boolean vector marking which active variables to drop
-     *              (size = |actives_|, true = drop this variable).
-     *
-     * @details
-     * For each marked variable (processed in reverse order for index stability):
-     * 1. Downdate Cholesky factor R using Givens rotations (downdateR())
-     * 2. Zero out coefficient in betaPath_ at current step
-     * 3. Record negative action in actions_.back() (removal indicator)
-     * 4. Re-add variable to inactives_ (enables cycling/re-entry)
-     * 5. Remove variable from actives_ vector (erase)
-     * 6. Remove sign from Sign_ vector (erase)
-     * 7. Decrement count_active_dummies_ if dropping a dummy
-     * 8. Increment num_removals_ counter
-     *
-     * @note Processes drops in reverse order (high to low index) to maintain
-     *       index stability during vector erasure operations.
-     * @note Re-adding to inactives_ is CRITICAL for LASSO cycling behavior.
-     * @note Updates Sign_ vector to match reduced active set.
-     * @note Thread-safe for single-threaded execution (modifies class state).
-     */
-    void processLassoDrops(std::vector<bool>& drops);
 };
 
 // =============================================================================
 } // End of namespace trex::tsolvers::linear_model::lars_based
+
+// =============================================================================
+// Cereal polymorphic registration
+// =============================================================================
+// Required to serialize a TLASSO_Solver held through a TLARS_Solver pointer
+// (e.g. TENETAug_Solver's inner solver). The base relation is registered
+// automatically via cereal::base_class in serialize().
+#include <cereal/types/polymorphic.hpp>
+CEREAL_REGISTER_TYPE(trex::tsolvers::linear_model::lars_based::TLASSO_Solver)
 
 #endif /* TSOLVERS_TLASSO_SOLVER_HPP */

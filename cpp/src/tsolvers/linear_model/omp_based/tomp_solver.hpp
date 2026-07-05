@@ -157,11 +157,15 @@ public:
      */
     template <class Archive>
     void serialize(Archive& archive) {
-        int& algo_type_int = reinterpret_cast<int&>(algo_type_);
+        // Enum passes through a local int (reinterpret_cast aliasing is UB);
+        // the assignment after archive() applies the loaded value and is a
+        // no-op round-trip on save.
+        int algo_type = static_cast<int>(algo_type_);
         archive(
             cereal::base_class<TSolver_Base>(this),
-            CEREAL_NVP(algo_type_int)
+            cereal::make_nvp("algo_type", algo_type)
         );
+        algo_type_ = static_cast<SolverTypeOMPBased>(algo_type);
     }
 
     /**

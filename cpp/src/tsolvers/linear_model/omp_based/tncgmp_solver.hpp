@@ -42,6 +42,19 @@ enum class NCGMPVariant : int {
 
 /**
  * @brief Terminating Norm-Corrective Generalized Matching Pursuit (T-NCGMP) solver.
+ *
+ * @details Implements Algorithm 4 of Locatello et al. (2017), "A Unified
+ * Optimization View on Generalized Matching Pursuit and Frank-Wolfe".
+ *
+ * @note EQUIVALENCE FOR LINEAR MODELS: Algorithm 4 updates through the
+ * quadratic upper bound b = x - (1/L) * grad f(x). For the least-squares
+ * objective used here (L = 1, grad f = -r), Variant 0 (LineSearch) reduces
+ * EXACTLY to Matching Pursuit (T-MP) and Variant 1 (FullyCorrective) reduces
+ * EXACTLY to Orthogonal Matching Pursuit (T-OMP); both equivalences are
+ * pinned to machine precision in the test suite. The class is retained as
+ * the GMP framing in anticipation of non-quadratic losses (e.g., the planned
+ * logistic model), where the norm-corrective updates genuinely differ from
+ * MP/OMP.
  */
 class TNCGMP_Solver : public TSolver_Base {
 protected:
@@ -125,11 +138,15 @@ public:
      */
     template <class Archive>
     void serialize(Archive& archive) {
-        int& variant_int = reinterpret_cast<int&>(variant_);
+        // Enum passes through a local int (reinterpret_cast aliasing is UB);
+        // the assignment after archive() applies the loaded value and is a
+        // no-op round-trip on save.
+        int variant = static_cast<int>(variant_);
         archive(
             cereal::base_class<TSolver_Base>(this),
-            CEREAL_NVP(variant_int)
+            cereal::make_nvp("variant", variant)
         );
+        variant_ = static_cast<NCGMPVariant>(variant);
     }
 
     /**
@@ -155,14 +172,19 @@ protected:
     // ==========================================================================
     // Internal Helpers
     // ==========================================================================
-    /** @brief Update the correlations between the residual and the predictors. */
+    /** @brief Update the correlations between the residual and the predictors.
+     *  Line Search (MP) refreshes all non-dropped variables to allow atom
+     *  re-selection; Fully Corrective (OMP) refreshes inactive variables only. */
     void updateCorrelations();
 
     /** @brief Update the beta path and residuals. */
     void updateBetaPathAndResiduals();
 
-    /** @brief Rebuild the inactive set for the Line Search variant. */
-    void rebuildInactiveSetForLineSearch();
+    /** @brief Find tied max correlations. Line Search (MP) scans all non-dropped
+     *  variables (re-selection); Fully Corrective (OMP) uses the base
+     *  inactive-only scan. */
+    std::pair<double, std::vector<std::size_t>>
+        findTiedMaxCorrelations() const override;
 };
 
 // ===================================================================================

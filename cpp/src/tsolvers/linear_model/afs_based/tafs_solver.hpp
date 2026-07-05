@@ -36,6 +36,10 @@ namespace trex::tsolvers::linear_model::afs_based {
  * Implements and adapts the AFS algorithm by Zhang & Tibshirani (2026) into the
  * terminating solver framework. It interpolates between Forward Stepwise (rho = 1)
  * and LAR/LASSO (rho -> 0).
+ *
+ * @note The reported DoF is |active set| + intercept; with rho < 1 the
+ * effective degrees of freedom of the shrunken fit are smaller, so
+ * Cp values based on it penalize conservatively.
  */
 class TAFS_Solver : public TSolver_Base {
 protected:
