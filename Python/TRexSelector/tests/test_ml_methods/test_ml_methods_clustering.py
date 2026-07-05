@@ -3,7 +3,7 @@ Tests for agglomerative clustering and cut_tree.
 """
 import numpy as np
 import pytest
-from trex_selector.ml_methods.clustering import (
+from trex_selector_neo.ml_methods.clustering import (
     LinkageMethod,
     DistanceMetric,
     agglomerative_cluster,

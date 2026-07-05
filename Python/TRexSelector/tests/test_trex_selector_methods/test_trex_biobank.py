@@ -3,7 +3,7 @@ Tests for TRexBiobankScreeningSelector.
 """
 import numpy as np
 import pytest
-from trex_selector import (
+from trex_selector_neo import (
     TRexBiobankScreeningSelector,
     BiobankScreenTRexControl,
     BiobankScreenTRexResult,

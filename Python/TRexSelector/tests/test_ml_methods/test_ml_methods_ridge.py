@@ -1,9 +1,9 @@
 """
-Tests for RidgeSolver (trex_selector.ml_methods.RidgeSolver).
+Tests for RidgeSolver (trex_selector_neo.ml_methods.RidgeSolver).
 """
 import numpy as np
 import pytest
-from trex_selector.ml_methods import RidgeSolver
+from trex_selector_neo.ml_methods import RidgeSolver
 
 
 # ---------------------------------------------------------------------------

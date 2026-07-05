@@ -3,7 +3,7 @@ Shared pytest fixtures for all TRexSelector test modules.
 """
 import numpy as np
 import pytest
-import trex_selector
+import trex_selector_neo
 
 
 @pytest.fixture
@@ -17,7 +17,7 @@ def signal_data():
 
 @pytest.fixture
 def fast_control():
-    ctrl = trex_selector.TRexControlParameter()
+    ctrl = trex_selector_neo.TRexControlParameter()
     ctrl.K = 3
     return ctrl
 

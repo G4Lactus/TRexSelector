@@ -3,7 +3,7 @@ Tests for scalers (ZScoreScaler, LpNormScaler) and ridge regression classes.
 """
 import numpy as np
 import pytest
-from trex_selector.ml_methods import (
+from trex_selector_neo.ml_methods import (
     ZScoreScaler,
     LpNormScaler,
     NormType,

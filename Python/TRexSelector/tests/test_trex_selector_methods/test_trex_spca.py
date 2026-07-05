@@ -1,9 +1,9 @@
 """
-Tests for TRexSPCASelector (trex_selector.TRexSPCASelector).
+Tests for TRexSPCASelector (trex_selector_neo.TRexSPCASelector).
 """
 import numpy as np
 import pytest
-from trex_selector import (
+from trex_selector_neo import (
     TRexSPCASelector,
     TRexSPCAControlParameter,
     SPCAMode,

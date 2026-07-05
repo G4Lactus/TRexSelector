@@ -1,9 +1,9 @@
 """
-Tests for SVDSolver (trex_selector.ml_methods.SVDSolver).
+Tests for SVDSolver (trex_selector_neo.ml_methods.SVDSolver).
 """
 import numpy as np
 import pytest
-from trex_selector.ml_methods import SVDSolver, SVDResult
+from trex_selector_neo.ml_methods import SVDSolver, SVDResult
 
 
 # ---------------------------------------------------------------------------

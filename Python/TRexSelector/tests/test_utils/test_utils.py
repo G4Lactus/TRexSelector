@@ -3,7 +3,7 @@ Tests for utility functions: MemoryMappedMatrix, evaluation metrics, OpenMP help
 """
 import numpy as np
 import pytest
-from trex_selector.utils import (
+from trex_selector_neo.utils import (
     AccessMode,
     MemoryMappedMatrix,
     numpy_to_memmap,

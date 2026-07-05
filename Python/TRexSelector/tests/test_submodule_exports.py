@@ -6,14 +6,14 @@ import pytest
 
 
 MODULES_TO_CHECK = [
-    "trex_selector",
-    "trex_selector.ml_methods",
-    "trex_selector.ml_methods.clustering",
-    "trex_selector.tsolvers",
-    "trex_selector.tsolvers.lars_based",
-    "trex_selector.tsolvers.omp_based",
-    "trex_selector.tsolvers.afs_based",
-    "trex_selector.utils",
+    "trex_selector_neo",
+    "trex_selector_neo.ml_methods",
+    "trex_selector_neo.ml_methods.clustering",
+    "trex_selector_neo.tsolvers",
+    "trex_selector_neo.tsolvers.lars_based",
+    "trex_selector_neo.tsolvers.omp_based",
+    "trex_selector_neo.tsolvers.afs_based",
+    "trex_selector_neo.utils",
 ]
 
 
@@ -28,14 +28,14 @@ def test_all_symbols_importable(module_name):
 
 
 def test_top_level_submodules_accessible():
-    import trex_selector
-    assert trex_selector.ml_methods is not None
-    assert trex_selector.tsolvers is not None
-    assert trex_selector.utils is not None
+    import trex_selector_neo
+    assert trex_selector_neo.ml_methods is not None
+    assert trex_selector_neo.tsolvers is not None
+    assert trex_selector_neo.utils is not None
 
 
 def test_top_level_classes_importable():
-    from trex_selector import (
+    from trex_selector_neo import (
         LLoopStrategy,
         SolverTypeForTRex,
         SolverHyperparameters,
@@ -86,16 +86,21 @@ def test_top_level_classes_importable():
 
 
 def test_utils_symbols_importable():
-    from trex_selector.utils import (
+    from trex_selector_neo.utils import (
         AccessMode,
         MemoryMappedMatrix,
         numpy_to_memmap,
+        convert_to_memory_mapped,
         compute_fdp,
         compute_tpp,
         compute_precision,
         compute_recall,
         compute_fdp_dense,
         compute_tpp_dense,
+        true_positives_count,
+        false_positives_count,
+        false_negatives_count,
+        f1_score,
         get_max_threads,
         set_num_threads,
     )
@@ -105,16 +110,53 @@ def test_utils_symbols_importable():
     assert callable(compute_recall)
     assert callable(compute_fdp_dense)
     assert callable(compute_tpp_dense)
+    assert callable(true_positives_count)
+    assert callable(false_positives_count)
+    assert callable(false_negatives_count)
+    assert callable(f1_score)
     assert callable(get_max_threads)
     assert callable(set_num_threads)
     assert callable(numpy_to_memmap)
+    assert callable(convert_to_memory_mapped)
     assert callable(MemoryMappedMatrix)
     assert AccessMode.ReadOnly is not None
     assert AccessMode.ReadWrite is not None
 
 
+def test_tsolver_symbols_importable():
+    from trex_selector_neo.tsolvers import ScalingMode
+    from trex_selector_neo.tsolvers.lars_based import (
+        TLARS_Solver,
+        TLASSO_Solver,
+        TSTEPWISE_Solver,
+        TSTAGEWISE_Solver,
+        TENET_Solver,
+        TENETAug_Solver,
+        TIENETAug_Solver,
+    )
+    from trex_selector_neo.tsolvers.omp_based import (
+        TOMP_Solver,
+        TGP_Solver,
+        TACGP_Solver,
+        TMP_Solver,
+        TOOLS_Solver,
+        TNCGMP_Solver,
+        NCGMPVariant,
+    )
+    from trex_selector_neo.tsolvers.afs_based import TAFS_Solver
+
+    for cls in (TLARS_Solver, TLASSO_Solver, TSTEPWISE_Solver, TSTAGEWISE_Solver,
+                TENET_Solver, TENETAug_Solver, TIENETAug_Solver, TOMP_Solver,
+                TGP_Solver, TACGP_Solver, TMP_Solver, TOOLS_Solver,
+                TNCGMP_Solver, TAFS_Solver):
+        assert callable(cls)
+    assert ScalingMode.L2 is not None
+    assert ScalingMode.ZSCORE is not None
+    assert NCGMPVariant.LineSearch is not None
+
+
 def test_ml_methods_symbols_importable():
-    from trex_selector.ml_methods import (
+    from trex_selector_neo.ml_methods import (
         ZScoreScaler,
         LpNormScaler,
         NormType,
@@ -126,7 +168,7 @@ def test_ml_methods_symbols_importable():
 
 
 def test_clustering_symbols_importable():
-    from trex_selector.ml_methods.clustering import (
+    from trex_selector_neo.ml_methods.clustering import (
         LinkageMethod,
         DistanceMetric,
         agglomerative_cluster,

@@ -30,7 +30,7 @@ set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../../cpp ${CMAKE_CURRENT_BINARY_DIR}/trex_core)
 
 # Create the Python extension module mapped to _core
-pybind11_add_module(_core src/trex_selector/bindings.cpp)
+pybind11_add_module(_core src/trex_selector_neo/bindings.cpp)
 
 # Link against the underlying C++ libraries
 target_link_libraries(_core PRIVATE
@@ -42,5 +42,5 @@ target_link_libraries(_core PRIVATE
 # GCC/Clang vs MSVC handled by the shared helper from cpp/cmake)
 trex_set_compile_options(_core)
 
-# Install the extension into the trex_selector package directory
-install(TARGETS _core DESTINATION trex_selector)
+# Install the extension into the trex_selector_neo package directory
+install(TARGETS _core DESTINATION trex_selector_neo)

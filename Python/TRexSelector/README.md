@@ -1,10 +1,10 @@
-# TRexSelector
+# TRexSelectorNeo
 
-[![PyPI version](https://badge.fury.io/py/trex-selector.svg)](https://badge.fury.io/py/trex-selector)
+[![PyPI version](https://badge.fury.io/py/TRexSelectorNeo.svg)](https://badge.fury.io/py/TRexSelectorNeo)
 
 **Title**: The T-Rex selector for fast high-dimensional variable selection with FDR control
 
-**Description**: It performs fast variable selection in large-scale high-dimensional settings while controlling the false discovery rate (FDR) at a user-defined target level. The Python package provides bindings to the TRexSelector C++ library via pybind11.
+**Description**: It performs fast variable selection in large-scale high-dimensional settings while controlling the false discovery rate (FDR) at a user-defined target level. The Python package provides bindings to the TRexSelector C++ library via pybind11. It is distributed as `TRexSelectorNeo` and imported as `trex_selector_neo` — distinct from the earlier pure-Python `trexselector` package, which it supersedes.
 
 **Papers**: The package is based on the papers
 
@@ -16,7 +16,7 @@ J. Machkour, M. Muma, and D. P. Palomar, "High-dimensional false discovery rate 
 
 ## Requirements
 
-- Python >= 3.8, NumPy
+- Python >= 3.10, NumPy >= 1.26
 - C++20 compiler, CMake >= 3.24, Eigen3, Boost, Cereal, OpenMP — only when building from source
 
 ---
@@ -24,7 +24,7 @@ J. Machkour, M. Muma, and D. P. Palomar, "High-dimensional false discovery rate 
 ## Installation
 
 ```bash
-pip install trex_selector
+pip install TRexSelectorNeo
 # or from GitHub:
 pip install git+https://github.com/G4Lactus/TRexSelector.git#subdirectory=Python/TRexSelector
 ```
@@ -35,7 +35,7 @@ pip install git+https://github.com/G4Lactus/TRexSelector.git#subdirectory=Python
 
 ```python
 import numpy as np
-import trex_selector
+import trex_selector_neo
 
 rng = np.random.default_rng(123)
 n, p, num_act = 75, 150, 3
@@ -45,7 +45,7 @@ true_actives = list(np.nonzero(beta)[0])  # 0-based
 X = rng.standard_normal((n, p))
 y = X @ beta + rng.standard_normal(n)
 
-sel = trex_selector.TRexSelector(X, y, tFDR=0.05, verbose=False)
+sel = trex_selector_neo.TRexSelector(X, y, tFDR=0.05, verbose=False)
 sel.select()
 
 print(f"True active variables: {true_actives}")

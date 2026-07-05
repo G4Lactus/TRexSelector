@@ -4,6 +4,8 @@
 *.pptx
 *.DS_Store
 *.tar.gz
+*.pyc
+*.whl
 *.Rcheck/
 config.log
 config.status
@@ -29,6 +31,8 @@ deprecated/
 .mypy_cache/
 .pytest_cache/
 __pycache__/
+dist/
+*.egg-info/
 
 ################################
 ############ C/C++ #############

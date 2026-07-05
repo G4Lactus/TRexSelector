@@ -1,5 +1,5 @@
 """
-Tests for PCA (trex_selector.ml_methods.PCA).
+Tests for PCA (trex_selector_neo.ml_methods.PCA).
 
 Note on memory layout
 ---------------------
@@ -11,7 +11,7 @@ np.asfortranarray internally).
 """
 import numpy as np
 import pytest
-from trex_selector.ml_methods import PCA, PCAResult
+from trex_selector_neo.ml_methods import PCA, PCAResult
 
 
 # ---------------------------------------------------------------------------

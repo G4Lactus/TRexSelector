@@ -3,8 +3,8 @@ Tests for TRexSelector: properties, type checks, and consistency.
 """
 import numpy as np
 import pytest
-import trex_selector
-from trex_selector import DummyDistribution, SolverTypeForTRex, SolverHyperparameters
+import trex_selector_neo
+from trex_selector_neo import DummyDistribution, SolverTypeForTRex, SolverHyperparameters
 
 
 # ---------------------------------------------------------------------------
@@ -13,7 +13,7 @@ from trex_selector import DummyDistribution, SolverTypeForTRex, SolverHyperparam
 
 def test_instantiation(signal_data, fast_control):
     X, y, n, p = signal_data
-    sel = trex_selector.TRexSelector(X, y, trex_control=fast_control, verbose=False)
+    sel = trex_selector_neo.TRexSelector(X, y, trex_control=fast_control, verbose=False)
     assert sel is not None
 
 
@@ -21,7 +21,7 @@ def test_dimension_mismatch_raises(signal_data, fast_control):
     X, y, n, p = signal_data
     y_bad = np.random.randn(n + 10)
     with pytest.raises(Exception):
-        trex_selector.TRexSelector(X, y_bad, trex_control=fast_control, verbose=False)
+        trex_selector_neo.TRexSelector(X, y_bad, trex_control=fast_control, verbose=False)
 
 
 # ---------------------------------------------------------------------------
@@ -30,7 +30,7 @@ def test_dimension_mismatch_raises(signal_data, fast_control):
 
 def test_properties_after_selection(signal_data, fast_control):
     X, y, n, p = signal_data
-    sel = trex_selector.TRexSelector(X, y, trex_control=fast_control, verbose=False)
+    sel = trex_selector_neo.TRexSelector(X, y, trex_control=fast_control, verbose=False)
     sel.select()
 
     # Scalar properties
@@ -71,7 +71,7 @@ def test_properties_after_selection(signal_data, fast_control):
 
 def test_selected_var_indices_consistent(signal_data, fast_control):
     X, y, n, p = signal_data
-    sel = trex_selector.TRexSelector(X, y, trex_control=fast_control, verbose=False)
+    sel = trex_selector_neo.TRexSelector(X, y, trex_control=fast_control, verbose=False)
     sel.select()
 
     sv = sel.selected_var
@@ -95,7 +95,7 @@ def test_selected_var_indices_consistent(signal_data, fast_control):
 # ---------------------------------------------------------------------------
 
 def test_trex_control_new_fields():
-    ctrl = trex_selector.TRexControlParameter()
+    ctrl = trex_selector_neo.TRexControlParameter()
 
     # Threading
     ctrl.max_outer_threads = 2
@@ -108,31 +108,31 @@ def test_trex_control_new_fields():
     assert ctrl.use_memory_mapping is False
 
     # Solver type
-    ctrl.solver_type = trex_selector.SolverTypeForTRex.TLASSO
-    assert ctrl.solver_type == trex_selector.SolverTypeForTRex.TLASSO
+    ctrl.solver_type = trex_selector_neo.SolverTypeForTRex.TLASSO
+    assert ctrl.solver_type == trex_selector_neo.SolverTypeForTRex.TLASSO
 
     # Solver hyperparameters
-    hp = trex_selector.SolverHyperparameters()
+    hp = trex_selector_neo.SolverHyperparameters()
     hp.lambda2 = 0.05
     hp.tol = 1e-8
     ctrl.solver_params = hp
     assert ctrl.solver_params.lambda2 == pytest.approx(0.05)
 
     # Dummy distribution
-    ctrl.dummy_distribution = trex_selector.DummyDistribution.student_t(df=5.0)
-    assert ctrl.dummy_distribution.get_type() == trex_selector.DummyDistribution.Type.StudentT
+    ctrl.dummy_distribution = trex_selector_neo.DummyDistribution.student_t(df=5.0)
+    assert ctrl.dummy_distribution.get_type() == trex_selector_neo.DummyDistribution.Type.StudentT
 
     # Scaling mode
-    ctrl.scaling_mode = trex_selector.ScalingMode.ZSCORE
-    assert ctrl.scaling_mode == trex_selector.ScalingMode.ZSCORE
+    ctrl.scaling_mode = trex_selector_neo.ScalingMode.ZSCORE
+    assert ctrl.scaling_mode == trex_selector_neo.ScalingMode.ZSCORE
 
 
 def test_trex_control_with_tlasso_solver(signal_data):
     X, y, n, p = signal_data
-    ctrl = trex_selector.TRexControlParameter()
+    ctrl = trex_selector_neo.TRexControlParameter()
     ctrl.K = 3
-    ctrl.solver_type = trex_selector.SolverTypeForTRex.TLASSO
-    sel = trex_selector.TRexSelector(X, y, trex_control=ctrl, verbose=False)
+    ctrl.solver_type = trex_selector_neo.SolverTypeForTRex.TLASSO
+    sel = trex_selector_neo.TRexSelector(X, y, trex_control=ctrl, verbose=False)
     res = sel.select()
     assert res is not None
 
@@ -143,7 +143,7 @@ def test_trex_control_with_tlasso_solver(signal_data):
 
 def test_selection_result_fields(signal_data, fast_control):
     X, y, n, p = signal_data
-    sel = trex_selector.TRexSelector(X, y, trex_control=fast_control, verbose=False)
+    sel = trex_selector_neo.TRexSelector(X, y, trex_control=fast_control, verbose=False)
     res = sel.select()
 
     assert isinstance(res.selected_var, np.ndarray)
@@ -163,19 +163,19 @@ def test_selection_result_fields(signal_data, fast_control):
 # ---------------------------------------------------------------------------
 
 @pytest.mark.parametrize("strategy", [
-    trex_selector.LLoopStrategy.SKIPL,
-    trex_selector.LLoopStrategy.STANDARD,
-    trex_selector.LLoopStrategy.HCONCAT,
-    trex_selector.LLoopStrategy.PERMUTATION,
-    trex_selector.LLoopStrategy.PERMUTATION_DIRECT,
-    trex_selector.LLoopStrategy.DIRECT,
+    trex_selector_neo.LLoopStrategy.SKIPL,
+    trex_selector_neo.LLoopStrategy.STANDARD,
+    trex_selector_neo.LLoopStrategy.HCONCAT,
+    trex_selector_neo.LLoopStrategy.PERMUTATION,
+    trex_selector_neo.LLoopStrategy.PERMUTATION_DIRECT,
+    trex_selector_neo.LLoopStrategy.DIRECT,
 ])
 def test_lloop_strategy_variants(signal_data, strategy):
     X, y, n, p = signal_data
-    ctrl = trex_selector.TRexControlParameter()
+    ctrl = trex_selector_neo.TRexControlParameter()
     ctrl.K = 3
     ctrl.lloop_strategy = strategy
-    sel = trex_selector.TRexSelector(X, y, trex_control=ctrl, verbose=False)
+    sel = trex_selector_neo.TRexSelector(X, y, trex_control=ctrl, verbose=False)
     res = sel.select()
     assert res is not None
 
@@ -186,20 +186,20 @@ def test_lloop_strategy_variants(signal_data, strategy):
 
 def test_dummy_rademacher_runs(signal_data):
     X, y, n, p = signal_data
-    ctrl = trex_selector.TRexControlParameter()
+    ctrl = trex_selector_neo.TRexControlParameter()
     ctrl.K = 3
-    ctrl.dummy_distribution = trex_selector.DummyDistribution.rademacher()
-    sel = trex_selector.TRexSelector(X, y, trex_control=ctrl, verbose=False)
+    ctrl.dummy_distribution = trex_selector_neo.DummyDistribution.rademacher()
+    sel = trex_selector_neo.TRexSelector(X, y, trex_control=ctrl, verbose=False)
     res = sel.select()
     assert res is not None
 
 
 def test_dummy_uniform_runs(signal_data):
     X, y, n, p = signal_data
-    ctrl = trex_selector.TRexControlParameter()
+    ctrl = trex_selector_neo.TRexControlParameter()
     ctrl.K = 3
-    ctrl.dummy_distribution = trex_selector.DummyDistribution.uniform(a=1.5)
-    sel = trex_selector.TRexSelector(X, y, trex_control=ctrl, verbose=False)
+    ctrl.dummy_distribution = trex_selector_neo.DummyDistribution.uniform(a=1.5)
+    sel = trex_selector_neo.TRexSelector(X, y, trex_control=ctrl, verbose=False)
     res = sel.select()
     assert res is not None
 
@@ -210,10 +210,10 @@ def test_dummy_uniform_runs(signal_data):
 
 def test_solver_type_tomp(signal_data):
     X, y, n, p = signal_data
-    ctrl = trex_selector.TRexControlParameter()
+    ctrl = trex_selector_neo.TRexControlParameter()
     ctrl.K = 3
-    ctrl.solver_type = trex_selector.SolverTypeForTRex.TOMP
-    sel = trex_selector.TRexSelector(X, y, trex_control=ctrl, verbose=False)
+    ctrl.solver_type = trex_selector_neo.SolverTypeForTRex.TOMP
+    sel = trex_selector_neo.TRexSelector(X, y, trex_control=ctrl, verbose=False)
     res = sel.select()
     assert res is not None
 

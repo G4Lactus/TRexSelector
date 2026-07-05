@@ -3,7 +3,7 @@ Tests for all T-Solver classes: common API + solver-specific getters.
 """
 import numpy as np
 import pytest
-from trex_selector.tsolvers.lars_based import (
+from trex_selector_neo.tsolvers.lars_based import (
     TLARS_Solver,
     TLASSO_Solver,
     TSTEPWISE_Solver,
@@ -11,7 +11,7 @@ from trex_selector.tsolvers.lars_based import (
     TENET_Solver,
     TENETAug_Solver,
 )
-from trex_selector.tsolvers.omp_based import (
+from trex_selector_neo.tsolvers.omp_based import (
     TOMP_Solver,
     TGP_Solver,
     TACGP_Solver,
@@ -20,7 +20,7 @@ from trex_selector.tsolvers.omp_based import (
     TNCGMP_Solver,
     NCGMPVariant,
 )
-from trex_selector.tsolvers.afs_based import TAFS_Solver
+from trex_selector_neo.tsolvers.afs_based import TAFS_Solver
 
 
 # ---------------------------------------------------------------------------
