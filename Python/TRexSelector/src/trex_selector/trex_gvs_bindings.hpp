@@ -63,12 +63,12 @@ public:
         // The refactored C++ constructor takes a single control struct that
         // nests the base algorithmic parameters as `trex_ctrl`. Merge the
         // separately-supplied `trex_control` and derive the solver_type GVS
-        // requires (EN -> TENET/TENET_AUG, IEN -> TLASSO), overriding whatever
-        // the caller left in `trex_control.solver_type`.
+        // requires (EN -> TENET/TENET_AUG, IEN -> TIENET_AUG), overriding
+        // whatever the caller left in `trex_control.solver_type`.
         TRexGVSControlParameter gvs_ctrl = gvs_control;
         gvs_ctrl.trex_ctrl = trex_control;
         if (gvs_ctrl.gvs_type == GVSType::IEN) {
-            gvs_ctrl.trex_ctrl.solver_type = gvs_sd::SolverTypeForTRex::TLASSO;
+            gvs_ctrl.trex_ctrl.solver_type = gvs_sd::SolverTypeForTRex::TIENET_AUG;
         } else { // EN
             gvs_ctrl.trex_ctrl.solver_type =
                 (gvs_ctrl.en_solver == ENSolverType::TENET_AUG)
@@ -98,7 +98,7 @@ public:
 inline void bind_trex_gvs(py::module& m) {
     py::enum_<GVSType>(m, "GVSType", "Group Variable Selection method variants.")
         .value("EN", GVSType::EN, "Elastic-Net group variable selection (uses TENET solver).")
-        .value("IEN", GVSType::IEN, "Informed Elastic-Net using group structure from clustering (uses TLASSO solver).")
+        .value("IEN", GVSType::IEN, "Informed Elastic-Net using group structure from clustering (uses TIENETAug solver).")
         .export_values();
 
     py::enum_<ENSolverType>(m, "ENSolverType", "Elastic-Net solver variant used when gvs_type == EN.")

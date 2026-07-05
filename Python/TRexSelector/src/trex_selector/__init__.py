@@ -166,7 +166,7 @@ class TRexGVSSelector(TRexSelector):
 
         # The C++ wrapper authoritatively derives the required solver_type from
         # gvs_control.gvs_type and gvs_control.en_solver (EN -> TENET/TENET_AUG,
-        # IEN -> TLASSO), overriding trex_control.solver_type. No Python-side
+        # IEN -> TIENET_AUG), overriding trex_control.solver_type. No Python-side
         # derivation is needed here.
         self._selector: PyTRexGVSSelector = PyTRexGVSSelector(self.X, self.y, tFDR,
                                                               gvs_control,
