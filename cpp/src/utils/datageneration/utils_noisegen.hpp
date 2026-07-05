@@ -16,6 +16,7 @@
 // ===================================================================================
 
 // std includes
+#include <algorithm>
 #include <cmath>
 #include <random>
 #include <stdexcept>
@@ -49,7 +50,11 @@ namespace noise_policy {
     /** @brief Policy for AR(1) temporally correlated noise. */
     struct AR1 {
         double rho;
-        explicit AR1(double rho = 0.5) : rho(rho) {}
+        explicit AR1(double rho = 0.5) : rho(rho) {
+            if (std::abs(rho) >= 1.0) {
+                throw std::invalid_argument("AR(1) rho must be in (-1, 1).");
+            }
+        }
     };
 
     /** @brief Policy for symmetric bi-modal Normal mixture noise. */
@@ -88,9 +93,9 @@ inline std::pair<double, double> calculate_noise_params(
 ) {
     double mean_y = y.mean();
     double var_sum = (y.array() - mean_y).square().sum();
-    double signal_power = (n <= 100) ?
-                          var_sum / static_cast<double>(n - 1) :
-                          var_sum / static_cast<double>(n);
+    double denom = (n <= 100) ? static_cast<double>(std::max<std::size_t>(n, 2) - 1)
+                              : static_cast<double>(n);
+    double signal_power = var_sum / denom;
 
     double noise_std = 0.0;
     if (snr > 0 && signal_power > 0) {
@@ -126,9 +131,10 @@ inline void add_noise(
     const noise_policy::Normal&,
     unsigned int noise_seed
 ) {
-    if (noise_std <= 0) {
-        throw std::invalid_argument("Noise standard deviation must be positive.");
+    if (noise_std < 0) {
+        throw std::invalid_argument("Noise standard deviation must be non-negative.");
     }
+    if (noise_std == 0) { return; } // Noiseless / null-model data: nothing to add
     std::mt19937 noise_gen(noise_seed);
     std::normal_distribution<double> noise_dist(0.0, noise_std);
     for (std::size_t i = 0; i < n; ++i) { y(i) += noise_dist(noise_gen); }
@@ -154,9 +160,10 @@ inline void add_noise(
     const noise_policy::StudentT& policy,
     unsigned int noise_seed
 ) {
-    if (noise_std <= 0) {
-        throw std::invalid_argument("Noise standard deviation must be positive.");
+    if (noise_std < 0) {
+        throw std::invalid_argument("Noise standard deviation must be non-negative.");
     }
+    if (noise_std == 0) { return; } // Noiseless / null-model data: nothing to add
     std::mt19937 noise_gen(noise_seed);
 
     std::student_t_distribution<double> noise_dist(policy.df);
@@ -185,19 +192,20 @@ inline void add_noise(
     const noise_policy::AR1& policy,
     unsigned int noise_seed
 ) {
-    if (noise_std <= 0) {
-        throw std::invalid_argument("Noise standard deviation must be positive.");
+    if (noise_std < 0) {
+        throw std::invalid_argument("Noise standard deviation must be non-negative.");
     }
-    double innovation_std = (std::abs(policy.rho) < 1.0) ?
-                        noise_std * std::sqrt(std::max(0.0, 1.0 - policy.rho * policy.rho)) :
-                        noise_std;
+    if (noise_std == 0) { return; } // Noiseless / null-model data: nothing to add
+    // Stationary AR(1): |rho| < 1 is enforced by the policy constructor.
+    // Innovations are scaled so the marginal variance equals noise_std^2, and
+    // the initial value is drawn from the stationary marginal distribution.
+    double innovation_std =
+        noise_std * std::sqrt(std::max(0.0, 1.0 - policy.rho * policy.rho));
 
     std::mt19937 noise_gen(noise_seed);
     std::normal_distribution<double> innovation_dist(0.0, innovation_std);
 
-    double current_val = (std::abs(policy.rho) < 1.0) ?
-                    std::normal_distribution<double>(0.0, noise_std)(noise_gen) :
-                    innovation_dist(noise_gen);
+    double current_val = std::normal_distribution<double>(0.0, noise_std)(noise_gen);
 
     y(0) += current_val;
     for (std::size_t i = 1; i < n; ++i) {
@@ -225,9 +233,10 @@ inline void add_noise(
     const noise_policy::NormalMixture& policy,
     unsigned int noise_seed
 ) {
-    if (noise_std <= 0) {
-        throw std::invalid_argument("Noise standard deviation must be positive.");
+    if (noise_std < 0) {
+        throw std::invalid_argument("Noise standard deviation must be non-negative.");
     }
+    if (noise_std == 0) { return; } // Noiseless / null-model data: nothing to add
 
     std::mt19937 noise_gen(noise_seed);
     std::normal_distribution<double> norm_dist(0.0, 1.0);
@@ -258,9 +267,10 @@ inline void add_noise(
     const noise_policy::StudentTMixture& policy,
     unsigned int noise_seed
 ) {
-    if (noise_std <= 0) {
-        throw std::invalid_argument("Noise standard deviation must be positive.");
+    if (noise_std < 0) {
+        throw std::invalid_argument("Noise standard deviation must be non-negative.");
     }
+    if (noise_std == 0) { return; } // Noiseless / null-model data: nothing to add
 
     std::mt19937 noise_gen(noise_seed);
     std::student_t_distribution<double> t_dist(policy.df);

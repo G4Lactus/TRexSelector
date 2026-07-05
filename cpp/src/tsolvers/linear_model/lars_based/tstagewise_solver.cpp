@@ -204,7 +204,7 @@ void TSTAGEWISE_Solver::processStagewiseNNLS(const Eigen::Ref<const Eigen::Vecto
 
     // 4. Record the removal action in current step
     // Negative index indicates removal
-    actions_.back().push_back(-static_cast<int>(dropped_var));
+    actions_.back().push_back(actionDrop(dropped_var));
 
     // 5. Refresh correlation for the dropped variable for potential re-entry
     // (its correlations_ entry is stale from when it entered the active set)

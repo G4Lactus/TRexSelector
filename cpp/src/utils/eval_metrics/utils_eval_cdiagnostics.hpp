@@ -125,20 +125,22 @@ inline void print_vector(
 /**
  * @brief Print a compact actions log.
  *
- * @details Each step prints a line with all additions (+k) or drops (-k) performed.
+ * @details Each step prints a line with all additions (+k) or drops (-k)
+ * performed, shown as 0-based variable indices. Entries are stored as
+ * 1-based signed indices (R lars convention, see TSolver_Base::getActions()).
  *
  * @param actions Vector of per-step action lists (positive = add, negative = drop).
  */
-void print_actions_log(const std::vector<std::vector<int>> &actions)
+inline void print_actions_log(const std::vector<std::vector<int>> &actions)
 {
     for (std::size_t step = 0; step < actions.size(); ++step)
     {
         std::cout << "Step " << std::setw(3) << step << ": ";
-        for (int idx : actions[step]) {
-            if (idx >= 0)
-                std::cout << " +" << idx;
+        for (int action : actions[step]) {
+            if (action > 0)
+                std::cout << " +" << (action - 1);
             else
-                std::cout << " " << idx; // Negative is drop
+                std::cout << " -" << (-action - 1); // Negative is drop
         }
         std::cout << "\n";
     }
@@ -220,6 +222,8 @@ inline void print_selection(
     print_vector(solver.getActiveDummyIndices());
 
     // 3. Full selection path (with dummies colored)
+    // Actions are stored as 1-based signed indices (R lars convention,
+    // see TSolver_Base::getActions()); decode with |a| - 1.
     auto actions = solver.getActions();
     std::size_t dummy_start = solver.getDummyStartIndex();
     std::cout << "\n  Path: [";
@@ -231,7 +235,7 @@ inline void print_selection(
 
             if (action < 0) {
                 // REMOVAL EVENT
-                std::size_t removed_idx = static_cast<std::size_t>(-action);
+                std::size_t removed_idx = static_cast<std::size_t>(-action) - 1;
                 if (removed_idx >= dummy_start) {
                     // Dummy removal: magenta
                     std::cout << "\033[35m-D" << (removed_idx - dummy_start)
@@ -242,7 +246,7 @@ inline void print_selection(
                 }
             } else {
                 // ADDITION EVENT
-                std::size_t idx = static_cast<std::size_t>(action);
+                std::size_t idx = static_cast<std::size_t>(action) - 1;
                 bool is_tp = std::find(true_support.begin(),
                                        true_support.end(), idx)
                                        != true_support.end();

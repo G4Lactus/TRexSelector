@@ -321,7 +321,10 @@ py::class_<PySolverWrapper<Solver>> bind_standard_tsolver(py::module& m, const s
         .def("getResiduals", &PySolverWrapper<Solver>::getResiduals,
              "Get the residual vector at the current step.")
         .def("getActions", &PySolverWrapper<Solver>::getActions,
-             "Get the integer codes for actions taken at each step.")
+             "Get the integer codes for actions taken at each step. Entries "
+             "follow the R lars convention: 1-based signed indices, +(j+1) "
+             "for the addition and -(j+1) for the removal of 0-based "
+             "variable j (decode with abs(a) - 1).")
         .def("getActives", &PySolverWrapper<Solver>::getActives,
              "Get indices of variables that are active at the current step.")
         .def("getInactives", &PySolverWrapper<Solver>::getInactives,

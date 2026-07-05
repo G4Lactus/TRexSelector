@@ -9,6 +9,9 @@
 // google test includes
 #include <gtest/gtest.h>
 
+// std includes
+#include <numbers>
+
 // project utils includes
 #include <utils/datageneration/utils_dummygen.hpp>
 
@@ -110,6 +113,49 @@ TEST(DummyGenTest, GenerateDummiesDeterminism) {
     // Different seed -> matrix should be different
     EXPECT_FALSE(D1.isApprox(D3, 1e-15));
 }
+
+/** @brief Unit tests for Gumbel dummy centering and variance. */
+TEST(DummyGenTest, GenerateDummiesGumbelCentered) {
+    constexpr std::size_t n = 20000;
+    constexpr std::size_t p = 4;
+    Eigen::MatrixXd D(n, p);
+
+    // Default parameters: samples must be centered at 0 with
+    // variance pi^2/6 * scale^2
+    generate_dummies(D, n, p, 4242, Distribution::Gumbel());
+    EXPECT_NEAR(D.mean(), 0.0, 0.05);
+    double var = (D.array() - D.mean()).square().sum()
+                 / static_cast<double>(n * p - 1);
+    EXPECT_NEAR(var, std::numbers::pi * std::numbers::pi / 6.0, 0.1);
+
+    // Non-default location/scale: mean must equal the requested location
+    generate_dummies(D, n, p, 4242, Distribution::Gumbel(1.0, 2.0));
+    EXPECT_NEAR(D.mean(), 1.0, 0.1);
+}
+
+
+/** @brief Unit tests for constrained sparse Rademacher balance and small-n bounds. */
+TEST(DummyGenTest, GenerateDummiesConstrainedSparseRademacher) {
+    constexpr std::size_t n = 100;
+    constexpr std::size_t p = 3;
+    Eigen::MatrixXd D(n, p);
+
+    generate_dummies(D, n, p, 7, Distribution::ConstrainedSparseRademacher(0.1));
+
+    for (std::size_t j = 0; j < p; ++j) {
+        // k = 2 * floor(n * s / 2) = 10 non-zeros, balanced +1/-1
+        EXPECT_EQ((D.col(j).array() == 1.0).count(), 5);
+        EXPECT_EQ((D.col(j).array() == -1.0).count(), 5);
+        EXPECT_EQ((D.col(j).array() == 0.0).count(), 90);
+    }
+
+    // Degenerate n = 1: minimum-non-zeros bump must not write out of bounds
+    Eigen::MatrixXd D_tiny(1, 2);
+    EXPECT_NO_THROW(generate_dummies(D_tiny, 1, 2, 7,
+        Distribution::ConstrainedSparseRademacher(0.5)));
+    EXPECT_TRUE((D_tiny.array() == 0.0).all());
+}
+
 
 // ========================================================================================
 } /* End of namespace trex::test::utils::datageneration */

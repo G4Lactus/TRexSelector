@@ -222,13 +222,13 @@ std::vector<int> TLARS_Solver::updateActiveSet (const std::vector<std::size_t>& 
         if (last_updateR_rank_ == static_cast<int>(active_size_backup)) {
             last_updateR_rank_ = rankR_backup;
             dropped_indices_.push_back(j_new);
-            actions_this_step.push_back(-static_cast<int>(j_new));
+            actions_this_step.push_back(actionDrop(j_new));
             any_dropped_ = true;
             logWarning(concatMsg("Variable ", j_new, " collinear; dropped."));
         } else {
             R_ = newR;
             actives_.push_back(j_new);
-            actions_this_step.push_back(static_cast<int>(j_new));
+            actions_this_step.push_back(actionAdd(j_new));
             Sign_.push_back((correlations_(static_cast<Eigen::Index>(j_new)) >= 0) ?
                                 1 : -1);
             num_additions_++;
@@ -398,7 +398,7 @@ void TLARS_Solver::processLassoDrops(std::vector<bool>& drops) {
                   static_cast<Eigen::Index>(currentStep_)) = 0.0;
 
         // Record negative action (removal) and re-add to inactives_ (cycling)
-        actions_.back().push_back(-static_cast<int>(dropped_var));
+        actions_.back().push_back(actionDrop(dropped_var));
         inactives_.push_back(dropped_var);
 
         // Refresh correlation for potential re-entry

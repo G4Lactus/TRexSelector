@@ -50,6 +50,24 @@ TEST(DataGenTest, PredictorPolicyValidation) {
 
     EXPECT_NO_THROW(predictor_policy::Gumbel(0.0, 1.0));
     EXPECT_THROW(predictor_policy::Gumbel(0.0, -1.0), std::exception);
+
+    EXPECT_NO_THROW(predictor_policy::AR1(0.9));
+    EXPECT_THROW(predictor_policy::AR1(1.0), std::invalid_argument);
+    EXPECT_THROW(predictor_policy::AR1(-1.5), std::invalid_argument);
+}
+
+
+/** @brief Unit tests for null-model data generation (empty support). */
+TEST(DataGenTest, SyntheticDataNullModel) {
+    // No true actives: the signal is all-zero, so no noise can be scaled to
+    // the requested SNR and the response must come out as exactly zero.
+    SyntheticData data(50, 10, {}, {}, 1.0, 42);
+
+    EXPECT_EQ(data.rows(), 50);
+    EXPECT_EQ(data.cols(), 10);
+    EXPECT_DOUBLE_EQ(data.getSignalPower(), 0.0);
+    EXPECT_DOUBLE_EQ(data.getNoiseStd(), 0.0);
+    EXPECT_TRUE((data.getY().array() == 0.0).all());
 }
 
 

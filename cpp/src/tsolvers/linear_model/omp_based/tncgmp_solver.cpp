@@ -139,7 +139,7 @@ void TNCGMP_Solver::executeStep(std::size_t T_stop, bool early_stop) {
                 std::erase(inactives_, j_new);
                 if (j_new >= dummy_start_idx_) { count_active_dummies_++; }
             }
-            actions_.push_back({static_cast<int>(j_new)});
+            actions_.push_back({actionAdd(j_new)});
 
             updateInactiveSet();
 
@@ -150,7 +150,7 @@ void TNCGMP_Solver::executeStep(std::size_t T_stop, bool early_stop) {
 
             if (last_updateR_rank_ == static_cast<int>(actives_.size())) {
                 dropped_indices_.push_back(j_new);
-                pending_drop_actions.push_back(-static_cast<int>(j_new));
+                pending_drop_actions.push_back(actionDrop(j_new));
                 any_dropped_ = true;
                 logWarning(concatMsg("Variable ", j_new, " collinear; dropped."));
                 updateInactiveSet();
@@ -158,7 +158,7 @@ void TNCGMP_Solver::executeStep(std::size_t T_stop, bool early_stop) {
             } else {
                 R_ = newR;
                 actives_.push_back(j_new);
-                pending_drop_actions.push_back(static_cast<int>(j_new));
+                pending_drop_actions.push_back(actionAdd(j_new));
                 actions_.push_back(std::move(pending_drop_actions));
                 pending_drop_actions.clear();
                 std::erase(inactives_, j_new);

@@ -99,7 +99,6 @@ target_sources(trex_utils PUBLIC
         ${CMAKE_CURRENT_SOURCE_DIR}/logging/logger.hpp
         ${CMAKE_CURRENT_SOURCE_DIR}/memmap/memory_mapped_matrix.hpp
         ${CMAKE_CURRENT_SOURCE_DIR}/openmp/utils_openmp.hpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/serialization/utils_cereal_armadillo.hpp
         ${CMAKE_CURRENT_SOURCE_DIR}/serialization/utils_cereal_eigen.hpp
 )
 # ==================================================================================

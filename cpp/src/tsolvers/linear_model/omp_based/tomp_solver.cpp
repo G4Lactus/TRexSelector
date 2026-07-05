@@ -156,13 +156,13 @@ std::vector<int> TOMP_Solver::updateActiveSet(const std::vector<std::size_t>& ne
             R_ = R_backup;
             last_updateR_rank_ = rankR_backup;
             dropped_indices_.push_back(j_new);
-            actions_this_step.push_back(-static_cast<int>(j_new));
+            actions_this_step.push_back(actionDrop(j_new));
             any_dropped_ = true;
             logWarning(concatMsg("Variable ", j_new, " collinear; dropped."));
         } else {
             R_ = newR;
             actives_.push_back(j_new);
-            actions_this_step.push_back(static_cast<int>(j_new));
+            actions_this_step.push_back(actionAdd(j_new));
             num_additions_++;
             std::erase(inactives_, j_new);
             if (j_new >= dummy_start_idx_) count_active_dummies_++;

@@ -195,6 +195,13 @@ def test_fdp_all_false_positives():
     assert compute_fdp([2, 3], [0, 1]) == pytest.approx(1.0)
 
 
+def test_fdp_empty_true_support():
+    # Null model: no true actives → every selection is a false positive
+    assert compute_fdp([2, 3], []) == pytest.approx(1.0)
+    # No selections under the null model → FDP defined as 0
+    assert compute_fdp([], []) == pytest.approx(0.0)
+
+
 # ---------------------------------------------------------------------------
 # compute_tpp
 # ---------------------------------------------------------------------------

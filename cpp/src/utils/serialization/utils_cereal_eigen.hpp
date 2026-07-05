@@ -95,7 +95,7 @@ void save(Archive &ar, const Eigen::SparseMatrix<Scalar> &sm) {
     std::size_t cols = sm.cols();
     std::size_t nonZeros = sm.nonZeros();
     ar(rows, cols, nonZeros);
-    for (std::size_t k = 0; k < sm.outerSize(); ++k) {
+    for (Eigen::Index k = 0; k < sm.outerSize(); ++k) {
         for (typename Eigen::SparseMatrix<Scalar>::InnerIterator it(sm, k);
              it; ++it) {
              ar(it.row(), it.col(), it.value());
@@ -122,7 +122,9 @@ void load(Archive &ar, Eigen::SparseMatrix<Scalar> &sm) {
     std::vector<Eigen::Triplet<Scalar>> triplets;
     triplets.reserve(nonZeros);
     for (std::size_t i = 0; i < nonZeros; ++i) {
-        std::size_t row, col;
+        // Entry indices are written as Eigen::Index by save(); read the same
+        // type so the archive layout matches exactly.
+        Eigen::Index row, col;
         Scalar value;
         ar(row, col, value);
         triplets.emplace_back(row, col, value);

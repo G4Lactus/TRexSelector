@@ -160,7 +160,7 @@ TMP_Solver::updateActiveSet(const std::vector<std::size_t>& new_vars) {
                                          actives_.end(), j_new)
                                 != actives_.end());
 
-        actions_this_step.push_back(static_cast<int>(j_new));
+        actions_this_step.push_back(actionAdd(j_new));
 
         if (!already_active) {
             // New atom: append to active set, initialize coefficient to 0

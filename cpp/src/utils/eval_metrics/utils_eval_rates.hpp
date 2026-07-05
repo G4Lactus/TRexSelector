@@ -13,7 +13,6 @@
 // std includes
 #include <limits>
 #include <vector>
-#include <unordered_set>
 
 // Eigen includes
 #include <Eigen/Core>
@@ -53,16 +52,12 @@ inline double compute_fdp(
     const std::vector<std::size_t>& selected_indices,
     const std::vector<std::size_t>& true_support
 ) {
-    if (true_support.empty() || selected_indices.empty()) {
+    if (selected_indices.empty()) {
         return 0.0;
     }
 
-    // Convert true support to set for O(log n) lookup
-    std::unordered_set<std::size_t> true_support_set(
-        true_support.begin(), true_support.end()
-    );
-
     // Count false positives: selected but not in true support
+    // (empty true support means every selection is a false positive)
     std::size_t num_false_positives = eval::counts::false_positives_count(
         selected_indices, true_support
     );
@@ -88,12 +83,6 @@ inline double compute_tpp(
     if (true_support.empty() || selected_indices.empty()) {
         return 0.0;
     }
-
-    // Convert selected to set for O(log n) lookup
-    std::unordered_set<std::size_t> selected_set(
-        selected_indices.begin(),
-        selected_indices.end()
-    );
 
     // Count true positives: in true_support AND selected
     std::size_t num_true_positives = eval::counts::true_positives_count(

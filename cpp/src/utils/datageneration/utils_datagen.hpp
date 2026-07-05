@@ -18,6 +18,7 @@
 
 // std includes
 #include <algorithm>
+#include <cmath>
 #include <memory>
 #include <random>
 #include <stdexcept>
@@ -67,7 +68,11 @@ namespace predictor_policy {
     /** @brief Policy struct for AR(1) process (default rho=0.5). */
     struct AR1 {
         double rho;
-        explicit AR1(double rho = 0.5) : rho(rho) {}
+        explicit AR1(double rho = 0.5) : rho(rho) {
+            if (std::abs(rho) >= 1.0) {
+                throw std::invalid_argument("AR(1) rho must be in (-1, 1).");
+            }
+        }
     };
 
 } /* End of namespace predictor_policy */
@@ -199,9 +204,8 @@ namespace detail {
         unsigned int base_seed,
         const predictor_policy::AR1& policy
     ) {
-        double innovation_std = (std::abs(policy.rho) >= 1.0) ?
-                                1.0 :
-                                std::sqrt(std::max(0.0, 1.0 - policy.rho * policy.rho));
+        // Stationary AR(1): |rho| < 1 is enforced by the policy constructor
+        double innovation_std = std::sqrt(std::max(0.0, 1.0 - policy.rho * policy.rho));
 
         #pragma omp parallel for schedule(static)
         for (std::size_t i = 0; i < n; ++i) {

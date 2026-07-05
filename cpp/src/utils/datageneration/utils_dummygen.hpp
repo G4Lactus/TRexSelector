@@ -28,6 +28,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdint>
+#include <limits>
 #include <numbers>
 #include <numeric>
 #include <random>
@@ -603,8 +604,9 @@ inline void generate_dummies(
             double location = dist.gumbel_location;
             double scale = dist.gumbel_scale;
 
-            // Gumbel mean: location + scale * gamma
-            double adjusted_location = location + scale * std::numbers::egamma;
+            // std::extreme_value_distribution(a, b) has mean a + b * gamma, so
+            // shift a down by scale * gamma to center the samples at `location`.
+            double adjusted_location = location - scale * std::numbers::egamma;
             #pragma omp parallel for schedule(static)
             for (std::size_t j = 0; j < p; ++j) {
                 std::mt19937 gen(mix_seed(base_seed, j));
@@ -693,8 +695,10 @@ inline void generate_dummies(
                 std::size_t k = 2 * static_cast<std::size_t>(static_cast<double>(n) * s / 2.0);
 
                 // Handle ultra-sparse case (s < 2 / n)
-                // Ensure a minimum of 2 non-zeros for balance
+                // Ensure a minimum of 2 non-zeros for balance, but never more
+                // than n placements (n < 2 yields an all-zero column)
                 if (k < 2) { k = 2; }
+                if (k > n) { k = n - (n % 2); }
                 std::size_t k_half = k / 2;
 
                 // Initialize column to zeros
@@ -725,7 +729,9 @@ inline void generate_dummies(
             #pragma omp parallel for schedule (static)
             for (std::size_t j = 0; j < p; ++j) {
                 std::mt19937 gen(mix_seed(base_seed, j));
-                std::uniform_real_distribution<double> uniform_dist(0.0, 1.0);
+                // Lower bound excludes u = 0, which would map to -infinity
+                std::uniform_real_distribution<double> uniform_dist(
+                    std::numeric_limits<double>::min(), 1.0);
                 for (std::size_t i = 0; i < n; ++i) {
                     double u = uniform_dist(gen);
                     D(i, j) = location + scale * std::log(u / (1.0 - u));

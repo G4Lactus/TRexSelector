@@ -64,6 +64,12 @@ TEST(EvalMetricsTest, ComputeFDP) {
     // Empty selections should have 0 FDP
     EXPECT_DOUBLE_EQ(rates::compute_fdp({},
                                                    truth), 0.0);
+
+    // Null model: with no true actives, every selection is a false positive
+    EXPECT_DOUBLE_EQ(rates::compute_fdp(pred, {}), 1.0);
+
+    // Null model with no selections: FDP defined as 0
+    EXPECT_DOUBLE_EQ(rates::compute_fdp({}, {}), 0.0);
 }
 
 

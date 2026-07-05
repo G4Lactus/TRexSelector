@@ -93,8 +93,30 @@ TEST(NoiseGenTest, AddNoiseThrowsOnNegativeStd) {
 
     EXPECT_THROW(add_noise(y, 5, -1.0, noise_policy::Normal(), 123),
                  std::invalid_argument);
-    EXPECT_THROW(add_noise(y, 5, 0.0, noise_policy::Normal(), 123),
-                 std::invalid_argument);
+}
+
+
+/** @brief Tests that zero noise standard deviation is a no-op (noiseless / null model) */
+TEST(NoiseGenTest, AddNoiseZeroStdIsNoOp) {
+    Eigen::VectorXd y_base(5);
+    y_base.setOnes();
+
+    Eigen::VectorXd y = y_base;
+    add_noise(y, 5, 0.0, noise_policy::Normal(), 123);
+    EXPECT_TRUE(y.isApprox(y_base, 1e-15));
+
+    y = y_base;
+    add_noise(y, 5, 0.0, noise_policy::AR1(0.5), 123);
+    EXPECT_TRUE(y.isApprox(y_base, 1e-15));
+}
+
+
+/** @brief Tests that the AR(1) noise policy rejects non-stationary rho */
+TEST(NoiseGenTest, AR1PolicyValidation) {
+    EXPECT_NO_THROW(noise_policy::AR1(0.9));
+    EXPECT_NO_THROW(noise_policy::AR1(-0.9));
+    EXPECT_THROW(noise_policy::AR1(1.0), std::invalid_argument);
+    EXPECT_THROW(noise_policy::AR1(-1.5), std::invalid_argument);
 }
 
 // ========================================================================================

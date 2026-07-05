@@ -32,7 +32,7 @@ namespace trex::utils::eval::counts {
  *
  * @return Number of true positives.
  */
-std::size_t true_positives_count(
+inline std::size_t true_positives_count(
     const std::vector<std::size_t>& selected_indices,
     const std::vector<std::size_t>& true_support
 ) {
@@ -66,7 +66,7 @@ std::size_t true_positives_count(
  *
  * @return Number of false positives.
  */
-std::size_t false_positives_count(
+inline std::size_t false_positives_count(
     const std::vector<std::size_t>& selected_indices,
     const std::vector<std::size_t>& true_support
 ) {
@@ -99,7 +99,7 @@ std::size_t false_positives_count(
  *
  * @return Number of false negatives.
  */
-std::size_t false_negatives_count(
+inline std::size_t false_negatives_count(
     const std::vector<std::size_t>& selected_indices,
     const std::vector<std::size_t>& true_support
 ) {

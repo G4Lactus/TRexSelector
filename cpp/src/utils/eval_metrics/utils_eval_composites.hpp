@@ -25,7 +25,7 @@ namespace trex::utils::eval::composites {
  *
  * @return The computed F1 score.
  */
-double f1_score(
+inline double f1_score(
     double precision,
     double recall
 ) {

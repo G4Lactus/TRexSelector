@@ -332,7 +332,15 @@ public:
     /** @brief Return the residuals at the current step. */
     Eigen::VectorXd getResiduals() const noexcept { return r_; }
 
-    /** @brief Return the actions taken at each step. */
+    /**
+     * @brief Return the actions taken at each step.
+     *
+     * @details Entries follow the R `lars` convention: 1-based signed indices,
+     * i.e. +(j+1) records the addition and -(j+1) the removal of 0-based
+     * variable j. This keeps the sign meaningful for variable 0 and lets a
+     * future R interface pass the values through unchanged; 0-based consumers
+     * decode with |a| - 1.
+     */
     const std::vector<std::vector<int>>& getActions() const noexcept { return actions_; }
 
     /** @brief Return the indices of active variables at each step. */
@@ -376,6 +384,18 @@ protected:
     // ==========================================================================
     // Unified Internal Tools
     // ==========================================================================
+
+    /** @brief Encode the addition of 0-based variable @p j for actions_
+     *  (1-based signed, R lars convention; see getActions()). */
+    static constexpr int actionAdd(std::size_t j) noexcept {
+        return static_cast<int>(j) + 1;
+    }
+
+    /** @brief Encode the removal of 0-based variable @p j for actions_
+     *  (1-based signed, R lars convention; see getActions()). */
+    static constexpr int actionDrop(std::size_t j) noexcept {
+        return -(static_cast<int>(j) + 1);
+    }
 
     /**
      * @brief Unified index management. Returns an Eigen::Ref to the correct

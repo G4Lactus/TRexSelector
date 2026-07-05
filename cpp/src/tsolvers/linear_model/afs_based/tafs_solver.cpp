@@ -111,13 +111,13 @@ void TAFS_Solver::executeStep(std::size_t T_stop, bool early_stop) {
             if (last_updateR_rank_ == static_cast<int>(actives_.size())) {
                 last_updateR_rank_ = rankR_backup;
                 dropped_indices_.push_back(j_new);
-                actions_this_step.push_back(-static_cast<int>(j_new));
+                actions_this_step.push_back(actionDrop(j_new));
                 any_dropped_ = true;
                 logWarning(concatMsg("Variable ", j_new, " collinear; dropped."));
             } else {
                 R_ = newR;
                 actives_.push_back(j_new);
-                actions_this_step.push_back(static_cast<int>(j_new));
+                actions_this_step.push_back(actionAdd(j_new));
                 num_additions_++;
                 std::erase(inactives_, j_new);
                 if (j_new >= dummy_start_idx_) count_active_dummies_++;

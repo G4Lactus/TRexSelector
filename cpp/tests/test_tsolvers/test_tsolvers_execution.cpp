@@ -130,7 +130,7 @@ TEST_F(TSolverExecutionTest, MPAndGPReSelectAtoms) {
         std::map<int, int> counts;
         for (const auto& step : solver.getActions()) {
             for (int a : step) {
-                if (a >= 0) { counts[a]++; }
+                if (a > 0) { counts[a]++; } // Additions are positive 1-based indices
             }
         }
         int max_count = 0;
@@ -291,14 +291,16 @@ TEST_F(TSolverExecutionTest, LassoZeroCrossingDropsBehaveConsistently) {
     const auto& actions = solver.getActions();
     EXPECT_EQ(actions.size(), solver.getRSS().size() - 1);
 
-    // Every drop must zero the coefficient at its step (beta column k+1)
+    // Every drop must zero the coefficient at its step (beta column k+1).
+    // Actions are 1-based signed indices; decode drops with -a - 1.
     Eigen::MatrixXd path = solver.getBetaPath();
     for (std::size_t k = 0; k < actions.size(); ++k) {
         for (int a : actions[k]) {
             if (a < 0) {
-                EXPECT_EQ(path(static_cast<Eigen::Index>(-a),
+                EXPECT_EQ(path(static_cast<Eigen::Index>(-a) - 1,
                                 static_cast<Eigen::Index>(k + 1)), 0.0)
-                    << "dropped variable " << -a << " has nonzero beta at step " << k + 1;
+                    << "dropped variable " << (-a - 1)
+                    << " has nonzero beta at step " << k + 1;
             }
         }
     }
