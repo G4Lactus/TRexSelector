@@ -9,6 +9,8 @@
 #include <Eigen/Dense>
 
 // std includes
+#include <algorithm>
+#include <random>
 #include <stdexcept>
 #include <vector>
 
@@ -57,6 +59,84 @@ protected:
     TRexSPCATest()
         : X(Eigen::MatrixXd::Random(n, p)),
           X_map(X.data(), n, p) {}
+
+    /** @brief Deterministic single-factor design engineered so the GVS active
+     *         set of PC1 and the top-|A| ordinary-loading support diverge.
+     *
+     *  Ordinary loadings rank variables by covariance with z_1 (X^T z_1 is
+     *  proportional to v_1), while the GVS sub-selector ranks by normalized
+     *  correlation. The design therefore plants, next to the strong factor
+     *  columns {0, 1, 2}:
+     *    - columns {3, 4, 5}: tiny norm, near-unit correlation with the factor
+     *      (GVS selects them, but their ordinary loadings are small), and
+     *    - columns {6, 7, 8}: large norm, weak correlation (GVS rejects them,
+     *      but their ordinary loadings can outrank columns {3, 4, 5}).
+     *  The remaining columns are pure noise, so that the FDR-controlled active
+     *  set is a proper subset of {1, ..., p} (with very small p the selector
+     *  admits every column and the two supports trivially coincide).
+     *  Uses its own RNG rather than Eigen::Random so the design is independent
+     *  of test order. */
+    static constexpr Eigen::Index n_f = 40;
+    static constexpr Eigen::Index p_f = 20;
+
+    static Eigen::MatrixXd plantedFactorX() {
+        std::mt19937 rng(7u);
+        std::normal_distribution<double> N01(0.0, 1.0);
+
+        Eigen::VectorXd z(n_f);
+        for (Eigen::Index i = 0; i < n_f; ++i) {
+            z(i) = 3.0 * N01(rng);
+        }
+
+        Eigen::MatrixXd Xf(n_f, p_f);
+        for (Eigen::Index j = 0; j < p_f; ++j) {
+            for (Eigen::Index i = 0; i < n_f; ++i) {
+                Xf(i, j) = N01(rng);
+            }
+        }
+        for (Eigen::Index j = 0; j < 3; ++j) {
+            Xf.col(j) = 0.9 * z + 0.3 * Xf.col(j);   // strong factor columns
+        }
+        for (Eigen::Index j = 3; j < 6; ++j) {
+            Xf.col(j) = 0.05 * z + 0.02 * Xf.col(j); // tiny norm, corr ~ 1
+        }
+        for (Eigen::Index j = 6; j < 9; ++j) {
+            Xf.col(j) = 0.05 * z + 1.5 * Xf.col(j);  // large norm, weak corr
+        }
+        return Xf;                                   // cols 9..19: pure noise
+    }
+
+    /** @brief Shared invariant check: after select(), Z must equal
+     *         X_centered * V (scores computed over the full support of V, not
+     *         merely the GVS active set), and every assembled loading column
+     *         must be L2-normalized. */
+    static void expectScoresMatchCenteredXTimesV(SPCAMode mode) {
+        Eigen::MatrixXd Xf = plantedFactorX();
+        Eigen::Map<Eigen::MatrixXd> Xf_map(Xf.data(), n_f, p_f);
+
+        TRexSPCA spca(Xf_map, M, 0.1, fast_ctrl(mode), seed);
+        auto result = spca.select();
+
+        // The planted factor must be picked up, otherwise the invariant below
+        // would only be checked on the trivial all-zero support.
+        ASSERT_FALSE(result.active_sets[0].empty());
+
+        const Eigen::RowVectorXd mu = Xf.colwise().mean();
+        const Eigen::MatrixXd Xc = Xf.rowwise() - mu;
+        const Eigen::MatrixXd Z_expected = Xc * result.V;
+
+        EXPECT_LE((result.Z - Z_expected).norm(),
+                  1e-10 * std::max(1.0, Z_expected.norm()))
+            << "Z != X_centered * V for mode "
+            << (mode == SPCAMode::ActiveSet ? "ActiveSet" : "Thresholded");
+
+        for (Eigen::Index m = 0; m < M; ++m) {
+            const double norm_m = result.V.col(m).norm();
+            if (norm_m > 0.0) {
+                EXPECT_NEAR(norm_m, 1.0, 1e-12);
+            }
+        }
+    }
 };
 
 
@@ -160,6 +240,24 @@ TEST_F(TRexSPCATest, ExplainedVariance_CumulativeMonotoneInUnitInterval) {
         EXPECT_LE(cum, 1.0 + 1e-12);
         prev = cum;
     }
+}
+
+
+// ========================================================================================
+// Score / loading consistency
+// ========================================================================================
+
+/** @brief ActiveSet mode: Z == X_centered * V and V columns are unit-norm. */
+TEST_F(TRexSPCATest, Scores_MatchCenteredXTimesV_ActiveSet) {
+    expectScoresMatchCenteredXTimesV(SPCAMode::ActiveSet);
+}
+
+
+/** @brief Thresholded mode: Z == X_centered * V even when the thresholded
+ *         support of V differs from the GVS active set (regression test for
+ *         the score loop formerly iterating over the active set only). */
+TEST_F(TRexSPCATest, Scores_MatchCenteredXTimesV_Thresholded) {
+    expectScoresMatchCenteredXTimesV(SPCAMode::Thresholded);
 }
 
 

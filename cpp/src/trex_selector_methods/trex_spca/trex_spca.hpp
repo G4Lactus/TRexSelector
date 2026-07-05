@@ -66,19 +66,29 @@ enum class SPCAMode {
  * @brief Container for final sparse PCA components.
  */
 struct TRexSPCAResult {
-    /** @brief Sparse PC score matrix (n x M). */
+    /** @brief Sparse PC score matrix (n x M); Z.col(m) = X_centered * V.col(m). */
     Eigen::MatrixXd Z;
 
-    /** @brief Sparse loading matrix (p x M). */
+    /** @brief Sparse loading matrix (p x M), columns L2-normalized.
+     *
+     *  In ActiveSet mode the nonzero support of column m equals active_sets[m].
+     *  In Thresholded mode it is the set of top-|active_sets[m]| ordinary PCA
+     *  loadings, which generally differs from active_sets[m]. */
     Eigen::MatrixXd V;
 
-    /** @brief Support indices per PC. */
+    /** @brief FDR-controlled support indices per PC, as returned by the GVS
+     *  sub-selector. Note: in Thresholded mode this is NOT necessarily the
+     *  nonzero support of the corresponding column of V (see V). */
     std::vector<std::vector<Eigen::Index>> active_sets;
 
-    /** @brief Marginal adjusted explained variance per component (M x 1). */
+    /** @brief Marginal adjusted explained variance per component (M x 1),
+     *  i.e. r_mm^2 / (n - 1) from the QR decomposition of Z. */
     Eigen::VectorXd adjusted_ev;
 
-    /** @brief Cumulative percentage of explained variance (M x 1). */
+    /** @brief Cumulative adjusted explained variance as a fraction of the
+     *  total variance of centered X (M x 1). Note: this is not the oracle
+     *  PEV of Definition 1 in the T-Rex SPCA paper, whose denominator
+     *  (Signal EV + Mixed EV) requires the true support. */
     Eigen::VectorXd cumulative_ev;
 };
 
@@ -118,10 +128,14 @@ struct TRexSPCAControlParameter {
      *  internally (matching en_solver). (IEN is not used by TRexSPCA.)
      *
      *  The GVS ridge penalty is controlled via:
-     *    - gvs_ctrl.lambda_2       : set > 0.0 to supply a fixed value; 0.0 (default)
-     *                                triggers auto-determination.
+     *    - gvs_ctrl.lambda_2       : < 0 (default -1.0) is the "not supplied"
+     *                                sentinel and triggers auto-determination;
+     *                                == 0 is the degenerate pure T-LASSO case
+     *                                (no ridge, no grouping effect);
+     *                                > 0 supplies a fixed penalty in LARS units.
      *    - gvs_ctrl.lambda2_method : selects the auto-determination strategy
-     *                                (GCV, CV_MIN, CV_1SE; default: CV_1SE).
+     *                                (CV_1SE_SVD, CV_MIN_SVD, CV_1SE_CCD,
+     *                                CV_MIN_CCD; default: CV_1SE_CCD).
      */
     tg::TRexGVSControlParameter gvs_ctrl;
 
@@ -164,7 +178,8 @@ struct TRexSPCAControlParameter {
  *    3. Assemble the sparse loading vector v_m:
  *       - SPCAMode::ActiveSet:   Ridge regression of z_m on X_{A_m}, normalized.
  *       - SPCAMode::Thresholded: Top |A_m| ordinary loadings, normalized.
- *    4. Compute sparse PC scores: Z_m = X_{A_m} * v_m.
+ *    4. Compute sparse PC scores: Z_m = X * v_m (over the nonzero support of
+ *       v_m, which in Thresholded mode may differ from A_m).
  *
  *  After all M components are assembled, explained variance is adjusted for
  *  non-orthogonality via a QR decomposition of the full score matrix Z.

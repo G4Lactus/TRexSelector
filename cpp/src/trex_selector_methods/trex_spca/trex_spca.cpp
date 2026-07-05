@@ -162,9 +162,15 @@ TRexSPCAResult TRexSPCA::select() {
                 result_.V.col(m));
         }
 
-        // 5. Compute sparse PC scores: z_hat_m = X_{A_m} * v_hat_m.
-        for (Eigen::Index idx : active_set) {
-            result_.Z.col(m) += X_->col(idx) * result_.V(idx, m);
+        // 5. Compute sparse PC scores: z_hat_m = X * v_hat_m, iterating over the
+        //    nonzero support of v_hat_m. In ActiveSet mode that support equals
+        //    A_m; in Thresholded mode it is the top-|A_m| ordinary loadings,
+        //    which generally differs from A_m.
+        for (Eigen::Index j = 0; j < p; ++j) {
+            const double v_jm = result_.V(j, m);
+            if (v_jm != 0.0) {
+                result_.Z.col(m) += X_->col(j) * v_jm;
+            }
         }
     }
 
