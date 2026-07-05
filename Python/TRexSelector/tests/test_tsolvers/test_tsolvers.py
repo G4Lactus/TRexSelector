@@ -372,3 +372,44 @@ def test_beta_path_first_col_is_zero(solver_data, factory):
     assert np.allclose(path[:, 0], 0.0), (
         f"{factory.__name__}: betaPath[:, 0] is not zero: {path[:, 0]}"
     )
+
+
+# ---------------------------------------------------------------------------
+# Tie-breaking seed (reproducibility API)
+# ---------------------------------------------------------------------------
+
+@pytest.mark.parametrize("factory", STANDARD_SOLVER_FACTORIES,
+                         ids=[f.__name__ for f in STANDARD_SOLVER_FACTORIES])
+def test_set_tie_seed(solver_data, factory):
+    """setTieSeed must be exposed on every solver and not interfere with execution."""
+    X, D, y, n, p = solver_data
+    solver = factory(X, D, y)
+    solver.setTieSeed(42)
+    solver.executeStep(2, True)
+    assert solver.getNumSteps() > 0
+
+
+# ---------------------------------------------------------------------------
+# TENETAug diagnostics (regression: inherited getters must mirror the inner solver)
+# ---------------------------------------------------------------------------
+
+def test_tenet_aug_diagnostics_reflect_inner_solver(solver_data):
+    """TENETAug historically returned empty diagnostics (getRSS() == [],
+    getNumSteps() == 0) because its inherited base state was never populated."""
+    X, D, y, n, p = solver_data
+    solver = make_tenet_aug(X, D, y)
+    solver.setTieSeed(7)
+    solver.executeStep(2, True)
+
+    assert solver.getNumSteps() > 0
+    rss = solver.getRSS()
+    assert len(rss) == solver.getNumSteps() + 1
+    assert rss[0] > rss[-1]
+    assert len(solver.getActives()) > 0
+    assert len(solver.getActions()) == solver.getNumSteps()
+    assert solver.getDummyStartIndex() == p
+    assert solver.isConnected()
+
+    # Exactly T_stop dummies must have entered the active set
+    active_dummies = [j for j in solver.getActives() if j >= p]
+    assert len(active_dummies) == 2
