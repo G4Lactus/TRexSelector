@@ -111,7 +111,7 @@ class TRexControlParameter:
     use_max_T_stop: bool
     opt_threshold: float
     lloop_strategy: LLoopStrategy
-    tloop_stagnation_stop: bool
+    tloop_stagnation_stop: bool | None
     tloop_max_stagnant_steps: int
     parallel_rnd_experiments: bool
     use_memory_mapping: bool

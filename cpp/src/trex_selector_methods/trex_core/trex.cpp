@@ -73,6 +73,12 @@ TRexSelector::TRexSelector(
     trex_ctrl_([&]() {
         auto ctrl = trex_control;
         ctrl.autoConfigResources();
+        // Resolve the AUTO stagnation default by solver family: greedy
+        // solvers need the noise-trap guard; equiangular LARS-path solvers
+        // terminate properly on their own (R reference / paper behavior).
+        if (!ctrl.tloop_stagnation_stop.has_value()) {
+            ctrl.tloop_stagnation_stop = isGreedySolver(ctrl.solver_type);
+        }
         return ctrl;
     }()),
     seed_(seed),
@@ -233,26 +239,16 @@ void TRexSelector::validateTRexParameters() const {
             + std::to_string(trex_ctrl_.solver_params.ncgmp_variant));
     }
 
-    // Warn when stagnation detection is disabled for greedy solvers.
-    if (!trex_ctrl_.tloop_stagnation_stop) {
-        const sd::SolverTypeForTRex st = trex_ctrl_.solver_type;
-        const bool is_greedy =
-            st == sd::SolverTypeForTRex::TSTAGEWISE ||
-            st == sd::SolverTypeForTRex::TSTEPWISE  ||
-            st == sd::SolverTypeForTRex::TOMP       ||
-            st == sd::SolverTypeForTRex::TGP        ||
-            st == sd::SolverTypeForTRex::TACGP      ||
-            st == sd::SolverTypeForTRex::TMP        ||
-            st == sd::SolverTypeForTRex::TNCGMP     ||
-            st == sd::SolverTypeForTRex::TOOLS      ||
-            st == sd::SolverTypeForTRex::TAFS;
-        if (is_greedy) {
-            TREX_WARN( "[TRexSelector Warning] tloop_stagnation_stop is disabled "
-                         "for a greedy solver. Greedy solvers tend to run into a noise trap "
-                         "and select until all allowed dummies are selected. "
-                         "Convergence without stagnation detection is not guaranteed. Consider "
-                         "re-enabling it." );
-        }
+    // Warn when stagnation detection is (explicitly) disabled for greedy
+    // solvers. The AUTO default never triggers this: it resolves to enabled
+    // for exactly the solvers isGreedySolver() flags.
+    if (!trex_ctrl_.tloop_stagnation_stop.value_or(false) &&
+        isGreedySolver(trex_ctrl_.solver_type)) {
+        TREX_WARN( "[TRexSelector Warning] tloop_stagnation_stop is disabled "
+                     "for a greedy solver. Greedy solvers tend to run into a noise trap "
+                     "and select until all allowed dummies are selected. "
+                     "Convergence without stagnation detection is not guaranteed. Consider "
+                     "re-enabling it." );
     }
 }
 
@@ -1169,8 +1165,9 @@ void TRexSelector::runTLoop(
         appendTRow(row_idx, view);
         ++row_idx;
 
-        // Stagnation check
-        if (trex_ctrl_.tloop_stagnation_stop && T_stop_ > 1) {
+        // Stagnation check (AUTO already resolved by solver family in the
+        // constructor)
+        if (trex_ctrl_.tloop_stagnation_stop.value_or(false) && T_stop_ > 1) {
             if (num_selected <= prev_num_selected) {
                 ++stagnant_iterations;
                 if (stagnant_iterations >= trex_ctrl_.tloop_max_stagnant_steps) {

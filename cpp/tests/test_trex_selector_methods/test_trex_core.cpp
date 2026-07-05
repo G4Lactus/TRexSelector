@@ -9,6 +9,7 @@
 #include <Eigen/Dense>
 
 // std includes
+#include <optional>
 #include <vector>
 
 // project trex includes
@@ -224,6 +225,43 @@ TEST(TRexCoreTest, DataIntegrity_XRestoredOnDestruction) {
 
     EXPECT_TRUE(X.isApprox(X_copy, 1e-12))
         << "X was not restored by TRexSelector destructor.";
+}
+
+
+// ========================================================================================
+// Stagnation-stop AUTO default (resolved by solver family in the constructor)
+// ========================================================================================
+
+/** @brief The AUTO default disables stagnation control for equiangular
+ *         LARS-path solvers (R reference / paper behavior) and enables it for
+ *         greedy solvers (noise-trap guard); an explicit value always wins. */
+TEST(TRexCoreTest, StagnationStop_AutoDefaultResolvesBySolverFamily) {
+    Eigen::MatrixXd X = Eigen::MatrixXd::Random(30, 10);
+    Eigen::VectorXd y = Eigen::VectorXd::Random(30);
+    Eigen::Map<Eigen::MatrixXd> X_map(X.data(), X.rows(), X.cols());
+    Eigen::Map<Eigen::VectorXd> y_map(y.data(), y.size());
+
+    auto resolved_default = [&](sd::SolverTypeForTRex solver,
+                                std::optional<bool> user_choice) {
+        TRexControlParameter ctrl;
+        ctrl.K = 3;
+        ctrl.solver_type = solver;
+        ctrl.tloop_stagnation_stop = user_choice;
+        TRexSelector trex(X_map, y_map, 0.1, ctrl, 42, false);
+        return trex.getStagnationCheck();
+    };
+
+    // AUTO: off for the equiangular LARS family, on for greedy solvers.
+    EXPECT_FALSE(resolved_default(sd::SolverTypeForTRex::TLARS,  std::nullopt));
+    EXPECT_FALSE(resolved_default(sd::SolverTypeForTRex::TLASSO, std::nullopt));
+    EXPECT_FALSE(resolved_default(sd::SolverTypeForTRex::TENET,  std::nullopt));
+    EXPECT_TRUE(resolved_default(sd::SolverTypeForTRex::TOMP,    std::nullopt));
+    EXPECT_TRUE(resolved_default(sd::SolverTypeForTRex::TSTEPWISE, std::nullopt));
+    EXPECT_TRUE(resolved_default(sd::SolverTypeForTRex::TAFS,    std::nullopt));
+
+    // Explicit user choice overrides the family default in both directions.
+    EXPECT_TRUE(resolved_default(sd::SolverTypeForTRex::TLARS, true));
+    EXPECT_FALSE(resolved_default(sd::SolverTypeForTRex::TOMP, false));
 }
 
 

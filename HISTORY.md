@@ -59,6 +59,14 @@
   an end-to-end memory-mapped vs. in-memory run that asserts the T-loop
   actually continues), DIRECT seed handling; fixed a checkpoint filename race
   between the typed serialization tests under parallel ctest.
+- `tloop_stagnation_stop` is now tri-state (`std::optional<bool>`, Python:
+  `bool | None`). The default (auto) resolves by solver family: DISABLED for
+  the equiangular LARS-path solvers (TLARS/TLASSO/TENET/TENET_AUG), which
+  terminate properly on their own — matching the R reference and the T-Rex
+  paper, neither of which has a stagnation stop — and ENABLED for greedy
+  solvers, which otherwise run into a noise trap and select until the
+  maximum number of dummies is reached. An explicit true/false overrides the
+  family default.
 - Cleanups from the review follow-up: the voting-grid sentinel uses machine
   epsilon instead of the solver tolerance (a large user tol with K >= 100
   could make the grid non-monotone; also matches the R reference grid); the

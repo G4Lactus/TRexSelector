@@ -280,7 +280,11 @@ inline void bind_trex_core(py::module& m_tsm) {
         .def_readwrite("use_max_T_stop", &TRexControlParameter::use_max_T_stop, "If true, always run solvers to T_stop regardless of early stopping.")
         .def_readwrite("opt_threshold", &TRexControlParameter::opt_threshold, "Voting threshold parameter (default 0.75).")
         .def_readwrite("lloop_strategy", &TRexControlParameter::lloop_strategy, "L-loop strategy for constructing dummy variables.")
-        .def_readwrite("tloop_stagnation_stop", &TRexControlParameter::tloop_stagnation_stop, "If true, stop the T-loop early when stagnation is detected.")
+        .def_readwrite("tloop_stagnation_stop", &TRexControlParameter::tloop_stagnation_stop,
+                       "T-loop early stopping on support-set stagnation. None (default) resolves "
+                       "by solver family: disabled for equiangular LARS-path solvers "
+                       "(TLARS/TLASSO/TENET/TENET_AUG, matching the R reference), enabled for "
+                       "greedy solvers (guards their noise trap). Set True/False to override.")
         .def_readwrite("tloop_max_stagnant_steps", &TRexControlParameter::tloop_max_stagnant_steps, "Maximum consecutive stagnant T-loop steps before early stopping.")
         .def_readwrite("parallel_rnd_experiments", &TRexControlParameter::parallel_rnd_experiments, "Run K random experiments in parallel using OpenMP.")
         .def_readwrite("use_memory_mapping",  &TRexControlParameter::use_memory_mapping,  "Use out-of-core memory-mapped dummy matrix.")

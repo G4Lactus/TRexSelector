@@ -14,6 +14,7 @@
 // std includes
 #include <cstddef>
 #include <functional>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -60,6 +61,32 @@ namespace dummygen = trex::utils::datageneration::dummygen;
  *          -ffinite-math-only).
  */
 inline constexpr double AUTO_ESTIMATE_CORRELATION = -2.0;
+
+/**
+ * @brief Whether a solver is greedy (non-equiangular forward selection).
+ *
+ * @details Greedy solvers tend to run into a noise trap in the T-loop: they
+ *          keep admitting variables until the maximum number of dummies is
+ *          selected instead of terminating. Only the equiangular LARS-path
+ *          solvers (TLARS and its derivatives TLASSO / TENET / TENET_AUG)
+ *          are free of this behavior. Used to resolve the AUTO default of
+ *          TRexControlParameter::tloop_stagnation_stop and for the
+ *          corresponding validation warning.
+ */
+inline constexpr bool isGreedySolver(
+    trex::trex_selector_methods::utils::solver_dispatch::SolverTypeForTRex st) noexcept
+{
+    namespace sdx = trex::trex_selector_methods::utils::solver_dispatch;
+    switch (st) {
+        case sdx::SolverTypeForTRex::TLARS:
+        case sdx::SolverTypeForTRex::TLASSO:
+        case sdx::SolverTypeForTRex::TENET:
+        case sdx::SolverTypeForTRex::TENET_AUG:
+            return false;
+        default:
+            return true;
+    }
+}
 
 // ===================================================================================
 // Enums & Control Structures
@@ -126,8 +153,17 @@ struct TRexControlParameter {
     // T-Loop Early Stopping
     // ==================================
 
-    /** @brief If true, perform early stopping if support set stagnates (default: true). */
-    bool tloop_stagnation_stop = true;
+    /** @brief T-loop early stopping when the support set stagnates.
+     *
+     *  Tri-state: std::nullopt (default, "auto") resolves by solver family in
+     *  the TRexSelector constructor — DISABLED for the equiangular LARS-path
+     *  solvers (TLARS, TLASSO, TENET, TENET_AUG), which terminate properly on
+     *  their own (matching the R reference and the T-Rex paper, neither of
+     *  which has a stagnation stop), and ENABLED for greedy solvers, which
+     *  otherwise run into a noise trap and select until the maximum number of
+     *  dummies is reached. Set an explicit true/false to override.
+     */
+    std::optional<bool> tloop_stagnation_stop = std::nullopt;
 
     /** @brief Number of stagnant steps to trigger early T-loop stopping.
      *  Recommendation: Pick from {3, 5, 7} (default: 5).
@@ -461,8 +497,11 @@ public:
     /** @brief Check if maximum stopping time is used. */
     bool getMaxTStop() const noexcept { return trex_ctrl_.use_max_T_stop; }
 
-    /** @brief Check if stagnation check is enabled. */
-    bool getStagnationCheck() const noexcept { return trex_ctrl_.tloop_stagnation_stop; }
+    /** @brief Check if stagnation check is enabled (AUTO is resolved by
+     *  solver family in the constructor, so this is always definite). */
+    bool getStagnationCheck() const noexcept {
+        return trex_ctrl_.tloop_stagnation_stop.value_or(false);
+    }
 
     // ============================================================
     // Public Getters — Normalization
