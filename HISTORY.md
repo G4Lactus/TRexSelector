@@ -59,6 +59,18 @@
   an end-to-end memory-mapped vs. in-memory run that asserts the T-loop
   actually continues), DIRECT seed handling; fixed a checkpoint filename race
   between the typed serialization tests under parallel ctest.
+- Cleanups from the review follow-up: the voting-grid sentinel uses machine
+  epsilon instead of the solver tolerance (a large user tol with K >= 100
+  could make the grid non-monotone; also matches the R reference grid); the
+  AR1 window fallback for an exactly-zero correlation estimate is the
+  formula's limit (±1 window) instead of the full window; the
+  equi-correlation estimator excludes near-constant columns from the pair
+  count; warm-start solvers are invalidated before the dummy matrices they
+  view are mutated (STANDARD/HCONCAT), with the buffer-reallocation contract
+  documented on the DummyGenerator; dead validation branches removed; the
+  Yule-Walker vs. `arima(..., method="ML")` auto-estimation difference for
+  the AR1 `cor_coef` is documented on the parameter and covered by a
+  known-rho recovery test.
 
 ## TRexSelector 2.0.0
 

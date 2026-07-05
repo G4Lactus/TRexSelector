@@ -617,8 +617,15 @@ void TRexDASelector::setupDA_AR1() {
     if (da_setup_.cor_coef > 0.0 && da_setup_.cor_coef < 1.0 && trex_da_ctrl_.rho_thr_DA > 0.0) {
         da_setup_.kap = static_cast<std::size_t>(
             std::ceil(std::log(trex_da_ctrl_.rho_thr_DA) / std::log(da_setup_.cor_coef)));
+    } else if (da_setup_.cor_coef == 0.0 && trex_da_ctrl_.rho_thr_DA > 0.0) {
+        // Limit of the formula as cor_coef -> 0+ (the log ratio tends to 0+,
+        // so ceil gives 1): minimal +/-1 window, NOT the full-window fallback
+        // (uncorrelated predictors need no wide deflation window).
+        da_setup_.kap = 1;
     } else {
-        da_setup_.kap = p_;  // fallback: full window
+        // cor_coef >= 1 (perfect correlation) or rho_thr_DA == 0 (every lag
+        // exceeds the threshold): full window.
+        da_setup_.kap = p_;
     }
 
     if (verbose_) {
@@ -713,18 +720,26 @@ double TRexDASelector::estimateEquiCorrelation() const {
     const auto p = static_cast<Eigen::Index>(p_);
 
     // Accumulate the row sums of the unit-norm columns: Σ_j x_j / ||x_j||.
+    // Near-zero-norm (constant) columns have no defined correlation; they are
+    // excluded from the accumulation AND from the pair count below, so they
+    // do not bias the mean towards zero.
     Eigen::VectorXd row_sums = Eigen::VectorXd::Zero(X_->rows());
+    Eigen::Index num_valid = 0;
     for (Eigen::Index j = 0; j < p; ++j) {
         const double norm_j = X_->col(j).norm();
         if (norm_j > eps_) {
             row_sums += X_->col(j) / norm_j;
+            ++num_valid;
         }
     }
-    const double sum_all = row_sums.squaredNorm();
+    if (num_valid < 2) { return 0.0; }  // no correlated pair exists
 
-    // Mean off-diagonal = (Σ_all - diag_sum) / (p * (p - 1)), diag_sum = p.
-    return (sum_all - static_cast<double>(p)) /
-           (static_cast<double>(p) * (static_cast<double>(p) - 1.0));
+    const double sum_all = row_sums.squaredNorm();
+    const double q = static_cast<double>(num_valid);
+
+    // Mean off-diagonal = (Σ_all - diag_sum) / (q * (q - 1)), diag_sum = q
+    // (each valid unit-norm column contributes u_j · u_j = 1).
+    return (sum_all - q) / (q * (q - 1.0));
 }
 
 

@@ -9,6 +9,8 @@
 #include <Eigen/Dense>
 
 // std includes
+#include <cmath>
+#include <random>
 #include <vector>
 
 // project trex includes
@@ -361,6 +363,63 @@ TEST(TRexDATest, DataIntegrity_XRestoredOnDestruction) {
 
     EXPECT_TRUE(X.isApprox(X_copy, 1e-12))
         << "X was not restored by TRexDASelector destructor.";
+}
+
+
+// ========================================================================================
+// Correlation estimation
+// ========================================================================================
+
+namespace {
+
+/** @brief Probe exposing the protected correlation estimators for testing. */
+class TRexDASelectorProbe : public TRexDASelector {
+public:
+    using TRexDASelector::TRexDASelector;
+    using TRexDASelector::estimateAR1Correlation;
+};
+
+} // namespace
+
+
+/** @brief The row-wise Yule-Walker AR(1) estimator recovers a known rho.
+ *
+ *  Tolerance context: the estimator approximates the R reference (per-row
+ *  `arima(..., method = "ML")` averaged over rows); both are consistent, so
+ *  on a long synthetic AR(1) design the estimate must sit close to the truth.
+ */
+TEST(TRexDATest, Estimation_AR1YuleWalkerRecoversKnownRho) {
+    const Eigen::Index n = 100;
+    const Eigen::Index p = 400;
+    const double rho = 0.7;
+
+    // Row-stationary AR(1) across the ordered predictors.
+    std::mt19937 rng(123);
+    std::normal_distribution<double> N01(0.0, 1.0);
+    const double innov_sd = std::sqrt(1.0 - rho * rho);
+
+    Eigen::MatrixXd X(n, p);
+    for (Eigen::Index i = 0; i < n; ++i) {
+        X(i, 0) = N01(rng);
+        for (Eigen::Index t = 1; t < p; ++t) {
+            X(i, t) = rho * X(i, t - 1) + innov_sd * N01(rng);
+        }
+    }
+    Eigen::VectorXd y = Eigen::VectorXd::Zero(n);  // unused by the estimator
+
+    Eigen::Map<Eigen::MatrixXd> X_map(X.data(), X.rows(), X.cols());
+    Eigen::Map<Eigen::VectorXd> y_map(y.data(), y.size());
+
+    TRexDAControlParameter da_ctrl;
+    da_ctrl.method = DAMethod::AR1;
+
+    // The constructor normalizes X in place; the estimator runs on the
+    // normalized data, exactly as setupDA_AR1() would invoke it.
+    TRexDASelectorProbe trex(X_map, y_map, 0.1, da_ctrl, 42, false);
+
+    const double est = trex.estimateAR1Correlation();
+    EXPECT_NEAR(est, rho, 0.05)
+        << "Yule-Walker AR(1) estimate drifted from the true coefficient.";
 }
 
 // ========================================================================================

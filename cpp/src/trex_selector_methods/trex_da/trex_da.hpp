@@ -119,7 +119,14 @@ struct TRexDAControlParameter {
     DAMethod method = DAMethod::BT;
 
     /** @brief Correlation coefficient for AR1/EQUI.
-     * AUTO_ESTIMATE_CORRELATION = auto-estimate from X.
+     *  AUTO_ESTIMATE_CORRELATION = auto-estimate from X.
+     *
+     *  @note Auto-estimation details: for EQUI, the mean of all pairwise
+     *  Pearson correlations (identical to the R reference). For AR1, the
+     *  per-row lag-1 Yule-Walker autocorrelation averaged over rows; the R
+     *  reference instead fits a per-row AR(1) via `arima(..., method="ML")`.
+     *  The two estimators agree asymptotically but can differ slightly on
+     *  short rows — supply cor_coef explicitly for exact R parity.
      */
     double cor_coef = tc::AUTO_ESTIMATE_CORRELATION;
 

@@ -695,7 +695,16 @@ private:
 
             // For each T from 1 to T_stop
             for (std::size_t t = 1; t <= T_stop; ++t) {
-                // Note: R uses strict equality (== t), we use >= t for robustness
+                // Note: R uses strict equality (== t), we use >= t for
+                // robustness (greedy solvers can admit several dummies in one
+                // step, skipping the exact count).
+                //
+                // Deliberate difference to R when NO step reaches t dummies
+                // (solver terminated early): R falls back to the LAST path
+                // column with a warning, inflating Phi with whatever was
+                // active at termination; we skip the experiment for this t
+                // (zero contribution), which biases Phi downward and is the
+                // conservative choice.
                 std::size_t step_idx = num_steps - 1;
                 bool found = false;
                 for (std::size_t s = 0; s < num_steps; ++s) {

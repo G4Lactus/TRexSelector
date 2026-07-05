@@ -200,12 +200,6 @@ void TRexSelector::validateTRexParameters() const {
             + std::to_string(trex_ctrl_.opt_threshold));
     }
 
-        if (trex_ctrl_.tloop_max_stagnant_steps < 0) {
-        throw std::invalid_argument(
-            "tloop_max_stagnant_steps must be >= 0. Got: "
-            + std::to_string(trex_ctrl_.tloop_max_stagnant_steps));
-    }
-
     if (trex_ctrl_.max_outer_threads < 1) {
         throw std::invalid_argument(
             "max_outer_threads must be >= 1. Got: "
@@ -397,7 +391,12 @@ er::ExperimentRunnerConfig TRexSelector::buildRunnerConfig(
 
 Eigen::VectorXd TRexSelector::createVotingGrid() const {
     const double v_start = 0.5;
-    const double v_end   = 1.0 - eps_;
+    // Machine epsilon on purpose (not eps_ = solver tolerance): the sentinel
+    // must stay above the last regular grid point 1 - 1/K for any K, which a
+    // large user-supplied solver tol (e.g. 1e-2 with K >= 100) would violate,
+    // making the grid non-monotone. This also matches the R reference
+    // (V = seq(0.5, 1 - .Machine$double.eps, by = 1/K)).
+    const double v_end   = 1.0 - std::numeric_limits<double>::epsilon();
     const double v_step  = 1.0 / static_cast<double>(trex_ctrl_.K);
 
     // Regular grid points: 0.5, 0.5 + 1/K, ... strictly below 1.0.
@@ -602,7 +601,9 @@ TRexSelector::SelectionResult TRexSelector::selectedVariables(
         }
     }
 
-    if (fpc::isinf(val_max) || val_max < 0) {
+    // val_max < 0 means no cell satisfied FDP_hat <= tFDR (it keeps its
+    // -1.0 initialisation): return an empty selection.
+    if (val_max < 0) {
         SelectionResult result;
         result.selected_var = Eigen::VectorXi::Zero(static_cast<Eigen::Index>(p_));
         result.v_thresh = 1.0;
@@ -714,11 +715,14 @@ void TRexSelector::prepareDummiesForLStep(LStepContext& ctx) {
             break;
         }
         case LLoopStrategy::STANDARD: {
-            // Fresh dummies each iteration → invalidate warm-start.
+            // Fresh dummies each iteration. Invalidate BEFORE mutating the
+            // stored matrices: retained solvers hold non-owning views into
+            // them, and dropping the solvers first guarantees no dangling
+            // view exists even transiently.
+            warm_start_mgr_.invalidate();
             dummy_gen_.generateAndStore(trex_ctrl_.K,
                                         ctx.num_dummies,
                                         ctx.L_iter);
-            warm_start_mgr_.invalidate();
             break;
         }
         case LLoopStrategy::HCONCAT: {
@@ -730,9 +734,10 @@ void TRexSelector::prepareDummiesForLStep(LStepContext& ctx) {
                 ctx.existing_on_disk = 0;
             } else {
                 // Append p new columns to each stored matrix:
-                // [D_k_old | D_k_new].
-                dummy_gen_.expandStored(p_, ctx.L_iter);
+                // [D_k_old | D_k_new]. Invalidate BEFORE expandStored: the
+                // resize reallocates the buffers that retained solvers view.
                 warm_start_mgr_.invalidate();
+                dummy_gen_.expandStored(p_, ctx.L_iter);
                 ctx.existing_on_disk = (ctx.L_iter - 1) * p_;
             }
             break;
@@ -1133,7 +1138,14 @@ void TRexSelector::runTLoop(
         exp_results = view.exp_results;
         FDP_hat     = view.FDP_hat;
 
-        // Find optimal v* at current T
+        // Stagnation metric: v* is the LARGEST feasible voting level (inside
+        // the loop that is usually the top grid point, since the while-guard
+        // requires FDP at the top level <= tFDR). num_selected below is thus
+        // the most conservative selection count (~ #{Phi = 1}), a diagnostic
+        // for the greedy-solver noise trap — NOT the argmax-R operating point
+        // used by the final selection. If no level is feasible, v_star_idx
+        // falls back to index 0 (v = 0.5); the count is then only used for
+        // the stagnation comparison, never for selection.
         Eigen::Index v_star_idx = 0;
         for (Eigen::Index i = 0; i < v_len; ++i) {
             if (FDP_hat(i) <= tFDR_) v_star_idx = i;

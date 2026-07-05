@@ -355,6 +355,10 @@ public:
      *          Used by STANDARD/HCONCAT/SKIP strategies that need all K
      *          dummies available simultaneously (for parallel execution).
      *
+     * @warning Destroys the previously stored matrices. Any retained
+     *          warm-start solver views them, so invalidate the
+     *          WarmStartManager BEFORE calling this.
+     *
      * @param K             Number of experiments.
      * @param num_dummies   Number of dummy columns per matrix.
      * @param seed_factor   L-loop iteration factor for seed mixing (0 = none).
@@ -387,6 +391,12 @@ public:
      *          previously generated columns exactly.
      *
      *          After this call, stored_dummies_[k] has size n × (old_cols + p_new).
+     *
+     * @warning The conservativeResize REALLOCATES each stored matrix's heap
+     *          buffer. Any retained warm-start solver holds a non-owning view
+     *          into the old buffer, so the caller MUST invalidate the
+     *          WarmStartManager BEFORE calling this (see
+     *          TRexSelector::prepareDummiesForLStep, HCONCAT case).
      *
      * @param p_new        Number of new dummy columns to append per matrix.
      * @param seed_factor  L-loop iteration multiplier for seed mixing.
