@@ -229,8 +229,12 @@ struct TRexGVSControlParameter {
     ENSolverType en_solver = ENSolverType::TENET;
 
     /** @brief Maximum allowed pairwise correlation between variables from
-     *  different clusters (only when groups are not provided).
-     *  Default: 0.5.
+     *  different clusters (only when groups are not provided); the dendrogram
+     *  is cut at height 1 - corr_max.
+     *
+     *  Default 0.5 matches the R reference (`trex(..., corr_max = 0.5)`).
+     *  Note: the EUSIPCO 2022 T-Rex+GVS paper used rho_thr = 1/3 for its
+     *  GWAS experiments; supply that value explicitly to reproduce them.
      */
     double corr_max = 0.5;
 

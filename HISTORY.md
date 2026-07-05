@@ -31,6 +31,20 @@
   serialized. NOTE: the checkpoint format changed — `.bin` files saved with
   earlier builds cannot be loaded.
 
+#### DA lifecycle refactor and NN-setup parallelisation
+
+- `TRexDASelector` no longer overrides `select()`: the dependency-structure
+  setup moved into an `onSelectBegin()` override and the DA selection /
+  result widening into a `finalizeSelectionResult()` override, so DA now
+  runs the inherited base pipeline like GVS does (behavior-neutral; the
+  duplicated scaffolding — voting-grid setup, loop drivers, cleanup,
+  X denormalization — existed twice before and could drift).
+- The DA-NN neighbourhood setup is OpenMP-parallelised: each variable's
+  neighbour list is built independently (race-free row-wise scan instead of
+  the symmetric pair loop), with an early exit over the ascending rho grid.
+- `corr_max` (GVS) documents that the default 0.5 matches the R reference
+  and that the EUSIPCO 2022 paper's GWAS experiments used rho_thr = 1/3.
+
 #### T-Rex+GVS rework: solver-encapsulated augmentation and the TIENETAug solver
 
 - New `TIENETAug_Solver` (tsolvers, LARS family): the Informed Elastic Net

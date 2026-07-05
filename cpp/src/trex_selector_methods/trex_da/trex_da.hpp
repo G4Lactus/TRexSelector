@@ -327,15 +327,12 @@ public:
     // ============================================================
 
     /**
-     * @brief Run DA-TRex selection.
-     *
-     * @return SelectionResult.
-     *         Use getDAResult() for the full DA diagnostics.
-     */
-    SelectionResult select() override;
-
-    /**
      * @brief Retrieve the full DA result from the last select() call.
+     *
+     * @details `select()` itself is inherited from `TRexSelector`; DA plugs
+     * in via the variant hooks `onSelectBegin()` (dependency-structure
+     * setup), `evaluateStep()` (deflation), the accumulator overrides, and
+     * `finalizeSelectionResult()` (DA selection + result widening).
      *
      * @return Const reference to DASelectionResult.
      */
@@ -399,8 +396,32 @@ protected:
 
 
     // ============================================================
-    // Hook overrides — per-step body and accumulator management
+    // Hook overrides — lifecycle, per-step body, accumulator management
     // ============================================================
+
+    /**
+     * @brief Override: build the dependency structure before the L-loop.
+     *
+     * @details Runs `setupDA()` (clustering / correlation estimation) and
+     *  prints the method banner. Called by the inherited `select()` after
+     *  the voting-grid setup.
+     */
+    void onSelectBegin() override;
+
+    /**
+     * @brief Override: DA variable selection, result widening, and
+     *        `Phi_prime_` correction.
+     *
+     * @details Replaces the base 2D selection with `selectVariables_BT()`
+     *  for BT-style methods (the base `selectedVariables()` result computed
+     *  on the canonical opt-rho channel is discarded), re-runs the base 2D
+     *  selection semantics for AR1/EQUI on the deflated accumulators, and
+     *  overwrites the raw `Phi_prime_` the base pipeline computed with the
+     *  deflated one from the last `evaluateStep()`. Populates `da_result_`
+     *  and returns the base-sliced result; cleanup and X denormalization
+     *  remain with the inherited `select()`.
+     */
+    SelectionResult finalizeSelectionResult(SelectionResult&& base_result) override;
 
     /**
      * @brief Override: run experiment, apply DA deflation, compute FDP.
@@ -433,22 +454,6 @@ protected:
 
     /** @brief Override: also trim BT accumulators. */
     void trimTAccumulators(Eigen::Index n_rows) override;
-
-
-    // ============================================================
-    // select() helper
-    // ============================================================
-
-    /**
-     * @brief Assemble da_result_, run cleanup + denormalisation, and return
-     *        the base-sliced SelectionResult.
-     *
-     * @details
-     *  Reads BT accumulators (`phi_acc_bt_`, `fdp_acc_bt_`) and last-step
-     *  side state (`Phi_prime_BT_last_`, `Phi_prime_last_`) from member
-     *  state populated during the L/T loops.
-     */
-    SelectionResult assembleDAResult();
 
 
     // ============================================================

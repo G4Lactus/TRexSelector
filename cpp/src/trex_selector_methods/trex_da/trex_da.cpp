@@ -104,17 +104,11 @@ void TRexDASelector::validateDAParameters() const {
 
 
 // ===================================================================================
-// Main DA-TRex algorithm: select()
+// Hook override: onSelectBegin — dependency-structure setup before the L-loop
 // ===================================================================================
 
-TRexDASelector::SelectionResult TRexDASelector::select() {
+void TRexDASelector::onSelectBegin() {
 
-    // 1. Voting grid and optimization point
-    voting_grid_ = createVotingGrid();
-    const std::size_t v_len = voting_grid_.size();
-    setPercentOptPoint(v_len, trex_ctrl_.opt_threshold);
-
-    // 2. Build neighbourhood / correlation structure
     if (verbose_) { printProgress("DA: Building dependency structure..."); }
     setupDA();
 
@@ -133,25 +127,6 @@ TRexDASelector::SelectionResult TRexDASelector::select() {
                             std::to_string(da_setup_.rho_grid_len) + ")"
                           : ""));
     }
-
-    // 3. L-loop calibration (DA's evaluateStep override)
-    if (verbose_) { printProgress("L-loop: Calibrating number of dummies..."); }
-    Eigen::VectorXd FDP_hat;
-    er::ExperimentResults exp_results;
-    runLLoop(FDP_hat, exp_results);
-
-    if (verbose_) {
-        printProgress("L-loop: converged with " +
-                      std::to_string(num_dummies_) + " dummies.\n");
-    }
-
-    // 4. T-loop calibration (base driver, DA's evaluateStep + accumulator
-    //    overrides; capacity-doubling, BT side state, parallel experiments,
-    //    memory mapping all inherited from base).
-    runTLoop(FDP_hat, exp_results);
-
-    // 5. Assemble results, cleanup, denormalise, return base slice.
-    return assembleDAResult();
 }
 
 
@@ -271,14 +246,23 @@ void TRexDASelector::trimTAccumulators(Eigen::Index n_rows) {
 
 
 // ===================================================================================
-// Result assembly: populate da_result_, cleanup, denormalise
+// Hook override: finalizeSelectionResult — DA selection + result widening
 // ===================================================================================
+//
+// The inherited select() has already run the standard pipeline: it computed a
+// raw (undeflated) Phi_prime_, a base 2D selection on the canonical channel,
+// and stored both into `base_result`. This hook replaces them with the
+// DA-corrected quantities: the deflated Phi_prime from the last evaluateStep,
+// and the 3D (T, v, rho) selection for BT-style methods. Cleanup and X
+// denormalization remain with the inherited select().
 
-TRexDASelector::SelectionResult TRexDASelector::assembleDAResult() {
-
+TRexDASelector::SelectionResult TRexDASelector::finalizeSelectionResult(
+    SelectionResult&& base_result)
+{
     const bool use_BT = da_setup_.use_BT_style;
 
-    // 1. Final Phi_prime
+    // 1. Final Phi_prime: overwrite the raw value the base pipeline computed
+    //    with the deflated one cached by evaluateStep().
     if (use_BT) {
         Phi_prime_ = Phi_prime_BT_last_.col(
             static_cast<Eigen::Index>(da_setup_.opt_point_BT));
@@ -288,6 +272,8 @@ TRexDASelector::SelectionResult TRexDASelector::assembleDAResult() {
 
     // 2. Variable selection
     if (use_BT) {
+        // 3D argmax over (T, v, rho); discards the base 2D selection that
+        // the inherited select() computed on the canonical opt-rho channel.
         da_result_ = selectVariables_BT(
             fdp_acc_bt_,
             phi_acc_bt_,
@@ -295,12 +281,9 @@ TRexDASelector::SelectionResult TRexDASelector::assembleDAResult() {
             da_setup_.rho_grid,
             T_stop_);
     } else {
-        auto base_result =
-            selectedVariables(FDP_hat_mat_,
-                              Phi_mat_,
-                              voting_grid_,
-                              T_stop_);
-
+        // AR1/EQUI: the base 2D selection in `base_result` was computed on
+        // the DEFLATED accumulators (evaluateStep feeds deflated rows), so
+        // it is already the DA selection — adopt it.
         da_result_.selected_var = base_result.selected_var;
         da_result_.v_thresh     = base_result.v_thresh;
         da_result_.R_mat        = base_result.R_mat;
@@ -327,6 +310,8 @@ TRexDASelector::SelectionResult TRexDASelector::assembleDAResult() {
         da_result_.Phi_mat     = Phi_mat_;
     }
 
+    // Re-store: for BT-style this replaces the base 2D selection recorded by
+    // the inherited select() with the DA selection.
     storeResults(da_result_);
 
     if (verbose_) {
@@ -334,18 +319,8 @@ TRexDASelector::SelectionResult TRexDASelector::assembleDAResult() {
                       std::to_string(getNumSelected()) + " variables.");
     }
 
-    // 4. Cleanup
-    warm_start_mgr_.cleanup();
-    if (memmap_mgr_) { memmap_mgr_->cleanup(); }
-
-    if (verbose_) { printProgress("Denormalizing X to original scale.\n"); }
-    if (X_is_normalized_) {
-        dn::denormalizeX(*X_, norm_params_);
-        X_is_normalized_ = false;
-    }
-
-    // 5. Return base-sliced result
-    SelectionResult base_result;
+    // 4. Return the base-sliced result (cleanup + denormalization follow in
+    //    the inherited select()).
     base_result.selected_var   = da_result_.selected_var;
     base_result.v_thresh       = da_result_.v_thresh;
     base_result.R_mat          = da_result_.R_mat;
@@ -548,13 +523,16 @@ void TRexDASelector::setupDA_NN() {
     da_setup_.cor_coef = trex_da_ctrl_.cor_coef;
     da_setup_.kap = 0;
 
-    // Build gr_j_list pair-wise: for each ordered pair (j, k) with j < k,
-    // compute the true Pearson correlation |<x_j, x_k>| / (||x_j|| ||x_k||),
-    // then for every rho level r where |cor| >= rho_grid(r) record the
-    // symmetric neighbour relation.
+    // Build gr_j_list per variable: for each j, compute the true Pearson
+    // correlation |<x_j, x_k>| / (||x_j|| ||x_k||) against every k != j, and
+    // for every rho level r where |cor| >= rho_grid(r) record k as a
+    // neighbour of j.
     //
     // This avoids materialising the full p x p correlation matrix
-    // (X^T * X), which would dominate memory at large p.
+    // (X^T * X), which would dominate memory at large p. Each row j scans
+    // ALL k != j (each dot product is computed twice overall) so that the
+    // loop writes only gr_j_list[j] — race-free under the OpenMP
+    // parallelisation below, which is what matters at screening scale.
     da_setup_.gr_j_list.assign(
         p_, std::vector<std::vector<Eigen::Index>>(grid_len));
 
@@ -571,8 +549,10 @@ void TRexDASelector::setupDA_NN() {
         inv_norms(j) = (col_norms(j) > eps_) ? (1.0 / col_norms(j)) : 0.0;
     }
 
+    #pragma omp parallel for schedule(dynamic) if (p > 100)
     for (Eigen::Index j = 0; j < p; ++j) {
-        for (Eigen::Index k = j + 1; k < p; ++k) {
+        for (Eigen::Index k = 0; k < p; ++k) {
+            if (k == j) { continue; }
             const double abs_cor =
                 std::abs(X_->col(j).dot(X_->col(k))) *
                            inv_norms(j) *
@@ -582,7 +562,9 @@ void TRexDASelector::setupDA_NN() {
                     da_setup_.rho_grid(static_cast<Eigen::Index>(r));
                 if (abs_cor >= rho_threshold) {
                     da_setup_.gr_j_list[j][r].push_back(k);
-                    da_setup_.gr_j_list[k][r].push_back(j);
+                } else {
+                    // rho_grid is ascending: no higher level can match.
+                    break;
                 }
             }
         }
