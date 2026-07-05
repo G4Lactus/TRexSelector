@@ -135,11 +135,21 @@ std::vector<MergeStep> internal_dispatch_linkage(
             return AgglomerativeClustering::cluster<TransposedType, DistPol,
                      LinkageMethod::WPGMA>(transposed_data, use_mmap);
         case LinkageMethod::Median:
-            return AgglomerativeClustering::cluster<TransposedType, DistPol,
-                     LinkageMethod::Median>(transposed_data, use_mmap);
+            // Median strictly requires (squared) Euclidean geometry
+            if constexpr (MetricEnum == DistanceMetric::Euclidean) {
+                return AgglomerativeClustering::cluster<TransposedType, DistPol,
+                         LinkageMethod::Median>(transposed_data, use_mmap);
+            } else {
+                throw std::invalid_argument("Median linkage strictly requires Euclidean distance.");
+            }
         case LinkageMethod::Centroid:
-            return AgglomerativeClustering::cluster<TransposedType, DistPol,
-                     LinkageMethod::Centroid>(transposed_data, use_mmap);
+            // Centroid strictly requires (squared) Euclidean geometry
+            if constexpr (MetricEnum == DistanceMetric::Euclidean) {
+                return AgglomerativeClustering::cluster<TransposedType, DistPol,
+                         LinkageMethod::Centroid>(transposed_data, use_mmap);
+            } else {
+                throw std::invalid_argument("Centroid linkage strictly requires Euclidean distance.");
+            }
         default:
             throw std::invalid_argument("Unknown LinkageMethod");
     }

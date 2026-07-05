@@ -192,6 +192,15 @@ public:
     /** @brief Check whether the solver has mapped access to data predictors. */
     bool isConnected() const { return solver_->isConnected(); }
 
+    /** @brief Set the random seed for reproducible tie-breaking among dummies. */
+    void setTieSeed(uint32_t seed) { solver_->setTieSeed(seed); }
+
+    /** @brief Get all recorded warnings (dropped columns, collinear rejections, ...). */
+    const std::vector<std::string>& getWarnings() const { return solver_->getWarnings(); }
+
+    /** @brief Clear the recorded warnings. */
+    void clearWarnings() { solver_->clearWarnings(); }
+
     // =================================================================================
     // Solver-Specific Getters (only valid for the corresponding solver type)
     // =================================================================================
@@ -327,6 +336,12 @@ py::class_<PySolverWrapper<Solver>> bind_standard_tsolver(py::module& m, const s
              "Quantify the number of path steps successfully taken thus far.")
         .def("isConnected", &PySolverWrapper<Solver>::isConnected,
              "Check whether the solver has mapped access to data predictors.")
+        .def("setTieSeed", &PySolverWrapper<Solver>::setTieSeed, py::arg("seed"),
+             "Set the random seed for reproducible tie-breaking among dummy candidates.")
+        .def("getWarnings", &PySolverWrapper<Solver>::getWarnings,
+             "Get all recorded warnings (dropped columns, collinear rejections, ...).")
+        .def("clearWarnings", &PySolverWrapper<Solver>::clearWarnings,
+             "Clear the recorded warnings.")
         .def("reconnect", &PySolverWrapper<Solver>::reconnect, py::arg("X"), py::arg("D"),
              "Reconnect the underlying native solver engine to a new batch of underlying Matrices.")
         .def("restore", &PySolverWrapper<Solver>::restore, py::arg("X"), py::arg("D"),
@@ -416,6 +431,9 @@ inline void bind_tsolvers_module(py::module& m) {
         .def("getDummyStartIndex", &PySolverWrapper<TENET_Solver>::getDummyStartIndex)
         .def("getNumSteps", &PySolverWrapper<TENET_Solver>::getNumSteps)
         .def("isConnected", &PySolverWrapper<TENET_Solver>::isConnected)
+        .def("setTieSeed", &PySolverWrapper<TENET_Solver>::setTieSeed, py::arg("seed"))
+        .def("getWarnings", &PySolverWrapper<TENET_Solver>::getWarnings)
+        .def("clearWarnings", &PySolverWrapper<TENET_Solver>::clearWarnings)
         .def("reconnect", &PySolverWrapper<TENET_Solver>::reconnect, py::arg("X"),
                     py::arg("D"))
         .def("restore", &PySolverWrapper<TENET_Solver>::restore, py::arg("X"),
@@ -467,6 +485,9 @@ inline void bind_tsolvers_module(py::module& m) {
         .def("getDummyStartIndex", &PySolverWrapper<TENETAug_Solver>::getDummyStartIndex)
         .def("getNumSteps", &PySolverWrapper<TENETAug_Solver>::getNumSteps)
         .def("isConnected", &PySolverWrapper<TENETAug_Solver>::isConnected)
+        .def("setTieSeed", &PySolverWrapper<TENETAug_Solver>::setTieSeed, py::arg("seed"))
+        .def("getWarnings", &PySolverWrapper<TENETAug_Solver>::getWarnings)
+        .def("clearWarnings", &PySolverWrapper<TENETAug_Solver>::clearWarnings)
         .def("reconnect", &PySolverWrapper<TENETAug_Solver>::reconnect, py::arg("X"),
                     py::arg("D"))
         .def("restore", &PySolverWrapper<TENETAug_Solver>::restore, py::arg("X"),
@@ -537,6 +558,9 @@ inline void bind_tsolvers_module(py::module& m) {
         .def("getDummyStartIndex", &PySolverWrapper<TNCGMP_Solver>::getDummyStartIndex)
         .def("getNumSteps", &PySolverWrapper<TNCGMP_Solver>::getNumSteps)
         .def("isConnected", &PySolverWrapper<TNCGMP_Solver>::isConnected)
+        .def("setTieSeed", &PySolverWrapper<TNCGMP_Solver>::setTieSeed, py::arg("seed"))
+        .def("getWarnings", &PySolverWrapper<TNCGMP_Solver>::getWarnings)
+        .def("clearWarnings", &PySolverWrapper<TNCGMP_Solver>::clearWarnings)
         .def("reconnect", &PySolverWrapper<TNCGMP_Solver>::reconnect,
                     py::arg("X"), py::arg("D"))
         .def("restore", &PySolverWrapper<TNCGMP_Solver>::restore,
@@ -591,6 +615,9 @@ inline void bind_tsolvers_module(py::module& m) {
         .def("getDummyStartIndex", &PySolverWrapper<TAFS_Solver>::getDummyStartIndex)
         .def("getNumSteps", &PySolverWrapper<TAFS_Solver>::getNumSteps)
         .def("isConnected", &PySolverWrapper<TAFS_Solver>::isConnected)
+        .def("setTieSeed", &PySolverWrapper<TAFS_Solver>::setTieSeed, py::arg("seed"))
+        .def("getWarnings", &PySolverWrapper<TAFS_Solver>::getWarnings)
+        .def("clearWarnings", &PySolverWrapper<TAFS_Solver>::clearWarnings)
         .def("reconnect", &PySolverWrapper<TAFS_Solver>::reconnect, py::arg("X"),
                     py::arg("D"))
         .def("restore", &PySolverWrapper<TAFS_Solver>::restore, py::arg("X"),
