@@ -8,7 +8,9 @@
 #include <gtest/gtest.h>
 #include <Eigen/Dense>
 #include <cmath>
+#include <cstdio>
 #include <sstream>
+#include <stdexcept>
 #include <cereal/archives/portable_binary.hpp>
 
 #include <ml_methods/scaler_methods/z_score_scaler.hpp>
@@ -220,6 +222,91 @@ TEST(StandardizationTest, LpNormScalerConstantColumn) {
 
 
 // ========================================================================================
+// Error handling
+// ========================================================================================
+
+/** @brief Transform/inverse before fit and column-count mismatches must throw. */
+TEST(StandardizationTest, NotFittedAndDimensionMismatchThrow) {
+    Eigen::MatrixXd data(3, 2);
+    data << 1.0, 4.0,
+            2.0, 6.0,
+            3.0, 8.0;
+    Eigen::Map<Eigen::MatrixXd> map_data(data.data(), data.rows(), data.cols());
+
+    ZScoreScaler z_scaler;
+    EXPECT_THROW(z_scaler.transform_inplace(map_data), std::logic_error);
+    EXPECT_THROW(z_scaler.inverse_transform_inplace(map_data), std::logic_error);
+
+    LpNormScaler lp_scaler;
+    EXPECT_THROW(lp_scaler.transform_inplace(map_data), std::logic_error);
+    EXPECT_THROW(lp_scaler.inverse_transform_inplace(map_data), std::logic_error);
+
+    // Fitted on 2 columns, applied to 3 columns -> invalid_argument
+    z_scaler.fit(map_data);
+    Eigen::MatrixXd wide(3, 3);
+    wide.setOnes();
+    Eigen::Map<Eigen::MatrixXd> map_wide(wide.data(), wide.rows(), wide.cols());
+    EXPECT_THROW(z_scaler.transform_inplace(map_wide), std::invalid_argument);
+    EXPECT_THROW(z_scaler.inverse_transform_inplace(map_wide), std::invalid_argument);
+}
+
+
+/**
+ * @brief A single sample makes the Bessel-corrected standard deviation undefined
+ *        (division by n - 1 = 0): fit must throw instead of emitting NaN scales.
+ */
+TEST(StandardizationTest, ZScoreScalerSingleSampleThrows) {
+    Eigen::MatrixXd data(1, 3);
+    data << 1.0, 2.0, 3.0;
+    Eigen::Map<Eigen::MatrixXd> map_data(data.data(), data.rows(), data.cols());
+
+    ZScoreScaler with_std(true, true);
+    EXPECT_THROW(with_std.fit(map_data), std::invalid_argument);
+
+    // Mean-only scaling has no n - 1 division and stays valid for a single sample.
+    ZScoreScaler mean_only(true, false);
+    EXPECT_NO_THROW(mean_only.fit(map_data));
+}
+
+
+/**
+ * @brief Multi-column round trip with a constant (dropped) column in the middle:
+ *        live columns standardise to mean 0 / unit SD and invert exactly; the
+ *        dropped column passes through untouched.
+ */
+TEST(StandardizationTest, MixedColumnsRoundTrip) {
+    const Eigen::Index n = 5;
+    Eigen::MatrixXd data(n, 3);
+    data.col(0) = Eigen::VectorXd::LinSpaced(n, -2.0, 6.0);
+    data.col(1) = Eigen::VectorXd::Constant(n, 7.0);   // constant -> dropped
+    data.col(2) = Eigen::VectorXd::LinSpaced(n, 10.0, 2.0);
+    Eigen::MatrixXd original = data;
+
+    Eigen::Map<Eigen::MatrixXd> map_data(data.data(), data.rows(), data.cols());
+
+    ZScoreScaler scaler(true, true);
+    scaler.fit(map_data);
+    ASSERT_EQ(scaler.get_dropped_indices().size(), 1);
+    EXPECT_EQ(scaler.get_dropped_indices()[0], 1);
+
+    scaler.transform_inplace(map_data);
+
+    // Live columns: mean 0, Bessel-corrected SD 1
+    for (Eigen::Index j : {Eigen::Index{0}, Eigen::Index{2}}) {
+        EXPECT_NEAR(data.col(j).mean(), 0.0, 1e-12);
+        const double sd = std::sqrt(data.col(j).squaredNorm()
+                                    / static_cast<double>(n - 1));
+        EXPECT_NEAR(sd, 1.0, 1e-12);
+    }
+    // Dropped column untouched
+    EXPECT_TRUE(data.col(1).isApprox(original.col(1), 0.0));
+
+    scaler.inverse_transform_inplace(map_data);
+    EXPECT_TRUE(data.isApprox(original, 1e-12));
+}
+
+
+// ========================================================================================
 // Serialization Tests
 // ========================================================================================
 
@@ -279,6 +366,54 @@ TEST(StandardizationTest, LpNormScalerSerialization) {
     EXPECT_EQ(original_scaler.get_means(), restored_scaler.get_means());
     EXPECT_EQ(original_scaler.get_scales(), restored_scaler.get_scales());
     EXPECT_EQ(original_scaler.get_dropped_indices(), restored_scaler.get_dropped_indices());
+}
+
+/**
+ * @brief The public save()/load() file API: round trip restores the fitted state,
+ *        the type-name guard rejects archives written by a different scaler type,
+ *        and loading a missing file throws.
+ */
+TEST(StandardizationTest, SaveLoadFileRoundTripAndTypeMismatch) {
+    Eigen::MatrixXd data(4, 2);
+    data << 1.0,  4.0,
+            2.0,  6.0,
+            3.0,  8.0,
+            6.0, 12.0;
+    Eigen::Map<Eigen::MatrixXd> map_data(data.data(), data.rows(), data.cols());
+
+    ZScoreScaler original(true, true);
+    original.fit(map_data);
+
+    const std::string path = ::testing::TempDir() + "trex_zscore_scaler_test.bin";
+    original.save(path);
+
+    // Round trip through the file restores the fitted state exactly.
+    ZScoreScaler restored(false, false);
+    restored.load(path);
+    EXPECT_TRUE(restored.is_fitted());
+    EXPECT_EQ(original.get_means(), restored.get_means());
+    EXPECT_EQ(original.get_scales(), restored.get_scales());
+    EXPECT_EQ(original.get_dropped_indices(), restored.get_dropped_indices());
+    EXPECT_EQ(restored.get_with_mean(), original.get_with_mean());
+    EXPECT_EQ(restored.get_with_std(), original.get_with_std());
+
+    // The restored scaler must transform identically to the original.
+    Eigen::MatrixXd a = data, b = data;
+    Eigen::Map<Eigen::MatrixXd> map_a(a.data(), a.rows(), a.cols());
+    Eigen::Map<Eigen::MatrixXd> map_b(b.data(), b.rows(), b.cols());
+    original.transform_inplace(map_a);
+    restored.transform_inplace(map_b);
+    EXPECT_TRUE(a.isApprox(b, 0.0));
+
+    // Type-name guard: a ZScoreScaler archive must be rejected by LpNormScaler.
+    LpNormScaler wrong_type;
+    EXPECT_THROW(wrong_type.load(path), std::runtime_error);
+
+    // Missing file throws.
+    ZScoreScaler no_file;
+    EXPECT_THROW(no_file.load(path + ".does_not_exist"), std::runtime_error);
+
+    std::remove(path.c_str());
 }
 
 // ========================================================================================

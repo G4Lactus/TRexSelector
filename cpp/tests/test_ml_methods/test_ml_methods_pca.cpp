@@ -260,6 +260,68 @@ TEST(PCATest, ExplainedVariance_SumEqualsTotalVariance) {
 }
 
 
+/**
+ * @brief Numerical cross-check against a direct eigendecomposition of the sample
+ *        covariance matrix (center only): explained variances must equal the top-M
+ *        eigenvalues and the loadings must span the same subspace.
+ */
+TEST(PCATest, ExplainedVariance_MatchesCovarianceEigendecomposition) {
+    const Eigen::Index n = 40, p = 10, M = 4;
+    Eigen::MatrixXd X = Eigen::MatrixXd::Random(n, p);
+    Eigen::MatrixXd Xc = X.rowwise() - X.colwise().mean();
+
+    // Reference: eigendecomposition of the sample covariance
+    Eigen::MatrixXd cov = Xc.transpose() * Xc / static_cast<double>(n - 1);
+    Eigen::SelfAdjointEigenSolver<Eigen::MatrixXd> es(cov);
+    Eigen::VectorXd evals_desc = es.eigenvalues().reverse();
+    Eigen::MatrixXd evecs_desc = es.eigenvectors().rowwise().reverse();
+
+    PCA pca(X, M, /*center=*/true, /*normalize=*/false);
+    PCAResult res = pca.fit();
+
+    EXPECT_TRUE(res.explained_variance.isApprox(evals_desc.head(M), 1e-8))
+        << "Explained variances deviate from the covariance eigenvalues.";
+
+    // Compare subspace projectors (sign/rotation independent)
+    Eigen::MatrixXd P_pca = res.V * res.V.transpose();
+    Eigen::MatrixXd P_ref = evecs_desc.leftCols(M) * evecs_desc.leftCols(M).transpose();
+    EXPECT_TRUE(P_pca.isApprox(P_ref, 1e-6))
+        << "Loadings do not span the top-M covariance eigenspace.";
+
+    // Scores must equal the projection of the preprocessed data: Z = Xc * V
+    EXPECT_TRUE(res.Z.isApprox(Xc * res.V, 1e-8));
+}
+
+
+/**
+ * @brief Regression test: a non-contiguous column-block view (outer stride larger
+ *        than the row count) must produce identical results to a contiguous copy.
+ *        fit() previously rebuilt X with a stride-less Map and misread such views.
+ */
+TEST(PCATest, NonContiguousBlockInput_MatchesContiguous) {
+    Eigen::MatrixXd big = Eigen::MatrixXd::Random(40, 10);
+    Eigen::MatrixXd big_backup = big;
+
+    // Reference: contiguous copy of the top 20 rows
+    Eigen::MatrixXd sub = big.topRows(20);
+    PCA ref_pca(sub, 3, /*center=*/true, /*normalize=*/true);
+    PCAResult ref = ref_pca.fit();
+
+    // Same data as a non-contiguous view into `big` (outer stride 40, rows 20)
+    PCA blk_pca(big.topRows(20), 3, /*center=*/true, /*normalize=*/true);
+    PCAResult res = blk_pca.fit();
+
+    EXPECT_TRUE(res.explained_variance.isApprox(ref.explained_variance, 1e-12));
+    EXPECT_TRUE(res.V.isApprox(ref.V, 1e-12));
+    EXPECT_TRUE(res.Z.isApprox(ref.Z, 1e-12));
+
+    // Restore through the same view; the bottom 20 rows must be untouched.
+    blk_pca.restore(big.topRows(20));
+    EXPECT_TRUE(big.isApprox(big_backup, 1e-12))
+        << "Restoring through the view corrupted the parent matrix.";
+}
+
+
 // ========================================================================================
 // transform()
 // ========================================================================================

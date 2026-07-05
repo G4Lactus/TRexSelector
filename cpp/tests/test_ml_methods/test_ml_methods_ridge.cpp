@@ -25,28 +25,6 @@ namespace trex::test::ml_methods::ridge {
 using namespace trex::ml_methods::ridge;
 
 // ========================================================================================
-// Helpers
-// ========================================================================================
-
-/** @brief Generate a random linear regression problem with a known true coefficient vector. */
-auto make_regression_problem(Eigen::Index n, Eigen::Index p,
-                              double noise_std = 0.0,
-                              unsigned int seed = 42) {
-    std::srand(seed);
-    Eigen::MatrixXd X = Eigen::MatrixXd::Random(n, p);
-    Eigen::VectorXd beta_true = Eigen::VectorXd::Random(p);
-    Eigen::VectorXd y = X * beta_true;
-    if (noise_std > 0.0) {
-        y += Eigen::VectorXd::Random(n) * noise_std;
-    }
-
-    // y = X * beta_true is implicit
-    return std::make_pair(X, beta_true); // noise-free version returns (X, beta_true)
-
-}
-
-
-// ========================================================================================
 // Output dimensions
 // ========================================================================================
 
@@ -187,37 +165,71 @@ TEST(RidgeSolverTest, Shrinkage_VeryLargeLambdaApproachesZero) {
 // ========================================================================================
 
 /**
- * @brief Test for a square (n == p) system both paths must produce identical results.
- *
- * @details We invoke the primal solver directly via n == p (primal path) and also
- *          construct an equivalent wide problem (n < p) to force the dual path, then
- *          verify the predictions X*beta match.
+ * @brief For lambda > 0 the ridge solution is unique, so the dual path (n < p) must
+ *        match the primal closed form (X^T X + lambda I)^{-1} X^T y, which is
+ *        well-posed for lambda > 0 regardless of the shape of X.
  */
-TEST(RidgeSolverTest, PrimalDualConsistency_PredictionsMatch) {
-    const Eigen::Index n = 15, p = 8;
-    double lambda = 0.5;
+TEST(RidgeSolverTest, PrimalDualConsistency_ClosedFormMatch) {
+    const Eigen::Index n = 8, p = 20;  // n < p -> RidgeSolver dispatches to the dual path
+    const double lambda = 0.5;
 
-    Eigen::MatrixXd X = Eigen::MatrixXd::Random(n, p);
-    Eigen::VectorXd y = Eigen::VectorXd::Random(n);
+    // Deterministic wide design matrix
+    Eigen::MatrixXd X(n, p);
+    for (Eigen::Index i = 0; i < n; ++i)
+        for (Eigen::Index j = 0; j < p; ++j)
+            X(i, j) = std::sin(static_cast<double>(i + 1)
+                             * static_cast<double>(j + 1) * 0.2);
+    Eigen::VectorXd y = Eigen::VectorXd::LinSpaced(n, -1.0, 2.0);
 
-    // Primal: n > p
-    Eigen::VectorXd beta_primal = RidgeSolver::solve(X, y, lambda);
+    Eigen::VectorXd beta_dual = RidgeSolver::solve(X, y, lambda);
 
-    // Dual: n < p — pad X with zero columns; the extra columns get zero coefficients.
-    Eigen::Index p_wide = n - 1; // ensures n > p_wide, keeping primal path unused
-    // Instead embed into a larger X: reduce n to force dual
-    Eigen::MatrixXd X_sub = X.topRows(p - 2); // n_sub = p - 2 < p → dual
-    Eigen::VectorXd y_sub = y.head(p - 2);
+    // Primal closed form computed independently
+    Eigen::MatrixXd A = X.transpose() * X
+                      + lambda * Eigen::MatrixXd::Identity(p, p);
+    Eigen::VectorXd beta_primal = A.ldlt().solve(X.transpose() * y);
 
-    Eigen::VectorXd beta_dual  = RidgeSolver::solve(X_sub, y_sub, lambda);
-    Eigen::VectorXd beta_prime = RidgeSolver::solve(X_sub, y_sub, lambda);
+    EXPECT_TRUE(beta_dual.isApprox(beta_primal, 1e-8))
+        << "Dual-path solution deviates from the primal closed form.";
+}
 
-    // Both calls use the same path; just verify determinism.
-    EXPECT_TRUE(beta_dual.isApprox(beta_prime, 1e-12))
-        << "RidgeSolver is not deterministic.";
 
-    // Predictions from the primal solve should be consistent.
-    EXPECT_EQ(beta_primal.size(), p);
+/**
+ * @brief The "lambda_2 trap" from the solver's documentation: a perfectly duplicated
+ *        column with a tiny lambda keeps X^T X + lambda I positive-definite but
+ *        extremely ill-conditioned. Whether LLT succeeds or the LDLT fallback kicks
+ *        in, the returned solution must satisfy the ridge KKT condition.
+ */
+TEST(RidgeSolverTest, RankDeficient_TinyLambdaStaysSolvable) {
+    const Eigen::Index n = 12, p = 4;
+
+    Eigen::MatrixXd X(n, p);
+    for (Eigen::Index i = 0; i < n; ++i)
+        for (Eigen::Index j = 0; j < p - 1; ++j)
+            X(i, j) = std::cos(static_cast<double>(i + 1)
+                             * static_cast<double>(j + 1) * 0.3);
+    X.col(p - 1) = X.col(0);  // exact duplicate -> X^T X singular, X^T X + lambda I PD
+
+    // Response in the column space of X
+    Eigen::VectorXd w(p);
+    w << 1.0, -2.0, 0.5, 0.0;
+    Eigen::VectorXd y = X * w;
+
+    const double lambda = 1e-8;
+    Eigen::VectorXd beta = RidgeSolver::solve(X, y, lambda);
+
+    // KKT residual (tolerance reflects the ~1/lambda conditioning of the system)
+    Eigen::VectorXd kkt = X.transpose() * (y - X * beta) - lambda * beta;
+    EXPECT_NEAR(kkt.norm(), 0.0, 1e-4);
+
+    // With lambda = 0 exactly the system is singular: depending on the platform's
+    // LDLT behavior the solver either reports failure or returns a valid solution
+    // of the (consistent) normal equations. Both are acceptable; garbage is not.
+    try {
+        Eigen::VectorXd beta0 = RidgeSolver::solve(X, y, 0.0);
+        EXPECT_NEAR((X.transpose() * (y - X * beta0)).norm(), 0.0, 1e-6);
+    } catch (const std::runtime_error&) {
+        SUCCEED() << "Factorizations rejected the exactly singular system.";
+    }
 }
 
 

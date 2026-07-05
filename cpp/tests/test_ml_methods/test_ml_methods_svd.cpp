@@ -219,6 +219,81 @@ TEST(SVDSolverTest, Dispatch_RandomizedPathShapesAndOrthogonality) {
 }
 
 
+/**
+ * @brief Gram path (p > 2n) must reproduce the direct JacobiSVD numerically:
+ *        same singular values and the same rank-M approximation of X.
+ */
+TEST(SVDSolverTest, GramPathMatchesDirectSVD) {
+    const Eigen::Index n = 15, p = 60, M = 6;  // p > 2n -> Gram/kernel path
+    Eigen::MatrixXd X = Eigen::MatrixXd::Random(n, p);
+
+    SVDResult res = SVDSolver{}.compute(X, M);
+
+    Eigen::JacobiSVD<Eigen::MatrixXd> ref(X,
+        Eigen::ComputeThinU | Eigen::ComputeThinV);
+
+    EXPECT_TRUE(res.S.isApprox(ref.singularValues().head(M), 1e-8))
+        << "Gram-path singular values deviate from JacobiSVD.";
+
+    // Compare the rank-M approximations (basis-independent).
+    Eigen::MatrixXd approx_gram = res.U * res.S.asDiagonal() * res.V.transpose();
+    Eigen::MatrixXd approx_ref  = ref.matrixU().leftCols(M)
+                                * ref.singularValues().head(M).asDiagonal()
+                                * ref.matrixV().leftCols(M).transpose();
+    EXPECT_TRUE(approx_gram.isApprox(approx_ref, 1e-8))
+        << "Gram-path rank-M approximation deviates from JacobiSVD.";
+}
+
+
+/**
+ * @brief Randomized path on an exactly rank-M matrix: the sketch captures the full
+ *        range, so recovery of the known singular values {M, ..., 1} is exact
+ *        (up to floating-point error), as is the reconstruction.
+ */
+TEST(SVDSolverTest, RandomizedPathExactOnLowRank) {
+    const Eigen::Index n = 200, p = 120, M = 5;
+    Eigen::MatrixXd X = make_rank_m_matrix(n, p, M);
+
+    // min_dim_thresh = 10 forces the randomized path (M = 5 < 120/10)
+    SVDSolver solver(/*min_dim_thresh=*/10, /*block_size=*/64);
+    SVDResult res = solver.compute(X, M);
+
+    Eigen::VectorXd expected_S =
+        Eigen::VectorXd::LinSpaced(M, static_cast<double>(M), 1.0);
+    EXPECT_TRUE(res.S.isApprox(expected_S, 1e-8))
+        << "Randomized path does not recover the known singular values.";
+
+    Eigen::MatrixXd X_approx = res.U * res.S.asDiagonal() * res.V.transpose();
+    EXPECT_TRUE(X_approx.isApprox(X, 1e-8))
+        << "Randomized path does not reconstruct a rank-M matrix exactly.";
+}
+
+
+/**
+ * @brief Gram path on a rank-deficient matrix: trailing singular values are ~0,
+ *        the S^{-1} guard must keep V free of NaN/Inf, and the reconstruction is
+ *        unaffected by the null components.
+ */
+TEST(SVDSolverTest, GramPathRankDeficient) {
+    const Eigen::Index n = 10, p = 30, rank = 3, M = 5;
+    Eigen::MatrixXd X = make_rank_m_matrix(n, p, rank);  // singular values {3, 2, 1}
+
+    SVDResult res = SVDSolver{}.compute(X, M);
+
+    EXPECT_NEAR(res.S(0), 3.0, 1e-6);
+    EXPECT_NEAR(res.S(1), 2.0, 1e-6);
+    EXPECT_NEAR(res.S(2), 1.0, 1e-6);
+    EXPECT_LT(res.S(3), 1e-5);
+    EXPECT_LT(res.S(4), 1e-5);
+
+    EXPECT_TRUE(res.V.allFinite())
+        << "Null components produced NaN/Inf in V (S^{-1} guard failed).";
+
+    Eigen::MatrixXd X_approx = res.U * res.S.asDiagonal() * res.V.transpose();
+    EXPECT_TRUE(X_approx.isApprox(X, 1e-6));
+}
+
+
 // ========================================================================================
 // Exception handling
 // ========================================================================================
@@ -229,5 +304,13 @@ TEST(SVDSolverTest, Exceptions_InvalidM) {
     EXPECT_THROW(SVDSolver{}.compute(X, 11), std::invalid_argument);
 }
 
+
+/** @brief M < 1 throws std::invalid_argument (0 and negative). */
+TEST(SVDSolverTest, Exceptions_NonPositiveM) {
+    Eigen::MatrixXd X = Eigen::MatrixXd::Random(10, 15);
+    EXPECT_THROW(SVDSolver{}.compute(X, 0), std::invalid_argument);
+    EXPECT_THROW(SVDSolver{}.compute(X, -1), std::invalid_argument);
+}
+
 // ========================================================================================
-} /* End ofnamespace trex::test::ml_methods::svd */
+} /* End of namespace trex::test::ml_methods::svd */
