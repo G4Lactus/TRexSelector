@@ -74,9 +74,9 @@ TEST(TSolverMmapTest, ValidateMapMutation) {
 
 /** @brief Test to verify that execution over disk-mapped data succeeds correctly */
 TEST(TSolverMmapTest, ValidateDiskMappedDataExecution) {
-    const std::string X_file = "test_tsolvers_mmap_X.bin";
-    const std::string D_file = "test_tsolvers_mmap_D.bin";
-    const std::string y_file = "test_tsolvers_mmap_y.bin";
+    const std::string X_file = ::testing::TempDir() + "test_tsolvers_mmap_X.bin";
+    const std::string D_file = ::testing::TempDir() + "test_tsolvers_mmap_D.bin";
+    const std::string y_file = ::testing::TempDir() + "test_tsolvers_mmap_y.bin";
 
     // Clean up if files left over from previous aborted run
     if (fs::exists(X_file)) fs::remove(X_file);

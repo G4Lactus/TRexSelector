@@ -11,6 +11,9 @@
 // google test includes
 #include <gtest/gtest.h>
 
+// std includes
+#include <algorithm>
+
 // Eigen includes
 #include <Eigen/Dense>
 
@@ -100,6 +103,50 @@ TEST_F(TSolverInitTest, CollinearDroppingLogic) {
     // The perfectly collinear and constant columns should be safely dropped
     // ensuring executeStep doesn't encounter floating point limits
     EXPECT_NO_THROW(solver.executeStep(2, true));
+}
+
+/** @brief Regression test: an exactly constant column whose mean is not exactly
+ *         representable leaves O(|c| * eps) rounding residue after centering.
+ *         It must be dropped — not scaled by its own tiny residue norm into a
+ *         unit-norm noise column that competes in the correlation screening. */
+TEST_F(TSolverInitTest, NearConstantColumnIsDropped) {
+    const double c = 1000.0 / 3.0;
+    X.col(3) = Eigen::VectorXd::Constant(200, c);
+
+    Eigen::Map<Eigen::MatrixXd> X_map(X.data(), X.rows(), X.cols());
+    Eigen::Map<Eigen::MatrixXd> D_map(D.data(), D.rows(), D.cols());
+    Eigen::Map<Eigen::VectorXd> y_map(y.data(), y.size());
+
+    TLARS_Solver solver(X_map, D_map, y_map,
+                        true /*normalize*/, true /*intercept*/,
+                        false /*verbose*/);
+
+    const auto& dropped = solver.getDroppedIndices();
+    EXPECT_TRUE(std::find(dropped.begin(), dropped.end(), 3u) != dropped.end())
+        << "near-constant column normalized into a noise column instead of dropped "
+        << "(residual norm after centering: " << X_map.col(3).norm() << ")";
+}
+
+/** @brief restore() must exactly reverse the in-place preprocessing
+ *         (centering + scaling of X, D and centering of y). */
+TEST_F(TSolverInitTest, RestoreReversesPreprocessing) {
+    Eigen::MatrixXd X0 = X, D0 = D;
+    Eigen::VectorXd y0 = y;
+
+    Eigen::Map<Eigen::MatrixXd> X_map(X.data(), X.rows(), X.cols());
+    Eigen::Map<Eigen::MatrixXd> D_map(D.data(), D.rows(), D.cols());
+    Eigen::Map<Eigen::VectorXd> y_map(y.data(), y.size());
+
+    TLARS_Solver solver(X_map, D_map, y_map, true, true, false);
+
+    // Preprocessing mutated the buffers in place
+    ASSERT_FALSE(X.isApprox(X0, 1e-12));
+
+    solver.restore(X_map, D_map, y_map);
+
+    EXPECT_TRUE(X.isApprox(X0, 1e-9)) << "X not restored";
+    EXPECT_TRUE(D.isApprox(D0, 1e-9)) << "D not restored";
+    EXPECT_TRUE(y.isApprox(y0, 1e-9)) << "y not restored";
 }
 
 // ========================================================================================

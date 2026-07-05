@@ -14,6 +14,7 @@
 // std includes
 #include <filesystem>
 #include <memory>
+#include <set>
 
 // Eigen includes
 #include <Eigen/Dense>
@@ -22,6 +23,7 @@
 #include <tsolvers/linear_model/lars_based/tlars_solver.hpp>
 #include <tsolvers/linear_model/lars_based/tlasso_solver.hpp>
 #include <tsolvers/linear_model/lars_based/tenet_solver.hpp>
+#include <tsolvers/linear_model/lars_based/tenet_aug_solver.hpp>
 #include <tsolvers/linear_model/lars_based/tstepwise_solver.hpp>
 #include <tsolvers/linear_model/lars_based/tstagewise_solver.hpp>
 
@@ -53,11 +55,11 @@ namespace fs = std::filesystem;
 
 // ========================================================================================
 
-// Type List for the 12 solvers
+// Type List for the 13 solvers
 typedef ::testing::Types<
-    TLARS_Solver, TLASSO_Solver, TENET_Solver, TSTEPWISE_Solver, TSTAGEWISE_Solver,
-    TOMP_Solver, TMP_Solver, TGP_Solver, TACGP_Solver, TNCGMP_Solver, TOOLS_Solver,
-    TAFS_Solver
+    TLARS_Solver, TLASSO_Solver, TENET_Solver, TENETAug_Solver, TSTEPWISE_Solver,
+    TSTAGEWISE_Solver, TOMP_Solver, TMP_Solver, TGP_Solver, TACGP_Solver,
+    TNCGMP_Solver, TOOLS_Solver, TAFS_Solver
 > AllSolvers;
 
 // Factory for construction
@@ -65,8 +67,9 @@ template <typename T>
 std::unique_ptr<T> create_solver(Eigen::Map<Eigen::MatrixXd>& X,
                                  Eigen::Map<Eigen::MatrixXd>& D,
                                  Eigen::Map<Eigen::VectorXd>& y) {
-    if constexpr (std::is_same_v<T, TENET_Solver>) {
-        // TENET requires lambda2
+    if constexpr (std::is_same_v<T, TENET_Solver> ||
+                  std::is_same_v<T, TENETAug_Solver>) {
+        // TENET / TENETAug require lambda2
         return std::make_unique<T>(X, D, y, 0.5, true, true, false);
     } else if constexpr (std::is_same_v<T, TAFS_Solver>) {
         // TAFS has rho with a default, but to be sure we just match signature
@@ -151,7 +154,7 @@ TYPED_TEST(TSolverPolymorphicTest, SerializationEquivalence) {
     auto partial_solver = create_solver<TypeParam>(X_map2, D_map2, y_map2);
     partial_solver->executeStep(4, true);
 
-    std::string checkpoint = "temp_poly_checkpoint.bin";
+    std::string checkpoint = ::testing::TempDir() + "temp_poly_checkpoint.bin";
 
     partial_solver->save(checkpoint);
     EXPECT_TRUE(fs::exists(checkpoint));
@@ -169,6 +172,39 @@ TYPED_TEST(TSolverPolymorphicTest, SerializationEquivalence) {
 
     // Cleanup
     fs::remove(checkpoint);
+}
+
+/** @brief Invariant: actives, inactives, and dropped indices must partition the
+ *         unified index space after execution — no index in two sets, none missing.
+ *         Guards the getInactives() contract for re-selection solvers (TMP, TGP,
+ *         TACGP, TNCGMP), which scan all columns internally.
+ */
+TYPED_TEST(TSolverPolymorphicTest, ActiveInactiveDroppedPartition) {
+    auto X = this->data->getX();
+    auto D = this->data->getD();
+    auto y = this->data->getY();
+
+    Eigen::Map<Eigen::MatrixXd> X_map(X.data(), X.rows(), X.cols());
+    Eigen::Map<Eigen::MatrixXd> D_map(D.data(), D.rows(), D.cols());
+    Eigen::Map<Eigen::VectorXd> y_map(y.data(), y.size());
+
+    auto solver = create_solver<TypeParam>(X_map, D_map, y_map);
+    solver->executeStep(5, true);
+
+    const std::size_t p_tot = static_cast<std::size_t>(X.cols() + D.cols());
+
+    std::set<std::size_t> seen;
+    auto insert_all = [&seen](const std::vector<std::size_t>& v, const char* name) {
+        for (std::size_t j : v) {
+            EXPECT_TRUE(seen.insert(j).second)
+                << "index " << j << " appears in multiple sets (last seen in " << name << ")";
+        }
+    };
+    insert_all(solver->getActives(), "actives");
+    insert_all(solver->getInactives(), "inactives");
+    insert_all(solver->getDroppedIndices(), "dropped");
+
+    EXPECT_EQ(seen.size(), p_tot) << "actives/inactives/dropped do not cover all indices";
 }
 
 // ========================================================================================

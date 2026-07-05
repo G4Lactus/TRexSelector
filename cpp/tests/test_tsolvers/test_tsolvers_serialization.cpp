@@ -88,7 +88,7 @@ TEST_F(TSolverSerializationTest, ExpectResumePathMatchesContinuousPath) {
                                 true, true, false);
     partial_solver.executeStep(5, true);
 
-    std::string checkpoint = "temp_tlars_checkpoint.bin";
+    std::string checkpoint = ::testing::TempDir() + "temp_tlars_checkpoint.bin";
     partial_solver.save(checkpoint);
 
     // Ensure checkpoint exists
