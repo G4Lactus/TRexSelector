@@ -160,9 +160,12 @@ public:
     void cluster() {
         // Initialize the first object (0-based indexing)
         // Step 1: Pi(1) = 1, Lambda(1) = infinity
-        const RealScalar INF = std::numeric_limits<RealScalar>::max();
+        // The sentinel is double max (lambda distances are stored as double) so that
+        // downstream consumers (pointer_to_merge_matrix) can test against
+        // numeric_limits<double>::max() regardless of the input RealScalar type.
+        const double INF = std::numeric_limits<double>::max();
         pi_[0] = 0;
-        lambda_[0] = {static_cast<double>(INF), 0, 0};
+        lambda_[0] = {INF, 0, 0};
 
         // Temporary array for the tie-aware structs during the loop
         std::vector<TieAwareDistance> M_tie(num_objects_);

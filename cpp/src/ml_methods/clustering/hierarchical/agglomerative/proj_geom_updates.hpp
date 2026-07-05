@@ -1,11 +1,11 @@
 // ===================================================================================
-// projected_geometric_update_policy.hpp
+// proj_geom_updates.hpp
 // ===================================================================================
 #ifndef ML_METHODS_CLUSTERING_HC_AGGLOMERATIVE_PROJECTED_GEOMETRIC_POLICY_HPP
 #define ML_METHODS_CLUSTERING_HC_AGGLOMERATIVE_PROJECTED_GEOMETRIC_POLICY_HPP
 // ===================================================================================
 /**
- * @file projected_geometric_update_policy.hpp
+ * @file proj_geom_updates.hpp
  *
  * @brief SimHash-projected geometric update policy for approximate hierarchical clustering.
  *
@@ -51,7 +51,7 @@ namespace trex::ml_methods::clustering::hierarchical::agglomerative {
  * @tparam MatrixType        Type of the input data matrix (e.g., Eigen::MatrixXd or Eigen::Map).
  * @tparam DistancePolicyType Distance metric policy type (currently unused; kept for interface
  *                           consistency with other update policy types).
- * @tparam SelectedMethod    Compile-time linkage method (Ward, Average, Centroid, or Median).
+ * @tparam SelectedMethod    Compile-time linkage method (Ward, Centroid, or Median).
  */
 template <typename MatrixType, typename DistancePolicyType, LinkageMethod SelectedMethod>
 class ProjectedGeometricUpdatePolicy {
@@ -64,10 +64,12 @@ public:
 
     static_assert(
         SelectedMethod == LinkageMethod::Ward ||
-        SelectedMethod == LinkageMethod::Average ||
         SelectedMethod == LinkageMethod::Centroid ||
         SelectedMethod == LinkageMethod::Median,
-        "ProjectedGeometricUpdatePolicy only supports geometric linkages.");
+        "ProjectedGeometricUpdatePolicy only supports Ward, Centroid, and Median. "
+        "Average (UPGMA) is the mean of pairwise distances, NOT the distance between "
+        "centroids — the geometric centroid update would compute the wrong linkage "
+        "and violates the reducibility property required by NNChain.");
 
 private:
     ProjMatrixType V_;

@@ -84,7 +84,6 @@ target_sources(trex_ml_methods PUBLIC
         ${CMAKE_CURRENT_SOURCE_DIR}/clustering/hierarchical/agglomerative/dendrogram_utils.hpp
         ${CMAKE_CURRENT_SOURCE_DIR}/clustering/hierarchical/agglomerative/distance_policy.hpp
         ${CMAKE_CURRENT_SOURCE_DIR}/clustering/hierarchical/agglomerative/generic_linkage_core.hpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/clustering/hierarchical/agglomerative/geometric_update_policy.hpp
         ${CMAKE_CURRENT_SOURCE_DIR}/clustering/hierarchical/agglomerative/nnchain_core.hpp
         ${CMAKE_CURRENT_SOURCE_DIR}/clustering/hierarchical/agglomerative/proj_geom_updates.hpp
         ${CMAKE_CURRENT_SOURCE_DIR}/clustering/hierarchical/agglomerative/slink_core.hpp

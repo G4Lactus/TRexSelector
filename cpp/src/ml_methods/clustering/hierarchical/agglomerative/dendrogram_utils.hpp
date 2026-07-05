@@ -245,19 +245,18 @@ public:
             Eigen::Index u;
             Eigen::Index v;
             double weight;
-            Eigen::Index size;
             bool operator<(const Edge& other) const { return weight < other.weight; }
         };
 
         std::vector<Edge> edges;
         edges.reserve(nn_merges.size());
         for (const auto& m : nn_merges) {
-            edges.push_back({leaf_rep[m.cluster1], leaf_rep[m.cluster2],
-                             m.distance, m.new_cluster_size});
+            edges.push_back({leaf_rep[m.cluster1], leaf_rep[m.cluster2], m.distance});
         }
 
         // 3. Sort edges globally by distance (Resolves NN-Chain disjoint jumps)
-        std::sort(edges.begin(), edges.end());
+        //    - stable sort required for deterministic tie handling
+        std::stable_sort(edges.begin(), edges.end());
 
         // 4. Rebuild the standard chronological merge sequence
         std::vector<MergeStep> standard_merges;
@@ -273,11 +272,19 @@ public:
                 Eigen::Index id_u = uf.get_cluster_id(root_u);
                 Eigen::Index id_v = uf.get_cluster_id(root_v);
 
+                // Size of the newly formed component, computed from the Union-Find
+                // state. The size recorded chronologically by the producer is NOT
+                // reused here: after the global re-sort, an edge may join different
+                // components than at discovery time (non-monotone inputs from
+                // GenericLinkage, i.e. Centroid/Median inversions).
+                Eigen::Index new_size = uf.get_cluster_size(root_u) +
+                                        uf.get_cluster_size(root_v);
+
                 standard_merges.push_back({
                     std::min(id_u, id_v),
                     std::max(id_u, id_v),
                     edge.weight,
-                    edge.size
+                    new_size
                 });
 
                 uf.unite(UnionFind::UniteArgs{

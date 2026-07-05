@@ -28,10 +28,10 @@
 // ml_methods includes
 #include <ml_methods/clustering/hierarchical/agglomerative/agglomerative_types.hpp>
 #include <ml_methods/clustering/hierarchical/agglomerative/dendrogram_utils.hpp>
+#include <ml_methods/clustering/hierarchical/agglomerative/distance_policy.hpp>
 #include <ml_methods/clustering/hierarchical/agglomerative/slink_core.hpp>
 #include <ml_methods/clustering/hierarchical/agglomerative/nnchain_core.hpp>
 #include <ml_methods/clustering/hierarchical/agglomerative/generic_linkage_core.hpp>
-#include <ml_methods/clustering/hierarchical/agglomerative/geometric_update_policy.hpp>
 #include <ml_methods/clustering/hierarchical/agglomerative/block_tiled_matrix_policy.hpp>
 #include <ml_methods/clustering/hierarchical/agglomerative/proj_geom_updates.hpp>
 
@@ -52,8 +52,11 @@ public:
      *   to SciPy's `metric='sqeuclidean'`).
      * - Inversions: Standard SciPy preserves non-monotonic inversions for methods like
      *   Centroid and Median. This framework currently enforces strict distance
-     *   monotonicity globally, which may reorder rows compared to SciPy's chronological
-     *   output for those specific non-reducible methods.
+     *   monotonicity globally by re-sorting all merges by distance and rebuilding the
+     *   tree via Kruskal's algorithm. For the non-reducible methods (Centroid, Median)
+     *   this is more than a row reordering: when inversions occur, the rebuilt tree can
+     *   have a DIFFERENT topology than SciPy's chronological dendrogram, so cut_tree
+     *   results may differ around inverted merges.
      *
      * @tparam MatrixType          The type of the input data matrix.
      * @tparam DistancePolicyType  The distance metric policy.
@@ -100,6 +103,12 @@ public:
             else {
                 // Average (all metrics), or Ward with non-LSH_Approx metrics:
                 // use the exact Lance-Williams Matrix Engine.
+                // Ward's LW recurrence is only valid on squared Euclidean distances.
+                static_assert(Method != LinkageMethod::Ward ||
+                              DistancePolicyType::Metric == DistanceMetric::Euclidean,
+                              "Ward linkage requires DistanceMetric::Euclidean "
+                              "(squared Euclidean); other exact metrics are not valid "
+                              "in the Lance-Williams recurrence for Ward.");
                 using Policy = BlockTiledMatrixPolicy<MatrixType, DistancePolicyType, Method>;
                 NNChain<MatrixType, Policy> nnchain(data, use_mmap, verbose);
                 nnchain.cluster();
@@ -111,9 +120,7 @@ public:
         // PATH 3: LANCE-WILLIAMS MATRIX METHODS (Disk-Bound NVMe, O(N^2) Space)
         // -----------------------------------------------------------------------
         else if constexpr (Method == LinkageMethod::Complete ||
-                           Method == LinkageMethod::WPGMA ||
-                           Method == LinkageMethod::Average ||
-                           Method == LinkageMethod::Ward) {
+                           Method == LinkageMethod::WPGMA) {
             using Policy = BlockTiledMatrixPolicy<MatrixType, DistancePolicyType, Method>;
 
             // Pass the use_mmap flag down through NNChain into the BlockTiled constructor
@@ -124,7 +131,12 @@ public:
         }
 
         else if constexpr (Method == LinkageMethod::Centroid || Method == LinkageMethod::Median) {
-            // Non-reducible methods MUST use the O(1) Matrix Policy to survive GenericLinkage
+            // Non-reducible methods MUST use the O(1) Matrix Policy to survive GenericLinkage.
+            // Their LW recurrences are only valid on squared Euclidean distances.
+            static_assert(DistancePolicyType::Metric == DistanceMetric::Euclidean,
+                          "Centroid/Median linkage requires DistanceMetric::Euclidean "
+                          "(squared Euclidean); the Lance-Williams centroid/median "
+                          "recurrences are not valid for other metrics.");
             using Policy = BlockTiledMatrixPolicy<MatrixType, DistancePolicyType, Method>;
             GenericLinkage<MatrixType, Policy> generic_linkage(data, use_mmap, verbose);
             generic_linkage.cluster();

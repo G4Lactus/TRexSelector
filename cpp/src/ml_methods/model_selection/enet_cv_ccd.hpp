@@ -100,6 +100,14 @@ public:
             (Xs_.transpose() * yc_).cwiseAbs().maxCoeff()
             / (static_cast<double>(n_) * alpha_eff) * y_scale_;
 
+        // Guard the grid anchor: a constant y (or y orthogonal to X) gives
+        // lambda_max == 0, and log(0) would poison the whole grid with NaNs.
+        if (!(lambda_max > 1e-12) || !std::isfinite(lambda_max)) {
+            throw std::runtime_error(
+                "enet_gaussian::fit: lambda grid anchor is degenerate "
+                "(y is constant or (nearly) orthogonal to X).");
+        }
+
         const double lmr = (lambda_min_ratio > 0.0)
                          ? lambda_min_ratio
                          : (n_ < p_ ? 1e-2 : 1e-4);

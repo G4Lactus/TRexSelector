@@ -131,11 +131,19 @@ public:
              - static_cast<double>(n) * x_mean_full.cwiseAbs2()
             ).cwiseMax(0.0).cwiseSqrt();
 
-        // Guard constant columns (zero variance → scale = 1 to avoid division by zero)
+        // Guard constant columns (zero variance → scale = 1 to avoid division by zero).
+        // If ALL columns are constant, maxCoeff() == 0 and a relative tolerance would
+        // be 0 too — set every scale to 1; the c_max check below then throws cleanly
+        // instead of propagating 0/0 NaNs.
         {
-            const double scale_tol = 1e-10 * x_scale_full.maxCoeff();
-            for (Eigen::Index j = 0; j < p; ++j) {
-                if (x_scale_full(j) < scale_tol) x_scale_full(j) = 1.0;
+            const double max_scale = x_scale_full.maxCoeff();
+            if (max_scale <= 0.0) {
+                x_scale_full.setOnes();
+            } else {
+                const double scale_tol = 1e-10 * max_scale;
+                for (Eigen::Index j = 0; j < p; ++j) {
+                    if (x_scale_full(j) < scale_tol) x_scale_full(j) = 1.0;
+                }
             }
         }
 
@@ -239,9 +247,16 @@ public:
                 ).cwiseMax(0.0).cwiseSqrt();
 
             {
-                const double scale_tol = 1e-10 * x_scale_tr.maxCoeff();
-                for (Eigen::Index j = 0; j < p; ++j) {
-                    if (x_scale_tr(j) < scale_tol) x_scale_tr(j) = 1.0;
+                // Same all-constant guard as the full-data block: with scales of 1
+                // the fold matrix becomes all-zero and the rank check below throws.
+                const double max_scale = x_scale_tr.maxCoeff();
+                if (max_scale <= 0.0) {
+                    x_scale_tr.setOnes();
+                } else {
+                    const double scale_tol = 1e-10 * max_scale;
+                    for (Eigen::Index j = 0; j < p; ++j) {
+                        if (x_scale_tr(j) < scale_tol) x_scale_tr(j) = 1.0;
+                    }
                 }
             }
 

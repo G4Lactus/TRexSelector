@@ -110,6 +110,7 @@ public:
                  bool center    = true,
                  bool normalize = true)
         : data_ptr_(X.data()),
+          outer_stride_(X.outerStride()),
           n_(X.rows()),
           p_(X.cols()),
           M_(M),
@@ -165,7 +166,11 @@ public:
                 "PCA::fit() called on an already-fitted instance.");
         }
 
-        Eigen::Map<Eigen::MatrixXd> X_map(data_ptr_, n_, p_);
+        // Rebuild the caller's view with its ORIGINAL outer stride: Eigen::Ref
+        // accepts non-contiguous column blocks (e.g. X.topRows(k)), so a plain
+        // stride-less Map would silently misread such inputs.
+        Eigen::Map<const Eigen::MatrixXd, 0, Eigen::OuterStride<>> X_map(
+            data_ptr_, n_, p_, Eigen::OuterStride<>(outer_stride_));
 
         svd::SVDResult svd_res = svd::SVDSolver{}.compute(X_map, M_);
 
@@ -284,6 +289,9 @@ private:
 
     /** @brief Raw pointer into X's data buffer; valid until fit() completes, then null. */
     double* data_ptr_;
+
+    /** @brief Outer stride of X's buffer (== n_ for contiguous storage, larger for views). */
+    Eigen::Index outer_stride_;
 
     /** @brief Number of rows in X. */
     Eigen::Index n_;

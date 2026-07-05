@@ -8,8 +8,8 @@
  * @file ridge.hpp
  *
  * @brief Standalone Ridge Regression solver optimized for single-lambda solves.
- *        Single-λ Cholesky solver. For multi-λ or GCV model selection, see
- *        model_selection/ridge_gcv.hpp."
+ *        Single-λ Cholesky solver. For multi-λ cross-validated model selection, see
+ *        model_selection/ridge_cv_svd.hpp and model_selection/enet_cv_ccd.hpp.
  */
 // ===================================================================================
 

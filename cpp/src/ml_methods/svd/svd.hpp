@@ -90,6 +90,9 @@ public:
         Eigen::Index n = X.rows();
         Eigen::Index p = X.cols();
 
+        if (M < 1) {
+            throw std::invalid_argument("M must be at least 1");
+        }
         if (M > std::min(n, p)) {
             throw std::invalid_argument("M must not exceed min(n, p)");
         }

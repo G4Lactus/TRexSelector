@@ -37,6 +37,11 @@ DataTransformer& ZScoreScaler::fit(Eigen::Map<Eigen::MatrixXd>& X,
         throw std::invalid_argument(
             get_name() + "::fit: Empty matrix provided");
     }
+    if (with_std_ && nrows < 2) {
+        throw std::invalid_argument(
+            get_name() + "::fit: with_std requires at least 2 samples "
+            "(the Bessel-corrected standard deviation divides by n - 1)");
+    }
 
     // Allocate storage
     means_.resize(ncols);
