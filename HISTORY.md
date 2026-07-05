@@ -31,6 +31,42 @@
   serialized. NOTE: the checkpoint format changed — `.bin` files saved with
   earlier builds cannot be loaded.
 
+#### T-Rex+GVS rework: solver-encapsulated augmentation and the TIENETAug solver
+
+- New `TIENETAug_Solver` (tsolvers, LARS family): the Informed Elastic Net
+  (Machkour et al., CAMSAP 2023, Theorem 1) as a terminating forward selector.
+  Builds the group-informed row-augmented system `[X; B]`, `[D; B tiled per
+  dummy layer]`, `[y; 0_M]` (B(m, j) = sqrt(lambda2)/sqrt(p_m) on group-m
+  columns) internally from a 0-based group assignment, applies the R-faithful
+  post-augmentation column scaling, and runs an inner T-LASSO (or pure T-LARS)
+  — full save/load support, registered in the polymorphic solver tests.
+- `TRexGVSSelector` now hands every solver the plain (n x p) design, the plain
+  (n x L) cluster-MVN dummy block, and the centered response; all augmentation
+  lives in the solvers. `GVSType::IEN` routes through `TIENETAug_Solver`
+  (new `SolverTypeForTRex::TIENET_AUG`, also in Python; IEN previously
+  required TLASSO — breaking config change), and `en_solver = TENET_AUG`
+  routes through `TENETAug_Solver`, which finally makes the
+  `tenet_aug_use_lars` R-parity flag functional (it was silently ignored).
+  The inline augmentation machinery (X_aug_/y_aug_ members, five build
+  helpers, the variable effective row count, and the EN-aug mmap
+  reinterpretation) is deleted; memory-mapped dummy files now always have n
+  rows. EN-aug thereby switches from post-augmentation re-normalization to
+  the demo-verified as-constructed convention that reproduces the Gram-based
+  TENET path exactly (asserted by a new equivalence test).
+- Review fixes: the GVS solver cache is cleared BEFORE the dummy buffers it
+  views are reassigned (transient-dangling-view hardening, mirroring the
+  base-class contract); EN dummy normalization goes through the shared
+  data-normalizer (degenerate columns warn and keep scale 1.0 instead of
+  throwing).
+- New end-to-end GVS tests (grouped-recovery for EN/TENET, EN/TENETAug,
+  EN/TENETAug with pure-LARS inner, IEN/TIENETAug, plus TENET==TENETAug
+  selection equivalence). The IEN test pins lambda_2: the ridge-CV value
+  (identical to the R reference's, which shares one CV and one * p/2
+  conversion between EN and IEN) can make the sqrt(lambda2)-scaled group
+  rows dominate the augmented geometry on n > p designs, leaving nothing
+  selectable — a documented sensitivity of the IEN track (see
+  computeLambda2()).
+
 #### T-Rex selector review fixes (trex_selector_methods module)
 
 - Warm starts now actually engage: `WarmStartManager` never stored solvers or

@@ -13,7 +13,7 @@ target_sources(trex_tsolvers PRIVATE
     ${CMAKE_CURRENT_LIST_DIR}/tenet_aug_solver.cpp
     ${CMAKE_CURRENT_LIST_DIR}/tenet_solver.cpp
     #${CMAKE_CURRENT_LIST_DIR}/tienet_solver.cpp
-    #${CMAKE_CURRENT_LIST_DIR}/tienet_aug_solver.cpp
+    ${CMAKE_CURRENT_LIST_DIR}/tienet_aug_solver.cpp
     ${CMAKE_CURRENT_LIST_DIR}/tlars_solver.cpp
     ${CMAKE_CURRENT_LIST_DIR}/tlasso_solver.cpp
     ${CMAKE_CURRENT_LIST_DIR}/tstagewise_solver.cpp
@@ -34,7 +34,7 @@ target_sources(trex_tsolvers PUBLIC
         ${CMAKE_CURRENT_LIST_DIR}/tenet_aug_solver.hpp
         ${CMAKE_CURRENT_LIST_DIR}/tenet_solver.hpp
         #${CMAKE_CURRENT_LIST_DIR}/tienet_solver.hpp
-        #${CMAKE_CURRENT_LIST_DIR}/tienet_aug_solver.hpp
+        ${CMAKE_CURRENT_LIST_DIR}/tienet_aug_solver.hpp
         ${CMAKE_CURRENT_LIST_DIR}/tlars_solver.hpp
         ${CMAKE_CURRENT_LIST_DIR}/tlasso_solver.hpp
         ${CMAKE_CURRENT_LIST_DIR}/tstagewise_solver.hpp

@@ -82,6 +82,7 @@ inline constexpr bool isGreedySolver(
         case sdx::SolverTypeForTRex::TLASSO:
         case sdx::SolverTypeForTRex::TENET:
         case sdx::SolverTypeForTRex::TENET_AUG:
+        case sdx::SolverTypeForTRex::TIENET_AUG:
             return false;
         default:
             return true;

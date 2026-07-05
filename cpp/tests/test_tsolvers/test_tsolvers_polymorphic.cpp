@@ -24,6 +24,7 @@
 #include <tsolvers/linear_model/lars_based/tlasso_solver.hpp>
 #include <tsolvers/linear_model/lars_based/tenet_solver.hpp>
 #include <tsolvers/linear_model/lars_based/tenet_aug_solver.hpp>
+#include <tsolvers/linear_model/lars_based/tienet_aug_solver.hpp>
 #include <tsolvers/linear_model/lars_based/tstepwise_solver.hpp>
 #include <tsolvers/linear_model/lars_based/tstagewise_solver.hpp>
 
@@ -55,11 +56,11 @@ namespace fs = std::filesystem;
 
 // ========================================================================================
 
-// Type List for the 13 solvers
+// Type List for the 14 solvers
 typedef ::testing::Types<
-    TLARS_Solver, TLASSO_Solver, TENET_Solver, TENETAug_Solver, TSTEPWISE_Solver,
-    TSTAGEWISE_Solver, TOMP_Solver, TMP_Solver, TGP_Solver, TACGP_Solver,
-    TNCGMP_Solver, TOOLS_Solver, TAFS_Solver
+    TLARS_Solver, TLASSO_Solver, TENET_Solver, TENETAug_Solver, TIENETAug_Solver,
+    TSTEPWISE_Solver, TSTAGEWISE_Solver, TOMP_Solver, TMP_Solver, TGP_Solver,
+    TACGP_Solver, TNCGMP_Solver, TOOLS_Solver, TAFS_Solver
 > AllSolvers;
 
 // Factory for construction
@@ -71,6 +72,13 @@ std::unique_ptr<T> create_solver(Eigen::Map<Eigen::MatrixXd>& X,
                   std::is_same_v<T, TENETAug_Solver>) {
         // TENET / TENETAug require lambda2
         return std::make_unique<T>(X, D, y, 0.5, true, true, false);
+    } else if constexpr (std::is_same_v<T, TIENETAug_Solver>) {
+        // TIENETAug requires lambda2 + a group assignment. Singleton groups
+        // (each variable its own group) exercise the full augmentation path;
+        // per Corollary 1 of the IEN paper this is the EN-like special case.
+        Eigen::VectorXi groups = Eigen::VectorXi::LinSpaced(
+            X.cols(), 0, static_cast<int>(X.cols()) - 1);
+        return std::make_unique<T>(X, D, y, 0.5, groups, true, true, false);
     } else if constexpr (std::is_same_v<T, TAFS_Solver>) {
         // TAFS has rho with a default, but to be sure we just match signature
         return std::make_unique<T>(X, D, y, 1.0, true, true, false);

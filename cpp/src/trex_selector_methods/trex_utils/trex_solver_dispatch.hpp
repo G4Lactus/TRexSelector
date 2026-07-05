@@ -67,9 +67,10 @@ enum class SolverTypeForTRex {
     TLASSO,     // Terminating LASSO
     TENET,      // Terminating ENET
     TENET_AUG,  // Terminating ENET via augmented LASSO (GVS only)
+    TIENET_AUG, // Terminating Informed ENET via augmented LASSO (GVS only)
     TSTEPWISE,  // Terminating Stepwise
     TSTAGEWISE, // Terminating Stagewise
-    //TIENET,   // Terminating Informed ENET (future) // TODO - add when implemented
+    //TIENET,   // Terminating Informed ENET, path-wise (future) // TODO - add when implemented
     // -------------------------------
 
     // OMP-based solvers
@@ -348,6 +349,9 @@ inline Eigen::MatrixXd dispatchByType(SolverTypeForTRex solver_type, const Solve
         case SolverTypeForTRex::TENET_AUG:  throw std::invalid_argument(
                 "trex_solver_dispatch: TENET_AUG is a GVS-only solver; "
                 "use TRexGVSSelector with gvs_type=EN.");
+        case SolverTypeForTRex::TIENET_AUG: throw std::invalid_argument(
+                "trex_solver_dispatch: TIENET_AUG is a GVS-only solver; "
+                "use TRexGVSSelector with gvs_type=IEN.");
         case SolverTypeForTRex::TSTAGEWISE: return dispatchSolver<lars::TSTAGEWISE_Solver>(cfg);
 
         // OMP family

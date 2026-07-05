@@ -11,85 +11,67 @@
  *
  * @details
  *  Extends the base class TRexSelector with cluster-aware multivariate-normal
- *  dummy generation and one of two selection policies:
+ *  dummy generation and one of two selection policies. All augmentation is
+ *  ENCAPSULATED IN THE SOLVERS: GVS always hands the solver the plain
+ *  (n x p) design X_, the plain (n x L) MVN dummy block D_k, and the centered
+ *  response y_.
  *
  *    - GVSType::EN    Elastic-Net penalty for grouped variable selection.
- *                     The concrete inner solver is chosen by ENSolverType:
+ *                     The concrete solver is chosen by ENSolverType:
  *
  *                     - ENSolverType::TENET (default) — Gram-based EN
  *                       (TENET_Solver): a pathwise LARS-EN solver that absorbs
  *                       the ridge penalty via a Cholesky update on
- *                       X_A^T X_A + lambda2*I (Zou & Hastie, 2005). X, D, y are
- *                       passed UNAUGMENTED (n rows); n_eff = n.
+ *                       X_A^T X_A + lambda2*I (Zou & Hastie, 2005).
  *
  *                     - ENSolverType::TENET_AUG — augmented-LASSO formulation
- *                       (Machkour et al. 2022, 2023). The ridge penalty is
- *                       lifted OUT of the solver into an explicitly augmented
- *                       system that is fed to a plain T-LASSO solver. Because
- *                       the elastic net penalises every coefficient, the ridge
- *                       blocks are identity matrices I_p (real variables) and
- *                       I_L (dummies), with d1 = sqrt(lambda2) and the global
- *                       Zou-Hastie factor d2 = 1/sqrt(1+lambda2):
- *                         X_aug = d2 * [ X       ]  (n rows)
- *                                      [ d1*I_p  ]  (p rows)
- *                                      [ 0       ]  (L rows)
- *                         D_aug = d2 * [ D       ]  (n rows)
- *                                      [ 0       ]  (p rows)
- *                                      [ d1*I_L  ]  (L rows)
- *                         y_aug = [ y ; 0_{p+L} ]   (NO d2, NO scaling on y)
- *                       => n_eff = n + p + L. Since L (= num_dummies) CHANGES
- *                       across the L-loop, the I_L block grows, so X_aug, D_aug
- *                       and y_aug are REBUILT every L-iteration (see
- *                       prepareDummiesForLStep / buildENXAugmentation /
- *                       buildENyAugmentation / buildENDAugmentation).
- *                       The global d2 = 1/sqrt(1+lambda2) factor is applied
- *                       EXPLICITLY. Although the post-augmentation
- *                       per-column scaling (always center, then divide by
- *                       L2-norm or sample SD) divides every column
- *                       by its own norm and would cancel any global scalar, d2
- *                       is kept for a 1:1 mirror of the reference. Equivalent
- *                       to TENET for lambda2 > 0.
+ *                       (TENETAug_Solver; Machkour et al. 2022, 2023). The
+ *                       solver internally builds the Zou-Hastie system
+ *                         X_aug = d2 * [ X ; d1*I_p ; 0_L ],
+ *                         D_aug = d2 * [ D ; 0_p ; d1*I_L ],
+ *                         y_aug = [ y ; 0_{p+L} ],
+ *                       with d1 = sqrt(lambda2), d2 = 1/sqrt(1+lambda2), and
+ *                       runs an inner T-LASSO (or pure T-LARS when
+ *                       `tenet_aug_use_lars` is set) on it AS CONSTRUCTED —
+ *                       for pre-normalized unit-scale X and D columns the
+ *                       augmented columns are already unit-scale by the d1/d2
+ *                       algebra, and this exactly reproduces the Gram-based
+ *                       TENET path (verified to machine precision; see
+ *                       tenet_aug_solver.hpp). GVS therefore passes the SAME
+ *                       pre-normalized D_k as for plain TENET.
  *
- *    - GVSType::IEN   Informed Elastic Net (Machkour et al., CAMSAP 2023).
- *                     No dedicated IEN solver exists yet, so the L2 penalty is
- *                     absorbed into an explicit augmented Lasso-type system fed
- *                     to a plain T-LASSO solver. Unlike EN (per-coefficient
- *                     identity ridge), IEN penalises GROUP structure, so the
- *                     ridge block is the cluster-membership matrix B with
- *                     M = max_clusters rows. M is fixed by the ONE-TIME
- *                     clustering of X and is independent of L:
- *                         X_aug = [ X ]  (n rows)
- *                                 [ B ]  (M rows), row m =
- *                                        (sqrt(lambda2)/sqrt(p_m)) on cluster-m cols
- *                         D_aug = [ D          ]  (n rows)
- *                                 [ B repeated ]  (M rows, one B segment per
- *                                                  dummy layer)
- *                         y_aug = [ y ; 0_M ]
- *                       => n_eff = n + M (FIXED). X_aug is built ONCE per
- *                       select(); but because L changes across the L-loop, the
- *                       DUMMY matrix D_aug (whose repeated-B bottom block widens
- *                       with the number of dummy layers) is still REASSEMBLED
- *                       every L-iteration.
+ *    - GVSType::IEN   Informed Elastic Net (TIENETAug_Solver; Machkour et
+ *                     al., CAMSAP 2023). The solver internally builds the
+ *                     group-informed Lasso-type system of Theorem 1
+ *                         X_aug = [ X ; B ]  (M extra rows; B(m, .) =
+ *                                 (sqrt(lambda2)/sqrt(p_m)) on cluster-m cols),
+ *                         D_aug = [ D ; B tiled once per dummy layer ],
+ *                         y_aug = [ y ; 0_M ],
+ *                       applies the R-faithful post-augmentation preprocessing
+ *                       (column centering + rescaling, y centering; R
+ *                       lm_dummy.R `scale()`), and runs an inner T-LASSO.
+ *                       GVS passes the RAW MVN dummy block (the solver
+ *                       normalizes the augmented columns itself) plus the
+ *                       0-based cluster assignment from the one-time
+ *                       clustering of X.
  *
- *    Reassembly rule (ALL variants): the per-experiment cluster-aware MVN dummy
- *    matrix is (re)assembled every L-iteration because num_dummies (L) changes;
- *    only the fixed real-variable augmentation (IEN's X_aug) is built once.
+ *    Reassembly rule (ALL variants): the per-experiment cluster-aware MVN
+ *    dummy block D_k is (re)assembled every L-iteration because num_dummies
+ *    (L) changes; fresh solvers are then constructed at T = 1.
  *
- *    Column scaling (ALL variants): every column is ALWAYS centered to mean 0
- *    first, then rescaled by either its L2-norm (ScalingMode::L2) or its sample
- *    SD (ScalingMode::ZSCORE). Centering is applied in BOTH cases. The augmented
- *    real, dummy, and response columns share the exact convention applied to X_
- *    by the base class, mirroring R `scale()` in lm_dummy.R / add_dummies_GVS.R.
+ *    Column scaling: X_ is centered + rescaled by the base class
+ *    (ScalingMode::L2 or ZSCORE). The EN-variant dummy blocks are centered +
+ *    rescaled with the same convention before being handed to the solver;
+ *    the IEN dummy block is passed raw (see above).
  *
  *  Design notes:
  *  ------------
  *    - GVS does NOT use the inherited `DummyGenerator` or `ExperimentRunner`.
  *      It owns a private K-experiment loop, a private per-experiment
  *      dummy-layer cache, and a private warm-start cache of in-memory solvers
- *      (T-LASSO for IEN / EN-aug, TENET for plain EN) shared by ALL variants.
- *      The inherited `MemmapManager` IS reused (re-allocated in
- *      `onSelectBegin()` at the maximum augmented row count, and torn down by
- *      the base class at the end of `select()`); see `gvs_use_mmap_`.
+ *      (TENET / TENETAug / TIENETAug). The inherited `MemmapManager` IS
+ *      reused (re-allocated in `onSelectBegin()` with n rows, and torn down
+ *      by the base class at the end of `select()`); see `gvs_use_mmap_`.
  *
  *    - Support L-looop strategies:
  *.     `LLoopStrategy::STANDARD`, `HCONCAT`, `SKIPL`, and `DIRECT`.
@@ -102,12 +84,9 @@
  *
  *    - Memory mapping is supported uniformly across all four allowed L-loop strategies.
  *      When enabled, K independent (non-shared) D files are allocated up-front
- *      in `onSelectBegin()`. Their row count is the MAXIMUM augmented height
- *      (n for plain EN, n+M for IEN, n+p+max_dummies for EN-aug); each L-loop
- *      step fills the per-K columns in place via `buildENDAugmentation` /
- *      `buildIENDAugmentation`. For
- *      EN-aug the flat buffer is reinterpreted per step as a contiguous
- *      (n+p+L) x L view, since the augmented height varies with L.
+ *      in `onSelectBegin()` with n rows (the solvers own any augmented
+ *      buffers internally); each L-loop step fills the per-K columns in place
+ *      via `assembleDummyBlock`.
  *
  *    - The lambda_2 ridge parameter (LARS units) is resolved as follows:
  *        * lambda_2 <  0 (default -1): "not supplied" sentinel (R's NULL
@@ -179,7 +158,8 @@ namespace hac = trex::ml_methods::clustering::hierarchical::agglomerative;
 enum class GVSType {
     /** @brief Ordinary Elastic Net; solver variant controlled by ENSolverType. */
     EN,
-    /** @brief Informed Elastic Net (row-augmented system + TLASSO solver). */
+    /** @brief Informed Elastic Net (TIENETAug_Solver: group-informed
+     *  row-augmented system built inside the solver). */
     IEN
 };
 
@@ -314,21 +294,21 @@ struct TRexGVSControlParameter {
      */
     std::vector<std::string> group_labels;
 
-    /** @brief Diagnostic / R-parity option for `en_solver == TENET_AUG`.
-     *  When true, the augmented EN system is solved with a pure-LARS inner
-     *  solver (never drops variables, matching R's `trex(type="lar")`) instead
-     *  of the default LARS-LASSO inner solver. Ignored for other solvers.
-     *  Default: false.
+    /** @brief Diagnostic / R-parity option for the augmented solvers
+     *  (`en_solver == TENET_AUG` and `gvs_type == IEN`). When true, the
+     *  augmented system is solved with a pure-LARS inner solver (never drops
+     *  variables, matching R's `trex(type="lar")`) instead of the default
+     *  LARS-LASSO inner solver. Ignored for plain TENET. Default: false.
      */
     bool tenet_aug_use_lars = false;
 
     /** @brief Base T-Rex algorithmic control parameters (nested).
      *  GVS restricts `solver_type` to the solvers it actually drives (see
      *  `TRexGVSSelector`'s validation): TENET/TENET_AUG for `GVSType::EN`,
-     *  TLASSO for `GVSType::IEN`. The default here overrides the base class's
-     *  own default (TLARS) with TENET, matching the default `gvs_type = EN`
-     *  / `en_solver = TENET`, so a fully-defaulted `TRexGVSControlParameter`
-     *  constructs without throwing.
+     *  TIENET_AUG for `GVSType::IEN`. The default here overrides the base
+     *  class's own default (TLARS) with TENET, matching the default
+     *  `gvs_type = EN` / `en_solver = TENET`, so a fully-defaulted
+     *  `TRexGVSControlParameter` constructs without throwing.
      */
     tc::TRexControlParameter trex_ctrl = [] {
         tc::TRexControlParameter t;
@@ -530,38 +510,6 @@ protected:
      */
     std::vector<std::vector<Eigen::MatrixXd>> dummy_layers_;
 
-    // ----- Augmented system (row-augmented; IEN and EN-aug) -----
-
-    /** @brief Augmented predictor matrix X_aug, column-normalized.
-     *  - IEN     : [X ; bottom_block], fixed ((n + M) x p), built once.
-     *  - EN-aug  : [X ; sqrt(lambda2)*I_p ; 0_{L x p}], ((n + p + L) x p),
-     *              rebuilt every L-step (L = num_dummies varies).
-     *  - plain EN: unused (solver sees *X_ directly).
-     */
-    Eigen::MatrixXd X_aug_;
-
-    /** @brief Augmented response y_aug.
-     *  - IEN     : [y ; 0_M]   (n + M).
-     *  - EN-aug  : [y ; 0_{p+L}] (n + p + L), rebuilt every L-step.
-     *  - plain EN: unused.
-     */
-    Eigen::VectorXd y_aug_;
-
-    /** @brief Per-cluster IEN bottom-row contribution (M x p): row m has
-     *  value (sqrt(lambda2) / sqrt(p_m)) at columns of cluster m, zero elsewhere.
-     *  Built once per select() if gvs_type == IEN.
-     */
-    Eigen::MatrixXd ien_bottom_block_p_;
-
-    // ----- Effective data shapes used by the solver -----
-
-    /** @brief Number of effective rows seen by the solver:
-     *  n for plain EN, n + M for IEN, n + p + L for EN-aug (L = num_dummies).
-     *  For IEN / plain EN set once in onSelectBegin(); for EN-aug updated each
-     *  L-step in prepareDummiesForLStep().
-     */
-    std::size_t n_eff_{0};
-
     /** @brief User-requested memory-mapping flag, captured before passing
      *  the base control parameter to the parent constructor. The base
      *  copy is forced to `false` so that the inherited `memmap_mgr_` is
@@ -572,19 +520,18 @@ protected:
 
     // ----- Solver-side buffers + Maps (must outlive any cached solver) -----
 
-    /** @brief Per-experiment dummy block D ((n_eff x num_dummies) per k).
+    /** @brief Per-experiment dummy block D ((n x num_dummies) per k).
      *  In-memory mode: stable across T-iterations within one L-iter,
      *  rebuilt per L-iter. Memory-mapped mode: empty (storage lives in
-     *  the inherited `memmap_mgr_`). */
+     *  the inherited `memmap_mgr_`). EN variants: centered + rescaled;
+     *  IEN: raw MVN draws (TIENETAug normalizes the augmented columns). */
     std::vector<Eigen::MatrixXd> D_solver_bufs_;
 
-    /** @brief Stable Map over X seen by the solver:
-     *  plain EN -> *X_; IEN / EN-aug -> X_aug_. Shared across all k.
-     *  Rebound per L-step for EN-aug (X_aug_ is rebuilt each L-step). */
+    /** @brief Stable Map over X_ seen by the solver (all variants; the
+     *  augmented solvers own their augmented copies internally). */
     std::unique_ptr<Eigen::Map<Eigen::MatrixXd>> X_solver_map_;
 
-    /** @brief Stable Map over y seen by the solver:
-     *  plain EN -> y_; IEN / EN-aug -> y_aug_. */
+    /** @brief Stable Map over y_ seen by the solver (all variants). */
     std::unique_ptr<Eigen::Map<Eigen::VectorXd>> y_solver_map_;
 
     /** @brief Stable Maps over D_solver_bufs_, one per k. */
@@ -627,109 +574,20 @@ protected:
      */
     double computeLambda2() const;
 
-    /** @brief Build the FIXED IEN real-variable design `X_aug_` and the
-     *  reusable cluster-membership bottom block `ien_bottom_block_p_`.
-     *  Called ONCE per select() when gvs_type == IEN, because these depend only
-     *  on the one-time clustering of X (rows = n + M, M = max_clusters) and are
-     *  independent of the dummy count L. No global d2 factor for IEN (the
-     *  sqrt(l2)*(1/sqrt(l2)) on the data block cancels in R; only the bottom
-     *  group-indicator block carries sqrt(lambda2)/sqrt(p_m)). The matrix is
-     *  column-normalized in place (R's `scale()`).
-     */
-    void buildIENXAugmentation();
-
-    /** @brief Build the FIXED IEN augmented response `y_aug_ = [ y ; 0_M ]`,
-     *  then center it (R: `y <- y - mean(y)`; no d2, no SD scaling on y).
-     *  Called ONCE per select() when gvs_type == IEN.
-     */
-    void buildIENyAugmentation();
-
-    /** @brief Build the EN-augmented (Zou-Hastie) design `X_aug_` for the
-     *  TENET_AUG solver variant. Unlike IEN (fixed `n + M` rows), the EN
-     *  augmentation has `n + p + L` rows where `L = num_dummies` varies per
-     *  L-iteration, so this is (re)built every L-step from
-     *  `prepareDummiesForLStep`.
+    /** @brief Assemble experiment `k`'s plain (n x L) dummy block into `dst`
+     *  (an owning `Eigen::MatrixXd` or an `Eigen::Map` over mmap storage):
+     *  the horizontal concatenation of `dummy_layers_[k]`. All augmentation
+     *  (ridge rows, group blocks) lives inside the solvers.
      *
-     *  X_aug_ = d2 * [ X ; d1*I_p ; 0_{L x p} ]   ((n+p+L) x p)
-     *  with d1 = sqrt(lambda2), d2 = 1/sqrt(1+lambda2). The global d2 factor is
-     *  applied EXPLICITLY (faithful to R `lm_dummy.R`), then the matrix is
-     *  column-normalized by `normalizeAugmentedColumns` (R's `scale()`).
-     *
-     *  @param num_dummies Current dummy count L (sets the trailing zero block).
-     */
-    void buildENXAugmentation(std::size_t num_dummies);
-
-    /** @brief Build the EN-augmented response `y_aug_ = [ y ; 0_{p+L} ]` for
-     *  the TENET_AUG variant, then center it (R: `y <- y - mean(y)`; no d2, no
-     *  SD scaling on y). (Re)built every L-step from `prepareDummiesForLStep`.
-     *
-     *  @param num_dummies Current dummy count L (sets the trailing zero block).
-     */
-    void buildENyAugmentation(std::size_t num_dummies);
-
-    /**
-     * @brief Center each column to mean 0 and rescale it, in place, using
-     *        the same column-scaling convention as the externally applied
-     *        `centerAndL2NormalizeX` (L2-norm or z-score / sample SD).
-     *
-     * @details
-     *  Templated on `Derived` so it accepts both owning `Eigen::MatrixXd`
-     *  buffers and `Eigen::Map<Eigen::MatrixXd>` views over
-     *  memory-mapped storage. Operates over all rows of `M` (i.e., the
-     *  full effective row count, including IEN bottom-block rows).
-     *
-     *  Applied externally to TLASSO / TENET (both solvers receive
-     *  `normalize=false, intercept=false`) so that the augmented system
-     *  handed to LARS conforms to the chosen column-scaling + zero-mean
-     *  convention.
-     *
-     *  The scale divisor of centered column `x_c` matches
-     *  `centerAndL2NormalizeX` exactly:
-     *    - L2     (`zscore == false`): `||x_c||`        -> unit-L2 columns.
-     *    - ZSCORE (`zscore == true`) : `||x_c|| / sqrt(rows - 1)`
-     *                                  (sample SD) -> unit-SD columns,
-     *                                  i.e. column L2-norm `sqrt(rows - 1)`.
-     *  This MUST track the scaling applied to `X_`: under z-score, the real
-     *  variables carry column mass `sqrt(n - 1)`, so the dummies in `M` must
-     *  be z-scaled too, otherwise the dummy-based FDR calibration compares
-     *  variables and dummies on mismatched scales.
-     *
-     * @tparam Derived Any Eigen dense matrix expression.
-     *
-     * @param[in,out] M    Matrix to normalize in place.
-     * @param eps          Numerical zero. A column whose scale after
-     *                     centering falls below `eps` triggers a
-     *                     `std::runtime_error` (degenerate input).
-     * @param zscore       If true, divide by sample SD (z-score) instead of
-     *                     the plain L2-norm. Default false (unit-L2).
+     *  Column scaling is the CALLER's choice: the EN variants center +
+     *  rescale afterwards (TENET consumes pre-normalized columns; TENETAug's
+     *  d1/d2 algebra preserves unit scale exactly); IEN passes the block raw
+     *  (TIENETAug normalizes the augmented columns internally, mirroring R's
+     *  post-augmentation `scale()`).
      */
     template <typename Derived>
-    static void normalizeAugmentedColumns(Eigen::MatrixBase<Derived>& M, double eps,
-                                          bool zscore = false);
-
-    /** @brief Assemble experiment `k`'s EN dummy matrix into `dst`
-     *  (an owning `Eigen::MatrixXd` or an `Eigen::Map` over mmap storage).
-     *  Handles BOTH EN sub-variants, sized by the caller:
-     *    - plain EN (TENET)     : dst is (n x L), D = horzcat of dummy layers.
-     *    - EN-aug   (TENET_AUG) : dst is (n+p+L x L),
-     *        D_aug = d2 * [ D ; 0_{p x L} ; d1*I_L ], d2=1/sqrt(1+l2), d1=sqrt(l2).
-     *  The d2 factor (EN-aug only) is applied EXPLICITLY for fidelity to R.
-     *  No column scaling here -- the caller applies `normalizeAugmentedColumns`.
-     */
-    template <typename Derived>
-    void buildENDAugmentation(std::size_t k, std::size_t num_dummies,
-                              Eigen::MatrixBase<Derived>& dst) const;
-
-    /** @brief Assemble experiment `k`'s IEN dummy matrix into `dst`
-     *  (an owning `Eigen::MatrixXd` or an `Eigen::Map` over mmap storage).
-     *  dst is (n + M x L): top n rows = horzcat of `dummy_layers_[k]`; bottom
-     *  M rows = `ien_bottom_block_p_` repeated once per dummy layer. No global
-     *  d2 factor (see buildIENXAugmentation). No column scaling here -- the
-     *  caller applies `normalizeAugmentedColumns`.
-     */
-    template <typename Derived>
-    void buildIENDAugmentation(std::size_t k, std::size_t num_dummies,
-                               Eigen::MatrixBase<Derived>& dst) const;
+    void assembleDummyBlock(std::size_t k,
+                            Eigen::MatrixBase<Derived>& dst) const;
 
 
     // ============================================================
@@ -801,12 +659,11 @@ protected:
     // ============================================================
 
     /**
-     * @brief Lifecycle hook: cluster discovery, lambda_2 resolution,
-     *        IEN-augmentation construction, and solver-side Map setup.
+     * @brief Lifecycle hook: cluster discovery, lambda_2 resolution, and
+     *        solver-side Map setup.
      *
      * @details Called once at the start of the inherited `select()`,
-     *  immediately after the voting-grid setup. Replaces the
-     *  setup phase of the previous full `select()` override.
+     *  immediately after the voting-grid setup.
      */
     void onSelectBegin() override;
 

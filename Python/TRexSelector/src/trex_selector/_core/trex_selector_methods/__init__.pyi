@@ -33,6 +33,8 @@ class SolverTypeForTRex:
     TAFS: SolverTypeForTRex
     TENET_AUG: SolverTypeForTRex
 
+    TIENET_AUG: SolverTypeForTRex
+
 # ---------------------------------------------------------------------------
 # SolverHyperparameters
 # ---------------------------------------------------------------------------

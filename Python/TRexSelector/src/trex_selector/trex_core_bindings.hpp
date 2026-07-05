@@ -194,6 +194,7 @@ inline void bind_trex_core(py::module& m_tsm) {
         .value("TOOLS",      sd::SolverTypeForTRex::TOOLS,      "Terminating Orthogonal Least Squares.")
         .value("TAFS",       sd::SolverTypeForTRex::TAFS,       "Terminating AFS.")
         .value("TENET_AUG",  sd::SolverTypeForTRex::TENET_AUG,  "Terminating Elastic Net via augmented LASSO (GVS).")
+        .value("TIENET_AUG", sd::SolverTypeForTRex::TIENET_AUG, "Terminating Informed Elastic Net via augmented LASSO (GVS, gvs_type=IEN).")
         .export_values();
 
     // Bind SolverHyperparameters struct
