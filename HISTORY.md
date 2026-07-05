@@ -4,6 +4,33 @@
 
 ????-??-??
 
+### 2026-07-05
+
+#### T-solver review fixes (tsolvers module)
+
+- Full code review of `cpp/src/tsolvers/` with correctness fixes: stale
+  correlations after T-Stagewise NNLS drops, missing dummy de-normalization in
+  T-ENET's `getBeta`/`getBetaPath`, a data race and a scale-aware
+  near-constant-column drop threshold in the preprocessing, guarded
+  `getBeta(step)`/`getCp()` accessors, and a consistent
+  actives/inactives/dropped partition across all solvers. `restore()` no
+  longer corrupts the caller's `y` (the response is copied internally and was
+  never centered in place).
+- API: `executeStep()` with `T_stop = 0` now computes the full solution path as
+  documented; `setTieSeed()` and `getWarnings()`/`clearWarnings()` are public
+  and exposed in Python; warnings print unconditionally and are recorded
+  per solver; TENETAug mirrors its inner solver's diagnostics, validates
+  `lambda2`, and supports `save()`/`load()`.
+- Performance: RAII guard restores Eigen's global thread count after solver
+  runs; beta-path storage grows geometrically instead of per-step; dead
+  Cholesky backup copies removed.
+- T-ACGP now applies the conjugate correction across active-set growth steps
+  via zero-padded previous directions (Blumensath & Davies 2008).
+- Internals deduplicated (correlation refresh, tie scans, save/load,
+  cycling-ratio tracking); tie-breaking RNG state, tolerance, and warnings are
+  serialized. NOTE: the checkpoint format changed — `.bin` files saved with
+  earlier builds cannot be loaded.
+
 ## TRexSelector 2.0.0
 
 ### 2026-06-11
