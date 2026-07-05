@@ -154,7 +154,10 @@ TYPED_TEST(TSolverPolymorphicTest, SerializationEquivalence) {
     auto partial_solver = create_solver<TypeParam>(X_map2, D_map2, y_map2);
     partial_solver->executeStep(4, true);
 
-    std::string checkpoint = ::testing::TempDir() + "temp_poly_checkpoint.bin";
+    // Per-type filename: the typed-test instances run concurrently under
+    // `ctest -j`, and a shared path makes the save/remove calls race.
+    std::string checkpoint = ::testing::TempDir() + "temp_poly_checkpoint_"
+                             + partial_solver->solverTypeToString() + ".bin";
 
     partial_solver->save(checkpoint);
     EXPECT_TRUE(fs::exists(checkpoint));

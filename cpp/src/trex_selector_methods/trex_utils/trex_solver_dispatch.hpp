@@ -32,9 +32,11 @@
 // ===================================================================================
 
 // std includes
+#include <memory>
 #include <stdexcept>
 #include <string>
 #include <type_traits>
+#include <utility>
 
 // Eigen includes
 #include <Eigen/Dense>
@@ -175,6 +177,22 @@ struct SolverConfig {
     /** @brief Encapsulated solver hyperparameters for t-solvers. */
     SolverHyperparameters hyperparams{};
 
+    // --- In-memory warm start ---
+
+    /** @brief Retained solver to continue in-memory (nullptr = none).
+     *  When set, dispatchSolver() skips construction entirely and resumes
+     *  this solver via executeStep(T_stop, early_stop). The solver holds
+     *  non-owning views into X and its dummy matrix from the run that
+     *  created it; cfg.X / cfg.D are ignored on this path. */
+    tsolvers::TSolver_Base* warm_solver = nullptr;
+
+    /** @brief Retention sink for the freshly constructed solver (nullptr = none).
+     *  When set, dispatchSolver() heap-allocates the solver and moves it here
+     *  after execution so the caller can retain it for the next T-step.
+     *  The caller must keep the X and D buffers alive for as long as the
+     *  solver is retained. */
+    std::unique_ptr<tsolvers::TSolver_Base>* retain_sink = nullptr;
+
 };
 
 
@@ -185,17 +203,86 @@ namespace afs  = trex::tsolvers::linear_model::afs_based;
 
 
 /**
+ * @brief Construct a solver on the heap from the config.
+ *
+ * @details Dispatches on the solver-specific constructor signature via
+ *          `if constexpr`:
+ *          - TENET:  requires an extra lambda2 hyperparameter.
+ *          - TAFS:   requires an extra rho_afs hyperparameter.
+ *          - TNCGMP: requires an NCGMPVariant enum.
+ *          - TOMP / TLARS: carry an algorithm_type before scaling_mode.
+ *          - All other solvers: standard (X, D, y, normalize, intercept,
+ *            verbose, scaling_mode) constructor.
+ *
+ * @tparam TSolver Concrete solver type (must satisfy the TSolver_Base interface).
+ *
+ * @param cfg Populated SolverConfig with data references and execution flags.
+ *
+ * @return Owning pointer to the freshly constructed solver.
+ */
+template <typename TSolver>
+std::unique_ptr<TSolver> makeSolverForConfig(const SolverConfig& cfg) {
+    if constexpr (std::is_same_v<TSolver, lars::TENET_Solver>) {
+
+        return std::make_unique<TSolver>(
+            cfg.X, cfg.D, cfg.y, cfg.hyperparams.lambda2, cfg.normalize,
+            cfg.intercept, cfg.verbose, cfg.scaling_mode);
+
+    } else if constexpr (std::is_same_v<TSolver, afs::TAFS_Solver>) {
+
+        return std::make_unique<TSolver>(
+            cfg.X, cfg.D, cfg.y, cfg.hyperparams.rho_afs, cfg.normalize,
+            cfg.intercept, cfg.verbose, cfg.scaling_mode);
+
+    } else if constexpr (std::is_same_v<TSolver, omp::TNCGMP_Solver>) {
+
+        auto variant =
+            static_cast<omp::NCGMPVariant>(cfg.hyperparams.ncgmp_variant);
+        return std::make_unique<TSolver>(
+            cfg.X, cfg.D, cfg.y, variant, cfg.normalize, cfg.intercept,
+            cfg.verbose, cfg.scaling_mode);
+
+    } else if constexpr (std::is_same_v<TSolver, omp::TOMP_Solver>) {
+
+        // Bare TOMP_Solver's public ctor carries an algorithm_type before
+        // scaling_mode; pass it explicitly so scaling_mode binds correctly.
+        return std::make_unique<TSolver>(
+            cfg.X, cfg.D, cfg.y, cfg.normalize, cfg.intercept,
+            cfg.verbose, omp::SolverTypeOMPBased::TOMP, cfg.scaling_mode);
+
+    } else if constexpr (std::is_same_v<TSolver, lars::TLARS_Solver>) {
+
+        // Bare TLARS_Solver's public ctor carries an algorithm_type before
+        // scaling_mode; pass it explicitly so scaling_mode binds correctly.
+        return std::make_unique<TSolver>(
+            cfg.X, cfg.D, cfg.y, cfg.normalize, cfg.intercept,
+            cfg.verbose, lars::SolverTypeLarsBased::TLARS, cfg.scaling_mode);
+
+    } else {
+
+        return std::make_unique<TSolver>(
+            cfg.X, cfg.D, cfg.y, cfg.normalize, cfg.intercept, cfg.verbose,
+            cfg.scaling_mode);
+
+    }
+}
+
+
+/**
  * @brief Execute a single solver lifecycle: construct (or warm-start), run, extract path,
  *        and optionally serialize.
  *
- * @details Handles three solver families via `if constexpr`:
- *          - TENET: requires an extra lambda2 hyperparameter.
- *          - TAFS:  requires an extra rho_afs hyperparameter.
- *          - TNCGMP: requires an NCGMPVariant enum.
- *          - All other solvers: standard (X, D, y, normalize, intercept, verbose) constructor.
- *
- *          If cfg.use_warm_start && !cfg.solver_file.empty(), the solver is deserialized
- *          from disk, continued, and re-saved.  Otherwise it is constructed fresh.
+ * @details Three paths, checked in order:
+ *          1. In-memory warm start (cfg.warm_solver != nullptr): the retained
+ *             solver is resumed via executeStep(T_stop, early_stop); no
+ *             construction, no serialization.
+ *          2. Serialized warm start (cfg.use_warm_start && solver_file set):
+ *             the solver is deserialized from disk, reconnected to cfg.X /
+ *             cfg.D, continued, and re-saved.
+ *          3. Fresh construction via makeSolverForConfig(). If a solver_file
+ *             is set, the state is saved for later resumption; if
+ *             cfg.retain_sink is set, ownership of the solver is handed to
+ *             the caller for in-memory retention.
  *
  * @tparam TSolver Concrete solver type (must satisfy the TSolver_Base interface).
  *
@@ -205,78 +292,33 @@ namespace afs  = trex::tsolvers::linear_model::afs_based;
  */
 template <typename TSolver>
 Eigen::MatrixXd dispatchSolver(const SolverConfig& cfg) {
-    Eigen::MatrixXd pathMatrix;
 
+    // 1. In-memory warm start: resume the retained solver. executeStep()
+    //    continues the existing path up to the new T_stop; getBetaPath()
+    //    returns the full accumulated path.
+    if (cfg.warm_solver != nullptr) {
+        cfg.warm_solver->setTolerance(cfg.hyperparams.tol);
+        cfg.warm_solver->executeStep(cfg.T_stop, cfg.early_stop);
+        return cfg.warm_solver->getBetaPath();
+    }
+
+    // 2. Serialized warm start: restore from disk, continue, re-save.
     if (cfg.use_warm_start && !cfg.solver_file.empty()) {
         TSolver solver = TSolver::load(cfg.solver_file, cfg.X, cfg.D);
         solver.setTolerance(cfg.hyperparams.tol);
-            solver.executeStep(cfg.T_stop, cfg.early_stop);
-        pathMatrix = solver.getBetaPath();
+        solver.executeStep(cfg.T_stop, cfg.early_stop);
+        Eigen::MatrixXd pathMatrix = solver.getBetaPath();
         solver.save(cfg.solver_file);
-    } else {
-        // Dispatch based on solver-specific constructor signature
-        if constexpr (std::is_same_v<TSolver, lars::TENET_Solver>) {
-
-            TSolver solver(cfg.X, cfg.D, cfg.y, cfg.hyperparams.lambda2, cfg.normalize,
-                           cfg.intercept, cfg.verbose, cfg.scaling_mode);
-            solver.setTolerance(cfg.hyperparams.tol);
-            solver.executeStep(cfg.T_stop, cfg.early_stop);
-            pathMatrix = solver.getBetaPath();
-            if (!cfg.solver_file.empty()) solver.save(cfg.solver_file);
-
-        } else if constexpr (std::is_same_v<TSolver, afs::TAFS_Solver>) {
-
-            TSolver solver(cfg.X, cfg.D, cfg.y, cfg.hyperparams.rho_afs, cfg.normalize,
-                            cfg.intercept, cfg.verbose, cfg.scaling_mode);
-            solver.setTolerance(cfg.hyperparams.tol);
-            solver.executeStep(cfg.T_stop, cfg.early_stop);
-            pathMatrix = solver.getBetaPath();
-            if (!cfg.solver_file.empty()) solver.save(cfg.solver_file);
-
-        } else if constexpr (std::is_same_v<TSolver, omp::TNCGMP_Solver>) {
-
-            auto variant =
-                static_cast<omp::NCGMPVariant>(cfg.hyperparams.ncgmp_variant);
-            TSolver solver(cfg.X, cfg.D, cfg.y, variant, cfg.normalize, cfg.intercept,
-                           cfg.verbose, cfg.scaling_mode);
-            solver.setTolerance(cfg.hyperparams.tol);
-            solver.executeStep(cfg.T_stop, cfg.early_stop);
-            pathMatrix = solver.getBetaPath();
-            if (!cfg.solver_file.empty()) solver.save(cfg.solver_file);
-
-        } else if constexpr (std::is_same_v<TSolver, omp::TOMP_Solver>) {
-
-            // Bare TOMP_Solver's public ctor carries an algorithm_type before
-            // scaling_mode; pass it explicitly so scaling_mode binds correctly.
-            TSolver solver(cfg.X, cfg.D, cfg.y, cfg.normalize, cfg.intercept,
-                           cfg.verbose, omp::SolverTypeOMPBased::TOMP, cfg.scaling_mode);
-            solver.setTolerance(cfg.hyperparams.tol);
-            solver.executeStep(cfg.T_stop, cfg.early_stop);
-            pathMatrix = solver.getBetaPath();
-            if (!cfg.solver_file.empty()) solver.save(cfg.solver_file);
-
-        } else if constexpr (std::is_same_v<TSolver, lars::TLARS_Solver>) {
-
-            // Bare TLARS_Solver's public ctor carries an algorithm_type before
-            // scaling_mode; pass it explicitly so scaling_mode binds correctly.
-            TSolver solver(cfg.X, cfg.D, cfg.y, cfg.normalize, cfg.intercept,
-                           cfg.verbose, lars::SolverTypeLarsBased::TLARS, cfg.scaling_mode);
-            solver.setTolerance(cfg.hyperparams.tol);
-            solver.executeStep(cfg.T_stop, cfg.early_stop);
-            pathMatrix = solver.getBetaPath();
-            if (!cfg.solver_file.empty()) solver.save(cfg.solver_file);
-
-        } else {
-
-            TSolver solver(cfg.X, cfg.D, cfg.y, cfg.normalize, cfg.intercept, cfg.verbose,
-                           cfg.scaling_mode);
-            solver.setTolerance(cfg.hyperparams.tol);
-            solver.executeStep(cfg.T_stop, cfg.early_stop);
-            pathMatrix = solver.getBetaPath();
-            if (!cfg.solver_file.empty()) solver.save(cfg.solver_file);
-
-        }
+        return pathMatrix;
     }
+
+    // 3. Fresh construction.
+    std::unique_ptr<TSolver> solver = makeSolverForConfig<TSolver>(cfg);
+    solver->setTolerance(cfg.hyperparams.tol);
+    solver->executeStep(cfg.T_stop, cfg.early_stop);
+    Eigen::MatrixXd pathMatrix = solver->getBetaPath();
+    if (!cfg.solver_file.empty()) solver->save(cfg.solver_file);
+    if (cfg.retain_sink != nullptr) *cfg.retain_sink = std::move(solver);
     return pathMatrix;
 }
 

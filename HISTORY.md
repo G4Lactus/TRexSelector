@@ -31,6 +31,35 @@
   serialized. NOTE: the checkpoint format changed — `.bin` files saved with
   earlier builds cannot be loaded.
 
+#### T-Rex selector review fixes (trex_selector_methods module)
+
+- Warm starts now actually engage: `WarmStartManager` never stored solvers or
+  checkpoint paths, so every T-loop step silently re-solved from scratch. The
+  manager now retains solvers in-memory (co-retaining the dummy matrix for
+  the PERMUTATION/DIRECT strategies, whose D_k is a per-call temporary) and
+  registers serialized checkpoints for the memory-mapped path; `invalidate()`
+  keeps the K slots repopulatable instead of shrinking them away. The T-loop
+  now continues each solver's path incrementally, as in the R reference;
+  results are unchanged (warm/cold equality is asserted by new tests). The
+  checkpoint temp directory is only created for serialized mode.
+- DIRECT / PERMUTATION_DIRECT dummy generation honours the user seed: it
+  previously derived from the PERMUTATION-only base seed (always 0, so
+  different seeds produced identical dummies) and, when unseeded, drew fresh
+  `random_device` entropy on every call — changing the dummies between
+  T-steps. The base seed is now resolved once per `DummyGenerator` and
+  reused, making unseeded runs internally consistent and seeded runs
+  reproducible across instances.
+- Documentation: the intentional `Phi_prime` [0, 1] clamp (deviation from the
+  R reference / paper to avoid negative FDP estimates) now documents its
+  conservative/anti-conservative asymmetry; the DA-BT deflation cites
+  Definition 1 of the T-Rex+DA paper (empty-group penalty Ψ = 1/2) and the
+  deliberate R-parity choice of terminal-Φ deltas vs. the paper's per-step
+  penalties (Eq. (10)).
+- Tests: warm-start engagement and warm/cold equality (in-memory, DIRECT, and
+  an end-to-end memory-mapped vs. in-memory run that asserts the T-loop
+  actually continues), DIRECT seed handling; fixed a checkpoint filename race
+  between the typed serialization tests under parallel ctest.
+
 ## TRexSelector 2.0.0
 
 ### 2026-06-11

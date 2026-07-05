@@ -32,7 +32,9 @@
 
 // std includes
 #include <cstddef>
+#include <memory>
 #include <string>
+#include <utility>
 #include <vector>
 
 // Eigen includes
@@ -195,8 +197,12 @@ public:
      */
     ExperimentResults run(const ExperimentRunnerConfig& cfg) {
 
-        // Initialize warm-start if requested
-        if (cfg.use_warm_start) { warm_start_mgr_.initializeTempDirectory(); }
+        // Initialize the checkpoint directory if serialized warm-starts are
+        // requested (IN_MEMORY retention needs no disk space).
+        if (cfg.use_warm_start
+            && warm_start_mgr_.mode() == wsm::WarmStartMode::SERIALIZED) {
+            warm_start_mgr_.initializeTempDirectory();
+        }
 
         // Dispatch to strategy-specific runner
         std::vector<Eigen::MatrixXd> beta_paths;
@@ -317,8 +323,9 @@ private:
         #endif
 
         for (std::size_t k = 0; k < cfg.K; ++k) {
-            Eigen::MatrixXd D_k = dummy_gen_.getPermuted(k, cfg.num_dummies);
-            beta_paths[k] = runSingleExperiment(k, D_k, cfg);
+            beta_paths[k] = runWithTemporaryDummies(
+                k, cfg,
+                [&]() { return dummy_gen_.getPermuted(k, cfg.num_dummies); });
         }
 
         return beta_paths;
@@ -341,12 +348,59 @@ private:
         #endif
 
         for (std::size_t k = 0; k < cfg.K; ++k) {
-            Eigen::MatrixXd D_k = dummy_gen_.generateDirect(
-                                    cfg.num_dummies, k);
-            beta_paths[k] = runSingleExperiment(k, D_k, cfg);
+            beta_paths[k] = runWithTemporaryDummies(
+                k, cfg,
+                [&]() { return dummy_gen_.generateDirect(cfg.num_dummies, k); });
         }
 
         return beta_paths;
+    }
+
+
+    /**
+     * @brief Run experiment k for strategies whose D_k is a per-call temporary
+     *        (PERMUTATION, DIRECT), handling in-memory warm-start retention.
+     *
+     * @details When a retained solver exists for slot k, the (expensive)
+     *          dummy generation is skipped entirely: the solver already holds
+     *          a view of its D_k, whose buffer the WarmStartManager co-retains.
+     *          Otherwise the dummies are produced via `make_dummies`, the
+     *          experiment runs, and — if dispatchForExperiment stored a fresh
+     *          solver for this slot — the D_k buffer is moved into the manager
+     *          so the solver's non-owning view stays valid across T-steps
+     *          (moving an Eigen::MatrixXd transfers the heap buffer without
+     *          changing its address).
+     *
+     * @param k            Experiment index.
+     * @param cfg          Runner configuration.
+     * @param make_dummies Callable producing the dummy matrix for slot k.
+     *
+     * @return Beta path matrix from the solver.
+     */
+    template <typename MakeDummiesFn>
+    Eigen::MatrixXd runWithTemporaryDummies(std::size_t k,
+                                            const ExperimentRunnerConfig& cfg,
+                                            MakeDummiesFn&& make_dummies) {
+
+        const bool in_memory =
+            warm_start_mgr_.mode() == wsm::WarmStartMode::IN_MEMORY;
+
+        if (cfg.use_warm_start && in_memory && warm_start_mgr_.hasSolver(k)) {
+            // Warm continuation — cfg.D is unused on this path.
+            Eigen::MatrixXd D_unused(0, 0);
+            return runSingleExperiment(k, D_unused, cfg);
+        }
+
+        Eigen::MatrixXd D_k = make_dummies();
+        Eigen::MatrixXd path = runSingleExperiment(k, D_k, cfg);
+
+        // dispatchForExperiment retained a fresh solver iff hasSolver(k) now
+        // holds; co-retain D_k's buffer so the solver's view stays valid.
+        if (cfg.use_warm_start && in_memory && warm_start_mgr_.hasSolver(k)) {
+            warm_start_mgr_.retainDummies(k, std::move(D_k));
+        }
+
+        return path;
     }
 
 
@@ -445,6 +499,17 @@ private:
     /**
      * @brief Build SolverConfig and call dispatchByType for experiment k.
      *
+     * @details Warm-start wiring (active only when cfg.use_warm_start):
+     *          - IN_MEMORY mode: if a solver is retained for slot k, it is
+     *            resumed via SolverConfig::warm_solver; otherwise the freshly
+     *            constructed solver is captured through
+     *            SolverConfig::retain_sink and stored for the next T-step.
+     *          - SERIALIZED mode: the deterministic checkpoint path is passed
+     *            as SolverConfig::solver_file (dispatchSolver loads from it
+     *            when a saved state is registered, and always re-saves); after
+     *            the run the path is registered so hasSolver(k) reports a
+     *            resumable state.
+     *
      * @param k Experiment index.
      * @param X Map of the original design matrix (n × p).
      * @param D Map of the dummy matrix for this experiment (n × num_dummies).
@@ -460,6 +525,9 @@ private:
         Eigen::Map<Eigen::VectorXd>& y,
         const ExperimentRunnerConfig& cfg) {
 
+        const bool warm_available =
+            cfg.use_warm_start && warm_start_mgr_.hasSolver(k);
+
         sd::SolverConfig solver_cfg{
             .X = X,
             .D = D,
@@ -470,18 +538,38 @@ private:
             .scaling_mode = cfg.scaling_mode,
             .T_stop = cfg.T_stop,
             .early_stop = true,
-            .use_warm_start = cfg.use_warm_start && warm_start_mgr_.hasSolver(k),
+            .use_warm_start = warm_available,
             .solver_file = {},
             .hyperparams = cfg.solver_params
         };
 
-        // Set solver file if using serialized warm-start
-        if (cfg.use_warm_start
-            && warm_start_mgr_.mode() == wsm::WarmStartMode::SERIALIZED) {
-            solver_cfg.solver_file = warm_start_mgr_.solverFile(k);
+        std::unique_ptr<trex::tsolvers::TSolver_Base> retained;
+        if (cfg.use_warm_start) {
+            if (warm_start_mgr_.mode() == wsm::WarmStartMode::IN_MEMORY) {
+                if (warm_available) {
+                    solver_cfg.warm_solver = warm_start_mgr_.getSolver(k);
+                } else {
+                    solver_cfg.retain_sink = &retained;
+                }
+            } else {  // SERIALIZED
+                solver_cfg.solver_file = warm_start_mgr_.plannedSolverFile(k);
+            }
         }
 
-        return dispatchByType(cfg.solver_type, solver_cfg);
+        Eigen::MatrixXd path = dispatchByType(cfg.solver_type, solver_cfg);
+
+        // Register the produced warm-start state (per-slot writes; safe for
+        // distinct k inside the OpenMP loops — vectors are pre-allocated).
+        if (retained) {
+            warm_start_mgr_.storeSolver(k, std::move(retained));
+        }
+        if (cfg.use_warm_start
+            && warm_start_mgr_.mode() == wsm::WarmStartMode::SERIALIZED
+            && !solver_cfg.solver_file.empty()) {
+            warm_start_mgr_.registerSolverFile(k);
+        }
+
+        return path;
     }
 
 

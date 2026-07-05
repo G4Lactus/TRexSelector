@@ -33,8 +33,12 @@
 
 // std includes
 #include <string>
+#include <utility>
 #include <vector>
 #include <memory>
+
+// Eigen includes
+#include <Eigen/Dense>
 
 // TSolver base inclusion
 #include <tsolvers/tsolver_base.hpp>
@@ -60,14 +64,29 @@ private:
     /** @brief Verbosity flag for debug printing. */
     [[maybe_unused]] bool verbose_{false};
 
+    /** @brief Number of experiment slots (fixed at construction). */
+    std::size_t K_{0};
+
     // In-Memory state
     // ---------------------
     /** @brief Vector of in-memory solvers. */
     std::vector<std::unique_ptr<tsolvers::TSolver_Base>> solvers_{};
 
+    /** @brief Per-slot dummy matrices co-retained with the solvers.
+     *
+     *  Solvers hold non-owning Eigen::Map views into their dummy matrix D_k.
+     *  For strategies whose D_k is a per-call temporary (PERMUTATION, DIRECT),
+     *  the buffer must be kept alive alongside the retained solver; moving the
+     *  MatrixXd here transfers the heap buffer without changing its address,
+     *  so the solver's view stays valid. Slots stay empty (0 x 0) for
+     *  strategies whose dummies persist elsewhere (STANDARD / memory-mapped).
+     */
+    std::vector<Eigen::MatrixXd> retained_D_{};
+
     // Serialized state
     // ---------------------
-    /** @brief Vector of file paths for serialized solvers. */
+    /** @brief Vector of file paths for serialized solvers (registered after
+     *  the first successful save; empty = no saved state yet). */
     std::vector<std::string> solver_files_{};
 
     /** @brief Path to the temporary directory for serialized solvers. */
@@ -91,11 +110,12 @@ public:
      * @param verbose Enable verbose debug output.
      */
     WarmStartManager(std::size_t K, WarmStartMode mode, bool verbose)
-        : mode_(mode), verbose_(verbose) {
+        : mode_(mode), verbose_(verbose), K_(K) {
 
         // CRITICAL: Pre-allocate vectors so OpenMP threads can safely
         // access indices 0 through K-1 without resizing the vector concurrently.
         solvers_.resize(K);
+        retained_D_.resize(K);
         solver_files_.resize(K);
     }
 
@@ -138,16 +158,88 @@ public:
     /**
      * @brief Invalidates all current solvers.
      * @details Called when dummy matrices change (e.g., new L-loop iteration).
-     * Discards in-memory states and resets the serialized file tracking.
+     * Discards in-memory states (and their co-retained dummy buffers) and
+     * resets the serialized file tracking. The K slots are preserved so that
+     * subsequent storeSolver() / registerSolverFile() calls can repopulate
+     * them (a plain clear() would leave hasSolver() permanently false).
      */
     void invalidate() {
-        // 1. Clear in-memory solvers
+        // 1. Drop in-memory solvers (and the dummy buffers they view),
+        //    keeping the slot count.
         solvers_.clear();
+        solvers_.resize(K_);
+        retained_D_.clear();
+        retained_D_.resize(K_);
 
-        // 2. Clear tracked files
-        // (Note: The files will be overwritten or cleaned up by the temp directory manager,
-        //  but we must clear the vector so hasSolver() returns false for the new iteration)
-        solver_files_.clear();
+        // 2. Deregister tracked files.
+        // (The files themselves are overwritten on the next save or removed by
+        //  the temp directory manager; deregistering makes hasSolver() false
+        //  for the new iteration.)
+        solver_files_.assign(K_, std::string{});
+    }
+
+    // =========================================================================
+    // In-memory solver retention
+    // =========================================================================
+
+    /**
+     * @brief Retain a solver for experiment k (in-memory warm start).
+     *
+     * @details Thread-safe for distinct k (pre-allocated slots, no resize).
+     *          The solver holds non-owning views into X and its dummy matrix
+     *          D_k; the caller must guarantee those buffers outlive the
+     *          retention (co-retain per-call temporaries via retainDummies()).
+     */
+    void storeSolver(std::size_t k, std::unique_ptr<tsolvers::TSolver_Base> solver) {
+        if (k < solvers_.size()) {
+            solvers_[k] = std::move(solver);
+        }
+    }
+
+    /**
+     * @brief Access the retained solver for experiment k (nullptr if none).
+     */
+    tsolvers::TSolver_Base* getSolver(std::size_t k) {
+        return (k < solvers_.size()) ? solvers_[k].get() : nullptr;
+    }
+
+    /**
+     * @brief Keep the dummy matrix of experiment k alive alongside its solver.
+     *
+     * @details For strategies whose D_k is a per-call temporary (PERMUTATION,
+     *          DIRECT). Moving the MatrixXd transfers its heap buffer without
+     *          changing the address, so the solver's non-owning view into D_k
+     *          remains valid.
+     */
+    void retainDummies(std::size_t k, Eigen::MatrixXd&& D_k) {
+        if (k < retained_D_.size()) {
+            retained_D_[k] = std::move(D_k);
+        }
+    }
+
+    // =========================================================================
+    // Serialized solver registration
+    // =========================================================================
+
+    /**
+     * @brief Deterministic checkpoint path for experiment k.
+     *
+     * @return "<temp_dir>/tsolver_state_<k>.bin", or "" if the temporary
+     *         directory has not been initialized yet.
+     */
+    std::string plannedSolverFile(std::size_t k) const {
+        if (!initialized_ || temp_dir_.empty()) return "";
+        return temp_dir_ + "/tsolver_state_" + std::to_string(k) + ".bin";
+    }
+
+    /**
+     * @brief Mark experiment k's checkpoint as saved, so hasSolver(k) reports
+     *        a resumable state on the next iteration.
+     */
+    void registerSolverFile(std::size_t k) {
+        if (k < solver_files_.size()) {
+            solver_files_[k] = plannedSolverFile(k);
+        }
     }
 
     // =========================================================================
@@ -193,8 +285,10 @@ private:
      * when throw_on_error is false.
      */
     void internalCleanup(bool throw_on_error) {
-        // 1. Release in-memory solvers
+        // 1. Release in-memory solvers and their co-retained dummy buffers
+        //    (solvers first — they hold views into the buffers).
         solvers_.clear();
+        retained_D_.clear();
 
         // 2. Delegate folder deletion to the shared TempDirManager
         if (initialized_ && !temp_dir_.empty()) {

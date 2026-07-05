@@ -226,5 +226,229 @@ TEST(TRexCoreTest, DataIntegrity_XRestoredOnDestruction) {
         << "X was not restored by TRexSelector destructor.";
 }
 
+
+// ========================================================================================
+// Warm-start wiring (regression: solvers were never retained, so warm starts
+// silently never engaged and every T-step re-solved from scratch)
+// ========================================================================================
+
+namespace {
+
+/** @brief Shared setup for the ExperimentRunner warm-start tests. */
+struct RunnerTestData {
+    Eigen::MatrixXd X;
+    Eigen::VectorXd y;
+
+    RunnerTestData(Eigen::Index n, Eigen::Index p) {
+        std::vector<std::size_t> support = {1, 2, 3};
+        std::vector<double> coefs = {5.0, -3.0, 2.0};
+        SyntheticData data(n, p, support, coefs, 1.0, 42);
+        X = data.getX();
+        y = data.getY();
+    }
+};
+
+/** @brief Baseline ExperimentRunnerConfig for warm-start tests. */
+er::ExperimentRunnerConfig make_runner_cfg(std::size_t K,
+                                           std::size_t p,
+                                           er::ExperimentStrategy strategy) {
+    er::ExperimentRunnerConfig cfg;
+    cfg.K = K;
+    cfg.num_dummies = p;
+    cfg.T_stop = 1;
+    cfg.p = p;
+    cfg.strategy = strategy;
+    cfg.use_warm_start = true;
+    return cfg;
+}
+
+} // namespace
+
+
+/** @brief In-memory warm start engages (solvers retained after the first
+ *         warm run), the continued T-step reproduces a cold run exactly, and
+ *         invalidate() keeps the slots repopulatable. */
+TEST(TRexCoreTest, WarmStart_EngagesAndMatchesColdRun) {
+    const Eigen::Index n = 60, p = 20;
+    const std::size_t K = 3;
+    RunnerTestData d(n, p);
+    Eigen::Map<Eigen::MatrixXd> X_map(d.X.data(), d.X.rows(), d.X.cols());
+
+    dg::DummyGenerator dummy_gen(static_cast<std::size_t>(n),
+                                 dummygen::Distribution::Normal(), 42, false);
+    dummy_gen.generateAndStore(K, static_cast<std::size_t>(p), 1);
+
+    wsm::WarmStartManager warm_mgr(K, wsm::WarmStartMode::IN_MEMORY, false);
+    er::ExperimentRunner runner(X_map, d.y, dummy_gen, warm_mgr, nullptr);
+
+    auto cfg = make_runner_cfg(K, static_cast<std::size_t>(p),
+                               er::ExperimentStrategy::Standard);
+
+    // T = 1: fresh solvers must be retained for continuation.
+    runner.run(cfg);
+    for (std::size_t k = 0; k < K; ++k) {
+        EXPECT_TRUE(warm_mgr.hasSolver(k))
+            << "Solver " << k << " was not retained after a warm-start run.";
+    }
+
+    // T = 2: warm continuation.
+    cfg.T_stop = 2;
+    auto res_warm = runner.run(cfg);
+
+    // Cold reference: fresh manager, identical stored dummies.
+    wsm::WarmStartManager cold_mgr(K, wsm::WarmStartMode::IN_MEMORY, false);
+    er::ExperimentRunner cold_runner(X_map, d.y, dummy_gen, cold_mgr, nullptr);
+    auto cold_cfg = cfg;
+    cold_cfg.use_warm_start = false;
+    auto res_cold = cold_runner.run(cold_cfg);
+
+    ASSERT_EQ(res_warm.phi_T_mat.rows(), res_cold.phi_T_mat.rows());
+    ASSERT_EQ(res_warm.phi_T_mat.cols(), res_cold.phi_T_mat.cols());
+    EXPECT_LE((res_warm.phi_T_mat - res_cold.phi_T_mat).cwiseAbs().maxCoeff(),
+              1e-12)
+        << "Warm-continued phi_T_mat differs from the cold reference run.";
+
+    // invalidate() must keep the K slots usable (regression: clear() shrank
+    // the vectors to zero and hasSolver() stayed false forever).
+    warm_mgr.invalidate();
+    for (std::size_t k = 0; k < K; ++k) {
+        EXPECT_FALSE(warm_mgr.hasSolver(k));
+    }
+    runner.run(cfg);
+    for (std::size_t k = 0; k < K; ++k) {
+        EXPECT_TRUE(warm_mgr.hasSolver(k))
+            << "Slot " << k << " could not be repopulated after invalidate().";
+    }
+}
+
+
+/** @brief DIRECT strategy: warm continuation matches a cold run — exercises
+ *         the co-retained dummy buffers (the retained solver views a per-call
+ *         temporary D_k) and the deterministic re-derivation of dummies. */
+TEST(TRexCoreTest, WarmStart_DirectStrategyContinuationMatchesCold) {
+    const Eigen::Index n = 60, p = 20;
+    const std::size_t K = 3;
+    RunnerTestData d(n, p);
+    Eigen::Map<Eigen::MatrixXd> X_map(d.X.data(), d.X.rows(), d.X.cols());
+
+    dg::DummyGenerator dummy_gen(static_cast<std::size_t>(n),
+                                 dummygen::Distribution::Normal(), 7, false);
+    wsm::WarmStartManager warm_mgr(K, wsm::WarmStartMode::IN_MEMORY, false);
+    er::ExperimentRunner runner(X_map, d.y, dummy_gen, warm_mgr, nullptr);
+
+    auto cfg = make_runner_cfg(K, static_cast<std::size_t>(p),
+                               er::ExperimentStrategy::Direct);
+
+    runner.run(cfg);           // T = 1, retains solvers + dummy buffers
+    cfg.T_stop = 2;
+    auto res_warm = runner.run(cfg);   // warm continuation
+
+    // Cold reference with a separate, equally seeded generator: DIRECT
+    // dummies must be reproducible across instances for the same seed.
+    dg::DummyGenerator cold_gen(static_cast<std::size_t>(n),
+                                dummygen::Distribution::Normal(), 7, false);
+    wsm::WarmStartManager cold_mgr(K, wsm::WarmStartMode::IN_MEMORY, false);
+    er::ExperimentRunner cold_runner(X_map, d.y, cold_gen, cold_mgr, nullptr);
+    auto cold_cfg = cfg;
+    cold_cfg.use_warm_start = false;
+    auto res_cold = cold_runner.run(cold_cfg);
+
+    ASSERT_EQ(res_warm.phi_T_mat.rows(), res_cold.phi_T_mat.rows());
+    ASSERT_EQ(res_warm.phi_T_mat.cols(), res_cold.phi_T_mat.cols());
+    EXPECT_LE((res_warm.phi_T_mat - res_cold.phi_T_mat).cwiseAbs().maxCoeff(),
+              1e-12)
+        << "DIRECT warm continuation differs from the cold reference run.";
+}
+
+
+/** @brief Memory-mapped runs use SERIALIZED warm starts (save/load per
+ *         T-step). With identical data and seed they must reproduce the
+ *         in-memory (retention-based) run exactly. */
+TEST(TRexCoreTest, WarmStart_MemoryMappedMatchesInMemory) {
+    std::vector<std::size_t> support = {1, 2, 3};
+    std::vector<double> coefs = {5.0, -3.0, 2.0};
+    SyntheticData data(200, 50, support, coefs, 1.0, 42);
+
+    auto X_mem = data.getX();
+    auto y_mem = data.getY();
+    auto X_map_data = X_mem;   // independent copies: X is normalized in-place
+    auto y_map_data = y_mem;
+
+    TRexControlParameter ctrl;
+    ctrl.K = 3;
+    ctrl.max_dummy_multiplier = 2;
+
+    // tFDR = 0.2: with K = 3 and few strong actives the FDP estimate cannot
+    // drop below ~0.15, so a tighter target (e.g. 0.1) would end the T-loop
+    // at T_stop = 1 — leaving the warm-start continuation unexercised
+    // (the EXPECT_GT below guards this).
+    const double tFDR = 0.2;
+
+    Eigen::Map<Eigen::MatrixXd> X1(X_mem.data(), X_mem.rows(), X_mem.cols());
+    Eigen::Map<Eigen::VectorXd> y1(y_mem.data(), y_mem.size());
+    TRexSelector trex_in_memory(X1, y1, tFDR, ctrl, 42, false);
+    auto res_in_memory = trex_in_memory.select();
+
+    ctrl.use_memory_mapping = true;
+    Eigen::Map<Eigen::MatrixXd> X2(X_map_data.data(),
+                                   X_map_data.rows(), X_map_data.cols());
+    Eigen::Map<Eigen::VectorXd> y2(y_map_data.data(), y_map_data.size());
+    TRexSelector trex_memmap(X2, y2, tFDR, ctrl, 42, false);
+    auto res_memmap = trex_memmap.select();
+
+    EXPECT_EQ(res_in_memory.T_stop, res_memmap.T_stop);
+    // The comparison is only meaningful if the T-loop actually continued
+    // (T_stop > 1), i.e. the serialized load-and-continue cycle fired.
+    EXPECT_GT(res_in_memory.T_stop, 1u)
+        << "Test data no longer drives the T-loop past T = 1; "
+           "the warm-start continuation path is not being exercised.";
+    ASSERT_EQ(res_in_memory.selected_var.size(), res_memmap.selected_var.size());
+    EXPECT_TRUE((res_in_memory.selected_var.array()
+                 == res_memmap.selected_var.array()).all())
+        << "Memory-mapped selection differs from the in-memory selection.";
+    if (res_in_memory.Phi_mat.size() > 0 &&
+        res_in_memory.Phi_mat.rows() == res_memmap.Phi_mat.rows()) {
+        EXPECT_LE((res_in_memory.Phi_mat - res_memmap.Phi_mat)
+                      .cwiseAbs().maxCoeff(), 1e-9);
+    }
+}
+
+
+// ========================================================================================
+// DIRECT dummy seeding (regression: the user seed was ignored — dummies were
+// derived from the PERMUTATION-only base seed, which is 0 for DIRECT — and
+// unseeded runs drew fresh entropy on every call, changing the dummies
+// between T-steps)
+// ========================================================================================
+
+/** @brief DIRECT dummies honour the user seed, are reproducible across
+ *         equally seeded instances, and are stable within one run even when
+ *         unseeded. */
+TEST(TRexCoreTest, DirectDummies_HonourUserSeedAndAreStableWithinRun) {
+    const std::size_t n = 50, num_dummies = 30;
+
+    dg::DummyGenerator g_seed1(n, dummygen::Distribution::Normal(), 1, false);
+    dg::DummyGenerator g_seed2(n, dummygen::Distribution::Normal(), 2, false);
+    dg::DummyGenerator g_seed1_again(n, dummygen::Distribution::Normal(), 1, false);
+
+    Eigen::MatrixXd D1  = g_seed1.generateDirect(num_dummies, 0);
+    Eigen::MatrixXd D2  = g_seed2.generateDirect(num_dummies, 0);
+    Eigen::MatrixXd D1b = g_seed1_again.generateDirect(num_dummies, 0);
+
+    EXPECT_FALSE(D1.isApprox(D2, 1e-12))
+        << "Different user seeds produced identical DIRECT dummies.";
+    EXPECT_TRUE(D1.isApprox(D1b, 1e-12))
+        << "Equal user seeds did not reproduce the same DIRECT dummies.";
+
+    // Unseeded (seed < 0): the base is resolved once per generator, so
+    // repeated derivation of the same experiment's dummies must be identical
+    // (the T-loop re-derives D_k at every step).
+    dg::DummyGenerator g_random(n, dummygen::Distribution::Normal(), -1, false);
+    Eigen::MatrixXd Da = g_random.generateDirect(num_dummies, 3);
+    Eigen::MatrixXd Db = g_random.generateDirect(num_dummies, 3);
+    EXPECT_TRUE(Da.isApprox(Db, 1e-12))
+        << "Unseeded DIRECT dummies changed between calls within one run.";
+}
+
 // ========================================================================================
 } /* End of namespace trex::test::trex_selector_methods::trex_core */

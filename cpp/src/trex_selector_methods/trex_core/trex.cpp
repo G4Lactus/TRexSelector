@@ -521,7 +521,15 @@ Eigen::VectorXd TRexSelector::computePhiPrime(
         }
     }
 
-    // Clamp to [0, 1]: guards against negative deflated relative occurrences.
+    // Clamp to [0, 1]: intentional deviation from the R reference and the
+    // T-Rex paper, which leave Phi_prime unclipped (phi_scale can be negative).
+    // Rationale: 1 - Phi_prime estimates a false-discovery probability, so
+    // Phi_prime is kept inside [0, 1] to avoid negative FDP estimates.
+    // Asymmetry to be aware of: the upper clamp (Phi' > 1 -> 1) can only
+    // raise FDP_hat vs. the reference (conservative), while the lower clamp
+    // (Phi' < 0 -> 0) caps a selected variable's false-discovery mass at 1
+    // and can lower FDP_hat vs. the reference. Exact-R parity tests must
+    // account for this wherever the unclipped Phi_prime leaves [0, 1].
     return (phi_T_mat_mod * phi_scale).cwiseMax(0.0).cwiseMin(1.0);
 }
 

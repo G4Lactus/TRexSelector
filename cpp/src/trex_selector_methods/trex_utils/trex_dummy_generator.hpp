@@ -89,7 +89,10 @@ public:
         distribution_(distribution),
         seed_(seed),
         verbose_(verbose),
-        scaling_mode_(scaling_mode)
+        scaling_mode_(scaling_mode),
+        resolved_base_seed_((seed >= 0)
+            ? static_cast<unsigned int>(seed)
+            : std::random_device{}())
     {}
 
     /** @brief Destructor of DummyGenerator */
@@ -273,22 +276,21 @@ public:
     /**
      * @brief Generate DIRECT-strategy dummies directly into an existing matrix.
      *
+     * @details Seeds via `deriveSeed(experiment_id)`, i.e. from the resolved
+     *          base seed. This honours the user-supplied seed (previously the
+     *          PERMUTATION-only `base_seed_perm_`, which is 0 for DIRECT, was
+     *          used) and is stable across repeated calls within one run, so
+     *          every T-loop step re-derives the identical D_k even when
+     *          `seed < 0` (previously each call drew fresh `random_device`
+     *          entropy, silently changing the dummies mid-calibration).
+     *
      * @param target         Matrix to write into (n × num_dummies, pre-sized).
      * @param experiment_id  Experiment index k.
      */
     void generateDirectInto(Eigen::Ref<Eigen::MatrixXd> target,
                             std::size_t experiment_id) const {
 
-        unsigned int seed_k;
-        if (seed_ >= 0) {
-            seed_k = dummygen::mix_seed(
-                static_cast<uint32_t>(base_seed_perm_),
-                static_cast<uint32_t>(experiment_id)
-            );
-        } else {
-            seed_k = std::random_device{}()
-                     + static_cast<unsigned int>(experiment_id);
-        }
+        const unsigned int seed_k = deriveSeed(experiment_id);
 
         dummygen::generate_dummies(
             target, n_,
@@ -557,6 +559,17 @@ private:
     /** @brief Column scaling convention applied to generated dummies. */
     data_normalizer::ScalingMode scaling_mode_;
 
+    /** @brief Base seed resolved once at construction.
+     *
+     *  Equals `seed_` when a deterministic seed (>= 0) was requested, and a
+     *  single `std::random_device` draw otherwise. Resolving the base once
+     *  (instead of per call) guarantees that repeated generation requests for
+     *  the same (experiment, seed_factor) pair — e.g. the DIRECT strategy
+     *  re-deriving D_k at every T-loop step — reproduce the identical dummy
+     *  matrix within one selector run, while separate runs still obtain fresh
+     *  entropy. */
+    unsigned int resolved_base_seed_;
+
     // ==========================================================================
     // State — STANDARD/HCONCAT/SKIP
     // ==========================================================================
@@ -583,7 +596,7 @@ private:
     // ==========================================================================
 
     /**
-     * @brief Derive a seed for experiment k from the base seed.
+     * @brief Derive a seed for experiment k from the resolved base seed.
      *
      * @details Uses `mix_seed(base, experiment_id)` (MurmurHash3 finalizer) rather
      *          than the naive linear formula `base + experiment_id`.  Linear seeds
@@ -593,22 +606,20 @@ private:
      *          Hash-based mixing decorrelates the K seeds regardless of whether the
      *          base comes from a fixed integer or from `std::random_device`.
      *
-     *          For Monte Carlo FDR sweeps the caller should pass `seed = -1` so that
-     *          every invocation draws a fresh hardware-entropy base; a fixed integer
-     *          seed is suitable only for exact reproducibility of a single run.
+     *          The base is `resolved_base_seed_`, fixed at construction: the
+     *          same (experiment, seed_factor) request always reproduces the
+     *          same dummies within one selector run (required by the DIRECT
+     *          strategy, which re-derives D_k at every T-loop step). For Monte
+     *          Carlo FDR sweeps the caller should pass `seed = -1` so that every
+     *          selector run draws a fresh hardware-entropy base; a fixed integer
+     *          seed is suitable for exact reproducibility of a single run.
      *
      * @param experiment_id  Experiment index k (or other unique identifier).
      *
      * @return Derived seed for this experiment.
      */
     unsigned int deriveSeed(std::size_t experiment_id) const {
-        unsigned int base;
-        if (seed_ >= 0) {
-            base = static_cast<unsigned int>(seed_);
-        } else {
-            base = std::random_device{}();
-        }
-        return dummygen::mix_seed(base, experiment_id);
+        return dummygen::mix_seed(resolved_base_seed_, experiment_id);
     }
 
 

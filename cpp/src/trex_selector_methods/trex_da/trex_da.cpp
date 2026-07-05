@@ -857,7 +857,13 @@ DACorrectionResult TRexDASelector::daCorrect(
     if (da_setup_.use_BT_style) {
         const std::size_t rho_grid_len = da_setup_.rho_grid_len;
 
-        // DA_delta_mat_BT: p x rho_grid_len
+        // DA_delta_mat_BT: p x rho_grid_len.
+        // delta = 1/Psi from Definition 1 of the T-Rex+DA paper (Machkour et
+        // al., Signal Processing 234 (2025) 109990): Psi = 1/(2 - min |Phi_j -
+        // Phi_j'|) over the group mates, and Psi = 1/2 for an EMPTY group.
+        // Hence delta stays at 2.0 for group-less variables — dividing by 2 IS
+        // the paper's maximal penalty (it anchors the FDR proof at
+        // rho_thr = 1, where all groups are empty), not a "skip".
         Eigen::MatrixXd delta_BT = Eigen::MatrixXd::Constant(
             p, static_cast<Eigen::Index>(rho_grid_len), 2.0);
 
@@ -872,11 +878,23 @@ DACorrectionResult TRexDASelector::daCorrect(
                     }
                     delta_BT(j, static_cast<Eigen::Index>(r)) = 2.0 - min_diff;
                 }
-                // else: delta stays at 2.0 (no deflation)
+                // else: delta stays at 2.0 == the empty-group penalty
+                //       Psi = 1/2 of Definition 1 (see block comment above).
             }
         }
 
-        // phi_T_array_BT: for each rho level, phi_T_mat / delta_col (broadcast across T)
+        // phi_T_array_BT: for each rho level, phi_T_mat / delta_col (broadcast across T).
+        //
+        // NOTE (deliberate R-parity deviation from the paper): delta is
+        // computed once from the TERMINAL Phi (= phi_T_mat column T_stop) and
+        // applied to all columns t = 1..T_stop, exactly like the R reference
+        // (DA_delta_mat_BT uses phi_T_mat[j, T_stop] only). The paper's
+        // estimator (Eq. (10) of 109990) instead uses per-step penalties
+        // Psi_{t,L} recomputed from each column t — as the R (and our) AR1 /
+        // EQUI paths do. The two coincide for T_stop = 1 (entire L-loop) and
+        // differ only in the Phi'/V-hat' internals across the T-loop. We
+        // follow R here; switching to per-step deltas would deviate from the
+        // reference implementation and requires re-validating FDR/TPR curves.
         result.phi_T_array_BT.resize(rho_grid_len);
         for (std::size_t r = 0; r < rho_grid_len; ++r) {
             result.phi_T_array_BT[r].resize(p, T);
