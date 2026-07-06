@@ -265,7 +265,7 @@ inline void bind_ml_methods(py::module& m) {
             [](PyPCA& self, Eigen::Ref<Eigen::MatrixXd> X, Eigen::Index M) {
                 return self.fit(X, M);
             },
-            py::arg("X"), py::arg("M"))
+            py::arg("X"), py::arg("M"), py::keep_alive<1, 2>())
         .def("transform",
             [](PyPCA& self,
                Eigen::Ref<const Eigen::MatrixXd> X_new // NOLINT(performance-unnecessary-value-param)

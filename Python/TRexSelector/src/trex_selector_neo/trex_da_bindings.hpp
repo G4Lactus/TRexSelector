@@ -125,6 +125,7 @@ inline void bind_trex_da(py::module& m) {
              py::arg("da_control") = TRexDAControlParameter(),
              py::arg("trex_control") = TRexControlParameter(),
              py::arg("seed") = -1, py::arg("verbose") = true,
+             py::keep_alive<1, 2>(), py::keep_alive<1, 3>(),
              "Construct the DA selector. X and y are accessed zero-copy via Eigen::Map.")
         .def("getDAResult", &PyTRexDASelector::getDAResult, "Fetch the detailed DA selection result.");
 }

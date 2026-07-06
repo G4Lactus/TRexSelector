@@ -143,6 +143,7 @@ inline void bind_trex_gvs(py::module& m) {
              py::arg("gvs_control") = TRexGVSControlParameter(),
              py::arg("trex_control") = TRexControlParameter(),
              py::arg("seed") = -1, py::arg("verbose") = true,
+             py::keep_alive<1, 2>(), py::keep_alive<1, 3>(),
              "Construct the GVS selector. X and y are accessed zero-copy via Eigen::Map.")
         .def("getGVSResult", &PyTRexGVSSelector::getGVSResult, "Return the GVSSelectionResult after calling select().");
 }

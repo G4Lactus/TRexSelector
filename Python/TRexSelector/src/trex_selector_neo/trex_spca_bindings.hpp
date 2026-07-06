@@ -157,6 +157,7 @@ inline void bind_trex_spca(py::module& m) {
              py::arg("ctrl")    = TRexSPCAControlParameter(),
              py::arg("seed")    = -1,
              py::arg("verbose") = false,
+             py::keep_alive<1, 2>(),
              "Construct the SPCA selector. X is accessed zero-copy via Eigen::Map.")
         .def("select",    &PyTRexSPCASelector::select,
              "Run T-Rex Sparse PCA selection.")

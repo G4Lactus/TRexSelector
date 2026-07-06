@@ -73,9 +73,11 @@ jobs:
           CIBW_SKIP: "*-musllinux_*"
 
           # Run the package test suite against every built wheel so an
-          # unimportable or broken wheel can never reach PyPI
+          # unimportable or broken wheel can never reach PyPI. faulthandler
+          # prints the exact test and native stack on a hard crash (SIGSEGV),
+          # and -x stops at the first failure so the culprit is unambiguous.
           CIBW_TEST_REQUIRES: "pytest"
-          CIBW_TEST_COMMAND: "pytest {package}/tests -q"
+          CIBW_TEST_COMMAND: "python -X faulthandler -m pytest {package}/tests -x -q"
 
           # Surface the compiler/CMake output so build failures are diagnosable
           CIBW_BUILD_VERBOSITY: "1"

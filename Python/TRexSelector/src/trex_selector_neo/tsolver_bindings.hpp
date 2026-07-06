@@ -373,9 +373,11 @@ py::class_<PySolverWrapper<Solver>>& add_standard_tsolver_methods(
         .def("clearWarnings", &PySolverWrapper<Solver>::clearWarnings,
              "Clear the recorded warnings.")
         .def("reconnect", &PySolverWrapper<Solver>::reconnect, py::arg("X"), py::arg("D"),
+             py::keep_alive<1, 2>(), py::keep_alive<1, 3>(),
              "Reconnect the underlying native solver engine to a new batch of underlying Matrices.")
         .def("restore", &PySolverWrapper<Solver>::restore, py::arg("X"), py::arg("D"),
              py::arg("y"),
+             py::keep_alive<1, 2>(), py::keep_alive<1, 3>(), py::keep_alive<1, 4>(),
              "Restore solver state parameters based on fresh target views.")
         .def("save", &PySolverWrapper<Solver>::save, py::arg("filepath"),
              "Serialize calculation state directly to disk utilizing Cereal.")
@@ -410,6 +412,7 @@ py::class_<PySolverWrapper<Solver>> bind_standard_tsolver(py::module& m, const s
              py::arg("intercept") = true,
              py::arg("verbose") = false,
              py::arg("scaling_mode") = ScalingMode::L2,
+             py::keep_alive<1, 2>(), py::keep_alive<1, 3>(), py::keep_alive<1, 4>(),
              "Initializes the solver via zero-copy views to facilitate safe in-place mutations.");
     add_standard_tsolver_methods<Solver>(cls);
     return cls;
@@ -462,6 +465,7 @@ inline void bind_tsolvers_module(py::module& m) {
              py::arg("intercept") = true,
              py::arg("verbose") = false,
              py::arg("scaling_mode") = ScalingMode::L2,
+             py::keep_alive<1, 2>(), py::keep_alive<1, 3>(), py::keep_alive<1, 4>(),
              "Initializes the solver via zero-copy views to facilitate safe in-place mutations.");
     add_standard_tsolver_methods<TLARS_Solver>(cls_tlars);
     cls_tlars
@@ -499,6 +503,7 @@ inline void bind_tsolvers_module(py::module& m) {
              py::arg("intercept") = true,
              py::arg("verbose") = false,
              py::arg("scaling_mode") = ScalingMode::L2,
+             py::keep_alive<1, 2>(), py::keep_alive<1, 3>(), py::keep_alive<1, 4>(),
              "Initializes the TENET solver array, using an explicit secondary L2"
              " penalty `lambda2`.");
     add_standard_tsolver_methods<TENET_Solver>(cls_tenet);
@@ -524,6 +529,7 @@ inline void bind_tsolvers_module(py::module& m) {
              py::arg("verbose") = false,
              py::arg("scaling_mode") = ScalingMode::L2,
              py::arg("use_lars_inner") = false,
+             py::keep_alive<1, 2>(), py::keep_alive<1, 3>(), py::keep_alive<1, 4>(),
              "Initializes the augmented-LASSO Elastic Net solver with an explicit"
              " secondary L2 penalty `lambda2`. Set `use_lars_inner` to run the"
              " inner path with a pure-LARS solver (never drops variables).");
@@ -544,6 +550,7 @@ inline void bind_tsolvers_module(py::module& m) {
              py::arg("verbose") = false,
              py::arg("scaling_mode") = ScalingMode::L2,
              py::arg("use_lars_inner") = false,
+             py::keep_alive<1, 2>(), py::keep_alive<1, 3>(), py::keep_alive<1, 4>(),
              "Initializes the augmented-LASSO Informed Elastic Net solver with a"
              " group-ridge penalty `lambda2` and a 0-based group id per original"
              " variable (`groups`, length p).");
@@ -581,6 +588,7 @@ inline void bind_tsolvers_module(py::module& m) {
              py::arg("intercept") = true,
              py::arg("verbose") = false,
              py::arg("scaling_mode") = ScalingMode::L2,
+             py::keep_alive<1, 2>(), py::keep_alive<1, 3>(), py::keep_alive<1, 4>(),
              "Initializes the solver via zero-copy views to facilitate safe in-place mutations.");
     add_standard_tsolver_methods<TOMP_Solver>(cls_tomp);
 
@@ -616,6 +624,7 @@ inline void bind_tsolvers_module(py::module& m) {
              py::arg("intercept") = true,
              py::arg("verbose") = false,
              py::arg("scaling_mode") = ScalingMode::L2,
+             py::keep_alive<1, 2>(), py::keep_alive<1, 3>(), py::keep_alive<1, 4>(),
              "Initializes the TNCGMP solver array, enforcing a strictly specified LineSearch"
              " or FullyCorrective variant.");
     add_standard_tsolver_methods<TNCGMP_Solver>(cls_tncgmp);
@@ -640,6 +649,7 @@ inline void bind_tsolvers_module(py::module& m) {
              py::arg("intercept") = true,
              py::arg("verbose") = false,
              py::arg("scaling_mode") = ScalingMode::L2,
+             py::keep_alive<1, 2>(), py::keep_alive<1, 3>(), py::keep_alive<1, 4>(),
              "Initializes the AFS solver array allowing for custom `rho` tuning.");
     add_standard_tsolver_methods<TAFS_Solver>(cls_tafs);
 }

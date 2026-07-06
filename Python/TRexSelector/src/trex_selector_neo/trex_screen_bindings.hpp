@@ -115,6 +115,7 @@ inline void bind_trex_screen(py::module& m) {
              py::arg("screen_control") = ScreenTRexControlParameter(),
              py::arg("trex_control") = TRexControlParameter(),
              py::arg("seed") = -1, py::arg("verbose") = true,
+             py::keep_alive<1, 2>(), py::keep_alive<1, 3>(),
              "Construct the screening selector. X and y are accessed zero-copy via Eigen::Map.")
         .def("getScreenResult", &PyScreenTRexSelector::getScreenResult, "Return the ScreenTRexSelectionResult after calling select().");
 }
