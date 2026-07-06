@@ -64,7 +64,7 @@ jobs:
       - name: Build wheels
         uses: pypa/cibuildwheel@v2.21.3
         with:
-          package-dir: Python/TRexSelector
+          package-dir: Python/TRexSelectorNeo
           output-dir: wheelhouse
         env:
           # Build CPython 3.10–3.13 (matches requires-python >= 3.10); skip
@@ -89,6 +89,10 @@ jobs:
           # for local/macOS builds. OpenMP uses GCC's bundled libgomp (no package).
           # This exact recipe was validated in the manylinux container.
           # -----------------------------------------------------------------------
+          # 64-bit only (mirrors CIBW_ARCHS_WINDOWS): numpy ships no i686
+          # wheels for cp310+, so the 32-bit test environments cannot even be
+          # installed — and there is no 32-bit audience for this package.
+          CIBW_ARCHS_LINUX: x86_64
           CIBW_MANYLINUX_X86_64_IMAGE: manylinux_2_28
           CIBW_BEFORE_ALL_LINUX: |
             set -e
