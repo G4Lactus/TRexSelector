@@ -1,0 +1,16 @@
+^bundle_for_cran\.sh$
+^src/.*\.o$
+^src/.*\.so$
+^src/Makevars$
+^LICENSE\.md$
+^tools$
+^TRexSelectorNeo\.Rcheck$
+^TRexSelector\.Rcheck$
+^cran-comments\.md$
+^README\.Rmd$
+^autom4te\.cache$
+^configure~$
+^config\.log$
+^config\.status$
+^\.DS_Store$
+^\.clangd$

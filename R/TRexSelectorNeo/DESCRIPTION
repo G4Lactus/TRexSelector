@@ -1,0 +1,41 @@
+Package: TRexSelectorNeo
+Type: Package
+Title: T-Rex Selector: High-Dimensional Variable Selection & FDR Control
+Version: 0.2.0
+Description: FDR-controlled variable selection for regression and classification in
+ high-dimensional settings while controlling the false discovery rate (FDR) at a user-specified
+ target level. The R package comes as R bindings to the TRexSelector C++ library and
+ supersedes the pure-R 'TRexSelector' package, alongside which it can be installed.
+Authors@R:
+    c(
+      person(given = "Jasin", family = "Machkour", email = "jasin.machkour@tu-darmstadt.de", role = c("aut", "cre")),
+      person(given = "Fabian", family = "Scheidt", email = "fabian.scheidt@tu-darmstadt.de", role = "aut"),
+      person(given = "Simon", family = "Tien", email = "simon.tien@stud.tu-darmstadt.de", role = "ctb"),
+      person(given = c("Daniel", "P."), family = "Palomar", email = "daniel.p.palomar@gmail.com", role = "aut"),
+      person(given = "Michael", family = "Muma", email = "michael.muma@tu-darmstadt.de", role = "aut")
+    )
+URL: https://github.com/G4Lactus/TRexSelector
+BugReports: https://github.com/G4Lactus/TRexSelector/issues
+License: GPL (>= 3)
+Encoding: UTF-8
+LazyData: true
+Roxygen: list(markdown = TRUE)
+LinkingTo:
+    Rcpp,
+    RcppEigen,
+    BH,
+    Rcereal
+Depends:
+    R (>= 4.3)
+Imports:
+    Rcpp,
+    R6
+Suggests:
+    testthat (>= 3.0.0),
+    knitr,
+    rmarkdown,
+    ggplot2,
+    patchwork
+VignetteBuilder: knitr
+SystemRequirements: C++20
+Config/roxygen2/version: 8.0.0

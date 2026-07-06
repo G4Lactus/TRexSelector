@@ -1,0 +1,26 @@
+# clangd flags for the Rcpp glue and vendored sources.
+#
+# These files are not in cpp/compile_commands.json (clangd's only database,
+# per .vscode clangd.arguments), so clangd would otherwise borrow flags from
+# the nearest cpp/src entry — no R headers, wrong -fopenmp flavour, red
+# squiggles everywhere. Note: c_cpp_properties.json is read only by the
+# Microsoft cpptools engine, which is disabled in this workspace.
+#
+# Mirrors the real build (src/Makevars.in): CXX20, -Isrc, -DCRAN_BUILD=1,
+# plus the R + LinkingTo package include paths. Paths are machine-specific
+# (macOS CRAN R framework layout). Excluded from the CRAN tarball via
+# .Rbuildignore.
+CompileFlags:
+  # Drop everything borrowed from the cpp/ compile database — its -I cpp/src
+  # and Homebrew Eigen (-isystem) would shadow the vendored sources and
+  # RcppEigen's Eigen 3.4 that the R build actually compiles against.
+  Remove: [-fopenmp*, -std=*, -I*, -isystem*, -D*]
+  Add:
+    - -std=c++20
+    - -I/Users/fabianscheidt/Documents/C++/TRexSelector/R/TRexSelectorNeo/src
+    - -I/Library/Frameworks/R.framework/Resources/include
+    - -I/Library/Frameworks/R.framework/Resources/library/Rcpp/include
+    - -I/Library/Frameworks/R.framework/Resources/library/RcppEigen/include
+    - -I/Library/Frameworks/R.framework/Resources/library/BH/include
+    - -I/Library/Frameworks/R.framework/Resources/library/Rcereal/include
+    - -DCRAN_BUILD=1

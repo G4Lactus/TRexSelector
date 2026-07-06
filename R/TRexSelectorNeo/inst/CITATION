@@ -1,0 +1,47 @@
+citHeader("To cite 'TRexSelector' in publications, please use:")
+
+bibentry("Manual",
+  title        = "{TRexSelector: T-Rex Selector: High-Dimensional Variable Selection & FDR Control}",
+  author       = as.person("TRexSelector Team"),
+  note         = "R package version 2.0.0",
+  year         = "2026",
+  url          = "https://github.com/G4Lactus/TRexSelector",
+  textVersion  =
+    paste(
+     "TRexSelector Team, \"TRexSelector: T-Rex Selector: High-Dimensional Variable Selection & FDR Control,\" 2026, R package version 2.0.0. [Online]. Available: https://github.com/G4Lactus/TRexSelector"
+    )
+)
+
+bibentry("Article",
+  title        = "The Terminating-Random Experiments Selector: Fast High-Dimensional Variable Selection with False Discovery Rate Control",
+  author       = c(as.person("Jasin Machkour"),
+                   as.person("Michael Muma"),
+                   as.person("Daniel P. Palomar")),
+  journal      = "Signal Processing",
+  volume       = "231",
+  pages        = "109894",
+  year         = "2025",
+  doi          = "10.1016/j.sigpro.2025.109894",
+  url          = "https://doi.org/10.1016/j.sigpro.2025.109894",
+  textVersion  =
+    paste(
+     "J. Machkour, M. Muma, and D. P. Palomar, \"The terminating-random experiments selector: Fast high-dimensional variable selection with false discovery rate control,\" Signal Processing, vol. 231, article 109894, 2025. DOI: 10.1016/j.sigpro.2025.109894"
+    )
+)
+
+bibentry("Article",
+  title        = "High-Dimensional False Discovery Rate Control for Dependent Variables",
+  author       = c(as.person("Jasin Machkour"),
+                   as.person("Michael Muma"),
+                   as.person("Daniel P. Palomar")),
+  journal      = "Signal Processing",
+  volume       = "234",
+  pages        = "109990",
+  year         = "2025",
+  doi          = "10.1016/j.sigpro.2025.109990",
+  url          = "https://doi.org/10.1016/j.sigpro.2025.109990",
+  textVersion  =
+    paste(
+     "J. Machkour, M. Muma, and D. P. Palomar, \"High-dimensional false discovery rate control for dependent variables,\" Signal Processing, vol. 234, article 109990, 2025. DOI: 10.1016/j.sigpro.2025.109990"
+    )
+)

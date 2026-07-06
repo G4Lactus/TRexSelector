@@ -1,0 +1,166 @@
+# =============================================================================
+# clustering.R - Hierarchical Clustering and Tree Cutting
+#
+# Functions are based on the implementations within the TRexSelector package,
+# written in Cpp with Rcpp interfaces.
+# =============================================================================
+
+
+#' @importFrom Rcpp evalCpp
+NULL
+
+
+#' @title Linkage Methods
+#'
+#' @description Enumeration of supported hierarchical clustering linkage methods.
+#'              Supported methods include:
+#'              - `Ward`: Ward's minimum variance method: codes as 0.
+#'              - `Average` (UPGMA): Average linkage: codes as 1.
+#'              - `Complete`: Complete linkage: codes as 2.
+#'              - `Single`: Single linkage: codes as 3.
+#'              - `WPGMA`: Weighted pair group method with arithmetic mean: codes as 4.
+#'              - `Median`: Median linkage: codes as 5.
+#'              - `Centroid`: Centroid linkage: codes as 6.
+#'
+#' @examples
+#' LinkageMethod$Ward
+#' LinkageMethod$Average
+#' @export
+LinkageMethod <- list(
+  Ward = 0,
+  Average = 1,
+  Complete = 2,
+  Single = 3,
+  WPGMA = 4,
+  Median = 5,
+  Centroid = 6
+)
+
+
+#' @title Distance Metrics
+#'
+#' @description Enumeration of supported distance metrics for hierarchical clustering.
+#'             Supported metrics include:
+#'            - `Euclidean`: Standard Euclidean distance: codes as 0.
+#'            - `Correlation`: Correlation distance (1 - correlation): codes as 1.
+#'            - `Manhattan`: Manhattan (L1) distance: codes as 2.
+#'            - `Correlation_LSH_Filter`: Correlation distance with LSH-based filtering: codes as 3.
+#'            - `Correlation_LSH_Approx`: Approximate correlation distance using LSH: codes as 4.
+#'
+#' @examples
+#' DistanceMetric$Euclidean
+#' DistanceMetric$Correlation
+#' @export
+DistanceMetric <- list(
+  Euclidean = 0,
+  Correlation = 1,
+  Manhattan = 2,
+  Correlation_LSH_Filter = 3,
+  Correlation_LSH_Approx = 4
+)
+
+
+#' @title Agglomerative Clustering
+#'
+#' @description Performs hierarchical agglomerative clustering on a numeric matrix.
+#'
+#' @param data   A numeric matrix, or an \code{mmap_matrix} created by
+#'               \code{\link{convert_to_memory_mapped}}.
+#' @param method A value from `LinkageMethod` (e.g. `LinkageMethod$Ward`).
+#' @param metric A value from `DistanceMetric` (e.g. `DistanceMetric$Euclidean`).
+#'               Default is Euclidean.
+#' @param use_mmap Whether to use memory mapping files for intermediate storage. Default is FALSE.
+#'                 Ignored when \code{data} is already an \code{mmap_matrix} (always \code{TRUE}).
+#'
+#' @return A numeric matrix representing the computed hierarchical linkage.
+#'
+#' @examples
+#' set.seed(1)
+#' data <- matrix(rnorm(30), nrow = 10)
+#' agglomerative_cluster(data, method = LinkageMethod$Ward)
+#' @export
+agglomerative_cluster <- function(data,
+                                  method = LinkageMethod$Ward,
+                                  metric = DistanceMetric$Euclidean,
+                                  use_mmap = FALSE) {
+  is_mmap <- inherits(data, "mmap_matrix")
+  if (!is_mmap && (!is.matrix(data) || !is.numeric(data))) {
+    stop("Input 'data' must be a numeric matrix or mmap_matrix.")
+  }
+
+  # Euclidean-geometry methods require Euclidean distances. Ward, Median, and
+  # Centroid are all centroid-based and their Lance-Williams update formulas
+  # are derived from the law of cosines in Euclidean space. Applying them to
+  # correlation or Manhattan distances produces a mathematically invalid
+  # dendrogram without any runtime error (consistent with SciPy's behaviour,
+  # but disallowed here following scikit-learn's stricter convention).
+  #
+  # Exception: Ward + Correlation_LSH_Approx is a defined approximate operation
+  # — the dispatcher routes it to a 64-dimensional SimHash-projected Euclidean
+  # space (ProjectedGeometricUpdatePolicy), so it is permitted.
+  euclidean_only_methods <- c(LinkageMethod$Ward, LinkageMethod$Median, LinkageMethod$Centroid)
+  ward_lsh_approx_exception <- (method == LinkageMethod$Ward &&
+                                  metric == DistanceMetric$Correlation_LSH_Approx)
+
+  if (method %in% euclidean_only_methods &&
+        metric  != DistanceMetric$Euclidean  &&
+        !ward_lsh_approx_exception) {
+
+    method_name <- switch(as.character(method),
+      "0" = "Ward",
+      "5" = "Median",
+      "6" = "Centroid",
+      paste0("LinkageMethod index ", method)
+    )
+    stop(sprintf(
+      paste0("'%s' linkage requires Euclidean distances because its merge criterion\n",
+             "is defined in terms of Euclidean centroids (law of cosines).\n",
+             "Use LinkageMethod$Average, $Complete, $Single, or $WPGMA for non-Euclidean metrics.\n",
+             "Exception: Ward + DistanceMetric$Correlation_LSH_Approx is permitted\n",
+             "(Ward is performed in a 64-dimensional SimHash-projected Euclidean space)."),
+      method_name
+    ))
+  }
+
+  # Delegate to Rcpp layer
+  if (is_mmap) {
+    result <- rcpp_agglomerative_cluster_mmap(data, method, metric)
+  } else {
+    result <- rcpp_agglomerative_cluster(data, method, metric, use_mmap)
+  }
+  # convert 0-based Cpp cluster IDs to 1-based R convention
+  result[, 1:2] <- result[, 1:2] + 1L
+  result
+}
+
+
+#' @title Cut Hierarchical Linkage Matrix
+#'
+#' @description Flatten the dendrogram clustering results based on the number of requested groups.
+#'
+#' @param linkage       A numeric matrix representing linkage, generated by `agglomerative_cluster`.
+#' @param num_orig_objs Original number of observations data rows.
+#' @param num_clusters  Target flat group capacity.
+#'
+#' @return An integer vector mapping observation indexes to cluster arrays.
+#'
+#' @examples
+#' set.seed(1)
+#' data <- matrix(rnorm(30), nrow = 10)
+#' linkage <- agglomerative_cluster(data, method = LinkageMethod$Ward)
+#' cut_tree(linkage, num_orig_objs = 10, num_clusters = 3)
+#' @export
+cut_tree <- function(linkage, num_orig_objs, num_clusters) {
+  if (!is.matrix(linkage) || !is.numeric(linkage)) {
+    stop("Input 'linkage' must be a numeric matrix generated by agglomerative_cluster().")
+  }
+  if (num_clusters < 1 || num_clusters > num_orig_objs) {
+    stop("num_clusters must be > 0 and <= num_orig_objs")
+  }
+
+  # Convert 1-based R linkage cluster IDs back to 0-based Cpp before calling Rcpp;
+  linkage_0 <- linkage
+  linkage_0[, 1:2] <- linkage_0[, 1:2] - 1L
+  # then shift the returned 0-based labels to 1-based R convention
+  rcpp_cut_tree(linkage_0, as.integer(num_orig_objs), as.integer(num_clusters)) + 1L
+}
