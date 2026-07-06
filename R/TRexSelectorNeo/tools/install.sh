@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
-# install.sh — Re-bundle C++ sources and (re)install the TRexSelector R package.
+# install.sh — Re-bundle C++ sources and (re)install the TRexSelectorNeo R package.
 #
 # Usage (from any directory):
-#   bash R/TRexSelector/tools/install.sh
+#   bash R/TRexSelectorNeo/tools/install.sh
 #   # or, after chmod +x:
-#   R/TRexSelector/tools/install.sh
+#   R/TRexSelectorNeo/tools/install.sh
 #
 # Content:
-#   1. bundle_for_cran.sh  — copies the latest C++ sources from src/ into
-#                             R/TRexSelector/src/ and regenerates all Makevars
+#   1. bundle_for_cran.sh  — copies the latest C++ sources from cpp/src/ into
+#                             R/TRexSelectorNeo/src/ and regenerates all Makevars
 #                             files.  Without this, R CMD INSTALL would compile
 #                             stale code.
 #   2. autoconf            — regenerates the configure script from configure.ac.
@@ -24,13 +24,11 @@ set -e
 
 # Resolve the repo root regardless of where the script is invoked from.
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-PKG_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"      # R/TRexSelector
+PKG_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"      # R/TRexSelectorNeo
 REPO_ROOT="$(cd "$PKG_DIR/../.." && pwd)"    # repo root
 
 echo "=== Step 1: Bundle C++ backend into R package ==="
-cd "$PKG_DIR"
-chmod +x bundle_for_cran.sh
-./bundle_for_cran.sh
+bash "$SCRIPT_DIR/bundle_for_cran.sh"
 
 echo ""
 echo "=== Step 2: Regenerate configure from configure.ac ==="
@@ -47,7 +45,7 @@ echo "Stale .o files removed."
 echo ""
 echo "=== Step 4: Install package ==="
 cd "$REPO_ROOT"
-R CMD INSTALL R/TRexSelector
+R CMD INSTALL "$PKG_DIR"
 
 echo ""
-echo "=== Done: TRexSelector installed successfully ==="
+echo "=== Done: TRexSelectorNeo installed successfully ==="

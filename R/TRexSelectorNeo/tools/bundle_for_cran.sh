@@ -18,9 +18,9 @@ set -euo pipefail
 # or before a release; it exits non-zero and lists the differences if stale.
 # =============================================================================
 
-# Always run relative to this script's location (R/TRexSelectorNeo/),
-# regardless of where it is invoked from.
-cd "$(dirname "$0")"
+# Always run relative to the package root (R/TRexSelectorNeo/, one level
+# above this script), regardless of where it is invoked from.
+cd "$(dirname "$0")/.."
 
 CPP_SRC="../../cpp/src"
 SUBTREES=(ml_methods trex_selector_methods tsolvers utils)
