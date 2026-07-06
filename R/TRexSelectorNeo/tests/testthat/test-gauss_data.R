@@ -24,19 +24,19 @@ D_g <- matrix(rnorm(n_g * p_g), n_g, p_g)
 # =============================================================================
 
 .gauss_factories <- list(
-  TLARS      = function() TLARSSolver$new(X_g, D_g, y_g),
-  TLASSO     = function() TLASSOSolver$new(X_g, D_g, y_g),
-  TSTEPWISE  = function() TSTEPWISESolver$new(X_g, D_g, y_g),
-  TENET      = function() TENETSolver$new(X_g, D_g, y_g, lambda2 = 0.5),
-  TSTAGEWISE = function() TStagewiseSolver$new(X_g, D_g, y_g),
-  TOMP       = function() TOMPSolver$new(X_g, D_g, y_g),
-  TGP        = function() TGPSolver$new(X_g, D_g, y_g),
-  TACGP      = function() TACGPSolver$new(X_g, D_g, y_g),
-  TMP        = function() TMPSolver$new(X_g, D_g, y_g),
-  TOOLS      = function() TOOLSSolver$new(X_g, D_g, y_g),
-  TNCGMP_ls  = function() TNCGMPSolver$new(X_g, D_g, y_g, variant = "line_search"),
-  TNCGMP_fc  = function() TNCGMPSolver$new(X_g, D_g, y_g, variant = "fully_corrective"),
-  TAFS       = function() TAFSSolver$new(X_g, D_g, y_g, rho = 1.0)
+  TLARS      = function() TLARS_Solver$new(X_g, D_g, y_g),
+  TLASSO     = function() TLASSO_Solver$new(X_g, D_g, y_g),
+  TSTEPWISE  = function() TSTEPWISE_Solver$new(X_g, D_g, y_g),
+  TENET      = function() TENET_Solver$new(X_g, D_g, y_g, lambda2 = 0.5),
+  TSTAGEWISE = function() TSTAGEWISE_Solver$new(X_g, D_g, y_g),
+  TOMP       = function() TOMP_Solver$new(X_g, D_g, y_g),
+  TGP        = function() TGP_Solver$new(X_g, D_g, y_g),
+  TACGP      = function() TACGP_Solver$new(X_g, D_g, y_g),
+  TMP        = function() TMP_Solver$new(X_g, D_g, y_g),
+  TOOLS      = function() TOOLS_Solver$new(X_g, D_g, y_g),
+  TNCGMP_ls  = function() TNCGMP_Solver$new(X_g, D_g, y_g, variant = "line_search"),
+  TNCGMP_fc  = function() TNCGMP_Solver$new(X_g, D_g, y_g, variant = "fully_corrective"),
+  TAFS       = function() TAFS_Solver$new(X_g, D_g, y_g, rho = 1.0)
 )
 
 test_that("All TSolver variants execute on Gauss_data with T_stop = 3", {

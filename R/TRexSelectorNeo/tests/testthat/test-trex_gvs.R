@@ -142,6 +142,64 @@ test_that("TRexGVSSelector correctly guards against invalid parameters", {
 })
 
 
+test_that("TRexGVSSelector warns when control$solver does not match the derived solver", {
+  set.seed(42)
+  n <- 50
+  p <- 10
+  X <- matrix(rnorm(n * p), n, p)
+  y <- rnorm(n)
+
+  # Non-matching solver: warning names the derived solver
+  expect_warning(
+    TRexGVSSelector$new(X, y, gvs_control = trex_gvs_control(gvs_type = "IEN"),
+                        control = trex_control(solver = "TOMP"), verbose = FALSE),
+    'derives solver "TIENET_AUG"'
+  )
+  expect_warning(
+    TRexGVSSelector$new(X, y, gvs_control = trex_gvs_control(gvs_type = "EN"),
+                        control = trex_control(solver = "TLASSO"), verbose = FALSE),
+    'derives solver "TENET"'
+  )
+
+  # Default solver ("TLARS") and matching solver stay silent
+  expect_no_warning(
+    TRexGVSSelector$new(X, y, gvs_control = trex_gvs_control(gvs_type = "IEN"),
+                        verbose = FALSE)
+  )
+  expect_no_warning(
+    TRexGVSSelector$new(X, y, gvs_control = trex_gvs_control(gvs_type = "EN"),
+                        control = trex_control(solver = "TENET"), verbose = FALSE)
+  )
+})
+
+
+test_that("TRexGVSSelector warns when lambda_2 == 0 (degenerate no-ridge)", {
+  set.seed(42)
+  n <- 50
+  p <- 10
+  X <- matrix(rnorm(n * p), n, p)
+  y <- rnorm(n)
+
+  expect_warning(
+    TRexGVSSelector$new(X, y,
+                        gvs_control = trex_gvs_control(gvs_type = "EN", lambda_2 = 0),
+                        verbose = FALSE),
+    "degenerate no-ridge"
+  )
+  # Auto (-1) and fixed positive must not warn
+  expect_no_warning(
+    TRexGVSSelector$new(X, y,
+                        gvs_control = trex_gvs_control(gvs_type = "EN", lambda_2 = -1),
+                        verbose = FALSE)
+  )
+  expect_no_warning(
+    TRexGVSSelector$new(X, y,
+                        gvs_control = trex_gvs_control(gvs_type = "EN", lambda_2 = 0.05),
+                        verbose = FALSE)
+  )
+})
+
+
 
 test_that("TRexGVSSelector handles manual grouping vectors correctly", {
   set.seed(42)

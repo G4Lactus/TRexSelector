@@ -122,6 +122,54 @@ def test_zscore_fit_transform_inplace(regression_data):
     assert np.allclose(X_one, X_two, atol=0.0)
 
 
+# ---------------------------------------------------------------------------
+# Returning (non-inplace) scaler API — layout-agnostic, leaves input untouched
+# ---------------------------------------------------------------------------
+
+def test_zscore_transform_returns_and_accepts_c_order(regression_data):
+    """transform() returns a new array and accepts a C-ordered input (the
+    natural 'copy then transform' idiom), without mutating the caller's array."""
+    X, y, n, p = regression_data
+    scaler = ZScoreScaler().fit(X)
+
+    X_c = np.ascontiguousarray(X)          # C-ordered — would break *_inplace
+    original = X_c.copy()
+    out = scaler.transform(X_c)
+
+    assert out is not None
+    assert out.shape == X.shape
+    assert np.array_equal(X_c, original), "transform() must not mutate its input"
+    assert np.allclose(out.mean(axis=0), 0.0, atol=1e-10)
+
+
+def test_zscore_fit_transform_returns_matches_inplace(regression_data):
+    """The returning fit_transform() equals the in-place path numerically."""
+    X, y, n, p = regression_data
+    out = ZScoreScaler().fit_transform(np.ascontiguousarray(X))
+
+    X_ref = X.copy(order="F")
+    ZScoreScaler().fit_transform_inplace(X_ref)
+    assert np.allclose(out, X_ref, atol=1e-12)
+
+
+def test_zscore_transform_inverse_round_trip_returning(regression_data):
+    X, y, n, p = regression_data
+    scaler = ZScoreScaler().fit(X)
+    out = scaler.transform(np.ascontiguousarray(X))
+    back = scaler.inverse_transform(out)
+    assert np.allclose(back, X, atol=1e-12)
+
+
+def test_lpnorm_transform_returns_and_accepts_c_order(regression_data):
+    X, y, n, p = regression_data
+    scaler = LpNormScaler(NormType.L2).fit(X)
+    X_c = np.ascontiguousarray(X)
+    original = X_c.copy()
+    out = scaler.transform(X_c)
+    assert out.shape == X.shape
+    assert np.array_equal(X_c, original)
+
+
 def test_zscore_no_centering_uses_rms():
     """center=False, scale=True divides by the RMS around 0, as in R's scale()."""
     rng = np.random.default_rng(99)

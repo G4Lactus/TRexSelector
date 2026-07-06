@@ -106,13 +106,19 @@ std::vector<MergeStep> internal_dispatch_linkage(
         case LinkageMethod::Ward:
             // Ward's Lance-Williams recurrence is only valid for (squared)
             // Euclidean geometry; other combinations are rejected at compile
-            // time by the dispatcher, so only instantiate the valid one.
-            if constexpr (Metric == DistanceMetric::Euclidean) {
+            // time by the dispatcher, so only instantiate the valid ones.
+            // Correlation_LSH_Approx is the one supported exception: the core
+            // dispatcher routes it to ProjectedGeometricUpdatePolicy (Ward in
+            // 64-D SimHash-projected Euclidean space).
+            if constexpr (Metric == DistanceMetric::Euclidean ||
+                          Metric == DistanceMetric::Correlation_LSH_Approx) {
                 return AgglomerativeClustering::cluster<TransposedType, DP,
                                                 LinkageMethod::Ward>(transposed, use_mmap);
             } else {
                 throw std::invalid_argument(
-                    "Ward linkage strictly requires Euclidean distance.");
+                    "Ward linkage strictly requires Euclidean distance "
+                    "(exception: Correlation_LSH_Approx, which runs Ward in a "
+                    "SimHash-projected Euclidean space).");
             }
         case LinkageMethod::Average:
             return AgglomerativeClustering::cluster<TransposedType, DP,

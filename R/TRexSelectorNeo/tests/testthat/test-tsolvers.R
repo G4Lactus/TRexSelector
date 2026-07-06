@@ -2,17 +2,17 @@
 # test-tsolvers.R
 # =============================================================================
 #
-# Unit tests for the R6 T-Solver wrappers (TSolverBase and all subclasses).
+# Unit tests for the R6 T-Solver wrappers (TSolver_Base and all subclasses).
 # Mirrors the structure of the C++ test bed in
 #   tests/test_tsolvers/test_tsolvers_polymorphic.cpp
 #   tests/test_tsolvers/test_tsolvers_serialization.cpp
 #
 # Test groups
 #   1. Input validation
-#   2. Polymorphic execution test (all 13 factory entries)
-#   3. Getter return-type and contract checks (TLARSSolver reference)
+#   2. Polymorphic execution test (all 15 factory entries)
+#   3. Getter return-type and contract checks (TLARS_Solver reference)
 #   4. Solver-specific getter checks (lambda, num_removals, cycling_ratio)
-#   5. Warm-start / serialization (all 13 factory entries)
+#   5. Warm-start / serialization (all 15 factory entries)
 # =============================================================================
 
 # ---------------------------------------------------------------------------
@@ -28,23 +28,29 @@ D <- matrix(rnorm(n * d), n, d)
 y <- X[, 5] * 4.0 + X[, 15] * (-2.5) + X[, 25] * 3.1 + rnorm(n)
 
 # ---------------------------------------------------------------------------
-# Solver factory (13 entries: 12 solver types, TNCGMP counted for both variants)
+# Solver factory (15 entries: 14 solver types, TNCGMP counted for both variants)
 # ---------------------------------------------------------------------------
 
+# 1-based contiguous group ids for TIENETAug (10 groups of 3 predictors)
+.tienet_groups <- rep(seq_len(10L), each = 3L)
+
 .factories <- list(
-  TLARS      = function() TLARSSolver$new(X, D, y),
-  TLASSO     = function() TLASSOSolver$new(X, D, y),
-  TSTEPWISE  = function() TSTEPWISESolver$new(X, D, y),
-  TENET      = function() TENETSolver$new(X, D, y, lambda2 = 0.5),
-  TSTAGEWISE = function() TStagewiseSolver$new(X, D, y),
-  TOMP       = function() TOMPSolver$new(X, D, y),
-  TGP        = function() TGPSolver$new(X, D, y),
-  TACGP      = function() TACGPSolver$new(X, D, y),
-  TMP        = function() TMPSolver$new(X, D, y),
-  TOOLS      = function() TOOLSSolver$new(X, D, y),
-  TNCGMP_ls  = function() TNCGMPSolver$new(X, D, y, variant = "line_search"),
-  TNCGMP_fc  = function() TNCGMPSolver$new(X, D, y, variant = "fully_corrective"),
-  TAFS       = function() TAFSSolver$new(X, D, y, rho = 1.0)
+  TLARS      = function() TLARS_Solver$new(X, D, y),
+  TLASSO     = function() TLASSO_Solver$new(X, D, y),
+  TSTEPWISE  = function() TSTEPWISE_Solver$new(X, D, y),
+  TENET      = function() TENET_Solver$new(X, D, y, lambda2 = 0.5),
+  TENET_AUG  = function() TENETAug_Solver$new(X, D, y, lambda2 = 0.5),
+  TIENET_AUG = function() TIENETAug_Solver$new(X, D, y, lambda2 = 0.5,
+                                              groups = .tienet_groups),
+  TSTAGEWISE = function() TSTAGEWISE_Solver$new(X, D, y),
+  TOMP       = function() TOMP_Solver$new(X, D, y),
+  TGP        = function() TGP_Solver$new(X, D, y),
+  TACGP      = function() TACGP_Solver$new(X, D, y),
+  TMP        = function() TMP_Solver$new(X, D, y),
+  TOOLS      = function() TOOLS_Solver$new(X, D, y),
+  TNCGMP_ls  = function() TNCGMP_Solver$new(X, D, y, variant = "line_search"),
+  TNCGMP_fc  = function() TNCGMP_Solver$new(X, D, y, variant = "fully_corrective"),
+  TAFS       = function() TAFS_Solver$new(X, D, y, rho = 1.0)
 )
 
 
@@ -52,29 +58,29 @@ y <- X[, 5] * 4.0 + X[, 15] * (-2.5) + X[, 25] * 3.1 + rnorm(n)
 # Group 1: Input validation
 # =============================================================================
 
-test_that("TSolverBase rejects non-matrix X", {
-  expect_error(TLARSSolver$new("not_a_matrix", D, y))
+test_that("TSolver_Base rejects non-matrix X", {
+  expect_error(TLARS_Solver$new("not_a_matrix", D, y))
 })
 
-test_that("TSolverBase rejects y length mismatch", {
-  expect_error(TLARSSolver$new(X, D, y[seq_len(50)]))
+test_that("TSolver_Base rejects y length mismatch", {
+  expect_error(TLARS_Solver$new(X, D, y[seq_len(50)]))
 })
 
-test_that("TSolverBase rejects D row count mismatch", {
-  expect_error(TLARSSolver$new(X, D[seq_len(50), ], y))
+test_that("TSolver_Base rejects D row count mismatch", {
+  expect_error(TLARS_Solver$new(X, D[seq_len(50), ], y))
 })
 
-test_that("TENETSolver rejects negative lambda2", {
-  expect_error(TENETSolver$new(X, D, y, lambda2 = -0.1))
+test_that("TENET_Solver rejects negative lambda2", {
+  expect_error(TENET_Solver$new(X, D, y, lambda2 = -0.1))
 })
 
-test_that("TNCGMPSolver rejects unknown variant string", {
-  expect_error(TNCGMPSolver$new(X, D, y, variant = "bad_variant"))
+test_that("TNCGMP_Solver rejects unknown variant string", {
+  expect_error(TNCGMP_Solver$new(X, D, y, variant = "bad_variant"))
 })
 
 
 # =============================================================================
-# Group 2: Polymorphic execution test (all 13 factory entries)
+# Group 2: Polymorphic execution test (all 15 factory entries)
 # Mirrors test_tsolvers_polymorphic.cpp :: ExecutionSmokeTest
 # =============================================================================
 
@@ -97,11 +103,11 @@ test_that("All solver types execute without error and produce a valid RSS path",
 
 
 # =============================================================================
-# Group 3: Getter return-type and contract checks (TLARSSolver as reference)
+# Group 3: Getter return-type and contract checks (TLARS_Solver as reference)
 # =============================================================================
 
 local({
-  s <- TLARSSolver$new(X, D, y)
+  s <- TLARS_Solver$new(X, D, y)
   s$execute_step(T_stop = 8)
   nsteps <- s$get_num_steps()
 
@@ -209,8 +215,8 @@ local({
 # Group 4: Solver-specific getter contracts
 # =============================================================================
 
-test_that("TLARSSolver: get_lambda returns a non-increasing numeric vector of length nsteps", {
-  s <- TLARSSolver$new(X, D, y)
+test_that("TLARS_Solver: get_lambda returns a non-increasing numeric vector of length nsteps", {
+  s <- TLARS_Solver$new(X, D, y)
   s$execute_step(T_stop = 8)
   lam <- s$get_lambda()
   expect_type(lam, "double")
@@ -218,8 +224,8 @@ test_that("TLARSSolver: get_lambda returns a non-increasing numeric vector of le
   expect_true(all(diff(lam) <= 1e-12), label = "lambda non-increasing")
 })
 
-test_that("TLASSOSolver: get_lambda numeric, get_num_removals non-negative integer", {
-  s <- TLASSOSolver$new(X, D, y)
+test_that("TLASSO_Solver: get_lambda numeric, get_num_removals non-negative integer", {
+  s <- TLASSO_Solver$new(X, D, y)
   s$execute_step(T_stop = 8)
   expect_type(s$get_lambda(), "double")
   nr <- s$get_num_removals()
@@ -227,14 +233,14 @@ test_that("TLASSOSolver: get_lambda numeric, get_num_removals non-negative integ
   expect_gte(nr, 0L)
 })
 
-test_that("TSTEPWISESolver: get_lambda returns a numeric vector", {
-  s <- TSTEPWISESolver$new(X, D, y)
+test_that("TSTEPWISE_Solver: get_lambda returns a numeric vector", {
+  s <- TSTEPWISE_Solver$new(X, D, y)
   s$execute_step(T_stop = 8)
   expect_type(s$get_lambda(), "double")
 })
 
-test_that("TENETSolver: get_lambda, get_num_removals, get_cycling_ratio all correct", {
-  s <- TENETSolver$new(X, D, y, lambda2 = 0.5)
+test_that("TENET_Solver: get_lambda, get_num_removals, get_cycling_ratio all correct", {
+  s <- TENET_Solver$new(X, D, y, lambda2 = 0.5)
   s$execute_step(T_stop = 8)
   expect_type(s$get_lambda(), "double")
   nr <- s$get_num_removals()
@@ -246,8 +252,8 @@ test_that("TENETSolver: get_lambda, get_num_removals, get_cycling_ratio all corr
   expect_lte(cr, 1.0)
 })
 
-test_that("TStagewiseSolver: get_num_removals non-negative, get_cycling_ratio in [0,1]", {
-  s <- TStagewiseSolver$new(X, D, y)
+test_that("TSTAGEWISE_Solver: get_num_removals non-negative, get_cycling_ratio in [0,1]", {
+  s <- TSTAGEWISE_Solver$new(X, D, y)
   s$execute_step(T_stop = 8)
   nr <- s$get_num_removals()
   expect_type(nr, "integer")
@@ -256,11 +262,19 @@ test_that("TStagewiseSolver: get_num_removals non-negative, get_cycling_ratio in
   expect_type(cr, "double")
   expect_gte(cr, 0.0)
   expect_lte(cr, 1.0)
+})
+
+test_that("TIENETAug_Solver: get_lambda2, get_groups (1-based), get_num_groups", {
+  s <- TIENETAug_Solver$new(X, D, y, lambda2 = 0.5, groups = .tienet_groups)
+  s$execute_step(T_stop = 8)
+  expect_equal(s$get_lambda2(), 0.5)
+  expect_identical(s$get_groups(), as.integer(.tienet_groups))
+  expect_identical(s$get_num_groups(), 10L)
 })
 
 
 # =============================================================================
-# Group 5: Warm-start / serialization — all 13 factory entries
+# Group 5: Warm-start / serialization — all 15 factory entries
 # Mirrors test_tsolvers_polymorphic.cpp :: SerializationEquivalence
 #
 # Note: No data-copy issue in R — Rcpp copies matrices by value on every

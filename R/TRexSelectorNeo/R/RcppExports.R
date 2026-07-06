@@ -942,6 +942,16 @@ tsolver_tenet_create <- function(X, D, y, lambda2, normalize = TRUE, intercept =
 }
 
 #' @noRd
+tsolver_tenet_aug_create <- function(X, D, y, lambda2, normalize = TRUE, intercept = TRUE, verbose = FALSE, use_lars_inner = FALSE) {
+    .Call(`_TRexSelectorNeo_tsolver_tenet_aug_create`, X, D, y, lambda2, normalize, intercept, verbose, use_lars_inner)
+}
+
+#' @noRd
+tsolver_tienet_aug_create <- function(X, D, y, lambda2, groups, normalize = TRUE, intercept = TRUE, verbose = FALSE, use_lars_inner = FALSE) {
+    .Call(`_TRexSelectorNeo_tsolver_tienet_aug_create`, X, D, y, lambda2, groups, normalize, intercept, verbose, use_lars_inner)
+}
+
+#' @noRd
 tsolver_tstagewise_create <- function(X, D, y, normalize = TRUE, intercept = TRUE, verbose = FALSE) {
     .Call(`_TRexSelectorNeo_tsolver_tstagewise_create`, X, D, y, normalize, intercept, verbose)
 }
@@ -989,6 +999,16 @@ tsolver_tstepwise_mmap_create <- function(X_ptr, D, y, normalize = TRUE, interce
 #' @noRd
 tsolver_tenet_mmap_create <- function(X_ptr, D, y, lambda2, normalize = TRUE, intercept = TRUE, verbose = FALSE) {
     .Call(`_TRexSelectorNeo_tsolver_tenet_mmap_create`, X_ptr, D, y, lambda2, normalize, intercept, verbose)
+}
+
+#' @noRd
+tsolver_tenet_aug_mmap_create <- function(X_ptr, D, y, lambda2, normalize = TRUE, intercept = TRUE, verbose = FALSE, use_lars_inner = FALSE) {
+    .Call(`_TRexSelectorNeo_tsolver_tenet_aug_mmap_create`, X_ptr, D, y, lambda2, normalize, intercept, verbose, use_lars_inner)
+}
+
+#' @noRd
+tsolver_tienet_aug_mmap_create <- function(X_ptr, D, y, lambda2, groups, normalize = TRUE, intercept = TRUE, verbose = FALSE, use_lars_inner = FALSE) {
+    .Call(`_TRexSelectorNeo_tsolver_tienet_aug_mmap_create`, X_ptr, D, y, lambda2, groups, normalize, intercept, verbose, use_lars_inner)
 }
 
 #' @noRd
@@ -1134,6 +1154,21 @@ tsolver_get_num_removals <- function(ptr) {
 #' @noRd
 tsolver_get_cycling_ratio <- function(ptr) {
     .Call(`_TRexSelectorNeo_tsolver_get_cycling_ratio`, ptr)
+}
+
+#' @noRd
+tsolver_tienet_aug_get_lambda2 <- function(ptr) {
+    .Call(`_TRexSelectorNeo_tsolver_tienet_aug_get_lambda2`, ptr)
+}
+
+#' @noRd
+tsolver_tienet_aug_get_groups <- function(ptr) {
+    .Call(`_TRexSelectorNeo_tsolver_tienet_aug_get_groups`, ptr)
+}
+
+#' @noRd
+tsolver_tienet_aug_get_num_groups <- function(ptr) {
+    .Call(`_TRexSelectorNeo_tsolver_tienet_aug_get_num_groups`, ptr)
 }
 
 #' @title Save TSolver to File

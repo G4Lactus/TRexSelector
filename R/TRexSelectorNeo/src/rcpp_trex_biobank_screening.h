@@ -35,7 +35,7 @@ public:
     RTRexBiobankScreeningSelector(
         Eigen::Map<Eigen::MatrixXd> X,
         Eigen::Map<Eigen::VectorXd> y,
-        const BiobankScreenTRexControl& biosctrex_ctrl,
+        const BiobankScreenTRexControl& bio_ctrl,
         int seed,
         bool verbose
     ) {
@@ -43,7 +43,7 @@ public:
         this->y_map_1d_ = std::make_unique<Eigen::Map<Eigen::VectorXd>>(y);
 
         this->selector_ = std::make_unique<BiobankScreenTRex>(
-            *(this->X_map_), *(this->y_map_1d_), biosctrex_ctrl, seed, verbose
+            *(this->X_map_), *(this->y_map_1d_), bio_ctrl, seed, verbose
         );
     }
 
@@ -51,7 +51,7 @@ public:
     RTRexBiobankScreeningSelector(
         Eigen::Map<Eigen::MatrixXd> X,
         Eigen::Map<Eigen::MatrixXd> Y,
-        const BiobankScreenTRexControl& biosctrex_ctrl,
+        const BiobankScreenTRexControl& bio_ctrl,
         int seed,
         bool verbose
     ) {
@@ -59,7 +59,7 @@ public:
         this->Y_map_2d_ = std::make_unique<Eigen::Map<Eigen::MatrixXd>>(Y);
 
         this->selector_ = std::make_unique<BiobankScreenTRex>(
-            *(this->X_map_), *(this->Y_map_2d_), biosctrex_ctrl, seed, verbose
+            *(this->X_map_), *(this->Y_map_2d_), bio_ctrl, seed, verbose
         );
     }
 

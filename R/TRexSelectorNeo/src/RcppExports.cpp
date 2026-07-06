@@ -1285,6 +1285,43 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// tsolver_tenet_aug_create
+XPtr<TSolverRcpp> tsolver_tenet_aug_create(Eigen::Map<Eigen::MatrixXd> X, Eigen::Map<Eigen::MatrixXd> D, Eigen::Map<Eigen::VectorXd> y, double lambda2, bool normalize, bool intercept, bool verbose, bool use_lars_inner);
+RcppExport SEXP _TRexSelectorNeo_tsolver_tenet_aug_create(SEXP XSEXP, SEXP DSEXP, SEXP ySEXP, SEXP lambda2SEXP, SEXP normalizeSEXP, SEXP interceptSEXP, SEXP verboseSEXP, SEXP use_lars_innerSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< Eigen::Map<Eigen::MatrixXd> >::type X(XSEXP);
+    Rcpp::traits::input_parameter< Eigen::Map<Eigen::MatrixXd> >::type D(DSEXP);
+    Rcpp::traits::input_parameter< Eigen::Map<Eigen::VectorXd> >::type y(ySEXP);
+    Rcpp::traits::input_parameter< double >::type lambda2(lambda2SEXP);
+    Rcpp::traits::input_parameter< bool >::type normalize(normalizeSEXP);
+    Rcpp::traits::input_parameter< bool >::type intercept(interceptSEXP);
+    Rcpp::traits::input_parameter< bool >::type verbose(verboseSEXP);
+    Rcpp::traits::input_parameter< bool >::type use_lars_inner(use_lars_innerSEXP);
+    rcpp_result_gen = Rcpp::wrap(tsolver_tenet_aug_create(X, D, y, lambda2, normalize, intercept, verbose, use_lars_inner));
+    return rcpp_result_gen;
+END_RCPP
+}
+// tsolver_tienet_aug_create
+XPtr<TSolverRcpp> tsolver_tienet_aug_create(Eigen::Map<Eigen::MatrixXd> X, Eigen::Map<Eigen::MatrixXd> D, Eigen::Map<Eigen::VectorXd> y, double lambda2, IntegerVector groups, bool normalize, bool intercept, bool verbose, bool use_lars_inner);
+RcppExport SEXP _TRexSelectorNeo_tsolver_tienet_aug_create(SEXP XSEXP, SEXP DSEXP, SEXP ySEXP, SEXP lambda2SEXP, SEXP groupsSEXP, SEXP normalizeSEXP, SEXP interceptSEXP, SEXP verboseSEXP, SEXP use_lars_innerSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< Eigen::Map<Eigen::MatrixXd> >::type X(XSEXP);
+    Rcpp::traits::input_parameter< Eigen::Map<Eigen::MatrixXd> >::type D(DSEXP);
+    Rcpp::traits::input_parameter< Eigen::Map<Eigen::VectorXd> >::type y(ySEXP);
+    Rcpp::traits::input_parameter< double >::type lambda2(lambda2SEXP);
+    Rcpp::traits::input_parameter< IntegerVector >::type groups(groupsSEXP);
+    Rcpp::traits::input_parameter< bool >::type normalize(normalizeSEXP);
+    Rcpp::traits::input_parameter< bool >::type intercept(interceptSEXP);
+    Rcpp::traits::input_parameter< bool >::type verbose(verboseSEXP);
+    Rcpp::traits::input_parameter< bool >::type use_lars_inner(use_lars_innerSEXP);
+    rcpp_result_gen = Rcpp::wrap(tsolver_tienet_aug_create(X, D, y, lambda2, groups, normalize, intercept, verbose, use_lars_inner));
+    return rcpp_result_gen;
+END_RCPP
+}
 // tsolver_tstagewise_create
 XPtr<TSolverRcpp> tsolver_tstagewise_create(Eigen::Map<Eigen::MatrixXd> X, Eigen::Map<Eigen::MatrixXd> D, Eigen::Map<Eigen::VectorXd> y, bool normalize, bool intercept, bool verbose);
 RcppExport SEXP _TRexSelectorNeo_tsolver_tstagewise_create(SEXP XSEXP, SEXP DSEXP, SEXP ySEXP, SEXP normalizeSEXP, SEXP interceptSEXP, SEXP verboseSEXP) {
@@ -1445,6 +1482,43 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< bool >::type intercept(interceptSEXP);
     Rcpp::traits::input_parameter< bool >::type verbose(verboseSEXP);
     rcpp_result_gen = Rcpp::wrap(tsolver_tenet_mmap_create(X_ptr, D, y, lambda2, normalize, intercept, verbose));
+    return rcpp_result_gen;
+END_RCPP
+}
+// tsolver_tenet_aug_mmap_create
+XPtr<TSolverRcpp> tsolver_tenet_aug_mmap_create(XPtr<MemoryMappedMatrix<double>> X_ptr, Eigen::Map<Eigen::MatrixXd> D, Eigen::Map<Eigen::VectorXd> y, double lambda2, bool normalize, bool intercept, bool verbose, bool use_lars_inner);
+RcppExport SEXP _TRexSelectorNeo_tsolver_tenet_aug_mmap_create(SEXP X_ptrSEXP, SEXP DSEXP, SEXP ySEXP, SEXP lambda2SEXP, SEXP normalizeSEXP, SEXP interceptSEXP, SEXP verboseSEXP, SEXP use_lars_innerSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< XPtr<MemoryMappedMatrix<double>> >::type X_ptr(X_ptrSEXP);
+    Rcpp::traits::input_parameter< Eigen::Map<Eigen::MatrixXd> >::type D(DSEXP);
+    Rcpp::traits::input_parameter< Eigen::Map<Eigen::VectorXd> >::type y(ySEXP);
+    Rcpp::traits::input_parameter< double >::type lambda2(lambda2SEXP);
+    Rcpp::traits::input_parameter< bool >::type normalize(normalizeSEXP);
+    Rcpp::traits::input_parameter< bool >::type intercept(interceptSEXP);
+    Rcpp::traits::input_parameter< bool >::type verbose(verboseSEXP);
+    Rcpp::traits::input_parameter< bool >::type use_lars_inner(use_lars_innerSEXP);
+    rcpp_result_gen = Rcpp::wrap(tsolver_tenet_aug_mmap_create(X_ptr, D, y, lambda2, normalize, intercept, verbose, use_lars_inner));
+    return rcpp_result_gen;
+END_RCPP
+}
+// tsolver_tienet_aug_mmap_create
+XPtr<TSolverRcpp> tsolver_tienet_aug_mmap_create(XPtr<MemoryMappedMatrix<double>> X_ptr, Eigen::Map<Eigen::MatrixXd> D, Eigen::Map<Eigen::VectorXd> y, double lambda2, IntegerVector groups, bool normalize, bool intercept, bool verbose, bool use_lars_inner);
+RcppExport SEXP _TRexSelectorNeo_tsolver_tienet_aug_mmap_create(SEXP X_ptrSEXP, SEXP DSEXP, SEXP ySEXP, SEXP lambda2SEXP, SEXP groupsSEXP, SEXP normalizeSEXP, SEXP interceptSEXP, SEXP verboseSEXP, SEXP use_lars_innerSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< XPtr<MemoryMappedMatrix<double>> >::type X_ptr(X_ptrSEXP);
+    Rcpp::traits::input_parameter< Eigen::Map<Eigen::MatrixXd> >::type D(DSEXP);
+    Rcpp::traits::input_parameter< Eigen::Map<Eigen::VectorXd> >::type y(ySEXP);
+    Rcpp::traits::input_parameter< double >::type lambda2(lambda2SEXP);
+    Rcpp::traits::input_parameter< IntegerVector >::type groups(groupsSEXP);
+    Rcpp::traits::input_parameter< bool >::type normalize(normalizeSEXP);
+    Rcpp::traits::input_parameter< bool >::type intercept(interceptSEXP);
+    Rcpp::traits::input_parameter< bool >::type verbose(verboseSEXP);
+    Rcpp::traits::input_parameter< bool >::type use_lars_inner(use_lars_innerSEXP);
+    rcpp_result_gen = Rcpp::wrap(tsolver_tienet_aug_mmap_create(X_ptr, D, y, lambda2, groups, normalize, intercept, verbose, use_lars_inner));
     return rcpp_result_gen;
 END_RCPP
 }
@@ -1716,6 +1790,39 @@ BEGIN_RCPP
     Rcpp::RNGScope rcpp_rngScope_gen;
     Rcpp::traits::input_parameter< XPtr<TSolverRcpp> >::type ptr(ptrSEXP);
     rcpp_result_gen = Rcpp::wrap(tsolver_get_cycling_ratio(ptr));
+    return rcpp_result_gen;
+END_RCPP
+}
+// tsolver_tienet_aug_get_lambda2
+double tsolver_tienet_aug_get_lambda2(XPtr<TSolverRcpp> ptr);
+RcppExport SEXP _TRexSelectorNeo_tsolver_tienet_aug_get_lambda2(SEXP ptrSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< XPtr<TSolverRcpp> >::type ptr(ptrSEXP);
+    rcpp_result_gen = Rcpp::wrap(tsolver_tienet_aug_get_lambda2(ptr));
+    return rcpp_result_gen;
+END_RCPP
+}
+// tsolver_tienet_aug_get_groups
+IntegerVector tsolver_tienet_aug_get_groups(XPtr<TSolverRcpp> ptr);
+RcppExport SEXP _TRexSelectorNeo_tsolver_tienet_aug_get_groups(SEXP ptrSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< XPtr<TSolverRcpp> >::type ptr(ptrSEXP);
+    rcpp_result_gen = Rcpp::wrap(tsolver_tienet_aug_get_groups(ptr));
+    return rcpp_result_gen;
+END_RCPP
+}
+// tsolver_tienet_aug_get_num_groups
+int tsolver_tienet_aug_get_num_groups(XPtr<TSolverRcpp> ptr);
+RcppExport SEXP _TRexSelectorNeo_tsolver_tienet_aug_get_num_groups(SEXP ptrSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< XPtr<TSolverRcpp> >::type ptr(ptrSEXP);
+    rcpp_result_gen = Rcpp::wrap(tsolver_tienet_aug_get_num_groups(ptr));
     return rcpp_result_gen;
 END_RCPP
 }
@@ -2057,6 +2164,8 @@ static const R_CallMethodDef CallEntries[] = {
     {"_TRexSelectorNeo_tsolver_tlasso_create", (DL_FUNC) &_TRexSelectorNeo_tsolver_tlasso_create, 6},
     {"_TRexSelectorNeo_tsolver_tstepwise_create", (DL_FUNC) &_TRexSelectorNeo_tsolver_tstepwise_create, 6},
     {"_TRexSelectorNeo_tsolver_tenet_create", (DL_FUNC) &_TRexSelectorNeo_tsolver_tenet_create, 7},
+    {"_TRexSelectorNeo_tsolver_tenet_aug_create", (DL_FUNC) &_TRexSelectorNeo_tsolver_tenet_aug_create, 8},
+    {"_TRexSelectorNeo_tsolver_tienet_aug_create", (DL_FUNC) &_TRexSelectorNeo_tsolver_tienet_aug_create, 9},
     {"_TRexSelectorNeo_tsolver_tstagewise_create", (DL_FUNC) &_TRexSelectorNeo_tsolver_tstagewise_create, 6},
     {"_TRexSelectorNeo_tsolver_tgp_create", (DL_FUNC) &_TRexSelectorNeo_tsolver_tgp_create, 6},
     {"_TRexSelectorNeo_tsolver_tacgp_create", (DL_FUNC) &_TRexSelectorNeo_tsolver_tacgp_create, 6},
@@ -2067,6 +2176,8 @@ static const R_CallMethodDef CallEntries[] = {
     {"_TRexSelectorNeo_tsolver_tlasso_mmap_create", (DL_FUNC) &_TRexSelectorNeo_tsolver_tlasso_mmap_create, 6},
     {"_TRexSelectorNeo_tsolver_tstepwise_mmap_create", (DL_FUNC) &_TRexSelectorNeo_tsolver_tstepwise_mmap_create, 6},
     {"_TRexSelectorNeo_tsolver_tenet_mmap_create", (DL_FUNC) &_TRexSelectorNeo_tsolver_tenet_mmap_create, 7},
+    {"_TRexSelectorNeo_tsolver_tenet_aug_mmap_create", (DL_FUNC) &_TRexSelectorNeo_tsolver_tenet_aug_mmap_create, 8},
+    {"_TRexSelectorNeo_tsolver_tienet_aug_mmap_create", (DL_FUNC) &_TRexSelectorNeo_tsolver_tienet_aug_mmap_create, 9},
     {"_TRexSelectorNeo_tsolver_tstagewise_mmap_create", (DL_FUNC) &_TRexSelectorNeo_tsolver_tstagewise_mmap_create, 6},
     {"_TRexSelectorNeo_tsolver_tgp_mmap_create", (DL_FUNC) &_TRexSelectorNeo_tsolver_tgp_mmap_create, 6},
     {"_TRexSelectorNeo_tsolver_tacgp_mmap_create", (DL_FUNC) &_TRexSelectorNeo_tsolver_tacgp_mmap_create, 6},
@@ -2088,6 +2199,9 @@ static const R_CallMethodDef CallEntries[] = {
     {"_TRexSelectorNeo_tsolver_get_lambda", (DL_FUNC) &_TRexSelectorNeo_tsolver_get_lambda, 1},
     {"_TRexSelectorNeo_tsolver_get_num_removals", (DL_FUNC) &_TRexSelectorNeo_tsolver_get_num_removals, 1},
     {"_TRexSelectorNeo_tsolver_get_cycling_ratio", (DL_FUNC) &_TRexSelectorNeo_tsolver_get_cycling_ratio, 1},
+    {"_TRexSelectorNeo_tsolver_tienet_aug_get_lambda2", (DL_FUNC) &_TRexSelectorNeo_tsolver_tienet_aug_get_lambda2, 1},
+    {"_TRexSelectorNeo_tsolver_tienet_aug_get_groups", (DL_FUNC) &_TRexSelectorNeo_tsolver_tienet_aug_get_groups, 1},
+    {"_TRexSelectorNeo_tsolver_tienet_aug_get_num_groups", (DL_FUNC) &_TRexSelectorNeo_tsolver_tienet_aug_get_num_groups, 1},
     {"_TRexSelectorNeo_tsolver_save", (DL_FUNC) &_TRexSelectorNeo_tsolver_save, 2},
     {"_TRexSelectorNeo_tsolver_load", (DL_FUNC) &_TRexSelectorNeo_tsolver_load, 2},
     {"_TRexSelectorNeo_rcpp_set_custom_temp_dir", (DL_FUNC) &_TRexSelectorNeo_rcpp_set_custom_temp_dir, 1},

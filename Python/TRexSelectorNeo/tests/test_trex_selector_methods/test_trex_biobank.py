@@ -32,6 +32,26 @@ def test_biobank_control_assignment():
     assert ctrl.upper_bound_FDR == pytest.approx(0.2)
 
 
+def test_biobank_nested_screen_control_settable():
+    """The nested Screen-TRex control (and its nested base T-Rex control) must
+    be reachable and mutable, matching the R package's screen_control/control
+    knobs."""
+    ctrl = BiobankScreenTRexControl()
+    ctrl.trex_screen_ctrl.trex_ctrl.K = 7
+    ctrl.trex_screen_ctrl.use_bootstrap_CI = True
+    assert ctrl.trex_screen_ctrl.trex_ctrl.K == 7
+    assert ctrl.trex_screen_ctrl.use_bootstrap_CI is True
+
+
+def test_biobank_bio_ctrl_kwarg(signal_data):
+    """The control argument is named bio_ctrl (matches the C++ ctor)."""
+    X, y, n, p = signal_data
+    ctrl = BiobankScreenTRexControl()
+    ctrl.trex_screen_ctrl.trex_ctrl.K = 5
+    sel = TRexBiobankScreeningSelector(X, y, bio_ctrl=ctrl, verbose=False)
+    assert sel is not None
+
+
 # ---------------------------------------------------------------------------
 # Single phenotype (1-D y) — screenPhenotype()
 # ---------------------------------------------------------------------------

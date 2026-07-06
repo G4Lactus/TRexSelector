@@ -72,6 +72,16 @@ def test_ward_requires_euclidean(cluster_data):
         agglomerative_cluster(X, LinkageMethod.Ward, DistanceMetric.Correlation)
 
 
+def test_ward_lsh_approx_permitted(cluster_data):
+    """Ward + Correlation_LSH_Approx is the supported exception: the core
+    dispatcher runs Ward in a 64-D SimHash-projected Euclidean space."""
+    X, n, p = cluster_data
+    linkage = agglomerative_cluster(
+        X, LinkageMethod.Ward, DistanceMetric.Correlation_LSH_Approx
+    )
+    assert linkage.shape == (n - 1, 4)
+
+
 # ---------------------------------------------------------------------------
 # Cluster indices from linkage matrix (column 0 & 1 in range)
 # ---------------------------------------------------------------------------

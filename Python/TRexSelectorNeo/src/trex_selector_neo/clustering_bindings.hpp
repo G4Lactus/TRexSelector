@@ -115,12 +115,19 @@ std::vector<MergeStep> internal_dispatch_linkage(
 
     switch (method) {
         case LinkageMethod::Ward:
-            // Ward strictly requires Euclidean spatial geometry
-            if constexpr (MetricEnum == DistanceMetric::Euclidean) {
+            // Ward strictly requires Euclidean spatial geometry.
+            // Correlation_LSH_Approx is the one supported exception: the core
+            // dispatcher routes it to ProjectedGeometricUpdatePolicy (Ward in
+            // 64-D SimHash-projected Euclidean space).
+            if constexpr (MetricEnum == DistanceMetric::Euclidean ||
+                          MetricEnum == DistanceMetric::Correlation_LSH_Approx) {
                 return AgglomerativeClustering::cluster<TransposedType, DistPol,
                         LinkageMethod::Ward>(transposed_data, use_mmap);
             } else {
-                throw std::invalid_argument("Ward linkage strictly requires Euclidean distance.");
+                throw std::invalid_argument(
+                    "Ward linkage strictly requires Euclidean distance "
+                    "(exception: Correlation_LSH_Approx, which runs Ward in a "
+                    "SimHash-projected Euclidean space).");
             }
         case LinkageMethod::Average:
             return AgglomerativeClustering::cluster<TransposedType, DistPol,

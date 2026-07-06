@@ -7,6 +7,8 @@
 #include <tsolvers/linear_model/lars_based/tlasso_solver.hpp>
 #include <tsolvers/linear_model/lars_based/tstepwise_solver.hpp>
 #include <tsolvers/linear_model/lars_based/tenet_solver.hpp>
+#include <tsolvers/linear_model/lars_based/tenet_aug_solver.hpp>
+#include <tsolvers/linear_model/lars_based/tienet_aug_solver.hpp>
 #include <tsolvers/linear_model/lars_based/tstagewise_solver.hpp>
 #include <tsolvers/linear_model/omp_based/tomp_solver.hpp>
 #include <tsolvers/linear_model/omp_based/tgp_solver.hpp>
@@ -228,6 +230,52 @@ XPtr<TSolverRcpp> tsolver_tenet_create(
 
 //' @noRd
 // [[Rcpp::export]]
+XPtr<TSolverRcpp> tsolver_tenet_aug_create(
+    Eigen::Map<Eigen::MatrixXd> X,
+    Eigen::Map<Eigen::MatrixXd> D,
+    Eigen::Map<Eigen::VectorXd> y,
+    double lambda2,
+    bool normalize      = true,
+    bool intercept      = true,
+    bool verbose        = false,
+    bool use_lars_inner = false
+) {
+    auto* h = new TSolverRcpp(Eigen::MatrixXd(X), Eigen::MatrixXd(D));
+    h->solver_ = new TENETAug_Solver(h->X_map_, h->D_map_, y, lambda2,
+                                     normalize, intercept, verbose,
+                                     ScalingMode::L2, use_lars_inner);
+    return XPtr<TSolverRcpp>(h);
+}
+
+
+//' @noRd
+// [[Rcpp::export]]
+XPtr<TSolverRcpp> tsolver_tienet_aug_create(
+    Eigen::Map<Eigen::MatrixXd> X,
+    Eigen::Map<Eigen::MatrixXd> D,
+    Eigen::Map<Eigen::VectorXd> y,
+    double lambda2,
+    IntegerVector groups,
+    bool normalize      = true,
+    bool intercept      = true,
+    bool verbose        = false,
+    bool use_lars_inner = false
+) {
+    // R supplies 1-based group ids (package convention, cf. trex_gvs_control);
+    // the solver expects 0-based contiguous ids.
+    Eigen::VectorXi c_groups(groups.size());
+    for (int i = 0; i < groups.size(); ++i) c_groups[i] = groups[i] - 1;
+
+    auto* h = new TSolverRcpp(Eigen::MatrixXd(X), Eigen::MatrixXd(D));
+    h->solver_ = new TIENETAug_Solver(h->X_map_, h->D_map_, y, lambda2, c_groups,
+                                      normalize, intercept, verbose,
+                                      ScalingMode::L2, use_lars_inner);
+    return XPtr<TSolverRcpp>(h);
+}
+
+
+//' @noRd
+// [[Rcpp::export]]
 XPtr<TSolverRcpp> tsolver_tstagewise_create(
     Eigen::Map<Eigen::MatrixXd> X,
     Eigen::Map<Eigen::MatrixXd> D,
@@ -401,6 +449,54 @@ XPtr<TSolverRcpp> tsolver_tenet_mmap_create(
     auto X_map = X_ptr->getMap();
     auto* h = new TSolverRcpp(Eigen::MatrixXd(X_map), Eigen::MatrixXd(D));
     h->solver_ = new TENET_Solver(h->X_map_, h->D_map_, y, lambda2, normalize, intercept, verbose);
+    return XPtr<TSolverRcpp>(h);
+}
+
+
+//' @noRd
+// [[Rcpp::export]]
+XPtr<TSolverRcpp> tsolver_tenet_aug_mmap_create(
+    XPtr<MemoryMappedMatrix<double>> X_ptr, // NOLINT(performance-unnecessary-value-param)
+    Eigen::Map<Eigen::MatrixXd> D,
+    Eigen::Map<Eigen::VectorXd> y,
+    double lambda2,
+    bool normalize      = true,
+    bool intercept      = true,
+    bool verbose        = false,
+    bool use_lars_inner = false
+) {
+    auto X_map = X_ptr->getMap();
+    auto* h = new TSolverRcpp(Eigen::MatrixXd(X_map), Eigen::MatrixXd(D));
+    h->solver_ = new TENETAug_Solver(h->X_map_, h->D_map_, y, lambda2,
+                                     normalize, intercept, verbose,
+                                     ScalingMode::L2, use_lars_inner);
+    return XPtr<TSolverRcpp>(h);
+}
+
+
+//' @noRd
+// [[Rcpp::export]]
+XPtr<TSolverRcpp> tsolver_tienet_aug_mmap_create(
+    XPtr<MemoryMappedMatrix<double>> X_ptr, // NOLINT(performance-unnecessary-value-param)
+    Eigen::Map<Eigen::MatrixXd> D,
+    Eigen::Map<Eigen::VectorXd> y,
+    double lambda2,
+    IntegerVector groups,
+    bool normalize      = true,
+    bool intercept      = true,
+    bool verbose        = false,
+    bool use_lars_inner = false
+) {
+    // R supplies 1-based group ids (package convention, cf. trex_gvs_control);
+    // the solver expects 0-based contiguous ids.
+    Eigen::VectorXi c_groups(groups.size());
+    for (int i = 0; i < groups.size(); ++i) c_groups[i] = groups[i] - 1;
+
+    auto X_map = X_ptr->getMap();
+    auto* h = new TSolverRcpp(Eigen::MatrixXd(X_map), Eigen::MatrixXd(D));
+    h->solver_ = new TIENETAug_Solver(h->X_map_, h->D_map_, y, lambda2, c_groups,
+                                      normalize, intercept, verbose,
+                                      ScalingMode::L2, use_lars_inner);
     return XPtr<TSolverRcpp>(h);
 }
 
@@ -738,6 +834,46 @@ double tsolver_get_cycling_ratio(
 }
 
 
+//' @noRd
+// [[Rcpp::export]]
+double tsolver_tienet_aug_get_lambda2(
+    XPtr<TSolverRcpp> ptr // NOLINT(performance-unnecessary-value-param)
+) {
+    if (auto* p = dynamic_cast<TIENETAug_Solver*>(ptr->solver_)) {
+        return p->getLambda2();
+    }
+    stop("tsolver_tienet_aug_get_lambda2: Solver is not a TIENETAug_Solver.");
+}
+
+
+//' @noRd
+// [[Rcpp::export]]
+IntegerVector tsolver_tienet_aug_get_groups(
+    XPtr<TSolverRcpp> ptr // NOLINT(performance-unnecessary-value-param)
+) {
+    if (auto* p = dynamic_cast<TIENETAug_Solver*>(ptr->solver_)) {
+        // Solver stores 0-based group ids; return 1-based (package convention).
+        const Eigen::VectorXi& g = p->getGroups();
+        IntegerVector out(g.size());
+        for (Eigen::Index i = 0; i < g.size(); ++i) out[i] = g[i] + 1;
+        return out;
+    }
+    stop("tsolver_tienet_aug_get_groups: Solver is not a TIENETAug_Solver.");
+}
+
+
+//' @noRd
+// [[Rcpp::export]]
+int tsolver_tienet_aug_get_num_groups(
+    XPtr<TSolverRcpp> ptr // NOLINT(performance-unnecessary-value-param)
+) {
+    if (auto* p = dynamic_cast<TIENETAug_Solver*>(ptr->solver_)) {
+        return static_cast<int>(p->getNumGroups());
+    }
+    stop("tsolver_tienet_aug_get_num_groups: Solver is not a TIENETAug_Solver.");
+}
+
+
 //' @title Save TSolver to File
 //'
 //' @param ptr TSolverRcpp holder pointer
@@ -758,6 +894,10 @@ void tsolver_save(
     // Derived classes must be checked before their base classes.
     // LARS family
     if (auto* p = dynamic_cast<TSTAGEWISE_Solver*>(s)) {
+        archive(*p);
+    } else if (auto* p = dynamic_cast<TENETAug_Solver*>(s)) {
+        archive(*p);
+    } else if (auto* p = dynamic_cast<TIENETAug_Solver*>(s)) {
         archive(*p);
     } else if (auto* p = dynamic_cast<TENET_Solver*>(s)) {
         archive(*p);
@@ -809,6 +949,10 @@ void tsolver_load(
     // Derived classes must be checked before their base classes.
     // LARS family
     if (auto* p = dynamic_cast<TSTAGEWISE_Solver*>(s)) {
+        archive(*p);
+    } else if (auto* p = dynamic_cast<TENETAug_Solver*>(s)) {
+        archive(*p);
+    } else if (auto* p = dynamic_cast<TIENETAug_Solver*>(s)) {
         archive(*p);
     } else if (auto* p = dynamic_cast<TENET_Solver*>(s)) {
         archive(*p);

@@ -3,6 +3,8 @@ from __future__ import annotations
 import os
 os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 
+import warnings
+
 from importlib.metadata import PackageNotFoundError, version as _pkg_version
 
 import numpy as np
@@ -176,8 +178,35 @@ class TRexGVSSelector(TRexSelector):
 
         # The C++ wrapper authoritatively derives the required solver_type from
         # gvs_control.gvs_type and gvs_control.en_solver (EN -> TENET/TENET_AUG,
-        # IEN -> TIENET_AUG), overriding trex_control.solver_type. No Python-side
-        # derivation is needed here.
+        # IEN -> TIENET_AUG), overriding trex_control.solver_type. Warn when the
+        # user explicitly set a non-matching solver (TLARS is the default and
+        # cannot be distinguished from an explicit choice, so it never warns).
+        if gvs_control.gvs_type == GVSType.IEN:
+            derived_solver = SolverTypeForTRex.TIENET_AUG
+        elif gvs_control.en_solver == ENSolverType.TENET_AUG:
+            derived_solver = SolverTypeForTRex.TENET_AUG
+        else:
+            derived_solver = SolverTypeForTRex.TENET
+        if trex_control.solver_type not in (SolverTypeForTRex.TLARS, derived_solver):
+            warnings.warn(
+                f"trex_control.solver_type = {trex_control.solver_type.name} is "
+                f"ignored by TRexGVSSelector: gvs_type = {gvs_control.gvs_type.name} "
+                f"derives solver {derived_solver.name}.",
+                UserWarning,
+                stacklevel=2,
+            )
+
+        # lambda_2 == 0 is the degenerate no-ridge case (pure T-LASSO), NOT
+        # automatic CV (the sentinel for that is lambda_2 < 0). Warn so a user
+        # who passed exactly 0 expecting CV is not silently given no ridge.
+        if gvs_control.lambda_2 == 0.0:
+            warnings.warn(
+                "gvs_control.lambda_2 = 0 is the degenerate no-ridge case "
+                "(pure T-LASSO), not automatic cross-validation. Use "
+                "lambda_2 < 0 (e.g. -1) to auto-determine lambda_2 via CV.",
+                UserWarning,
+                stacklevel=2,
+            )
         self._selector: PyTRexGVSSelector = PyTRexGVSSelector(self.X, self.y, tFDR,
                                                               gvs_control,
                                                               trex_control,
@@ -228,18 +257,18 @@ class TRexBiobankScreeningSelector:
     """
 
     def __init__(self, X: np.ndarray, Y,
-                 biosctrex_ctrl: BiobankScreenTRexControl | None = None,
+                 bio_ctrl: BiobankScreenTRexControl | None = None,
                  seed: int = -1, verbose: bool = False):
 
         self.X = np.asfortranarray(X, dtype=np.float64)
-        if biosctrex_ctrl is None:
-            biosctrex_ctrl = BiobankScreenTRexControl()
+        if bio_ctrl is None:
+            bio_ctrl = BiobankScreenTRexControl()
 
         Y = np.asarray(Y, dtype=np.float64)
         self._is_mD = Y.ndim > 1
         self._Y = np.asfortranarray(Y)
         self._selector = PyBiobankScreeningSelector(self.X, self._Y,
-                                                    biosctrex_ctrl,
+                                                    bio_ctrl,
                                                     seed, verbose)
 
     def select(self) -> BiobankScreenTRexResult | list[BiobankScreenTRexResult]:
@@ -295,6 +324,18 @@ class TRexSPCASelector:
         self._ctrl = spca_ctrl if spca_ctrl is not None else TRexSPCAControlParameter()
         self._seed = seed
         self._result: TRexSPCAResult | None = None
+
+        # lambda_2 == 0 is the degenerate no-ridge case (pure T-LASSO), NOT
+        # automatic CV (the sentinel for that is lambda_2 < 0). Warn so a user
+        # who set exactly 0 expecting CV is not silently given no ridge.
+        if self._ctrl.gvs_ctrl.lambda_2 == 0.0:
+            warnings.warn(
+                "spca_ctrl.gvs_ctrl.lambda_2 = 0 is the degenerate no-ridge "
+                "case (pure T-LASSO), not automatic cross-validation. Use "
+                "lambda_2 < 0 (e.g. -1) to auto-determine lambda_2 via CV.",
+                UserWarning,
+                stacklevel=2,
+            )
 
     def select(self, M: int, tFDR: float) -> "TRexSPCASelector":
         """

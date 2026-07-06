@@ -26,7 +26,7 @@ assembly (default: \code{1e-6}).}
 
 \item{gvs_type}{Character, GVS variant used internally for per-PC variable
 selection: \code{"EN"} (default, Elastic Net via TENET solver) or
-\code{"IEN"} (Informed Elastic Net via TLASSO solver).}
+\code{"IEN"} (Informed Elastic Net via TIENET_AUG solver).}
 
 \item{lambda_2}{Numeric, L2/Elastic Net penalty forwarded to the internal
 TRexGVSSelector, in LARS units. A negative value (default \code{-1})
