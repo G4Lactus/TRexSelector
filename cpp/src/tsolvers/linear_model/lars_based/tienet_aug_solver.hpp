@@ -335,14 +335,19 @@ public:
                 CEREAL_NVP(y_aug_owned_));
         archive(CEREAL_NVP(inner_));
 
-        // Rebuild maps and reconnect the inner solver ONLY on load (the maps
-        // are null on a freshly deserialized object). Rebuilding during save
-        // would destroy the Map objects the inner solver points into.
-        if (X_aug_owned_.size() > 0 && !X_aug_map_) {
-            buildMaps();
-            if (inner_) {
-                inner_->reconnect(*X_aug_map_, *D_aug_map_);
-                syncDiagnosticsFromInner();
+        // Rebuild maps and reconnect the inner solver ONLY on load (rebuilding
+        // during save would destroy the Map objects the inner solver points
+        // into). The rebuild must be unconditional on load: when deserializing
+        // into an already-constructed solver (e.g. the R bindings' load path)
+        // stale maps exist but point into buffers cereal may have reallocated,
+        // and the freshly deserialized inner solver is always disconnected.
+        if constexpr (Archive::is_loading::value) {
+            if (X_aug_owned_.size() > 0) {
+                buildMaps();
+                if (inner_) {
+                    inner_->reconnect(*X_aug_map_, *D_aug_map_);
+                    syncDiagnosticsFromInner();
+                }
             }
         }
     }

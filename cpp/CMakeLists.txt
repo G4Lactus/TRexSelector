@@ -229,6 +229,29 @@ endif()
 
 
 # ============================================================================
+# Install hygiene: prune package-owned header trees before installing
+# ============================================================================
+# `cmake --install` only copies files; it never removes headers that were
+# renamed or deleted since the previous install. A stale header (e.g. one
+# that #includes a since-renamed file) poisons every consumer of the install
+# tree until it is cleaned by hand. Pruning is restricted to the four header
+# subtrees this project owns, so the operation stays safe in shared prefixes.
+# Declared before add_subdirectory(src) so it runs ahead of the FILE_SET
+# header installs (CMP0082: install rules execute in declaration order).
+include(GNUInstallDirs)   # gives portable CMAKE_INSTALL_LIBDIR / INCLUDEDIR
+install(CODE "set(_trex_include_root \"${CMAKE_INSTALL_INCLUDEDIR}\")")
+install(CODE [[
+    foreach(_trex_subdir ml_methods trex_selector_methods tsolvers utils)
+        file(REMOVE_RECURSE
+             "$ENV{DESTDIR}${CMAKE_INSTALL_PREFIX}/${_trex_include_root}/${_trex_subdir}")
+    endforeach()
+    message(STATUS
+        "TRexSelector: pruned package header trees under "
+        "${CMAKE_INSTALL_PREFIX}/${_trex_include_root}")
+]])
+
+
+# ============================================================================
 # Add subdirectories with build targets (.cpp files)
 # ============================================================================
 include(CTest)
