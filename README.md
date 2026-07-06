@@ -29,199 +29,37 @@ experiments, a voting threshold is derived that provably bounds the FDR.
 
 ## Implemented Variants
 
-| Class | Description |
-|-------|-------------|
-| `TRexSelector` | Core FDR-controlled selector for linear regression |
-| `TRexDASelector` | Dependency-aware variant for correlated predictors |
-| `TRexGVSSelector` | Grouped variable selection |
-| `TRexScreeningSelector` | Fast FDR-controlled variable pre-screening for large *p* |
-| `TRexBiobankScreeningSelector` | High-throughput genomic / biobank screening |
-| `TRexSPCA` | FDR-controlled sparse principal component analysis |
+| Class                          | Description                                               |
+|--------------------------------|-----------------------------------------------------------|
+| `TRexSelector`                 | Core FDR-controlled selector for linear regression        |
+| `TRexDASelector`               | Dependency-aware variant for correlated predictors        |
+| `TRexGVSSelector`              | Grouped variable selection                                |
+| `TRexScreeningSelector`        | Fast FDR-controlled variable pre-screening for large *p*  |
+| `TRexBiobankScreeningSelector` | High-throughput genomic / biobank screening               |
+| `TRexSPCA`                     | FDR-controlled sparse principal component analysis        |
+
+All variants are implemented once in the C++ core and exposed identically in R and Python.
 
 ---
 
-## Dependencies & Platform Compatibility
+## Repository Layout
 
-| Library | Role | Version | Required |
-|---------|------|---------|----------|
-| [Eigen3](https://eigen.tuxfamily.org) | Linear algebra | any recent | Yes |
-| [Boost](https://www.boost.org) | Headers + iostreams (memory-mapped files) | ≥ 1.80 | Yes |
-| [Cereal](https://uscilab.github.io/cereal) | Serialization of solver state | any recent | Yes |
-| [OpenMP](https://www.openmp.org) | Parallelisation of random experiments | ≥ 3.1 | Yes |
-| BLAS / LAPACK | Accelerated linear algebra backend | — | Optional |
+This repository hosts the C++ core and both language packages. Each component has its own
+README with installation instructions, examples, and developer documentation:
 
-**Platform Support:**
+* **C++ core library** — [`cpp/`](cpp/), documented in [cpp/README.md](cpp/README.md):
+  building the library and tests, and consuming it from your own C++ project via
+  `find_package(TRexSelector)`.
+* **Python package** — [`Python/TRexSelectorNeo/`](Python/TRexSelectorNeo/), documented in
+  [Python/TRexSelectorNeo/README.md](Python/TRexSelectorNeo/README.md): installation, quick
+  start, and development setup. Distributed as `TRexSelectorNeo`, imported as
+  `trex_selector_neo`.
+* **R package** — [`R/TRexSelectorNeo/`](R/TRexSelectorNeo/), documented in
+  [R/TRexSelectorNeo/README.md](R/TRexSelectorNeo/README.md): installation, quick start, and
+  vignette.
 
-* **macOS (arm64):** Fully tested (C++ Core, R, and Python packages). BLAS/LAPACK defaults to Apple Accelerate.
-* **Linux (x86_64):** Supported (OpenBLAS is used).
-* **Windows (x86_64):** Supported.
-
-*The BLAS/LAPACK backend can be disabled at configure time with `-DTREX_USE_BLAS_LAPACK=OFF`.*
-
----
-
-## C++ Core Installation
-
-**macOS (Homebrew):**
-
-```bash
-brew install cmake llvm eigen cereal boost openblas libomp
-```
-
-*(CMake requires Homebrew LLVM, not Apple Clang, for OpenMP support).*
-
-**Ubuntu / Debian:**
-
-```bash
-sudo apt install cmake libeigen3-dev libcereal-dev libboost-all-dev libopenblas-dev libomp-dev
-```
-
-**Windows (vcpkg):**
-Install `vcpkg`, set `VCPKG_ROOT`, then let the preset handle everything:
-
-```bash
-cmake --workflow --preset vcpkg-release
-```
-
-**Build Commands:**
-
-```bash
-# Debug build (symbols, no optimisation)
-cmake --preset debug
-cmake --build --preset debug-build
-
-# Release build (optimised)
-cmake --preset release
-cmake --build --preset release-build
-```
-
-**Running the test executables:**
-
-After a successful build, all test executables are placed in `build/{debug,release}/bin/`. Run the full suite via CTest:
-
-```bash
-cd build/debug && ctest --output-on-failure
-```
-
-Or run individual executables directly (e.g. to test the core selector):
-
-```bash
-./build/debug/bin/test_trex_core
-./build/debug/bin/test_tsolvers_execution
-```
-
----
-
-## Language Ecosystems
-
-### R Package
-
-The R bindings live in `R/TRexSelector/` and are implemented with RcppEigen. The C++ backend is compiled automatically on installation.
-
-**Requirements:** R ≥ 2.10, a C++20-capable compiler (GCC ≥ 10, Clang ≥ 12, or MSVC 2019+).
-
-**Install R package prerequisites** (once, from an R session). See `R/TRexSelector/DESCRIPTION` for the full list — the essential ones are:
-
-```r
-install.packages(c("Rcpp", "RcppEigen", "BH", "Rcereal", "R6"))
-```
-
-**Install from source:**
-
-```bash
-R CMD INSTALL R/TRexSelector
-```
-
-*(CRAN submission is in progress. The package passes `R CMD check --as-cran` cleanly).*
-
-### Python Package
-
-The Python bindings live in `Python/TRexSelector/` and are implemented with pybind11, built via scikit-build-core.
-
-**Requirements:** Python ≥ 3.8, CMake ≥ 3.24, a C++20 compiler, and the C++ system dependencies listed above (Eigen3, Boost, Cereal, OpenMP).
-
-**User install** — pip fetches build tools automatically into an isolated environment:
-
-```bash
-pip install Python/TRexSelector
-```
-
-**Developer editable install** — use inside the `trex-dev` conda environment where pybind11 and scikit-build-core are already installed:
-
-```bash
-conda activate trex-dev
-pip install --no-build-isolation -e Python/TRexSelector
-```
-
-Run the test suite:
-
-```bash
-pytest Python/TRexSelector/tests/ -v
-```
-
----
-
-## For C++ Developers
-
-The library installs CMake package config files and can be consumed by other C++ projects via `find_package(TRexSelector)`.
-
-### Install the library
-
-**Option A — Install to the project-local `install/` directory:**
-
-```bash
-# 1. Configure and build (portable release, no -march=native)
-cmake --workflow --preset local-install
-
-# 2. Run the install step
-cmake --install build/release-portable
-# Installs to <project-root>/install/ (prefix set in the local-install preset)
-```
-
-**Option B — Install system-wide (`/usr/local`):**
-
-```bash
-# 1. Configure and build
-cmake --workflow --preset release-libs
-
-# 2. Install (sudo required on macOS)
-sudo cmake --install build/release-portable --prefix /usr/local
-```
-
-**Option C — Install to a custom prefix:**
-
-```bash
-cmake --workflow --preset release-libs
-cmake --install build/release-portable --prefix /your/custom/prefix
-```
-
-### Consume in a downstream project
-
-```cmake
-# CMakeLists.txt of the consuming project
-find_package(TRexSelector REQUIRED)
-
-target_link_libraries(my_app PRIVATE
-    TRexSelector::trex_selector_methods   # pulls in everything transitively
-)
-```
-
-If the library is not on the standard search path, pass its prefix:
-
-```bash
-cmake -S . -B build -DCMAKE_PREFIX_PATH=/path/to/TRexSelector/install
-```
-
-**Exported targets:**
-
-| Target | Contains |
-|--------|----------|
-| `TRexSelector::trex_selector_methods` | All selectors — links tsolvers, ml\_methods, utils |
-| `TRexSelector::trex_tsolvers` | T-algorithm solvers only |
-| `TRexSelector::trex_ml_methods` | Standardization, clustering, model selection |
-| `TRexSelector::trex_utils` | Foundational utilities (memmap, serialization, OpenMP, Eigen) |
-
-All targets bring their transitive dependencies (Eigen3, Cereal, OpenMP, Boost, BLAS/LAPACK) with them — downstream projects do not need to call `find_package` for those individually.
+Both language packages bind the same C++ backend — results are identical across languages
+for the same seeds and parameters.
 
 ---
 
