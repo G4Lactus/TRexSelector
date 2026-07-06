@@ -43,7 +43,7 @@ PointerAlignment: Right
 NamespaceIndentation: None
 
 # Standard settings
-Standard:        Cpp20
+Standard:        c++20
 
 # Miscellaneous
 ReflowComments:  true
