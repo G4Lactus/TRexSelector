@@ -467,7 +467,8 @@ public:
         }
         const Eigen::Index K = lambdas_.size();
 
-        // ---- deterministic folds (same scheme as ridge_cv_glmnet) ----------
+        // ---- deterministic folds (seeded shuffle, round-robin assignment;
+        //      same scheme as R's cv.glmnet with a fixed fold id vector) ----
         std::vector<Eigen::Index> perm(static_cast<std::size_t>(n));
         std::iota(perm.begin(), perm.end(), Eigen::Index{0});
         std::mt19937 rng(seed);

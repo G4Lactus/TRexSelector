@@ -16,7 +16,7 @@
 #'   assembly (default: \code{1e-6}).
 #' @param gvs_type Character, GVS variant used internally for per-PC variable
 #'   selection: \code{"EN"} (default, Elastic Net via TENET solver) or
-#'   \code{"IEN"} (Informed Elastic Net via TLASSO solver).
+#'   \code{"IEN"} (Informed Elastic Net via TIENET_AUG solver).
 #' @param lambda_2 Numeric, L2/Elastic Net penalty forwarded to the internal
 #'   TRexGVSSelector, in LARS units. A negative value (default \code{-1})
 #'   triggers automatic determination (method selected by
@@ -135,6 +135,14 @@ TRexSPCASelector <- R6::R6Class("TRexSPCASelector",
         is.numeric(control$lambda2_ridge_loadings),
         is.logical(verbose)
       )
+      # lambda_2 == 0 is the degenerate no-ridge case, NOT automatic CV
+      # (the sentinel for that is lambda_2 < 0). Warn so a user who passed 0
+      # expecting CV is not silently handed pure T-LASSO.
+      if (isTRUE(control$lambda_2 == 0)) {
+        warning("control$lambda_2 = 0 is the degenerate no-ridge case ",
+                "(pure T-LASSO), not automatic cross-validation. ",
+                "Use lambda_2 < 0 (e.g. -1) to auto-determine lambda_2 via CV.")
+      }
       # Double storage so the zero-copy select() view aliases this buffer
       # instead of a silent integer->double copy (see .as_double_matrix).
       private$X_ref    <- .as_double_matrix(X)

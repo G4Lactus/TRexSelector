@@ -44,7 +44,8 @@ A named list for use in TRexGVSSelector.
 \description{
 Build a control list for group variable selection augmentation policy in
 TRexGVSSelector. The solver is determined automatically from \code{gvs_type}:
-"EN" uses the T-Elastic-Net (TENET) solver; "IEN" uses the T-LASSO (TLASSO) solver.
+"EN" uses the T-Elastic-Net solver (TENET, or TENET_AUG per \code{en_solver});
+"IEN" uses the augmented T-Informed-Elastic-Net (TIENET_AUG) solver.
 The \code{solver} field in \code{\link{trex_control}} is ignored by TRexGVSSelector.
 }
 \examples{

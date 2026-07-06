@@ -226,3 +226,17 @@ test_that("TRexSPCASelector rejects tFDR out of (0, 1) at construction", {
   expect_error(TRexSPCASelector$new(d$X, M, tFDR = 0, control = ctrl, seed = 1L))
   expect_error(TRexSPCASelector$new(d$X, M, tFDR = 1, control = ctrl, seed = 1L))
 })
+
+test_that("TRexSPCASelector warns when lambda_2 == 0 (degenerate no-ridge)", {
+  d <- local_fixture()
+  ctrl0 <- trex_spca_control(K = 3L, max_dummy_multiplier = 3L, lambda_2 = 0)
+  expect_warning(
+    TRexSPCASelector$new(d$X, M, tFDR, control = ctrl0, seed = 1L),
+    "degenerate no-ridge"
+  )
+  # Auto (-1) and fixed positive must not warn
+  ctrl_auto <- trex_spca_control(K = 3L, max_dummy_multiplier = 3L, lambda_2 = -1)
+  ctrl_pos  <- trex_spca_control(K = 3L, max_dummy_multiplier = 3L, lambda_2 = 0.05)
+  expect_no_warning(TRexSPCASelector$new(d$X, M, tFDR, control = ctrl_auto, seed = 1L))
+  expect_no_warning(TRexSPCASelector$new(d$X, M, tFDR, control = ctrl_pos,  seed = 1L))
+})

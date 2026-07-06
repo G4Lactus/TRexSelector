@@ -8,7 +8,7 @@
 NULL
 
 # ==============================================================================
-# TSolverBase
+# TSolver_Base
 # ==============================================================================
 
 #' Base T-Solver Class
@@ -16,7 +16,7 @@ NULL
 #' @description
 #' Abstract base class for all T-Solver R6 wrappers. Provides the common solver
 #' API backed by a Cpp \code{TSolver_Base} instance. Users should instantiate one
-#' of the concrete subclasses (\code{TLARSSolver}, \code{TLASSOSolver}, etc.)
+#' of the concrete subclasses (\code{TLARS_Solver}, \code{TLASSO_Solver}, etc.)
 #' rather than this class directly.
 #'
 #' @field X Numeric matrix of predictors, or an \code{mmap_matrix}.
@@ -24,11 +24,11 @@ NULL
 #' @field y Numeric response vector.
 #' @field ptr External pointer to the underlying Cpp \code{TSolver_Base} object.
 #' @examples
-#' # TSolverBase is abstract; use a concrete subclass instead, e.g.:
-#' # solver <- TLARSSolver$new(X, D, y)
+#' # TSolver_Base is abstract; use a concrete subclass instead, e.g.:
+#' # solver <- TLARS_Solver$new(X, D, y)
 #' @export
-TSolverBase <- R6::R6Class(
-  "TSolverBase",
+TSolver_Base <- R6::R6Class(
+  "TSolver_Base",
   public = list(
     X   = NULL,
     D   = NULL,
@@ -176,7 +176,7 @@ TSolverBase <- R6::R6Class(
 #'
 #' @description
 #' Terminating Least Angle Regression (T-LARS) solver.
-#' Inherits all common methods from \code{\link{TSolverBase}}.
+#' Inherits all common methods from \code{\link{TSolver_Base}}.
 #'
 #' @examples
 #' set.seed(1)
@@ -184,17 +184,17 @@ TSolverBase <- R6::R6Class(
 #' X <- matrix(rnorm(n * p), n, p)
 #' D <- matrix(rnorm(n * p), n, p)
 #' y <- X[, 1] * 2 + rnorm(n)
-#' solver <- TLARSSolver$new(X, D, y)
+#' solver <- TLARS_Solver$new(X, D, y)
 #' solver$execute_step(T_stop = 3)
 #' solver$get_beta()
 #' solver$get_actives()
 #'
 #' @export
-TLARSSolver <- R6::R6Class(
-  "TLARSSolver",
-  inherit = TSolverBase,
+TLARS_Solver <- R6::R6Class(
+  "TLARS_Solver",
+  inherit = TSolver_Base,
   public = list(
-    #' @description Create a new \code{TLARSSolver}.
+    #' @description Create a new \code{TLARS_Solver}.
     #' @param X Numeric matrix of predictors, or \code{mmap_matrix}.
     #' @param D Numeric matrix of dummies.
     #' @param y Numeric response vector.
@@ -228,7 +228,7 @@ TLARSSolver <- R6::R6Class(
 #'
 #' @description
 #' Terminating LASSO solver (T-LARS with variable removal).
-#' Inherits all common methods from \code{\link{TSolverBase}}.
+#' Inherits all common methods from \code{\link{TSolver_Base}}.
 #'
 #' @examples
 #' set.seed(1)
@@ -236,16 +236,16 @@ TLARSSolver <- R6::R6Class(
 #' X <- matrix(rnorm(n * p), n, p)
 #' D <- matrix(rnorm(n * p), n, p)
 #' y <- X[, 1] * 2 + rnorm(n)
-#' solver <- TLASSOSolver$new(X, D, y)
+#' solver <- TLASSO_Solver$new(X, D, y)
 #' solver$execute_step(T_stop = 3)
 #' solver$get_beta()
 #'
 #' @export
-TLASSOSolver <- R6::R6Class(
-  "TLASSOSolver",
-  inherit = TSolverBase,
+TLASSO_Solver <- R6::R6Class(
+  "TLASSO_Solver",
+  inherit = TSolver_Base,
   public = list(
-    #' @description Create a new \code{TLASSOSolver}.
+    #' @description Create a new \code{TLASSO_Solver}.
     #' @param X Numeric matrix of predictors, or \code{mmap_matrix}.
     #' @param D Numeric matrix of dummies.
     #' @param y Numeric response vector.
@@ -285,7 +285,7 @@ TLASSOSolver <- R6::R6Class(
 #'
 #' @description
 #' Terminating Forward Stepwise Regression solver.
-#' Inherits all common methods from \code{\link{TSolverBase}}.
+#' Inherits all common methods from \code{\link{TSolver_Base}}.
 #'
 #' @examples
 #' set.seed(1)
@@ -293,16 +293,16 @@ TLASSOSolver <- R6::R6Class(
 #' X <- matrix(rnorm(n * p), n, p)
 #' D <- matrix(rnorm(n * p), n, p)
 #' y <- X[, 1] * 2 + rnorm(n)
-#' solver <- TSTEPWISESolver$new(X, D, y)
+#' solver <- TSTEPWISE_Solver$new(X, D, y)
 #' solver$execute_step(T_stop = 3)
 #' solver$get_beta()
 #'
 #' @export
-TSTEPWISESolver <- R6::R6Class(
-  "TSTEPWISESolver",
-  inherit = TSolverBase,
+TSTEPWISE_Solver <- R6::R6Class(
+  "TSTEPWISE_Solver",
+  inherit = TSolver_Base,
   public = list(
-    #' @description Create a new \code{TSTEPWISESolver}.
+    #' @description Create a new \code{TSTEPWISE_Solver}.
     #' @param X Numeric matrix of predictors, or \code{mmap_matrix}.
     #' @param D Numeric matrix of dummies.
     #' @param y Numeric response vector.
@@ -336,7 +336,7 @@ TSTEPWISESolver <- R6::R6Class(
 #'
 #' @description
 #' Terminating Elastic Net solver (L1 + L2 regularization).
-#' Inherits all common methods from \code{\link{TSolverBase}}.
+#' Inherits all common methods from \code{\link{TSolver_Base}}.
 #'
 #' @examples
 #' set.seed(1)
@@ -344,16 +344,16 @@ TSTEPWISESolver <- R6::R6Class(
 #' X <- matrix(rnorm(n * p), n, p)
 #' D <- matrix(rnorm(n * p), n, p)
 #' y <- X[, 1] * 2 + rnorm(n)
-#' solver <- TENETSolver$new(X, D, y, lambda2 = 0.1)
+#' solver <- TENET_Solver$new(X, D, y, lambda2 = 0.1)
 #' solver$execute_step(T_stop = 3)
 #' solver$get_beta()
 #'
 #' @export
-TENETSolver <- R6::R6Class(
-  "TENETSolver",
-  inherit = TSolverBase,
+TENET_Solver <- R6::R6Class(
+  "TENET_Solver",
+  inherit = TSolver_Base,
   public = list(
-    #' @description Create a new \code{TENETSolver}.
+    #' @description Create a new \code{TENET_Solver}.
     #'
     #' @param X Numeric matrix of predictors, or \code{mmap_matrix}.
     #' @param D Numeric matrix of dummies.
@@ -401,11 +401,13 @@ TENETSolver <- R6::R6Class(
 )
 
 
-#' T-Stagewise Solver
+#' T-ENET-Aug Solver
 #'
 #' @description
-#' Terminating Stagewise Regression solver.
-#' Inherits all common methods from \code{\link{TSolverBase}}.
+#' Terminating Elastic Net solver via row augmentation (TENETAug). The ridge
+#' penalty is encoded in an augmented data system solved by an inner T-LASSO
+#' (or pure T-LARS) path, matching the R reference implementation of
+#' \code{trex_GVS()}. Inherits all common methods from \code{\link{TSolver_Base}}.
 #'
 #' @examples
 #' set.seed(1)
@@ -413,16 +415,151 @@ TENETSolver <- R6::R6Class(
 #' X <- matrix(rnorm(n * p), n, p)
 #' D <- matrix(rnorm(n * p), n, p)
 #' y <- X[, 1] * 2 + rnorm(n)
-#' solver <- TStagewiseSolver$new(X, D, y)
+#' solver <- TENETAug_Solver$new(X, D, y, lambda2 = 0.1)
 #' solver$execute_step(T_stop = 3)
 #' solver$get_beta()
 #'
 #' @export
-TStagewiseSolver <- R6::R6Class(
-  "TStagewiseSolver",
-  inherit = TSolverBase,
+TENETAug_Solver <- R6::R6Class(
+  "TENETAug_Solver",
+  inherit = TSolver_Base,
   public = list(
-    #' @description Create a new \code{TStagewiseSolver}.
+    #' @description Create a new \code{TENETAug_Solver}.
+    #'
+    #' @param X Numeric matrix of predictors, or \code{mmap_matrix}.
+    #' @param D Numeric matrix of dummies.
+    #' @param y Numeric response vector.
+    #' @param lambda2 Numeric L2 (ridge) penalty parameter (>= 0).
+    #' @param normalize Logical; column-normalize X and D (default \code{TRUE}).
+    #' @param intercept Logical; fit an intercept (default \code{TRUE}).
+    #' @param verbose Logical; print progress (default \code{FALSE}).
+    #' @param use_lars_inner Logical; run the inner path with a pure-LARS
+    #'   solver that never drops variables (default \code{FALSE}).
+    initialize = function(X, D, y,
+                          lambda2,
+                          normalize = TRUE,
+                          intercept = TRUE,
+                          verbose   = FALSE,
+                          use_lars_inner = FALSE) {
+      super$initialize(X, D, y)
+      if (inherits(self$X, "mmap_matrix")) {
+        self$ptr <- tsolver_tenet_aug_mmap_create(self$X, self$D, self$y,
+                                                  lambda2, normalize, intercept,
+                                                  verbose, use_lars_inner)
+      } else {
+        self$ptr <- tsolver_tenet_aug_create(self$X, self$D, self$y,
+                                             lambda2, normalize, intercept,
+                                             verbose, use_lars_inner)
+      }
+    }
+  )
+)
+
+
+#' T-IENET-Aug Solver
+#'
+#' @description
+#' Terminating Informed Elastic Net solver via row augmentation (TIENETAug).
+#' The group-ridge penalty (one augmented row per group, scaled by
+#' \code{sqrt(lambda2)}) is encoded in an augmented data system solved by an
+#' inner T-LASSO (or pure T-LARS) path. This is the solver used internally by
+#' \code{TRexGVSSelector} for \code{gvs_type = "IEN"}.
+#' Inherits all common methods from \code{\link{TSolver_Base}}.
+#'
+#' @examples
+#' set.seed(1)
+#' n <- 20; p <- 4
+#' X <- matrix(rnorm(n * p), n, p)
+#' D <- matrix(rnorm(n * p), n, p)
+#' y <- X[, 1] * 2 + rnorm(n)
+#' groups <- c(1, 1, 2, 2)  # 1-based group id per predictor
+#' solver <- TIENETAug_Solver$new(X, D, y, lambda2 = 0.1, groups = groups)
+#' solver$execute_step(T_stop = 3)
+#' solver$get_beta()
+#'
+#' @export
+TIENETAug_Solver <- R6::R6Class(
+  "TIENETAug_Solver",
+  inherit = TSolver_Base,
+  public = list(
+    #' @description Create a new \code{TIENETAug_Solver}.
+    #'
+    #' @param X Numeric matrix of predictors, or \code{mmap_matrix}.
+    #' @param D Numeric matrix of dummies.
+    #' @param y Numeric response vector.
+    #' @param lambda2 Numeric group-ridge penalty parameter (>= 0).
+    #' @param groups Integer vector of 1-based group ids, one per predictor
+    #'   column of \code{X} (contiguous ids starting at 1).
+    #' @param normalize Logical; column-normalize X and D (default \code{TRUE}).
+    #' @param intercept Logical; fit an intercept (default \code{TRUE}).
+    #' @param verbose Logical; print progress (default \code{FALSE}).
+    #' @param use_lars_inner Logical; run the inner path with a pure-LARS
+    #'   solver that never drops variables (default \code{FALSE}).
+    initialize = function(X, D, y,
+                          lambda2,
+                          groups,
+                          normalize = TRUE,
+                          intercept = TRUE,
+                          verbose   = FALSE,
+                          use_lars_inner = FALSE) {
+      super$initialize(X, D, y)
+      groups <- as.integer(groups)
+      if (inherits(self$X, "mmap_matrix")) {
+        self$ptr <- tsolver_tienet_aug_mmap_create(self$X, self$D, self$y,
+                                                   lambda2, groups, normalize,
+                                                   intercept, verbose,
+                                                   use_lars_inner)
+      } else {
+        self$ptr <- tsolver_tienet_aug_create(self$X, self$D, self$y,
+                                              lambda2, groups, normalize,
+                                              intercept, verbose,
+                                              use_lars_inner)
+      }
+    },
+
+    #' @description Get the group-ridge penalty lambda2 used.
+    #' @return Scalar numeric lambda2.
+    get_lambda2 = function() {
+      tsolver_tienet_aug_get_lambda2(self$ptr)
+    },
+
+    #' @description Get the group ids (1-based, one per predictor).
+    #' @return Integer vector of group ids.
+    get_groups = function() {
+      tsolver_tienet_aug_get_groups(self$ptr)
+    },
+
+    #' @description Get the number of disjoint groups.
+    #' @return Integer group count.
+    get_num_groups = function() {
+      tsolver_tienet_aug_get_num_groups(self$ptr)
+    }
+  )
+)
+
+
+#' T-Stagewise Solver
+#'
+#' @description
+#' Terminating Stagewise Regression solver.
+#' Inherits all common methods from \code{\link{TSolver_Base}}.
+#'
+#' @examples
+#' set.seed(1)
+#' n <- 20; p <- 5
+#' X <- matrix(rnorm(n * p), n, p)
+#' D <- matrix(rnorm(n * p), n, p)
+#' y <- X[, 1] * 2 + rnorm(n)
+#' solver <- TSTAGEWISE_Solver$new(X, D, y)
+#' solver$execute_step(T_stop = 3)
+#' solver$get_beta()
+#'
+#' @export
+TSTAGEWISE_Solver <- R6::R6Class(
+  "TSTAGEWISE_Solver",
+  inherit = TSolver_Base,
+  public = list(
+    #' @description Create a new \code{TSTAGEWISE_Solver}.
     #'
     #' @param X Numeric matrix of predictors, or \code{mmap_matrix}.
     #' @param D Numeric matrix of dummies.
@@ -473,7 +610,7 @@ TStagewiseSolver <- R6::R6Class(
 #'
 #' @description
 #' Terminating Orthogonal Matching Pursuit (T-OMP) solver.
-#' Inherits all common methods from \code{\link{TSolverBase}}.
+#' Inherits all common methods from \code{\link{TSolver_Base}}.
 #'
 #' @examples
 #' set.seed(1)
@@ -481,16 +618,16 @@ TStagewiseSolver <- R6::R6Class(
 #' X <- matrix(rnorm(n * p), n, p)
 #' D <- matrix(rnorm(n * p), n, p)
 #' y <- X[, 1] * 2 + rnorm(n)
-#' solver <- TOMPSolver$new(X, D, y)
+#' solver <- TOMP_Solver$new(X, D, y)
 #' solver$execute_step(T_stop = 3)
 #' solver$get_beta()
 #'
 #' @export
-TOMPSolver <- R6::R6Class(
-  "TOMPSolver",
-  inherit = TSolverBase,
+TOMP_Solver <- R6::R6Class(
+  "TOMP_Solver",
+  inherit = TSolver_Base,
   public = list(
-    #' @description Create a new \code{TOMPSolver}.
+    #' @description Create a new \code{TOMP_Solver}.
     #' @param X Numeric matrix of predictors, or \code{mmap_matrix}.
     #' @param D Numeric matrix of dummies.
     #' @param y Numeric response vector.
@@ -518,7 +655,7 @@ TOMPSolver <- R6::R6Class(
 #'
 #' @description
 #' Terminating Gradient Pursuit (T-GP) solver.
-#' Inherits all common methods from \code{\link{TSolverBase}}.
+#' Inherits all common methods from \code{\link{TSolver_Base}}.
 #'
 #' @examples
 #' set.seed(1)
@@ -526,16 +663,16 @@ TOMPSolver <- R6::R6Class(
 #' X <- matrix(rnorm(n * p), n, p)
 #' D <- matrix(rnorm(n * p), n, p)
 #' y <- X[, 1] * 2 + rnorm(n)
-#' solver <- TGPSolver$new(X, D, y)
+#' solver <- TGP_Solver$new(X, D, y)
 #' solver$execute_step(T_stop = 3)
 #' solver$get_beta()
 #'
 #' @export
-TGPSolver <- R6::R6Class(
-  "TGPSolver",
-  inherit = TSolverBase,
+TGP_Solver <- R6::R6Class(
+  "TGP_Solver",
+  inherit = TSolver_Base,
   public = list(
-    #' @description Create a new \code{TGPSolver}.
+    #' @description Create a new \code{TGP_Solver}.
     #'
     #' @param X Numeric matrix of predictors, or \code{mmap_matrix}.
     #' @param D Numeric matrix of dummies.
@@ -564,7 +701,7 @@ TGPSolver <- R6::R6Class(
 #'
 #' @description
 #' Terminating Approximate Conjugate Gradient Pursuit (T-ACGP) solver.
-#' Inherits all common methods from \code{\link{TSolverBase}}.
+#' Inherits all common methods from \code{\link{TSolver_Base}}.
 #'
 #' @examples
 #' set.seed(1)
@@ -572,16 +709,16 @@ TGPSolver <- R6::R6Class(
 #' X <- matrix(rnorm(n * p), n, p)
 #' D <- matrix(rnorm(n * p), n, p)
 #' y <- X[, 1] * 2 + rnorm(n)
-#' solver <- TACGPSolver$new(X, D, y)
+#' solver <- TACGP_Solver$new(X, D, y)
 #' solver$execute_step(T_stop = 3)
 #' solver$get_beta()
 #'
 #' @export
-TACGPSolver <- R6::R6Class(
-  "TACGPSolver",
-  inherit = TSolverBase,
+TACGP_Solver <- R6::R6Class(
+  "TACGP_Solver",
+  inherit = TSolver_Base,
   public = list(
-    #' @description Create a new \code{TACGPSolver}.
+    #' @description Create a new \code{TACGP_Solver}.
     #' @param X Numeric matrix of predictors, or \code{mmap_matrix}.
     #' @param D Numeric matrix of dummies.
     #' @param y Numeric response vector.
@@ -609,7 +746,7 @@ TACGPSolver <- R6::R6Class(
 #'
 #' @description
 #' Terminating Matching Pursuit (T-MP) solver.
-#' Inherits all common methods from \code{\link{TSolverBase}}.
+#' Inherits all common methods from \code{\link{TSolver_Base}}.
 #'
 #' @examples
 #' set.seed(1)
@@ -617,16 +754,16 @@ TACGPSolver <- R6::R6Class(
 #' X <- matrix(rnorm(n * p), n, p)
 #' D <- matrix(rnorm(n * p), n, p)
 #' y <- X[, 1] * 2 + rnorm(n)
-#' solver <- TMPSolver$new(X, D, y)
+#' solver <- TMP_Solver$new(X, D, y)
 #' solver$execute_step(T_stop = 3)
 #' solver$get_beta()
 #'
 #' @export
-TMPSolver <- R6::R6Class(
-  "TMPSolver",
-  inherit = TSolverBase,
+TMP_Solver <- R6::R6Class(
+  "TMP_Solver",
+  inherit = TSolver_Base,
   public = list(
-    #' @description Create a new \code{TMPSolver}.
+    #' @description Create a new \code{TMP_Solver}.
     #' @param X Numeric matrix of predictors, or \code{mmap_matrix}.
     #' @param D Numeric matrix of dummies.
     #' @param y Numeric response vector.
@@ -654,7 +791,7 @@ TMPSolver <- R6::R6Class(
 #'
 #' @description
 #' Terminating Orthogonal Least Squares (T-OLS) solver.
-#' Inherits all common methods from \code{\link{TSolverBase}}.
+#' Inherits all common methods from \code{\link{TSolver_Base}}.
 #'
 #' @examples
 #' set.seed(1)
@@ -662,16 +799,16 @@ TMPSolver <- R6::R6Class(
 #' X <- matrix(rnorm(n * p), n, p)
 #' D <- matrix(rnorm(n * p), n, p)
 #' y <- X[, 1] * 2 + rnorm(n)
-#' solver <- TOOLSSolver$new(X, D, y)
+#' solver <- TOOLS_Solver$new(X, D, y)
 #' solver$execute_step(T_stop = 3)
 #' solver$get_beta()
 #'
 #' @export
-TOOLSSolver <- R6::R6Class(
-  "TOOLSSolver",
-  inherit = TSolverBase,
+TOOLS_Solver <- R6::R6Class(
+  "TOOLS_Solver",
+  inherit = TSolver_Base,
   public = list(
-    #' @description Create a new \code{TOOLSSolver}.
+    #' @description Create a new \code{TOOLS_Solver}.
     #' @param X Numeric matrix of predictors, or \code{mmap_matrix}.
     #' @param D Numeric matrix of dummies.
     #' @param y Numeric response vector.
@@ -701,7 +838,7 @@ TOOLSSolver <- R6::R6Class(
 #' Terminating Norm-Corrected Gradient Matching Pursuit (T-NCGMP) solver.
 #' Two variants are available: \code{"line_search"} (standard, 1-D projection)
 #' and \code{"fully_corrective"} (OMP-style least squares over the active set).
-#' Inherits all common methods from \code{\link{TSolverBase}}.
+#' Inherits all common methods from \code{\link{TSolver_Base}}.
 #'
 #' @examples
 #' set.seed(1)
@@ -709,16 +846,16 @@ TOOLSSolver <- R6::R6Class(
 #' X <- matrix(rnorm(n * p), n, p)
 #' D <- matrix(rnorm(n * p), n, p)
 #' y <- X[, 1] * 2 + rnorm(n)
-#' solver <- TNCGMPSolver$new(X, D, y, variant = "line_search")
+#' solver <- TNCGMP_Solver$new(X, D, y, variant = "line_search")
 #' solver$execute_step(T_stop = 3)
 #' solver$get_beta()
 #'
 #' @export
-TNCGMPSolver <- R6::R6Class(
-  "TNCGMPSolver",
-  inherit = TSolverBase,
+TNCGMP_Solver <- R6::R6Class(
+  "TNCGMP_Solver",
+  inherit = TSolver_Base,
   public = list(
-    #' @description Create a new \code{TNCGMPSolver}.
+    #' @description Create a new \code{TNCGMP_Solver}.
     #' @param X Numeric matrix of predictors, or \code{mmap_matrix}.
     #' @param D Numeric matrix of dummies.
     #' @param y Numeric response vector.
@@ -736,7 +873,7 @@ TNCGMPSolver <- R6::R6Class(
       v <- switch(variant,
         "line_search"      = 0L,
         "fully_corrective" = 1L,
-        stop("TNCGMPSolver: unknown variant '", variant,
+        stop("TNCGMP_Solver: unknown variant '", variant,
              "'. Use \"line_search\" or \"fully_corrective\".")
       )
       if (inherits(self$X, "mmap_matrix")) {
@@ -761,7 +898,7 @@ TNCGMPSolver <- R6::R6Class(
 #' Terminating Adaptive Forward Stepwise (T-AFS) solver.
 #' The shrinkage parameter \code{rho} interpolates between Forward Stepwise
 #' (\code{rho = 1}) and LAR/LASSO (\code{rho -> 0}).
-#' Inherits all common methods from \code{\link{TSolverBase}}.
+#' Inherits all common methods from \code{\link{TSolver_Base}}.
 #'
 #' @examples
 #' set.seed(1)
@@ -769,16 +906,16 @@ TNCGMPSolver <- R6::R6Class(
 #' X <- matrix(rnorm(n * p), n, p)
 #' D <- matrix(rnorm(n * p), n, p)
 #' y <- X[, 1] * 2 + rnorm(n)
-#' solver <- TAFSSolver$new(X, D, y, rho = 0.5)
+#' solver <- TAFS_Solver$new(X, D, y, rho = 0.5)
 #' solver$execute_step(T_stop = 3)
 #' solver$get_beta()
 #'
 #' @export
-TAFSSolver <- R6::R6Class(
-  "TAFSSolver",
-  inherit = TSolverBase,
+TAFS_Solver <- R6::R6Class(
+  "TAFS_Solver",
+  inherit = TSolver_Base,
   public = list(
-    #' @description Create a new \code{TAFSSolver}.
+    #' @description Create a new \code{TAFS_Solver}.
     #' @param X Numeric matrix of predictors, or \code{mmap_matrix}.
     #' @param D Numeric matrix of dummies.
     #' @param y Numeric response vector.

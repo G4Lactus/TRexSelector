@@ -68,8 +68,9 @@ sel$selected_indices
       \item{\code{verbose}}{Whether to print progress (default: TRUE).}
       \item{\code{gvs_control}}{A GVS control list from \code{\link{trex_gvs_control}()} (default:
 \code{trex_gvs_control()}). The solver is derived from \code{gvs_type}:
-"EN" uses TENET, "IEN" uses TLASSO. The \code{solver} field in \code{control}
-is ignored.}
+"EN" uses TENET (or TENET_AUG, per \code{en_solver}), "IEN" uses
+TIENET_AUG. The \code{solver} field in \code{control} is ignored;
+a warning is issued if it is set to a non-matching solver.}
       \item{\code{control}}{A control list from \code{\link{trex_control}()} (default:
 \code{trex_control()}). The \code{solver} field is overridden by \code{gvs_type}.}
     }

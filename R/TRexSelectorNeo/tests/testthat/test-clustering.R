@@ -99,6 +99,26 @@ test_that("new_size column is in [2, n]", {
   expect_true(all(lnk[, 4] <= n_fix))
 })
 
+test_that("Ward rejects non-Euclidean metrics except Correlation_LSH_Approx", {
+  expect_error(
+    agglomerative_cluster(data_fix, LinkageMethod$Ward,
+                          metric = DistanceMetric$Correlation),
+    "Euclidean"
+  )
+})
+
+test_that("Ward + Correlation_LSH_Approx is permitted (SimHash-projected Ward)", {
+  # Needs variation in both coordinates: rows with zero variance make the
+  # correlation metric degenerate.
+  set.seed(42)
+  X <- matrix(rnorm(5L * 8L), nrow = 5L, ncol = 8L)
+  lnk <- agglomerative_cluster(X, LinkageMethod$Ward,
+                               metric = DistanceMetric$Correlation_LSH_Approx)
+  expect_true(is.matrix(lnk))
+  expect_equal(nrow(lnk), 4L)
+  expect_equal(ncol(lnk), 4L)
+})
+
 
 # =============================================================================
 # Group 4: Single linkage correctness
