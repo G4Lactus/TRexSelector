@@ -1,12 +1,6 @@
 <!-- README.md is generated from README.Rmd. Please edit that file -->
 
-# TRexSelector
-
-[![CRAN_Status_Badge](https://www.r-pkg.org/badges/version/TRexSelector)](https://CRAN.R-project.org/package=TRexSelector)
-[![CRAN
-Downloads](https://cranlogs.r-pkg.org/badges/TRexSelector)](https://CRAN.R-project.org/package=TRexSelector)
-![CRAN Downloads
-Total](https://cranlogs.r-pkg.org/badges/grand-total/TRexSelector?color=brightgreen)
+# TRexSelectorNeo
 
 **Title**: The T-Rex selector for fast high-dimensional variable
 selection with FDR control
@@ -14,7 +8,8 @@ selection with FDR control
 **Description**: It performs fast variable selection in large-scale
 high-dimensional settings while controlling the false discovery rate
 (FDR) at a user-defined target level. The R package provides bindings to
-the TRexSelector C++ library.
+the TRexSelector C++ library and supersedes the earlier pure-R
+‘TRexSelector’ package, alongside which it can be installed.
 
 **Papers**: The package is based on the papers
 
@@ -45,25 +40,38 @@ package.
 
 ## Installation
 
-You can install the ‘TRexSelector’ package from
-[CRAN](https://CRAN.R-project.org/package=TRexSelector) (stable version)
-or [GitHub](https://github.com/G4Lactus/TRexSelector) (developer
-version) with:
+The package compiles its C++ backend on installation, so a C++20-capable
+compiler is required (GCC ≥ 10, Clang ≥ 12, Apple Clang ≥ 14, or Rtools
+on Windows), together with R ≥ 4.3.
+
+First install the R-side prerequisites (once, from an R session):
 
 ``` r
-# Option 1: Install stable version from CRAN
-install.packages("TRexSelector")
-
-# Option 2: Install developer version from GitHub
-install.packages("devtools")
-devtools::install_github("G4Lactus/TRexSelector")
+install.packages(c("Rcpp", "RcppEigen", "BH", "Rcereal", "R6"))
 ```
+
+Then install ‘TRexSelectorNeo’ from
+[GitHub](https://github.com/G4Lactus/TRexSelector) — the package lives
+in the `R/TRexSelectorNeo/` subdirectory of the repository:
+
+``` r
+# Option 1: Install directly from GitHub
+install.packages("remotes")
+remotes::install_github("G4Lactus/TRexSelector", subdir = "R/TRexSelectorNeo")
+
+# Option 2: Install from a local clone of the repository
+# (from the shell, at the repository root)
+# R CMD INSTALL R/TRexSelectorNeo
+```
+
+*(A CRAN submission is in progress; once accepted,
+`install.packages("TRexSelectorNeo")` will provide the stable version.)*
 
 You can open the help pages with:
 
 ``` r
 library(TRexSelectorNeo)
-help(package = "TRexSelector")
+help(package = "TRexSelectorNeo")
 ?TRexSelector
 ?trex_control
 ?compute_fdp
@@ -71,16 +79,16 @@ help(package = "TRexSelector")
 # etc.
 ```
 
-To cite the package ‘TRexSelector’ in publications use:
+To cite the package ‘TRexSelectorNeo’ in publications use:
 
 ``` r
-citation("TRexSelector")
+citation("TRexSelectorNeo")
 ```
 
 # Quick Start
 
-This section illustrates the basic usage of the ‘TRexSelector’ package
-to perform FDR-controlled variable selection in large-scale
+This section illustrates the basic usage of the ‘TRexSelectorNeo’
+package to perform FDR-controlled variable selection in large-scale
 high-dimensional settings based on the T-Rex selector.
 
 1.  **First**, we generate a high-dimensional Gaussian data set with
@@ -103,7 +111,10 @@ y <- X %*% beta + stats::rnorm(n)
 ```
 
 2.  **Second**, we perform FDR-controlled variable selection using the
-    T-Rex selector for a target FDR of 5%:
+    T-Rex selector for a target FDR of 5%. The selectors are R6 classes:
+    construct with `$new(...)`, run with `$select()`, and read the
+    results from active fields such as `$selected_indices` (1-based
+    indices):
 
 ``` r
 # Seed
@@ -125,23 +136,23 @@ true active variables and there are no false positives in this example.
 Note that users have to choose the target FDR according to the
 requirements of their specific applications.
 
+All selector variants (`TRexSelector`, `TRexDASelector`,
+`TRexGVSSelector`, `TRexScreeningSelector`,
+`TRexBiobankScreeningSelector`, `TRexSPCASelector`) follow the same
+construct → `$select()` → inspect pattern.
+
 ## Documentation
 
-For more information and some examples, please check the
-[GitHub-vignette](https://htmlpreview.github.io/?https://github.com/G4Lactus/TRexSelector/blob/main/vignettes/TRexSelector_usage_and_simulations.html).
+For more information and some examples, please check the package
+vignette in [`vignettes/`](vignettes/) (built on installation with
+`build_vignettes = TRUE`).
 
 ## Links
 
 T-Rex paper: <https://doi.org/10.48550/arXiv.2110.06048>
 
-TRexSelector package (stable version):
-[CRAN-TRexSelector](https://CRAN.R-project.org/package=TRexSelector).
+TRexSelector repository (C++ core, Python, and R packages):
+[GitHub-TRexSelector](https://github.com/G4Lactus/TRexSelector)
 
-TRexSelector package (developer version):
-[GitHub-TRexSelector](https://github.com/G4Lactus/TRexSelector).
-
-README file:
-[GitHub-readme](https://htmlpreview.github.io/?https://github.com/G4Lactus/TRexSelector/blob/main/README.html).
-
-Vignette:
-[GitHub-vignette](https://htmlpreview.github.io/?https://github.com/G4Lactus/TRexSelector/blob/main/vignettes/TRexSelector_usage_and_simulations.html).
+Bug reports: [GitHub
+Issues](https://github.com/G4Lactus/TRexSelector/issues)
