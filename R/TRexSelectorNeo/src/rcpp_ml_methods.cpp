@@ -35,13 +35,13 @@ using ridge_cv = trex::ml_methods::model_selection::ridge_cv_svd;
 
 //' @title Create ZScoreScaler
 //'
-//' @param with_mean Center data
-//' @param with_std Scale data
+//' @param center Center columns to mean 0
+//' @param scale Scale columns to unit SD (Bessel; RMS around 0 if not centered)
 //' @return XPtr to ZScoreScaler
 //' @noRd
 // [[Rcpp::export]]
-XPtr<ZScoreScaler> zscore_scaler_create(bool with_mean, bool with_std) {
-    return XPtr<ZScoreScaler>(new ZScoreScaler(with_mean, with_std));
+XPtr<ZScoreScaler> zscore_scaler_create(bool center, bool scale) {
+    return XPtr<ZScoreScaler>(new ZScoreScaler(center, scale));
 }
 
 //' @title Fit ZScoreScaler
@@ -70,6 +70,21 @@ void zscore_scaler_transform_inplace(
     Eigen::Map<Eigen::MatrixXd> X
 ) {
     ptr->transform_inplace(X);
+}
+
+//' @title Fit and Transform Inplace ZScoreScaler
+//'
+//' @param ptr XPtr to ZScoreScaler
+//' @param X Matrix to fit and transform
+//' @param threshold Numerical stability threshold
+//' @noRd
+// [[Rcpp::export]]
+void zscore_scaler_fit_transform_inplace(
+    XPtr<ZScoreScaler> ptr, // NOLINT(performance-unnecessary-value-param)
+    Eigen::Map<Eigen::MatrixXd> X,
+    double threshold = 1e-12
+) {
+    ptr->fit_transform_inplace(X, threshold);
 }
 
 //' @title Inverse Transform Inplace ZScoreScaler
@@ -109,40 +124,40 @@ std::vector<std::size_t> zscore_scaler_get_dropped_indices(
     return ptr->get_dropped_indices();
 }
 
-//' @title Get with_mean flag from ZScoreScaler
+//' @title Get center flag from ZScoreScaler
 //'
 //' @param ptr XPtr to ZScoreScaler
-//' @return Boolean with_mean
+//' @return Boolean center
 //' @noRd
 // [[Rcpp::export]]
-bool zscore_scaler_get_with_mean(
+bool zscore_scaler_get_center(
     XPtr<ZScoreScaler> ptr // NOLINT(performance-unnecessary-value-param)
 ) {
-    return ptr->get_with_mean();
+    return ptr->get_center();
 }
 
-//' @title Get with_std flag from ZScoreScaler
+//' @title Get scale flag from ZScoreScaler
 //'
 //' @param ptr XPtr to ZScoreScaler
-//' @return Boolean with_std
+//' @return Boolean scale
 //' @noRd
 // [[Rcpp::export]]
-bool zscore_scaler_get_with_std(
+bool zscore_scaler_get_scale(
     XPtr<ZScoreScaler> ptr // NOLINT(performance-unnecessary-value-param)
 ) {
-    return ptr->get_with_std();
+    return ptr->get_scale();
 }
 
-//' @title Get means from ZScoreScaler
+//' @title Get centers from ZScoreScaler
 //'
 //' @param ptr XPtr to ZScoreScaler
-//' @return Vector of means
+//' @return Vector of centers
 //' @noRd
 // [[Rcpp::export]]
-Eigen::VectorXd zscore_scaler_get_means(
+Eigen::VectorXd zscore_scaler_get_centers(
     XPtr<ZScoreScaler> ptr // NOLINT(performance-unnecessary-value-param)
 ) {
-    return ptr->get_means();
+    return ptr->get_centers();
 }
 
 //' @title Get scales from ZScoreScaler
@@ -190,13 +205,14 @@ void zscore_scaler_load(
 //' @title Create LpNormScaler
 //'
 //' @param norm_type Type of norm (1 for L1, 2 for L2)
-//' @param with_mean Center data
+//' @param center Center columns to mean 0
+//' @param scale Scale columns to unit Lp norm (around the applied center)
 //' @return XPtr to LpNormScaler
 //' @noRd
 // [[Rcpp::export]]
-XPtr<LpNormScaler> lpnorm_scaler_create(int norm_type, bool with_mean) {
+XPtr<LpNormScaler> lpnorm_scaler_create(int norm_type, bool center, bool scale) {
     LpNormScaler::NormType type = (norm_type == 1) ? LpNormScaler::NormType::L1 : LpNormScaler::NormType::L2;
-    return XPtr<LpNormScaler>(new LpNormScaler(type, with_mean));
+    return XPtr<LpNormScaler>(new LpNormScaler(type, center, scale));
 }
 
 //' @title Fit LpNormScaler
@@ -225,6 +241,21 @@ void lpnorm_scaler_transform_inplace(
     Eigen::Map<Eigen::MatrixXd> X
 ) {
     ptr->transform_inplace(X);
+}
+
+//' @title Fit and Transform Inplace LpNormScaler
+//'
+//' @param ptr XPtr to LpNormScaler
+//' @param X Matrix to fit and transform
+//' @param threshold Numerical stability threshold
+//' @noRd
+// [[Rcpp::export]]
+void lpnorm_scaler_fit_transform_inplace(
+    XPtr<LpNormScaler> ptr, // NOLINT(performance-unnecessary-value-param)
+    Eigen::Map<Eigen::MatrixXd> X,
+    double threshold = 1e-12
+) {
+    ptr->fit_transform_inplace(X, threshold);
 }
 
 //' @title Inverse Transform Inplace LpNormScaler
@@ -264,16 +295,16 @@ std::vector<std::size_t> lpnorm_scaler_get_dropped_indices(
     return ptr->get_dropped_indices();
 }
 
-//' @title Get means from LpNormScaler
+//' @title Get centers from LpNormScaler
 //'
 //' @param ptr XPtr to LpNormScaler
-//' @return Vector of means
+//' @return Vector of centers
 //' @noRd
 // [[Rcpp::export]]
-Eigen::VectorXd lpnorm_scaler_get_means(
+Eigen::VectorXd lpnorm_scaler_get_centers(
     XPtr<LpNormScaler> ptr // NOLINT(performance-unnecessary-value-param)
 ) {
-    return ptr->get_means();
+    return ptr->get_centers();
 }
 
 //' @title Get scales from LpNormScaler
@@ -288,28 +319,28 @@ Eigen::VectorXd lpnorm_scaler_get_scales(
     return ptr->get_scales();
 }
 
-//' @title Get with_mean flag from LpNormScaler
+//' @title Get center flag from LpNormScaler
 //'
 //' @param ptr XPtr to LpNormScaler
-//' @return Boolean with_mean
+//' @return Boolean center
 //' @noRd
 // [[Rcpp::export]]
-bool lpnorm_scaler_get_with_mean(
+bool lpnorm_scaler_get_center(
     XPtr<LpNormScaler> ptr // NOLINT(performance-unnecessary-value-param)
 ) {
-    return ptr->get_with_mean();
+    return ptr->get_center();
 }
 
-//' @title Get with_norm flag from LpNormScaler
+//' @title Get scale flag from LpNormScaler
 //'
 //' @param ptr XPtr to LpNormScaler
-//' @return Boolean with_norm
+//' @return Boolean scale
 //' @noRd
 // [[Rcpp::export]]
-bool lpnorm_scaler_get_with_norm(
+bool lpnorm_scaler_get_scale(
     XPtr<LpNormScaler> ptr // NOLINT(performance-unnecessary-value-param)
 ) {
-    return ptr->get_with_norm();
+    return ptr->get_scale();
 }
 
 //' @title Get norm type from LpNormScaler

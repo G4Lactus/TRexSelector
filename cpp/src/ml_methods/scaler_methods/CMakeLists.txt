@@ -9,7 +9,7 @@
 # -------------
 # src/ml_methods/
 # |-- scaler_methods
-#     |-- data_transformer.hpp
+#     |-- data_transformer.hpp/.cpp
 #     |-- lp_norm_scaler.hpp/.cpp
 #     |-- z_score_scaler.hpp/.cpp
 # ==================================================================================
@@ -20,6 +20,7 @@
 # Append the C++ source files (.cpp) to the parent library target (trex_ml_methods).
 # These are marked PRIVATE because they are compiled implementation details.
 target_sources(trex_ml_methods PRIVATE
+    ${CMAKE_CURRENT_LIST_DIR}/data_transformer.cpp
     ${CMAKE_CURRENT_LIST_DIR}/lp_norm_scaler.cpp
     ${CMAKE_CURRENT_LIST_DIR}/z_score_scaler.cpp
 )

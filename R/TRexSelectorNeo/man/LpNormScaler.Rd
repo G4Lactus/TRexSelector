@@ -4,7 +4,16 @@
 \alias{LpNormScaler}
 \title{Lp-Norm Scaler}
 \description{
-Scales input features to unit norm based on the chosen L1 or L2 formulation.
+Scales input features to unit norm based on the chosen L1 or
+L2 formulation. The \code{center}/\code{scale} arguments follow R's
+\code{\link[base]{scale}()}: the norm is computed around the applied
+center (around 0 when \code{center = FALSE}).
+}
+\details{
+The \code{*_inplace} methods mutate \code{X} directly (zero-copy)
+when it is a double-storage matrix; other inputs are coerced to a double
+matrix first, in which case the coerced copy is modified. The (modified)
+matrix is returned in both cases.
 }
 \examples{
 set.seed(1)
@@ -21,12 +30,13 @@ X_norm <- scaler$transform_inplace(X)
     \item \href{#method-LpNormScaler-fit}{\code{LpNormScaler$fit()}}
     \item \href{#method-LpNormScaler-transform_inplace}{\code{LpNormScaler$transform_inplace()}}
     \item \href{#method-LpNormScaler-inverse_transform_inplace}{\code{LpNormScaler$inverse_transform_inplace()}}
+    \item \href{#method-LpNormScaler-fit_transform_inplace}{\code{LpNormScaler$fit_transform_inplace()}}
     \item \href{#method-LpNormScaler-is_fitted}{\code{LpNormScaler$is_fitted()}}
     \item \href{#method-LpNormScaler-get_dropped_indices}{\code{LpNormScaler$get_dropped_indices()}}
-    \item \href{#method-LpNormScaler-get_means}{\code{LpNormScaler$get_means()}}
+    \item \href{#method-LpNormScaler-get_centers}{\code{LpNormScaler$get_centers()}}
     \item \href{#method-LpNormScaler-get_scales}{\code{LpNormScaler$get_scales()}}
-    \item \href{#method-LpNormScaler-get_with_mean}{\code{LpNormScaler$get_with_mean()}}
-    \item \href{#method-LpNormScaler-get_with_norm}{\code{LpNormScaler$get_with_norm()}}
+    \item \href{#method-LpNormScaler-get_center}{\code{LpNormScaler$get_center()}}
+    \item \href{#method-LpNormScaler-get_scale}{\code{LpNormScaler$get_scale()}}
     \item \href{#method-LpNormScaler-get_norm_type}{\code{LpNormScaler$get_norm_type()}}
     \item \href{#method-LpNormScaler-save}{\code{LpNormScaler$save()}}
     \item \href{#method-LpNormScaler-load}{\code{LpNormScaler$load()}}
@@ -40,14 +50,15 @@ X_norm <- scaler$transform_inplace(X)
   Initialize the LpNormScaler
   \subsection{Usage}{
     \if{html}{\out{<div class="r">}}
-    \preformatted{LpNormScaler$new(norm_type = 2, with_mean = TRUE)}
+    \preformatted{LpNormScaler$new(norm_type = 2, center = TRUE, scale = TRUE)}
     \if{html}{\out{</div>}}
   }
   \subsection{Arguments}{
     \if{html}{\out{<div class="arguments">}}
     \describe{
       \item{\code{norm_type}}{Integer, 1 for L1 norm, 2 for L2 norm (default: 2)}
-      \item{\code{with_mean}}{Logical, whether to center the data before scaling (default: TRUE)}
+      \item{\code{center}}{Logical, whether to center columns to mean 0 (default: TRUE)}
+      \item{\code{scale}}{Logical, whether to scale columns to unit Lp norm (default: TRUE)}
     }
     \if{html}{\out{</div>}}
   }
@@ -67,7 +78,7 @@ X_norm <- scaler$transform_inplace(X)
     \if{html}{\out{<div class="arguments">}}
     \describe{
       \item{\code{X}}{A numeric matrix (n x p).}
-      \item{\code{threshold}}{Double, lower bound for norm (default: 1e-12).}
+      \item{\code{threshold}}{Double, lower bound for the scale statistic (default: 1e-12).}
     }
     \if{html}{\out{</div>}}
   }
@@ -121,6 +132,29 @@ X_norm <- scaler$transform_inplace(X)
 }
 
 \if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-LpNormScaler-fit_transform_inplace"></a>}}
+\if{latex}{\out{\hypertarget{method-LpNormScaler-fit_transform_inplace}{}}}
+\subsection{\code{LpNormScaler$fit_transform_inplace()}}{
+  Fit and transform in one call, like R's scale().
+  \subsection{Usage}{
+    \if{html}{\out{<div class="r">}}
+    \preformatted{LpNormScaler$fit_transform_inplace(X, threshold = 1e-12)}
+    \if{html}{\out{</div>}}
+  }
+  \subsection{Arguments}{
+    \if{html}{\out{<div class="arguments">}}
+    \describe{
+      \item{\code{X}}{A numeric matrix (n x p).}
+      \item{\code{threshold}}{Double, lower bound for the scale statistic (default: 1e-12).}
+    }
+    \if{html}{\out{</div>}}
+  }
+  \subsection{Returns}{
+    The modified matrix \code{X}.
+  }
+}
+
+\if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-LpNormScaler-is_fitted"></a>}}
 \if{latex}{\out{\hypertarget{method-LpNormScaler-is_fitted}{}}}
 \subsection{\code{LpNormScaler$is_fitted()}}{
@@ -139,7 +173,8 @@ X_norm <- scaler$transform_inplace(X)
 \if{html}{\out{<a id="method-LpNormScaler-get_dropped_indices"></a>}}
 \if{latex}{\out{\hypertarget{method-LpNormScaler-get_dropped_indices}{}}}
 \subsection{\code{LpNormScaler$get_dropped_indices()}}{
-  Get dropped indices.
+  Get dropped (degenerate) column indices. These columns get
+scale factor 1 and are still centered (sklearn semantics).
   \subsection{Usage}{
     \if{html}{\out{<div class="r">}}
     \preformatted{LpNormScaler$get_dropped_indices()}
@@ -151,13 +186,13 @@ X_norm <- scaler$transform_inplace(X)
 }
 
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-LpNormScaler-get_means"></a>}}
-\if{latex}{\out{\hypertarget{method-LpNormScaler-get_means}{}}}
-\subsection{\code{LpNormScaler$get_means()}}{
-  Get the learned means.
+\if{html}{\out{<a id="method-LpNormScaler-get_centers"></a>}}
+\if{latex}{\out{\hypertarget{method-LpNormScaler-get_centers}{}}}
+\subsection{\code{LpNormScaler$get_centers()}}{
+  Get the learned centers (column means).
   \subsection{Usage}{
     \if{html}{\out{<div class="r">}}
-    \preformatted{LpNormScaler$get_means()}
+    \preformatted{LpNormScaler$get_centers()}
     \if{html}{\out{</div>}}
   }
   \subsection{Returns}{
@@ -181,13 +216,13 @@ X_norm <- scaler$transform_inplace(X)
 }
 
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-LpNormScaler-get_with_mean"></a>}}
-\if{latex}{\out{\hypertarget{method-LpNormScaler-get_with_mean}{}}}
-\subsection{\code{LpNormScaler$get_with_mean()}}{
+\if{html}{\out{<a id="method-LpNormScaler-get_center"></a>}}
+\if{latex}{\out{\hypertarget{method-LpNormScaler-get_center}{}}}
+\subsection{\code{LpNormScaler$get_center()}}{
   Check if scaler centers data.
   \subsection{Usage}{
     \if{html}{\out{<div class="r">}}
-    \preformatted{LpNormScaler$get_with_mean()}
+    \preformatted{LpNormScaler$get_center()}
     \if{html}{\out{</div>}}
   }
   \subsection{Returns}{
@@ -196,13 +231,13 @@ X_norm <- scaler$transform_inplace(X)
 }
 
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-LpNormScaler-get_with_norm"></a>}}
-\if{latex}{\out{\hypertarget{method-LpNormScaler-get_with_norm}{}}}
-\subsection{\code{LpNormScaler$get_with_norm()}}{
+\if{html}{\out{<a id="method-LpNormScaler-get_scale"></a>}}
+\if{latex}{\out{\hypertarget{method-LpNormScaler-get_scale}{}}}
+\subsection{\code{LpNormScaler$get_scale()}}{
   Check if scaler scales data to unit norm.
   \subsection{Usage}{
     \if{html}{\out{<div class="r">}}
-    \preformatted{LpNormScaler$get_with_norm()}
+    \preformatted{LpNormScaler$get_scale()}
     \if{html}{\out{</div>}}
   }
   \subsection{Returns}{

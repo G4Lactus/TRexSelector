@@ -3,12 +3,12 @@
 #
 # Test groups:
 #   1.  ZScoreScaler — basic fit, transform, inverse_transform, getters
-#   2.  ZScoreScaler — no centering (with_mean = FALSE)
+#   2.  ZScoreScaler — no centering (center = FALSE)
 #   3.  ZScoreScaler — constant column (dropped_indices is 1-based)
 #   4.  ZScoreScaler — save/load round-trip
 #   5.  LpNormScaler — L2 norm fit, transform, inverse_transform, getters
 #   6.  LpNormScaler — L1 norm fit, transform, getters
-#   7.  LpNormScaler — no centering (with_mean = FALSE)
+#   7.  LpNormScaler — no centering (center = FALSE)
 #   8.  LpNormScaler — constant column (dropped_indices is 1-based)
 #   9.  LpNormScaler — save/load round-trip
 #   13. RidgeCV  — cross-validation rules (index ordering, 1SE threshold)
@@ -31,14 +31,14 @@ library(TRexSelectorNeo)
 
 test_that("ZScoreScaler basic fit: correct means and scales", {
   data <- matrix(c(1, 2, 3, 4, 6, 8), nrow = 3, ncol = 2)
-  scaler <- ZScoreScaler$new(with_mean = TRUE, with_std = TRUE)
+  scaler <- ZScoreScaler$new(center = TRUE, scale = TRUE)
   scaler$fit(data)
 
   expect_true(scaler$is_fitted())
-  expect_true(scaler$get_with_mean())
-  expect_true(scaler$get_with_std())
-  expect_equal(scaler$get_means()[1], 2.0)
-  expect_equal(scaler$get_means()[2], 6.0)
+  expect_true(scaler$get_center())
+  expect_true(scaler$get_scale())
+  expect_equal(scaler$get_centers()[1], 2.0)
+  expect_equal(scaler$get_centers()[2], 6.0)
   expect_equal(scaler$get_scales()[1], 1.0)
   expect_equal(scaler$get_scales()[2], 2.0)
 })
@@ -73,23 +73,23 @@ test_that("ZScoreScaler inverse_transform restores original values", {
 # =============================================================================
 # Group 2: ZScoreScaler — no centering
 # Mirrors C++ test ZScoreScalerNoCentering
-# Data: {1, 3, 5};  with_mean=FALSE → raw-sum variance
+# Data: {1, 3, 5};  center=FALSE → RMS around 0 (R's scale() behavior)
 #   var = (1^2 + 3^2 + 5^2) / (n-1) = 35 / 2 = 17.5
 #   std = sqrt(17.5)
 # =============================================================================
 
-test_that("ZScoreScaler no centering: mean stored as 0, scale uses raw std", {
+test_that("ZScoreScaler no centering: center stored as 0, scale uses RMS around 0", {
   data   <- matrix(c(1, 3, 5), nrow = 3, ncol = 1)
-  scaler <- ZScoreScaler$new(with_mean = FALSE, with_std = TRUE)
+  scaler <- ZScoreScaler$new(center = FALSE, scale = TRUE)
   scaler$fit(data)
 
-  expect_equal(scaler$get_means()[1], 0.0)
+  expect_equal(scaler$get_centers()[1], 0.0)
   expect_equal(scaler$get_scales()[1], sqrt(17.5), tolerance = 1e-12)
 })
 
-test_that("ZScoreScaler no centering: transform divides by raw std", {
+test_that("ZScoreScaler no centering: transform divides by RMS around 0", {
   data   <- matrix(c(1, 3, 5), nrow = 3, ncol = 1)
-  scaler <- ZScoreScaler$new(with_mean = FALSE, with_std = TRUE)
+  scaler <- ZScoreScaler$new(center = FALSE, scale = TRUE)
   scaler$fit(data)
   result <- scaler$transform_inplace(data)
 
@@ -102,7 +102,8 @@ test_that("ZScoreScaler no centering: transform divides by raw std", {
 # Group 3: ZScoreScaler — constant column
 # Mirrors C++ test ZScoreScalerConstantColumn
 # Constant column → std = 0 → scale set to 1.0, column index added to
-# dropped_indices.  dropped_indices must be 1-based (R convention).
+# dropped_indices (1-based in R).  sklearn semantics: the column is still
+# centered (constant becomes 0); only the division is suppressed.
 # =============================================================================
 
 test_that("ZScoreScaler constant column: scale is 1, dropped_indices is 1-based", {
@@ -116,15 +117,19 @@ test_that("ZScoreScaler constant column: scale is 1, dropped_indices is 1-based"
   expect_equal(dropped[1], 1L)   # 1-based: column 1 (C++ column 0)
 })
 
-test_that("ZScoreScaler constant column: transform leaves values unchanged", {
+test_that("ZScoreScaler constant column: still centered to 0, inverse restores", {
   data   <- matrix(rep(42.0, 3), nrow = 3, ncol = 1)
   scaler <- ZScoreScaler$new()
   scaler$fit(data)
   result <- scaler$transform_inplace(data)
 
-  expect_equal(result[1, 1], 42.0)
-  expect_equal(result[2, 1], 42.0)
-  expect_equal(result[3, 1], 42.0)
+  expect_equal(result[1, 1], 0.0)
+  expect_equal(result[2, 1], 0.0)
+  expect_equal(result[3, 1], 0.0)
+
+  restored <- scaler$inverse_transform_inplace(result)
+  expect_equal(restored[1, 1], 42.0)
+  expect_equal(restored[3, 1], 42.0)
 })
 
 # =============================================================================
@@ -145,7 +150,7 @@ test_that("ZScoreScaler save/load preserves means, scales, dropped_indices", {
   restored$load(tf)
 
   expect_true(restored$is_fitted())
-  expect_equal(restored$get_means(),           original$get_means())
+  expect_equal(restored$get_centers(),           original$get_centers())
   expect_equal(restored$get_scales(),          original$get_scales())
   expect_equal(restored$get_dropped_indices(), original$get_dropped_indices())
 })
@@ -153,21 +158,21 @@ test_that("ZScoreScaler save/load preserves means, scales, dropped_indices", {
 # =============================================================================
 # Group 5: LpNormScaler — L2 norm
 # Mirrors C++ test LpNormScalerL2
-# Data: {1, 2, 3};  with_mean=TRUE → centered: {-1, 0, 1}, L2 norm = sqrt(2)
+# Data: {1, 2, 3};  center=TRUE → centered: {-1, 0, 1}, L2 norm = sqrt(2)
 # =============================================================================
 
 test_that("LpNormScaler L2: correct means and scales", {
   data   <- matrix(c(1, 2, 3), nrow = 3, ncol = 1)
-  scaler <- LpNormScaler$new(norm_type = 2, with_mean = TRUE)
+  scaler <- LpNormScaler$new(norm_type = 2, center = TRUE)
   scaler$fit(data)
 
-  expect_equal(scaler$get_means()[1],  2.0)
+  expect_equal(scaler$get_centers()[1],  2.0)
   expect_equal(scaler$get_scales()[1], sqrt(2.0))
 })
 
 test_that("LpNormScaler L2: transform normalises to unit L2 norm of centered data", {
   data   <- matrix(c(1, 2, 3), nrow = 3, ncol = 1)
-  scaler <- LpNormScaler$new(norm_type = 2, with_mean = TRUE)
+  scaler <- LpNormScaler$new(norm_type = 2, center = TRUE)
   scaler$fit(data)
   result <- scaler$transform_inplace(data)
 
@@ -178,7 +183,7 @@ test_that("LpNormScaler L2: transform normalises to unit L2 norm of centered dat
 
 test_that("LpNormScaler L2: inverse_transform restores original values", {
   data   <- matrix(c(1, 2, 3), nrow = 3, ncol = 1)
-  scaler <- LpNormScaler$new(norm_type = 2, with_mean = TRUE)
+  scaler <- LpNormScaler$new(norm_type = 2, center = TRUE)
   scaler$fit(data)
   transformed <- scaler$transform_inplace(data)
   restored    <- scaler$inverse_transform_inplace(transformed)
@@ -190,12 +195,12 @@ test_that("LpNormScaler L2: inverse_transform restores original values", {
 # =============================================================================
 # Group 6: LpNormScaler — L1 norm
 # Mirrors C++ test LpNormScalerL1
-# Data: {1, 2, 3};  with_mean=TRUE → centered: {-1, 0, 1}, L1 norm = 2.0
+# Data: {1, 2, 3};  center=TRUE → centered: {-1, 0, 1}, L1 norm = 2.0
 # =============================================================================
 
 test_that("LpNormScaler L1: correct scale (L1 norm of centered data)", {
   data   <- matrix(c(1, 2, 3), nrow = 3, ncol = 1)
-  scaler <- LpNormScaler$new(norm_type = 1, with_mean = TRUE)
+  scaler <- LpNormScaler$new(norm_type = 1, center = TRUE)
   scaler$fit(data)
 
   expect_equal(scaler$get_scales()[1], 2.0)
@@ -203,7 +208,7 @@ test_that("LpNormScaler L1: correct scale (L1 norm of centered data)", {
 
 test_that("LpNormScaler L1: transform normalises to unit L1 norm", {
   data   <- matrix(c(1, 2, 3), nrow = 3, ncol = 1)
-  scaler <- LpNormScaler$new(norm_type = 1, with_mean = TRUE)
+  scaler <- LpNormScaler$new(norm_type = 1, center = TRUE)
   scaler$fit(data)
   result <- scaler$transform_inplace(data)
 
@@ -215,21 +220,21 @@ test_that("LpNormScaler L1: transform normalises to unit L1 norm", {
 # =============================================================================
 # Group 7: LpNormScaler — no centering, L2
 # Mirrors C++ test LpNormScalerNoCenteringL2
-# Data: {3, 4, 0};  with_mean=FALSE → L2 norm of raw data = sqrt(9+16+0) = 5
+# Data: {3, 4, 0};  center=FALSE → L2 norm of raw data = sqrt(9+16+0) = 5
 # =============================================================================
 
 test_that("LpNormScaler no centering L2: mean is 0, scale is L2 norm of raw data", {
   data   <- matrix(c(3, 4, 0), nrow = 3, ncol = 1)
-  scaler <- LpNormScaler$new(norm_type = 2, with_mean = FALSE)
+  scaler <- LpNormScaler$new(norm_type = 2, center = FALSE)
   scaler$fit(data)
 
-  expect_equal(scaler$get_means()[1],  0.0)
+  expect_equal(scaler$get_centers()[1],  0.0)
   expect_equal(scaler$get_scales()[1], 5.0)
 })
 
 test_that("LpNormScaler no centering L2: transform divides by L2 norm", {
   data   <- matrix(c(3, 4, 0), nrow = 3, ncol = 1)
-  scaler <- LpNormScaler$new(norm_type = 2, with_mean = FALSE)
+  scaler <- LpNormScaler$new(norm_type = 2, center = FALSE)
   scaler$fit(data)
   result <- scaler$transform_inplace(data)
 
@@ -242,12 +247,13 @@ test_that("LpNormScaler no centering L2: transform divides by L2 norm", {
 # Group 8: LpNormScaler — constant column
 # Mirrors C++ test LpNormScalerConstantColumn
 # Constant column → centered values all 0 → norm = 0 → scale set to 1.0,
-# column added to dropped_indices.  dropped_indices must be 1-based.
+# column added to dropped_indices (1-based).  sklearn semantics: still
+# centered (constant becomes 0); only the division is suppressed.
 # =============================================================================
 
 test_that("LpNormScaler constant column: scale is 1, dropped_indices is 1-based", {
   data   <- matrix(rep(5.0, 3), nrow = 3, ncol = 1)
-  scaler <- LpNormScaler$new(norm_type = 2, with_mean = TRUE)
+  scaler <- LpNormScaler$new(norm_type = 2, center = TRUE)
   scaler$fit(data)
 
   expect_equal(scaler$get_scales()[1], 1.0)
@@ -256,15 +262,19 @@ test_that("LpNormScaler constant column: scale is 1, dropped_indices is 1-based"
   expect_equal(dropped[1], 1L)   # 1-based: column 1 (C++ column 0)
 })
 
-test_that("LpNormScaler constant column: transform leaves values unchanged", {
+test_that("LpNormScaler constant column: still centered to 0, inverse restores", {
   data   <- matrix(rep(5.0, 3), nrow = 3, ncol = 1)
-  scaler <- LpNormScaler$new(norm_type = 2, with_mean = TRUE)
+  scaler <- LpNormScaler$new(norm_type = 2, center = TRUE)
   scaler$fit(data)
   result <- scaler$transform_inplace(data)
 
-  expect_equal(result[1, 1], 5.0)
-  expect_equal(result[2, 1], 5.0)
-  expect_equal(result[3, 1], 5.0)
+  expect_equal(result[1, 1], 0.0)
+  expect_equal(result[2, 1], 0.0)
+  expect_equal(result[3, 1], 0.0)
+
+  restored <- scaler$inverse_transform_inplace(result)
+  expect_equal(restored[1, 1], 5.0)
+  expect_equal(restored[3, 1], 5.0)
 })
 
 # =============================================================================
@@ -274,20 +284,75 @@ test_that("LpNormScaler constant column: transform leaves values unchanged", {
 
 test_that("LpNormScaler save/load preserves means, scales, dropped_indices", {
   data     <- matrix(c(1, 2, 3), nrow = 3, ncol = 1)
-  original <- LpNormScaler$new(norm_type = 2, with_mean = TRUE)
+  original <- LpNormScaler$new(norm_type = 2, center = TRUE)
   original$fit(data)
 
   tf <- tempfile()
   on.exit(unlink(tf))
   original$save(tf)
 
-  restored <- LpNormScaler$new(norm_type = 2, with_mean = TRUE)
+  restored <- LpNormScaler$new(norm_type = 2, center = TRUE)
   restored$load(tf)
 
   expect_true(restored$is_fitted())
-  expect_equal(restored$get_means(),           original$get_means())
+  expect_equal(restored$get_centers(),           original$get_centers())
   expect_equal(restored$get_scales(),          original$get_scales())
   expect_equal(restored$get_dropped_indices(), original$get_dropped_indices())
+})
+
+
+# =============================================================================
+# Group 10: fit_transform_inplace — R's scale() in one call
+# =============================================================================
+
+test_that("ZScoreScaler fit_transform_inplace matches base::scale()", {
+  set.seed(7)
+  data     <- matrix(rnorm(30 * 4), 30, 4)
+  expected <- scale(data, center = TRUE, scale = TRUE)
+
+  scaler <- ZScoreScaler$new()
+  result <- scaler$fit_transform_inplace(data)
+
+  expected_mat <- expected
+  attr(expected_mat, "scaled:center") <- NULL
+  attr(expected_mat, "scaled:scale") <- NULL
+
+  expect_true(scaler$is_fitted())
+  expect_equal(result, unclass(expected_mat), tolerance = 1e-12)
+  expect_equal(scaler$get_centers(), as.numeric(attr(expected, "scaled:center")),
+               tolerance = 1e-12)
+  expect_equal(scaler$get_scales(), as.numeric(attr(expected, "scaled:scale")),
+               tolerance = 1e-12)
+})
+
+test_that("ZScoreScaler center=FALSE matches base::scale(center = FALSE)", {
+  set.seed(8)
+  data     <- matrix(rnorm(20 * 3) + 5.0, 20, 3)
+  expected <- scale(data, center = FALSE, scale = TRUE)
+
+  scaler <- ZScoreScaler$new(center = FALSE, scale = TRUE)
+  result <- scaler$fit_transform_inplace(data)
+
+  expected_mat <- expected
+  attr(expected_mat, "scaled:scale") <- NULL
+
+  expect_equal(result, unclass(expected_mat), tolerance = 1e-12)
+})
+
+test_that("LpNormScaler fit_transform_inplace equals fit + transform", {
+  set.seed(9)
+  data  <- matrix(rnorm(25 * 3), 25, 3)
+  X_one <- data + 0.0
+  X_two <- data + 0.0
+
+  one_call <- LpNormScaler$new(norm_type = 2)
+  r1 <- one_call$fit_transform_inplace(X_one)
+
+  two_calls <- LpNormScaler$new(norm_type = 2)
+  two_calls$fit(X_two)
+  r2 <- two_calls$transform_inplace(X_two)
+
+  expect_equal(r1, r2, tolerance = 0)
 })
 
 

@@ -44,10 +44,10 @@ TEST(StandardizationTest, ZScoreScalerBasic) {
     EXPECT_TRUE(scaler.is_fitted());
 
     // Check parameters
-    const auto& means = scaler.get_means();
+    const auto& centers = scaler.get_centers();
     const auto& scales = scaler.get_scales();
-    EXPECT_DOUBLE_EQ(means(0), 2.0);
-    EXPECT_DOUBLE_EQ(means(1), 6.0);
+    EXPECT_DOUBLE_EQ(centers(0), 2.0);
+    EXPECT_DOUBLE_EQ(centers(1), 6.0);
     EXPECT_DOUBLE_EQ(scales(0), 1.0);
     EXPECT_DOUBLE_EQ(scales(1), 2.0);
 
@@ -80,14 +80,14 @@ TEST(StandardizationTest, ZScoreScalerNoCentering) {
     ZScoreScaler scaler(false, true); // no mean, yes std
     scaler.fit(map_data);
 
-    const auto& means = scaler.get_means();
+    const auto& centers = scaler.get_centers();
     const auto& scales = scaler.get_scales();
 
     // If no centering, the mean recorded by the scaler is 0.0 internally if with_mean_ = false
     // But wait, the standard deviation WITHOUT mean subtraction is computed as:
     // variance = sum(X_i^2) / (n-1) = (1 + 9 + 25) / 2 = 35 / 2 = 17.5
     // std_val = sqrt(17.5) = 4.1833001326703778
-    EXPECT_DOUBLE_EQ(means(0), 0.0);
+    EXPECT_DOUBLE_EQ(centers(0), 0.0);
     EXPECT_NEAR(scales(0), 4.1833001326703778, 1e-12);
 
     scaler.transform_inplace(map_data);
@@ -114,9 +114,15 @@ TEST(StandardizationTest, ZScoreScalerConstantColumn) {
     EXPECT_EQ(scaler.get_dropped_indices()[0], 0);
 
     scaler.transform_inplace(map_data);
-    // Because it is dropped, transform_inplace just skips the column entirely.
+    // sklearn semantics: the degenerate column is still centered (constant
+    // becomes exactly 0), only the division is suppressed (scale = 1).
+    EXPECT_DOUBLE_EQ(data(0, 0), 0.0);
+    EXPECT_DOUBLE_EQ(data(1, 0), 0.0);
+    EXPECT_DOUBLE_EQ(data(2, 0), 0.0);
+
+    // The inverse restores the original constant.
+    scaler.inverse_transform_inplace(map_data);
     EXPECT_DOUBLE_EQ(data(0, 0), 42.0);
-    EXPECT_DOUBLE_EQ(data(1, 0), 42.0);
     EXPECT_DOUBLE_EQ(data(2, 0), 42.0);
 }
 
@@ -135,10 +141,10 @@ TEST(StandardizationTest, LpNormScalerL2) {
     LpNormScaler scaler(LpNormScaler::NormType::L2, true, true);
     scaler.fit(map_data);
 
-    const auto& means = scaler.get_means();
+    const auto& centers = scaler.get_centers();
     const auto& scales = scaler.get_scales();
 
-    EXPECT_DOUBLE_EQ(means(0), 2.0);
+    EXPECT_DOUBLE_EQ(centers(0), 2.0);
     EXPECT_DOUBLE_EQ(scales(0), std::sqrt(2.0));
 
     scaler.transform_inplace(map_data);
@@ -185,7 +191,7 @@ TEST(StandardizationTest, LpNormScalerNoCenteringL2) {
     LpNormScaler scaler(LpNormScaler::NormType::L2, false, true); // No mean
     scaler.fit(map_data);
 
-    EXPECT_DOUBLE_EQ(scaler.get_means()(0), 0.0);
+    EXPECT_DOUBLE_EQ(scaler.get_centers()(0), 0.0);
     EXPECT_DOUBLE_EQ(scaler.get_scales()(0), 5.0);
 
     scaler.transform_inplace(map_data);
@@ -214,9 +220,13 @@ TEST(StandardizationTest, LpNormScalerConstantColumn) {
 
     scaler.transform_inplace(map_data);
 
-    // Because it is dropped, transform_inplace skips it.
+    // sklearn semantics: still centered (constant becomes 0), never divided.
+    EXPECT_DOUBLE_EQ(data(0, 0), 0.0);
+    EXPECT_DOUBLE_EQ(data(1, 0), 0.0);
+    EXPECT_DOUBLE_EQ(data(2, 0), 0.0);
+
+    scaler.inverse_transform_inplace(map_data);
     EXPECT_DOUBLE_EQ(data(0, 0), 5.0);
-    EXPECT_DOUBLE_EQ(data(1, 0), 5.0);
     EXPECT_DOUBLE_EQ(data(2, 0), 5.0);
 }
 
@@ -272,7 +282,8 @@ TEST(StandardizationTest, ZScoreScalerSingleSampleThrows) {
 /**
  * @brief Multi-column round trip with a constant (dropped) column in the middle:
  *        live columns standardise to mean 0 / unit SD and invert exactly; the
- *        dropped column passes through untouched.
+ *        dropped column is centered to exactly 0 (sklearn semantics) and
+ *        restored by the inverse.
  */
 TEST(StandardizationTest, MixedColumnsRoundTrip) {
     const Eigen::Index n = 5;
@@ -298,11 +309,44 @@ TEST(StandardizationTest, MixedColumnsRoundTrip) {
                                     / static_cast<double>(n - 1));
         EXPECT_NEAR(sd, 1.0, 1e-12);
     }
-    // Dropped column untouched
-    EXPECT_TRUE(data.col(1).isApprox(original.col(1), 0.0));
+    // Dropped column: centered to exactly 0, never divided
+    EXPECT_TRUE(data.col(1).isZero(0.0));
 
     scaler.inverse_transform_inplace(map_data);
     EXPECT_TRUE(data.isApprox(original, 1e-12));
+}
+
+
+/**
+ * @brief fit_transform_inplace mirrors R's scale(): one call fits and applies,
+ *        and equals a separate fit() + transform_inplace().
+ */
+TEST(StandardizationTest, FitTransformInplaceMatchesRScale) {
+    Eigen::MatrixXd data(4, 2);
+    data << 1.0,  10.0,
+            2.0,  20.0,
+            3.0,  30.0,
+            6.0,  60.0;
+    Eigen::MatrixXd expected = data;
+
+    Eigen::Map<Eigen::MatrixXd> map_data(data.data(), data.rows(), data.cols());
+    Eigen::Map<Eigen::MatrixXd> map_expected(expected.data(),
+                                             expected.rows(), expected.cols());
+
+    ZScoreScaler one_call(true, true);
+    one_call.fit_transform_inplace(map_data);
+
+    ZScoreScaler two_calls(true, true);
+    two_calls.fit(map_expected);
+    two_calls.transform_inplace(map_expected);
+
+    EXPECT_TRUE(one_call.is_fitted());
+    EXPECT_TRUE(data.isApprox(expected, 0.0));
+
+    // R reference: scale(c(1, 2, 3, 6)) -> mean 3, sd sqrt(14/3)
+    EXPECT_DOUBLE_EQ(one_call.get_centers()(0), 3.0);
+    EXPECT_NEAR(one_call.get_scales()(0), std::sqrt(14.0 / 3.0), 1e-15);
+    EXPECT_NEAR(data(0, 0), (1.0 - 3.0) / std::sqrt(14.0 / 3.0), 1e-15);
 }
 
 
@@ -335,7 +379,7 @@ TEST(StandardizationTest, ZScoreScalerSerialization) {
     }
 
     EXPECT_TRUE(restored_scaler.is_fitted());
-    EXPECT_EQ(original_scaler.get_means(), restored_scaler.get_means());
+    EXPECT_EQ(original_scaler.get_centers(), restored_scaler.get_centers());
     EXPECT_EQ(original_scaler.get_scales(), restored_scaler.get_scales());
     EXPECT_EQ(original_scaler.get_dropped_indices(), restored_scaler.get_dropped_indices());
 }
@@ -363,7 +407,7 @@ TEST(StandardizationTest, LpNormScalerSerialization) {
     }
 
     EXPECT_TRUE(restored_scaler.is_fitted());
-    EXPECT_EQ(original_scaler.get_means(), restored_scaler.get_means());
+    EXPECT_EQ(original_scaler.get_centers(), restored_scaler.get_centers());
     EXPECT_EQ(original_scaler.get_scales(), restored_scaler.get_scales());
     EXPECT_EQ(original_scaler.get_dropped_indices(), restored_scaler.get_dropped_indices());
 }
@@ -391,11 +435,11 @@ TEST(StandardizationTest, SaveLoadFileRoundTripAndTypeMismatch) {
     ZScoreScaler restored(false, false);
     restored.load(path);
     EXPECT_TRUE(restored.is_fitted());
-    EXPECT_EQ(original.get_means(), restored.get_means());
+    EXPECT_EQ(original.get_centers(), restored.get_centers());
     EXPECT_EQ(original.get_scales(), restored.get_scales());
     EXPECT_EQ(original.get_dropped_indices(), restored.get_dropped_indices());
-    EXPECT_EQ(restored.get_with_mean(), original.get_with_mean());
-    EXPECT_EQ(restored.get_with_std(), original.get_with_std());
+    EXPECT_EQ(restored.get_center(), original.get_center());
+    EXPECT_EQ(restored.get_scale(), original.get_scale());
 
     // The restored scaler must transform identically to the original.
     Eigen::MatrixXd a = data, b = data;

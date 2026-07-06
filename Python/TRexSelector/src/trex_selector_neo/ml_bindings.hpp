@@ -109,37 +109,48 @@ inline void bind_ml_methods(py::module& m) {
      * @brief Standardizes features by removing the mean and scaling to unit variance.
      *
      * @details This scaler provides similar functionality to
-     *          `sklearn.preprocessing.StandardScaler`.
-     *          It computes the mean and standard deviation on a training set so they can be
-     *          later applied to a validation or test set via `transform_inplace`.
+     *          `sklearn.preprocessing.StandardScaler` with R's scale() argument
+     *          names: `center` subtracts the column mean, `scale` divides by the
+     *          Bessel-corrected SD (around 0 when `center` is disabled, as in R).
+     *          It computes the statistics on a training set so they can later be
+     *          applied to a validation or test set via `transform_inplace`.
+     *
+     * @note The *_inplace methods mutate the passed array directly (zero-copy);
+     *       it must be Fortran-ordered float64 (e.g. np.asfortranarray(X)).
      */
     py::class_<ZScoreScaler>(m, "ZScoreScaler")
         .def(py::init<bool, bool>(),
-             py::arg("with_mean") = true, py::arg("with_std") = true)
+             py::arg("center") = true, py::arg("scale") = true)
         .def("fit",
-            [](ZScoreScaler& self, Eigen::MatrixXd& X, double threshold) {
+            [](ZScoreScaler& self, Eigen::Ref<Eigen::MatrixXd> X, double threshold) -> ZScoreScaler& {
             Eigen::Map<Eigen::MatrixXd> X_map(X.data(), X.rows(), X.cols());
             self.fit(X_map, threshold);
-            return &self;
-        }, py::arg("X"), py::arg("threshold") = 1e-12)
+            return self;
+        }, py::arg("X"), py::arg("threshold") = 1e-12,
+           py::return_value_policy::reference_internal)
         .def("transform_inplace",
-            [](ZScoreScaler& self, Eigen::MatrixXd& X) {
+            [](ZScoreScaler& self, Eigen::Ref<Eigen::MatrixXd> X) {
             Eigen::Map<Eigen::MatrixXd> X_map(X.data(), X.rows(), X.cols());
             self.transform_inplace(X_map);
-            return X; // Return modified matrix for convenience
         }, py::arg("X"))
         .def("inverse_transform_inplace",
-            [](const ZScoreScaler& self, Eigen::MatrixXd& X) {
+            [](const ZScoreScaler& self, Eigen::Ref<Eigen::MatrixXd> X) {
             Eigen::Map<Eigen::MatrixXd> X_map(X.data(), X.rows(), X.cols());
             self.inverse_transform_inplace(X_map);
-            return X; // Return modified matrix for convenience
         }, py::arg("X_scaled"))
+        .def("fit_transform_inplace",
+            [](ZScoreScaler& self, Eigen::Ref<Eigen::MatrixXd> X, double threshold) -> ZScoreScaler& {
+            Eigen::Map<Eigen::MatrixXd> X_map(X.data(), X.rows(), X.cols());
+            self.fit_transform_inplace(X_map, threshold);
+            return self;
+        }, py::arg("X"), py::arg("threshold") = 1e-12,
+           py::return_value_policy::reference_internal)
         .def("is_fitted", &ZScoreScaler::is_fitted)
         .def("get_dropped_indices", &ZScoreScaler::get_dropped_indices)
-        .def("get_means", &ZScoreScaler::get_means)
+        .def("get_centers", &ZScoreScaler::get_centers)
         .def("get_scales", &ZScoreScaler::get_scales)
-        .def("get_with_mean", &ZScoreScaler::get_with_mean)
-        .def("get_with_std", &ZScoreScaler::get_with_std)
+        .def("get_center", &ZScoreScaler::get_center)
+        .def("get_scale", &ZScoreScaler::get_scale)
         .def("save", &ZScoreScaler::save, py::arg("filename"))
         .def("load", &ZScoreScaler::load, py::arg("filename"));
 
@@ -158,38 +169,49 @@ inline void bind_ml_methods(py::module& m) {
     /**
      * @brief Scales input features to unit norm based on the chosen L1 or L2 formulation.
      *
-     * @details Depending on the chosen `NormType`, this scaler normalizes the data such that
-     *          the norm of each feature vector is exactly one. Mean centering is optionally
-     *          applied prior to scaling.
+     * @details Depending on the chosen `NormType`, this scaler normalizes the data such
+     *          that the Lp norm of each column is exactly one. The `center`/`scale`
+     *          switches follow R's scale(): the norm is computed around the applied
+     *          center (around 0 when `center` is disabled).
+     *
+     * @note The *_inplace methods mutate the passed array directly (zero-copy);
+     *       it must be Fortran-ordered float64 (e.g. np.asfortranarray(X)).
      */
     py::class_<LpNormScaler>(m, "LpNormScaler")
-        .def(py::init<LpNormScaler::NormType, bool>(),
+        .def(py::init<LpNormScaler::NormType, bool, bool>(),
              py::arg("norm_type") = LpNormScaler::NormType::L2,
-             py::arg("with_mean") = true)
+             py::arg("center") = true,
+             py::arg("scale") = true)
         .def("fit", [](LpNormScaler& self,
-            Eigen::MatrixXd& X, double threshold) {
+            Eigen::Ref<Eigen::MatrixXd> X, double threshold) -> LpNormScaler& {
                 Eigen::Map<Eigen::MatrixXd> X_map(X.data(), X.rows(), X.cols());
                 self.fit(X_map, threshold);
-                return &self;
-        }, py::arg("X"), py::arg("threshold") = 1e-12)
+                return self;
+        }, py::arg("X"), py::arg("threshold") = 1e-12,
+           py::return_value_policy::reference_internal)
         .def("transform_inplace",
-             [](LpNormScaler& self, Eigen::MatrixXd& X) {
+             [](LpNormScaler& self, Eigen::Ref<Eigen::MatrixXd> X) {
             Eigen::Map<Eigen::MatrixXd> X_map(X.data(), X.rows(), X.cols());
             self.transform_inplace(X_map);
-            return X; // Return modified matrix for convenience
         }, py::arg("X"))
         .def("inverse_transform_inplace",
-             [](const LpNormScaler& self, Eigen::MatrixXd& X) {
+             [](const LpNormScaler& self, Eigen::Ref<Eigen::MatrixXd> X) {
             Eigen::Map<Eigen::MatrixXd> X_map(X.data(), X.rows(), X.cols());
             self.inverse_transform_inplace(X_map);
-            return X; // Return modified matrix for convenience
         }, py::arg("X_normed"))
+        .def("fit_transform_inplace",
+             [](LpNormScaler& self, Eigen::Ref<Eigen::MatrixXd> X, double threshold) -> LpNormScaler& {
+            Eigen::Map<Eigen::MatrixXd> X_map(X.data(), X.rows(), X.cols());
+            self.fit_transform_inplace(X_map, threshold);
+            return self;
+        }, py::arg("X"), py::arg("threshold") = 1e-12,
+           py::return_value_policy::reference_internal)
         .def("is_fitted", &LpNormScaler::is_fitted)
         .def("get_dropped_indices", &LpNormScaler::get_dropped_indices)
-        .def("get_means", &LpNormScaler::get_means)
+        .def("get_centers", &LpNormScaler::get_centers)
         .def("get_scales", &LpNormScaler::get_scales)
-        .def("get_with_mean", &LpNormScaler::get_with_mean)
-        .def("get_with_norm", &LpNormScaler::get_with_norm)
+        .def("get_center", &LpNormScaler::get_center)
+        .def("get_scale", &LpNormScaler::get_scale)
         .def("get_norm_type", &LpNormScaler::get_norm_type)
         .def("save", &LpNormScaler::save, py::arg("filename"))
         .def("load", &LpNormScaler::load, py::arg("filename"));

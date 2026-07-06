@@ -4,7 +4,16 @@
 \alias{ZScoreScaler}
 \title{Z-Score Scaler}
 \description{
-Standardizes features by removing the mean and scaling to unit variance.
+Standardizes features by removing the mean and scaling to unit
+variance (Bessel-corrected, n - 1). The \code{center}/\code{scale} arguments follow
+R's \code{\link[base]{scale}()}: with \code{center = FALSE, scale = TRUE}
+columns are divided by the root-mean-square around 0.
+}
+\details{
+The \code{*_inplace} methods mutate \code{X} directly (zero-copy)
+when it is a double-storage matrix; other inputs are coerced to a double
+matrix first, in which case the coerced copy is modified. The (modified)
+matrix is returned in both cases.
 }
 \examples{
 set.seed(1)
@@ -12,7 +21,7 @@ X <- matrix(rnorm(50 * 5), 50, 5)
 scaler <- ZScoreScaler$new()
 scaler$fit(X)
 X_std <- scaler$transform_inplace(X)
-scaler$get_means()
+scaler$get_centers()
 
 }
 \section{Methods}{
@@ -22,11 +31,12 @@ scaler$get_means()
     \item \href{#method-ZScoreScaler-fit}{\code{ZScoreScaler$fit()}}
     \item \href{#method-ZScoreScaler-transform_inplace}{\code{ZScoreScaler$transform_inplace()}}
     \item \href{#method-ZScoreScaler-inverse_transform_inplace}{\code{ZScoreScaler$inverse_transform_inplace()}}
+    \item \href{#method-ZScoreScaler-fit_transform_inplace}{\code{ZScoreScaler$fit_transform_inplace()}}
     \item \href{#method-ZScoreScaler-is_fitted}{\code{ZScoreScaler$is_fitted()}}
     \item \href{#method-ZScoreScaler-get_dropped_indices}{\code{ZScoreScaler$get_dropped_indices()}}
-    \item \href{#method-ZScoreScaler-get_with_mean}{\code{ZScoreScaler$get_with_mean()}}
-    \item \href{#method-ZScoreScaler-get_with_std}{\code{ZScoreScaler$get_with_std()}}
-    \item \href{#method-ZScoreScaler-get_means}{\code{ZScoreScaler$get_means()}}
+    \item \href{#method-ZScoreScaler-get_center}{\code{ZScoreScaler$get_center()}}
+    \item \href{#method-ZScoreScaler-get_scale}{\code{ZScoreScaler$get_scale()}}
+    \item \href{#method-ZScoreScaler-get_centers}{\code{ZScoreScaler$get_centers()}}
     \item \href{#method-ZScoreScaler-get_scales}{\code{ZScoreScaler$get_scales()}}
     \item \href{#method-ZScoreScaler-save}{\code{ZScoreScaler$save()}}
     \item \href{#method-ZScoreScaler-load}{\code{ZScoreScaler$load()}}
@@ -40,14 +50,15 @@ scaler$get_means()
   Initialize the ZScoreScaler
   \subsection{Usage}{
     \if{html}{\out{<div class="r">}}
-    \preformatted{ZScoreScaler$new(with_mean = TRUE, with_std = TRUE)}
+    \preformatted{ZScoreScaler$new(center = TRUE, scale = TRUE)}
     \if{html}{\out{</div>}}
   }
   \subsection{Arguments}{
     \if{html}{\out{<div class="arguments">}}
     \describe{
-      \item{\code{with_mean}}{Logical, whether to center the data before scaling (default: TRUE)}
-      \item{\code{with_std}}{Logical, whether to scale the data to unit variance (default: TRUE)}
+      \item{\code{center}}{Logical, whether to center columns to mean 0 (default: TRUE)}
+      \item{\code{scale}}{Logical, whether to scale columns to unit SD (default: TRUE);
+around 0 instead of the mean when \code{center = FALSE}, as in R's scale().}
     }
     \if{html}{\out{</div>}}
   }
@@ -57,7 +68,7 @@ scaler$get_means()
 \if{html}{\out{<a id="method-ZScoreScaler-fit"></a>}}
 \if{latex}{\out{\hypertarget{method-ZScoreScaler-fit}{}}}
 \subsection{\code{ZScoreScaler$fit()}}{
-  Compute the mean and std to be used for later scaling.
+  Compute the centers and scales to be used for later scaling.
   \subsection{Usage}{
     \if{html}{\out{<div class="r">}}
     \preformatted{ZScoreScaler$fit(X, threshold = 1e-12)}
@@ -67,7 +78,7 @@ scaler$get_means()
     \if{html}{\out{<div class="arguments">}}
     \describe{
       \item{\code{X}}{A numeric matrix (n x p).}
-      \item{\code{threshold}}{Double, lower bound for standard deviation (default: 1e-12).}
+      \item{\code{threshold}}{Double, lower bound for the scale statistic (default: 1e-12).}
     }
     \if{html}{\out{</div>}}
   }
@@ -121,6 +132,29 @@ scaler$get_means()
 }
 
 \if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-ZScoreScaler-fit_transform_inplace"></a>}}
+\if{latex}{\out{\hypertarget{method-ZScoreScaler-fit_transform_inplace}{}}}
+\subsection{\code{ZScoreScaler$fit_transform_inplace()}}{
+  Fit and transform in one call, like R's scale().
+  \subsection{Usage}{
+    \if{html}{\out{<div class="r">}}
+    \preformatted{ZScoreScaler$fit_transform_inplace(X, threshold = 1e-12)}
+    \if{html}{\out{</div>}}
+  }
+  \subsection{Arguments}{
+    \if{html}{\out{<div class="arguments">}}
+    \describe{
+      \item{\code{X}}{A numeric matrix (n x p).}
+      \item{\code{threshold}}{Double, lower bound for the scale statistic (default: 1e-12).}
+    }
+    \if{html}{\out{</div>}}
+  }
+  \subsection{Returns}{
+    The modified matrix \code{X}.
+  }
+}
+
+\if{html}{\out{<hr>}}
 \if{html}{\out{<a id="method-ZScoreScaler-is_fitted"></a>}}
 \if{latex}{\out{\hypertarget{method-ZScoreScaler-is_fitted}{}}}
 \subsection{\code{ZScoreScaler$is_fitted()}}{
@@ -139,7 +173,8 @@ scaler$get_means()
 \if{html}{\out{<a id="method-ZScoreScaler-get_dropped_indices"></a>}}
 \if{latex}{\out{\hypertarget{method-ZScoreScaler-get_dropped_indices}{}}}
 \subsection{\code{ZScoreScaler$get_dropped_indices()}}{
-  Get dropped indices.
+  Get dropped (degenerate) column indices. These columns get
+scale factor 1 and are still centered (sklearn semantics).
   \subsection{Usage}{
     \if{html}{\out{<div class="r">}}
     \preformatted{ZScoreScaler$get_dropped_indices()}
@@ -151,13 +186,13 @@ scaler$get_means()
 }
 
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-ZScoreScaler-get_with_mean"></a>}}
-\if{latex}{\out{\hypertarget{method-ZScoreScaler-get_with_mean}{}}}
-\subsection{\code{ZScoreScaler$get_with_mean()}}{
+\if{html}{\out{<a id="method-ZScoreScaler-get_center"></a>}}
+\if{latex}{\out{\hypertarget{method-ZScoreScaler-get_center}{}}}
+\subsection{\code{ZScoreScaler$get_center()}}{
   Check if scaler centers data.
   \subsection{Usage}{
     \if{html}{\out{<div class="r">}}
-    \preformatted{ZScoreScaler$get_with_mean()}
+    \preformatted{ZScoreScaler$get_center()}
     \if{html}{\out{</div>}}
   }
   \subsection{Returns}{
@@ -166,13 +201,13 @@ scaler$get_means()
 }
 
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-ZScoreScaler-get_with_std"></a>}}
-\if{latex}{\out{\hypertarget{method-ZScoreScaler-get_with_std}{}}}
-\subsection{\code{ZScoreScaler$get_with_std()}}{
+\if{html}{\out{<a id="method-ZScoreScaler-get_scale"></a>}}
+\if{latex}{\out{\hypertarget{method-ZScoreScaler-get_scale}{}}}
+\subsection{\code{ZScoreScaler$get_scale()}}{
   Check if scaler scales data to unit variance.
   \subsection{Usage}{
     \if{html}{\out{<div class="r">}}
-    \preformatted{ZScoreScaler$get_with_std()}
+    \preformatted{ZScoreScaler$get_scale()}
     \if{html}{\out{</div>}}
   }
   \subsection{Returns}{
@@ -181,13 +216,13 @@ scaler$get_means()
 }
 
 \if{html}{\out{<hr>}}
-\if{html}{\out{<a id="method-ZScoreScaler-get_means"></a>}}
-\if{latex}{\out{\hypertarget{method-ZScoreScaler-get_means}{}}}
-\subsection{\code{ZScoreScaler$get_means()}}{
-  Get the learned means.
+\if{html}{\out{<a id="method-ZScoreScaler-get_centers"></a>}}
+\if{latex}{\out{\hypertarget{method-ZScoreScaler-get_centers}{}}}
+\subsection{\code{ZScoreScaler$get_centers()}}{
+  Get the learned centers (column means).
   \subsection{Usage}{
     \if{html}{\out{<div class="r">}}
-    \preformatted{ZScoreScaler$get_means()}
+    \preformatted{ZScoreScaler$get_centers()}
     \if{html}{\out{</div>}}
   }
   \subsection{Returns}{

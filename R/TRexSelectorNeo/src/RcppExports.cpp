@@ -53,14 +53,14 @@ BEGIN_RCPP
 END_RCPP
 }
 // zscore_scaler_create
-XPtr<ZScoreScaler> zscore_scaler_create(bool with_mean, bool with_std);
-RcppExport SEXP _TRexSelectorNeo_zscore_scaler_create(SEXP with_meanSEXP, SEXP with_stdSEXP) {
+XPtr<ZScoreScaler> zscore_scaler_create(bool center, bool scale);
+RcppExport SEXP _TRexSelectorNeo_zscore_scaler_create(SEXP centerSEXP, SEXP scaleSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
-    Rcpp::traits::input_parameter< bool >::type with_mean(with_meanSEXP);
-    Rcpp::traits::input_parameter< bool >::type with_std(with_stdSEXP);
-    rcpp_result_gen = Rcpp::wrap(zscore_scaler_create(with_mean, with_std));
+    Rcpp::traits::input_parameter< bool >::type center(centerSEXP);
+    Rcpp::traits::input_parameter< bool >::type scale(scaleSEXP);
+    rcpp_result_gen = Rcpp::wrap(zscore_scaler_create(center, scale));
     return rcpp_result_gen;
 END_RCPP
 }
@@ -84,6 +84,18 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< XPtr<ZScoreScaler> >::type ptr(ptrSEXP);
     Rcpp::traits::input_parameter< Eigen::Map<Eigen::MatrixXd> >::type X(XSEXP);
     zscore_scaler_transform_inplace(ptr, X);
+    return R_NilValue;
+END_RCPP
+}
+// zscore_scaler_fit_transform_inplace
+void zscore_scaler_fit_transform_inplace(XPtr<ZScoreScaler> ptr, Eigen::Map<Eigen::MatrixXd> X, double threshold);
+RcppExport SEXP _TRexSelectorNeo_zscore_scaler_fit_transform_inplace(SEXP ptrSEXP, SEXP XSEXP, SEXP thresholdSEXP) {
+BEGIN_RCPP
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< XPtr<ZScoreScaler> >::type ptr(ptrSEXP);
+    Rcpp::traits::input_parameter< Eigen::Map<Eigen::MatrixXd> >::type X(XSEXP);
+    Rcpp::traits::input_parameter< double >::type threshold(thresholdSEXP);
+    zscore_scaler_fit_transform_inplace(ptr, X, threshold);
     return R_NilValue;
 END_RCPP
 }
@@ -120,36 +132,36 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
-// zscore_scaler_get_with_mean
-bool zscore_scaler_get_with_mean(XPtr<ZScoreScaler> ptr);
-RcppExport SEXP _TRexSelectorNeo_zscore_scaler_get_with_mean(SEXP ptrSEXP) {
+// zscore_scaler_get_center
+bool zscore_scaler_get_center(XPtr<ZScoreScaler> ptr);
+RcppExport SEXP _TRexSelectorNeo_zscore_scaler_get_center(SEXP ptrSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
     Rcpp::traits::input_parameter< XPtr<ZScoreScaler> >::type ptr(ptrSEXP);
-    rcpp_result_gen = Rcpp::wrap(zscore_scaler_get_with_mean(ptr));
+    rcpp_result_gen = Rcpp::wrap(zscore_scaler_get_center(ptr));
     return rcpp_result_gen;
 END_RCPP
 }
-// zscore_scaler_get_with_std
-bool zscore_scaler_get_with_std(XPtr<ZScoreScaler> ptr);
-RcppExport SEXP _TRexSelectorNeo_zscore_scaler_get_with_std(SEXP ptrSEXP) {
+// zscore_scaler_get_scale
+bool zscore_scaler_get_scale(XPtr<ZScoreScaler> ptr);
+RcppExport SEXP _TRexSelectorNeo_zscore_scaler_get_scale(SEXP ptrSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
     Rcpp::traits::input_parameter< XPtr<ZScoreScaler> >::type ptr(ptrSEXP);
-    rcpp_result_gen = Rcpp::wrap(zscore_scaler_get_with_std(ptr));
+    rcpp_result_gen = Rcpp::wrap(zscore_scaler_get_scale(ptr));
     return rcpp_result_gen;
 END_RCPP
 }
-// zscore_scaler_get_means
-Eigen::VectorXd zscore_scaler_get_means(XPtr<ZScoreScaler> ptr);
-RcppExport SEXP _TRexSelectorNeo_zscore_scaler_get_means(SEXP ptrSEXP) {
+// zscore_scaler_get_centers
+Eigen::VectorXd zscore_scaler_get_centers(XPtr<ZScoreScaler> ptr);
+RcppExport SEXP _TRexSelectorNeo_zscore_scaler_get_centers(SEXP ptrSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
     Rcpp::traits::input_parameter< XPtr<ZScoreScaler> >::type ptr(ptrSEXP);
-    rcpp_result_gen = Rcpp::wrap(zscore_scaler_get_means(ptr));
+    rcpp_result_gen = Rcpp::wrap(zscore_scaler_get_centers(ptr));
     return rcpp_result_gen;
 END_RCPP
 }
@@ -187,14 +199,15 @@ BEGIN_RCPP
 END_RCPP
 }
 // lpnorm_scaler_create
-XPtr<LpNormScaler> lpnorm_scaler_create(int norm_type, bool with_mean);
-RcppExport SEXP _TRexSelectorNeo_lpnorm_scaler_create(SEXP norm_typeSEXP, SEXP with_meanSEXP) {
+XPtr<LpNormScaler> lpnorm_scaler_create(int norm_type, bool center, bool scale);
+RcppExport SEXP _TRexSelectorNeo_lpnorm_scaler_create(SEXP norm_typeSEXP, SEXP centerSEXP, SEXP scaleSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
     Rcpp::traits::input_parameter< int >::type norm_type(norm_typeSEXP);
-    Rcpp::traits::input_parameter< bool >::type with_mean(with_meanSEXP);
-    rcpp_result_gen = Rcpp::wrap(lpnorm_scaler_create(norm_type, with_mean));
+    Rcpp::traits::input_parameter< bool >::type center(centerSEXP);
+    Rcpp::traits::input_parameter< bool >::type scale(scaleSEXP);
+    rcpp_result_gen = Rcpp::wrap(lpnorm_scaler_create(norm_type, center, scale));
     return rcpp_result_gen;
 END_RCPP
 }
@@ -218,6 +231,18 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< XPtr<LpNormScaler> >::type ptr(ptrSEXP);
     Rcpp::traits::input_parameter< Eigen::Map<Eigen::MatrixXd> >::type X(XSEXP);
     lpnorm_scaler_transform_inplace(ptr, X);
+    return R_NilValue;
+END_RCPP
+}
+// lpnorm_scaler_fit_transform_inplace
+void lpnorm_scaler_fit_transform_inplace(XPtr<LpNormScaler> ptr, Eigen::Map<Eigen::MatrixXd> X, double threshold);
+RcppExport SEXP _TRexSelectorNeo_lpnorm_scaler_fit_transform_inplace(SEXP ptrSEXP, SEXP XSEXP, SEXP thresholdSEXP) {
+BEGIN_RCPP
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< XPtr<LpNormScaler> >::type ptr(ptrSEXP);
+    Rcpp::traits::input_parameter< Eigen::Map<Eigen::MatrixXd> >::type X(XSEXP);
+    Rcpp::traits::input_parameter< double >::type threshold(thresholdSEXP);
+    lpnorm_scaler_fit_transform_inplace(ptr, X, threshold);
     return R_NilValue;
 END_RCPP
 }
@@ -254,14 +279,14 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
-// lpnorm_scaler_get_means
-Eigen::VectorXd lpnorm_scaler_get_means(XPtr<LpNormScaler> ptr);
-RcppExport SEXP _TRexSelectorNeo_lpnorm_scaler_get_means(SEXP ptrSEXP) {
+// lpnorm_scaler_get_centers
+Eigen::VectorXd lpnorm_scaler_get_centers(XPtr<LpNormScaler> ptr);
+RcppExport SEXP _TRexSelectorNeo_lpnorm_scaler_get_centers(SEXP ptrSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
     Rcpp::traits::input_parameter< XPtr<LpNormScaler> >::type ptr(ptrSEXP);
-    rcpp_result_gen = Rcpp::wrap(lpnorm_scaler_get_means(ptr));
+    rcpp_result_gen = Rcpp::wrap(lpnorm_scaler_get_centers(ptr));
     return rcpp_result_gen;
 END_RCPP
 }
@@ -276,25 +301,25 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
-// lpnorm_scaler_get_with_mean
-bool lpnorm_scaler_get_with_mean(XPtr<LpNormScaler> ptr);
-RcppExport SEXP _TRexSelectorNeo_lpnorm_scaler_get_with_mean(SEXP ptrSEXP) {
+// lpnorm_scaler_get_center
+bool lpnorm_scaler_get_center(XPtr<LpNormScaler> ptr);
+RcppExport SEXP _TRexSelectorNeo_lpnorm_scaler_get_center(SEXP ptrSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
     Rcpp::traits::input_parameter< XPtr<LpNormScaler> >::type ptr(ptrSEXP);
-    rcpp_result_gen = Rcpp::wrap(lpnorm_scaler_get_with_mean(ptr));
+    rcpp_result_gen = Rcpp::wrap(lpnorm_scaler_get_center(ptr));
     return rcpp_result_gen;
 END_RCPP
 }
-// lpnorm_scaler_get_with_norm
-bool lpnorm_scaler_get_with_norm(XPtr<LpNormScaler> ptr);
-RcppExport SEXP _TRexSelectorNeo_lpnorm_scaler_get_with_norm(SEXP ptrSEXP) {
+// lpnorm_scaler_get_scale
+bool lpnorm_scaler_get_scale(XPtr<LpNormScaler> ptr);
+RcppExport SEXP _TRexSelectorNeo_lpnorm_scaler_get_scale(SEXP ptrSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
     Rcpp::traits::input_parameter< XPtr<LpNormScaler> >::type ptr(ptrSEXP);
-    rcpp_result_gen = Rcpp::wrap(lpnorm_scaler_get_with_norm(ptr));
+    rcpp_result_gen = Rcpp::wrap(lpnorm_scaler_get_scale(ptr));
     return rcpp_result_gen;
 END_RCPP
 }
@@ -1933,25 +1958,27 @@ static const R_CallMethodDef CallEntries[] = {
     {"_TRexSelectorNeo_zscore_scaler_create", (DL_FUNC) &_TRexSelectorNeo_zscore_scaler_create, 2},
     {"_TRexSelectorNeo_zscore_scaler_fit", (DL_FUNC) &_TRexSelectorNeo_zscore_scaler_fit, 3},
     {"_TRexSelectorNeo_zscore_scaler_transform_inplace", (DL_FUNC) &_TRexSelectorNeo_zscore_scaler_transform_inplace, 2},
+    {"_TRexSelectorNeo_zscore_scaler_fit_transform_inplace", (DL_FUNC) &_TRexSelectorNeo_zscore_scaler_fit_transform_inplace, 3},
     {"_TRexSelectorNeo_zscore_scaler_inverse_transform_inplace", (DL_FUNC) &_TRexSelectorNeo_zscore_scaler_inverse_transform_inplace, 2},
     {"_TRexSelectorNeo_zscore_scaler_is_fitted", (DL_FUNC) &_TRexSelectorNeo_zscore_scaler_is_fitted, 1},
     {"_TRexSelectorNeo_zscore_scaler_get_dropped_indices", (DL_FUNC) &_TRexSelectorNeo_zscore_scaler_get_dropped_indices, 1},
-    {"_TRexSelectorNeo_zscore_scaler_get_with_mean", (DL_FUNC) &_TRexSelectorNeo_zscore_scaler_get_with_mean, 1},
-    {"_TRexSelectorNeo_zscore_scaler_get_with_std", (DL_FUNC) &_TRexSelectorNeo_zscore_scaler_get_with_std, 1},
-    {"_TRexSelectorNeo_zscore_scaler_get_means", (DL_FUNC) &_TRexSelectorNeo_zscore_scaler_get_means, 1},
+    {"_TRexSelectorNeo_zscore_scaler_get_center", (DL_FUNC) &_TRexSelectorNeo_zscore_scaler_get_center, 1},
+    {"_TRexSelectorNeo_zscore_scaler_get_scale", (DL_FUNC) &_TRexSelectorNeo_zscore_scaler_get_scale, 1},
+    {"_TRexSelectorNeo_zscore_scaler_get_centers", (DL_FUNC) &_TRexSelectorNeo_zscore_scaler_get_centers, 1},
     {"_TRexSelectorNeo_zscore_scaler_get_scales", (DL_FUNC) &_TRexSelectorNeo_zscore_scaler_get_scales, 1},
     {"_TRexSelectorNeo_zscore_scaler_save", (DL_FUNC) &_TRexSelectorNeo_zscore_scaler_save, 2},
     {"_TRexSelectorNeo_zscore_scaler_load", (DL_FUNC) &_TRexSelectorNeo_zscore_scaler_load, 2},
-    {"_TRexSelectorNeo_lpnorm_scaler_create", (DL_FUNC) &_TRexSelectorNeo_lpnorm_scaler_create, 2},
+    {"_TRexSelectorNeo_lpnorm_scaler_create", (DL_FUNC) &_TRexSelectorNeo_lpnorm_scaler_create, 3},
     {"_TRexSelectorNeo_lpnorm_scaler_fit", (DL_FUNC) &_TRexSelectorNeo_lpnorm_scaler_fit, 3},
     {"_TRexSelectorNeo_lpnorm_scaler_transform_inplace", (DL_FUNC) &_TRexSelectorNeo_lpnorm_scaler_transform_inplace, 2},
+    {"_TRexSelectorNeo_lpnorm_scaler_fit_transform_inplace", (DL_FUNC) &_TRexSelectorNeo_lpnorm_scaler_fit_transform_inplace, 3},
     {"_TRexSelectorNeo_lpnorm_scaler_inverse_transform_inplace", (DL_FUNC) &_TRexSelectorNeo_lpnorm_scaler_inverse_transform_inplace, 2},
     {"_TRexSelectorNeo_lpnorm_scaler_is_fitted", (DL_FUNC) &_TRexSelectorNeo_lpnorm_scaler_is_fitted, 1},
     {"_TRexSelectorNeo_lpnorm_scaler_get_dropped_indices", (DL_FUNC) &_TRexSelectorNeo_lpnorm_scaler_get_dropped_indices, 1},
-    {"_TRexSelectorNeo_lpnorm_scaler_get_means", (DL_FUNC) &_TRexSelectorNeo_lpnorm_scaler_get_means, 1},
+    {"_TRexSelectorNeo_lpnorm_scaler_get_centers", (DL_FUNC) &_TRexSelectorNeo_lpnorm_scaler_get_centers, 1},
     {"_TRexSelectorNeo_lpnorm_scaler_get_scales", (DL_FUNC) &_TRexSelectorNeo_lpnorm_scaler_get_scales, 1},
-    {"_TRexSelectorNeo_lpnorm_scaler_get_with_mean", (DL_FUNC) &_TRexSelectorNeo_lpnorm_scaler_get_with_mean, 1},
-    {"_TRexSelectorNeo_lpnorm_scaler_get_with_norm", (DL_FUNC) &_TRexSelectorNeo_lpnorm_scaler_get_with_norm, 1},
+    {"_TRexSelectorNeo_lpnorm_scaler_get_center", (DL_FUNC) &_TRexSelectorNeo_lpnorm_scaler_get_center, 1},
+    {"_TRexSelectorNeo_lpnorm_scaler_get_scale", (DL_FUNC) &_TRexSelectorNeo_lpnorm_scaler_get_scale, 1},
     {"_TRexSelectorNeo_lpnorm_scaler_get_norm_type", (DL_FUNC) &_TRexSelectorNeo_lpnorm_scaler_get_norm_type, 1},
     {"_TRexSelectorNeo_lpnorm_scaler_save", (DL_FUNC) &_TRexSelectorNeo_lpnorm_scaler_save, 2},
     {"_TRexSelectorNeo_lpnorm_scaler_load", (DL_FUNC) &_TRexSelectorNeo_lpnorm_scaler_load, 2},

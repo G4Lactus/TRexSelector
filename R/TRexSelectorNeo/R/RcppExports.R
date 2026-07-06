@@ -52,12 +52,12 @@ rcpp_cut_tree <- function(linkage, num_orig_objs, num_clusters) {
 
 #' @title Create ZScoreScaler
 #'
-#' @param with_mean Center data
-#' @param with_std Scale data
+#' @param center Center columns to mean 0
+#' @param scale Scale columns to unit SD (Bessel; RMS around 0 if not centered)
 #' @return XPtr to ZScoreScaler
 #' @noRd
-zscore_scaler_create <- function(with_mean, with_std) {
-    .Call(`_TRexSelectorNeo_zscore_scaler_create`, with_mean, with_std)
+zscore_scaler_create <- function(center, scale) {
+    .Call(`_TRexSelectorNeo_zscore_scaler_create`, center, scale)
 }
 
 #' @title Fit ZScoreScaler
@@ -77,6 +77,16 @@ zscore_scaler_fit <- function(ptr, X, threshold = 1e-12) {
 #' @noRd
 zscore_scaler_transform_inplace <- function(ptr, X) {
     invisible(.Call(`_TRexSelectorNeo_zscore_scaler_transform_inplace`, ptr, X))
+}
+
+#' @title Fit and Transform Inplace ZScoreScaler
+#'
+#' @param ptr XPtr to ZScoreScaler
+#' @param X Matrix to fit and transform
+#' @param threshold Numerical stability threshold
+#' @noRd
+zscore_scaler_fit_transform_inplace <- function(ptr, X, threshold = 1e-12) {
+    invisible(.Call(`_TRexSelectorNeo_zscore_scaler_fit_transform_inplace`, ptr, X, threshold))
 }
 
 #' @title Inverse Transform Inplace ZScoreScaler
@@ -106,31 +116,31 @@ zscore_scaler_get_dropped_indices <- function(ptr) {
     .Call(`_TRexSelectorNeo_zscore_scaler_get_dropped_indices`, ptr)
 }
 
-#' @title Get with_mean flag from ZScoreScaler
+#' @title Get center flag from ZScoreScaler
 #'
 #' @param ptr XPtr to ZScoreScaler
-#' @return Boolean with_mean
+#' @return Boolean center
 #' @noRd
-zscore_scaler_get_with_mean <- function(ptr) {
-    .Call(`_TRexSelectorNeo_zscore_scaler_get_with_mean`, ptr)
+zscore_scaler_get_center <- function(ptr) {
+    .Call(`_TRexSelectorNeo_zscore_scaler_get_center`, ptr)
 }
 
-#' @title Get with_std flag from ZScoreScaler
+#' @title Get scale flag from ZScoreScaler
 #'
 #' @param ptr XPtr to ZScoreScaler
-#' @return Boolean with_std
+#' @return Boolean scale
 #' @noRd
-zscore_scaler_get_with_std <- function(ptr) {
-    .Call(`_TRexSelectorNeo_zscore_scaler_get_with_std`, ptr)
+zscore_scaler_get_scale <- function(ptr) {
+    .Call(`_TRexSelectorNeo_zscore_scaler_get_scale`, ptr)
 }
 
-#' @title Get means from ZScoreScaler
+#' @title Get centers from ZScoreScaler
 #'
 #' @param ptr XPtr to ZScoreScaler
-#' @return Vector of means
+#' @return Vector of centers
 #' @noRd
-zscore_scaler_get_means <- function(ptr) {
-    .Call(`_TRexSelectorNeo_zscore_scaler_get_means`, ptr)
+zscore_scaler_get_centers <- function(ptr) {
+    .Call(`_TRexSelectorNeo_zscore_scaler_get_centers`, ptr)
 }
 
 #' @title Get scales from ZScoreScaler
@@ -163,11 +173,12 @@ zscore_scaler_load <- function(ptr, filename) {
 #' @title Create LpNormScaler
 #'
 #' @param norm_type Type of norm (1 for L1, 2 for L2)
-#' @param with_mean Center data
+#' @param center Center columns to mean 0
+#' @param scale Scale columns to unit Lp norm (around the applied center)
 #' @return XPtr to LpNormScaler
 #' @noRd
-lpnorm_scaler_create <- function(norm_type, with_mean) {
-    .Call(`_TRexSelectorNeo_lpnorm_scaler_create`, norm_type, with_mean)
+lpnorm_scaler_create <- function(norm_type, center, scale) {
+    .Call(`_TRexSelectorNeo_lpnorm_scaler_create`, norm_type, center, scale)
 }
 
 #' @title Fit LpNormScaler
@@ -187,6 +198,16 @@ lpnorm_scaler_fit <- function(ptr, X, threshold = 1e-12) {
 #' @noRd
 lpnorm_scaler_transform_inplace <- function(ptr, X) {
     invisible(.Call(`_TRexSelectorNeo_lpnorm_scaler_transform_inplace`, ptr, X))
+}
+
+#' @title Fit and Transform Inplace LpNormScaler
+#'
+#' @param ptr XPtr to LpNormScaler
+#' @param X Matrix to fit and transform
+#' @param threshold Numerical stability threshold
+#' @noRd
+lpnorm_scaler_fit_transform_inplace <- function(ptr, X, threshold = 1e-12) {
+    invisible(.Call(`_TRexSelectorNeo_lpnorm_scaler_fit_transform_inplace`, ptr, X, threshold))
 }
 
 #' @title Inverse Transform Inplace LpNormScaler
@@ -216,13 +237,13 @@ lpnorm_scaler_get_dropped_indices <- function(ptr) {
     .Call(`_TRexSelectorNeo_lpnorm_scaler_get_dropped_indices`, ptr)
 }
 
-#' @title Get means from LpNormScaler
+#' @title Get centers from LpNormScaler
 #'
 #' @param ptr XPtr to LpNormScaler
-#' @return Vector of means
+#' @return Vector of centers
 #' @noRd
-lpnorm_scaler_get_means <- function(ptr) {
-    .Call(`_TRexSelectorNeo_lpnorm_scaler_get_means`, ptr)
+lpnorm_scaler_get_centers <- function(ptr) {
+    .Call(`_TRexSelectorNeo_lpnorm_scaler_get_centers`, ptr)
 }
 
 #' @title Get scales from LpNormScaler
@@ -234,22 +255,22 @@ lpnorm_scaler_get_scales <- function(ptr) {
     .Call(`_TRexSelectorNeo_lpnorm_scaler_get_scales`, ptr)
 }
 
-#' @title Get with_mean flag from LpNormScaler
+#' @title Get center flag from LpNormScaler
 #'
 #' @param ptr XPtr to LpNormScaler
-#' @return Boolean with_mean
+#' @return Boolean center
 #' @noRd
-lpnorm_scaler_get_with_mean <- function(ptr) {
-    .Call(`_TRexSelectorNeo_lpnorm_scaler_get_with_mean`, ptr)
+lpnorm_scaler_get_center <- function(ptr) {
+    .Call(`_TRexSelectorNeo_lpnorm_scaler_get_center`, ptr)
 }
 
-#' @title Get with_norm flag from LpNormScaler
+#' @title Get scale flag from LpNormScaler
 #'
 #' @param ptr XPtr to LpNormScaler
-#' @return Boolean with_norm
+#' @return Boolean scale
 #' @noRd
-lpnorm_scaler_get_with_norm <- function(ptr) {
-    .Call(`_TRexSelectorNeo_lpnorm_scaler_get_with_norm`, ptr)
+lpnorm_scaler_get_scale <- function(ptr) {
+    .Call(`_TRexSelectorNeo_lpnorm_scaler_get_scale`, ptr)
 }
 
 #' @title Get norm type from LpNormScaler

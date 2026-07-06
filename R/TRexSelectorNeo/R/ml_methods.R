@@ -1,6 +1,14 @@
 #' @title Z-Score Scaler
 #'
-#' @description Standardizes features by removing the mean and scaling to unit variance.
+#' @description Standardizes features by removing the mean and scaling to unit
+#'   variance (Bessel-corrected, n - 1). The `center`/`scale` arguments follow
+#'   R's \code{\link[base]{scale}()}: with \code{center = FALSE, scale = TRUE}
+#'   columns are divided by the root-mean-square around 0.
+#'
+#' @details The \code{*_inplace} methods mutate \code{X} directly (zero-copy)
+#'   when it is a double-storage matrix; other inputs are coerced to a double
+#'   matrix first, in which case the coerced copy is modified. The (modified)
+#'   matrix is returned in both cases.
 #'
 #' @examples
 #' set.seed(1)
@@ -8,7 +16,7 @@
 #' scaler <- ZScoreScaler$new()
 #' scaler$fit(X)
 #' X_std <- scaler$transform_inplace(X)
-#' scaler$get_means()
+#' scaler$get_centers()
 #'
 #' @export
 ZScoreScaler <- R6::R6Class("ZScoreScaler",
@@ -19,22 +27,21 @@ ZScoreScaler <- R6::R6Class("ZScoreScaler",
 
     #' @description Initialize the ZScoreScaler
     #'
-    #' @param with_mean Logical, whether to center the data before scaling (default: TRUE)
-    #' @param with_std Logical, whether to scale the data to unit variance (default: TRUE)
-    initialize = function(with_mean = TRUE, with_std = TRUE) {
-      private$cpp_ptr <- zscore_scaler_create(with_mean, with_std)
+    #' @param center Logical, whether to center columns to mean 0 (default: TRUE)
+    #' @param scale Logical, whether to scale columns to unit SD (default: TRUE);
+    #'   around 0 instead of the mean when \code{center = FALSE}, as in R's scale().
+    initialize = function(center = TRUE, scale = TRUE) {
+      private$cpp_ptr <- zscore_scaler_create(center, scale)
     },
 
-    #' @description Compute the mean and std to be used for later scaling.
+    #' @description Compute the centers and scales to be used for later scaling.
     #'
     #' @param X A numeric matrix (n x p).
-    #' @param threshold Double, lower bound for standard deviation (default: 1e-12).
+    #' @param threshold Double, lower bound for the scale statistic (default: 1e-12).
     #'
     #' @return Value.
     fit = function(X, threshold = 1e-12) {
-      if (!is.matrix(X)) {
-        X <- as.matrix(X)
-      }
+      X <- .as_double_matrix(X)
       zscore_scaler_fit(private$cpp_ptr, X, threshold)
       invisible(self)
     },
@@ -45,9 +52,7 @@ ZScoreScaler <- R6::R6Class("ZScoreScaler",
     #'
     #' @return The modified matrix `X`.
     transform_inplace = function(X) {
-      if (!is.matrix(X)) {
-        X <- as.matrix(X)
-      }
+      X <- .as_double_matrix(X)
       zscore_scaler_transform_inplace(private$cpp_ptr, X)
       return(X)
     },
@@ -58,10 +63,20 @@ ZScoreScaler <- R6::R6Class("ZScoreScaler",
     #'
     #' @return The modified matrix `X`.
     inverse_transform_inplace = function(X) {
-      if (!is.matrix(X)) {
-        X <- as.matrix(X)
-      }
+      X <- .as_double_matrix(X)
       zscore_scaler_inverse_transform_inplace(private$cpp_ptr, X)
+      return(X)
+    },
+
+    #' @description Fit and transform in one call, like R's scale().
+    #'
+    #' @param X A numeric matrix (n x p).
+    #' @param threshold Double, lower bound for the scale statistic (default: 1e-12).
+    #'
+    #' @return The modified matrix `X`.
+    fit_transform_inplace = function(X, threshold = 1e-12) {
+      X <- .as_double_matrix(X)
+      zscore_scaler_fit_transform_inplace(private$cpp_ptr, X, threshold)
       return(X)
     },
 
@@ -72,7 +87,8 @@ ZScoreScaler <- R6::R6Class("ZScoreScaler",
       zscore_scaler_is_fitted(private$cpp_ptr)
     },
 
-    #' @description Get dropped indices.
+    #' @description Get dropped (degenerate) column indices. These columns get
+    #'   scale factor 1 and are still centered (sklearn semantics).
     #'
     #' @return Value.
     get_dropped_indices = function() {
@@ -83,22 +99,22 @@ ZScoreScaler <- R6::R6Class("ZScoreScaler",
     #' @description Check if scaler centers data.
     #'
     #' @return Value.
-    get_with_mean = function() {
-      zscore_scaler_get_with_mean(private$cpp_ptr)
+    get_center = function() {
+      zscore_scaler_get_center(private$cpp_ptr)
     },
 
     #' @description Check if scaler scales data to unit variance.
     #'
     #' @return Value.
-    get_with_std = function() {
-      zscore_scaler_get_with_std(private$cpp_ptr)
+    get_scale = function() {
+      zscore_scaler_get_scale(private$cpp_ptr)
     },
 
-    #' @description Get the learned means.
+    #' @description Get the learned centers (column means).
     #'
     #' @return Value.
-    get_means = function() {
-      zscore_scaler_get_means(private$cpp_ptr)
+    get_centers = function() {
+      zscore_scaler_get_centers(private$cpp_ptr)
     },
 
     #' @description Get the learned scales (standard deviations).
@@ -139,7 +155,15 @@ ZScoreScaler <- R6::R6Class("ZScoreScaler",
 
 #' @title Lp-Norm Scaler
 #'
-#' @description Scales input features to unit norm based on the chosen L1 or L2 formulation.
+#' @description Scales input features to unit norm based on the chosen L1 or
+#'   L2 formulation. The `center`/`scale` arguments follow R's
+#'   \code{\link[base]{scale}()}: the norm is computed around the applied
+#'   center (around 0 when \code{center = FALSE}).
+#'
+#' @details The \code{*_inplace} methods mutate \code{X} directly (zero-copy)
+#'   when it is a double-storage matrix; other inputs are coerced to a double
+#'   matrix first, in which case the coerced copy is modified. The (modified)
+#'   matrix is returned in both cases.
 #'
 #' @examples
 #' set.seed(1)
@@ -158,24 +182,23 @@ LpNormScaler <- R6::R6Class("LpNormScaler",
     #' @description Initialize the LpNormScaler
     #'
     #' @param norm_type Integer, 1 for L1 norm, 2 for L2 norm (default: 2)
-    #' @param with_mean Logical, whether to center the data before scaling (default: TRUE)
-    initialize = function(norm_type = 2, with_mean = TRUE) {
+    #' @param center Logical, whether to center columns to mean 0 (default: TRUE)
+    #' @param scale Logical, whether to scale columns to unit Lp norm (default: TRUE)
+    initialize = function(norm_type = 2, center = TRUE, scale = TRUE) {
       if (!(norm_type %in% c(1, 2))) {
         stop("norm_type must be 1 (L1) or 2 (L2)")
       }
-      private$cpp_ptr <- lpnorm_scaler_create(norm_type, with_mean)
+      private$cpp_ptr <- lpnorm_scaler_create(norm_type, center, scale)
     },
 
     #' @description Compute the norm parameters.
     #'
     #' @param X A numeric matrix (n x p).
-    #' @param threshold Double, lower bound for norm (default: 1e-12).
+    #' @param threshold Double, lower bound for the scale statistic (default: 1e-12).
     #'
     #' @return Value.
     fit = function(X, threshold = 1e-12) {
-      if (!is.matrix(X)) {
-        X <- as.matrix(X)
-      }
+      X <- .as_double_matrix(X)
       lpnorm_scaler_fit(private$cpp_ptr, X, threshold)
       invisible(self)
     },
@@ -186,9 +209,7 @@ LpNormScaler <- R6::R6Class("LpNormScaler",
     #'
     #' @return The modified matrix `X`.
     transform_inplace = function(X) {
-      if (!is.matrix(X)) {
-        X <- as.matrix(X)
-      }
+      X <- .as_double_matrix(X)
       lpnorm_scaler_transform_inplace(private$cpp_ptr, X)
       return(X)
     },
@@ -199,10 +220,20 @@ LpNormScaler <- R6::R6Class("LpNormScaler",
     #'
     #' @return The modified matrix `X`.
     inverse_transform_inplace = function(X) {
-      if (!is.matrix(X)) {
-        X <- as.matrix(X)
-      }
+      X <- .as_double_matrix(X)
       lpnorm_scaler_inverse_transform_inplace(private$cpp_ptr, X)
+      return(X)
+    },
+
+    #' @description Fit and transform in one call, like R's scale().
+    #'
+    #' @param X A numeric matrix (n x p).
+    #' @param threshold Double, lower bound for the scale statistic (default: 1e-12).
+    #'
+    #' @return The modified matrix `X`.
+    fit_transform_inplace = function(X, threshold = 1e-12) {
+      X <- .as_double_matrix(X)
+      lpnorm_scaler_fit_transform_inplace(private$cpp_ptr, X, threshold)
       return(X)
     },
 
@@ -213,7 +244,8 @@ LpNormScaler <- R6::R6Class("LpNormScaler",
       lpnorm_scaler_is_fitted(private$cpp_ptr)
     },
 
-    #' @description Get dropped indices.
+    #' @description Get dropped (degenerate) column indices. These columns get
+    #'   scale factor 1 and are still centered (sklearn semantics).
     #'
     #' @return Value.
     get_dropped_indices = function() {
@@ -221,11 +253,11 @@ LpNormScaler <- R6::R6Class("LpNormScaler",
       lpnorm_scaler_get_dropped_indices(private$cpp_ptr) + 1L
     },
 
-    #' @description Get the learned means.
+    #' @description Get the learned centers (column means).
     #'
     #' @return Value.
-    get_means = function() {
-      lpnorm_scaler_get_means(private$cpp_ptr)
+    get_centers = function() {
+      lpnorm_scaler_get_centers(private$cpp_ptr)
     },
 
     #' @description Get the learned scales.
@@ -238,15 +270,15 @@ LpNormScaler <- R6::R6Class("LpNormScaler",
     #' @description Check if scaler centers data.
     #'
     #' @return Value.
-    get_with_mean = function() {
-      lpnorm_scaler_get_with_mean(private$cpp_ptr)
+    get_center = function() {
+      lpnorm_scaler_get_center(private$cpp_ptr)
     },
 
     #' @description Check if scaler scales data to unit norm.
     #'
     #' @return Value.
-    get_with_norm = function() {
-      lpnorm_scaler_get_with_norm(private$cpp_ptr)
+    get_scale = function() {
+      lpnorm_scaler_get_scale(private$cpp_ptr)
     },
 
     #' @description Get norm type (1 for L1, 2 for L2).

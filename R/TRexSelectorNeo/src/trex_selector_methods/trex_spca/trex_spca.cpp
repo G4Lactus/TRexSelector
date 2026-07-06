@@ -53,8 +53,8 @@ TRexSPCA::TRexSPCA(Eigen::Map<Eigen::MatrixXd>& X,
     , seed_(seed)
     , verbose_(verbose)
     , scaler_(std_scaler::LpNormScaler::NormType::L2,
-              /*with_mean=*/true,
-              /*with_norm=*/false)   // center-only: ordinary PCA must be a covariance PCA
+              /*center=*/true,
+              /*scale=*/false)   // center-only: ordinary PCA must be a covariance PCA
 {
     if (M_ > std::min(X_->rows(), X_->cols())) {
         throw std::invalid_argument(

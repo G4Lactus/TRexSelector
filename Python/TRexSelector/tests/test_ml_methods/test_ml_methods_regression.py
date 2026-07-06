@@ -1,5 +1,8 @@
 """
 Tests for scalers (ZScoreScaler, LpNormScaler) and ridge regression classes.
+
+The *_inplace methods are true zero-copy in-place operations: they require a
+Fortran-ordered float64 array and mutate it directly (no return value).
 """
 import numpy as np
 import pytest
@@ -18,9 +21,9 @@ from trex_selector_neo.ml_methods import (
 def regression_data():
     rng = np.random.default_rng(10)
     n, p = 60, 8
-    X = rng.standard_normal((n, p)).astype(np.float64)
+    X = np.asfortranarray(rng.standard_normal((n, p)), dtype=np.float64)
     y = (X[:, 0] * 2.0 + X[:, 1] * -1.5 + rng.standard_normal(n)).astype(np.float64)
-    return X.copy(), y, n, p
+    return X.copy(order="F"), y, n, p
 
 
 # ---------------------------------------------------------------------------
@@ -40,14 +43,14 @@ def test_zscore_scaler_fit_returns_self(regression_data):
     assert scaler.is_fitted()
 
 
-def test_zscore_scaler_get_means(regression_data):
+def test_zscore_scaler_get_centers(regression_data):
     X, y, n, p = regression_data
     scaler = ZScoreScaler()
     scaler.fit(X)
-    means = scaler.get_means()
-    assert isinstance(means, np.ndarray)
-    assert means.shape == (p,)
-    assert np.allclose(means, X.mean(axis=0), atol=1e-10)
+    centers = scaler.get_centers()
+    assert isinstance(centers, np.ndarray)
+    assert centers.shape == (p,)
+    assert np.allclose(centers, X.mean(axis=0), atol=1e-10)
 
 
 def test_zscore_scaler_get_scales(regression_data):
@@ -64,8 +67,8 @@ def test_zscore_transform_zero_mean(regression_data):
     X, y, n, p = regression_data
     scaler = ZScoreScaler()
     scaler.fit(X)
-    X_scaled = X.copy()
-    X_scaled = scaler.transform_inplace(X_scaled)
+    X_scaled = X.copy(order="F")
+    scaler.transform_inplace(X_scaled)
     col_means = X_scaled.mean(axis=0)
     assert np.allclose(col_means, 0.0, atol=1e-10)
 
@@ -74,31 +77,78 @@ def test_zscore_transform_unit_std(regression_data):
     X, y, n, p = regression_data
     scaler = ZScoreScaler()
     scaler.fit(X)
-    X_scaled = X.copy()
-    X_scaled = scaler.transform_inplace(X_scaled)
+    X_scaled = X.copy(order="F")
+    scaler.transform_inplace(X_scaled)
     col_stds = X_scaled.std(axis=0, ddof=1)
     assert np.allclose(col_stds, 1.0, atol=1e-6)
 
 
-def test_zscore_no_mean_centering():
-    rng = np.random.default_rng(99)
-    X = rng.standard_normal((30, 4)).astype(np.float64) + 5.0
-    scaler = ZScoreScaler(with_mean=False, with_std=True)
+def test_zscore_transform_is_truly_inplace(regression_data):
+    """transform_inplace mutates the passed Fortran-ordered array directly."""
+    X, y, n, p = regression_data
+    scaler = ZScoreScaler()
     scaler.fit(X)
-    X_copy = X.copy()
+    X_scaled = X.copy(order="F")
+    original = X_scaled.copy(order="F")
+    result = scaler.transform_inplace(X_scaled)
+    assert result is None
+    assert not np.allclose(X_scaled, original)
+
+
+def test_zscore_inverse_transform_round_trip(regression_data):
+    X, y, n, p = regression_data
+    scaler = ZScoreScaler()
+    scaler.fit(X)
+    X_scaled = X.copy(order="F")
+    scaler.transform_inplace(X_scaled)
+    scaler.inverse_transform_inplace(X_scaled)
+    assert np.allclose(X_scaled, X, atol=1e-12)
+
+
+def test_zscore_fit_transform_inplace(regression_data):
+    """fit_transform_inplace equals fit() + transform_inplace() (R's scale())."""
+    X, y, n, p = regression_data
+    X_one = X.copy(order="F")
+    X_two = X.copy(order="F")
+
+    one_call = ZScoreScaler()
+    result = one_call.fit_transform_inplace(X_one)
+    assert result is one_call
+
+    two_calls = ZScoreScaler()
+    two_calls.fit(X_two)
+    two_calls.transform_inplace(X_two)
+
+    assert np.allclose(X_one, X_two, atol=0.0)
+
+
+def test_zscore_no_centering_uses_rms():
+    """center=False, scale=True divides by the RMS around 0, as in R's scale()."""
+    rng = np.random.default_rng(99)
+    X = np.asfortranarray(rng.standard_normal((30, 4)) + 5.0, dtype=np.float64)
+    scaler = ZScoreScaler(center=False, scale=True)
+    scaler.fit(X)
+    # Column means should still be non-zero after transform (not centered)
+    X_copy = X.copy(order="F")
     scaler.transform_inplace(X_copy)
-    # Column means should still be non-zero (not centered)
     assert not np.allclose(X_copy.mean(axis=0), 0.0, atol=0.5)
+    # Scale = root-mean-square around 0 with Bessel denominator (R behavior)
+    rms = np.sqrt((X**2).sum(axis=0) / (X.shape[0] - 1))
+    assert np.allclose(scaler.get_scales(), rms, atol=1e-12)
 
 
 def test_zscore_dropped_indices_constant_column():
-    """Constant columns should be flagged as dropped."""
-    X = np.ones((20, 3), dtype=np.float64)
+    """Constant columns are flagged as dropped but still centered (sklearn)."""
+    X = np.asfortranarray(np.ones((20, 3)), dtype=np.float64)
     X[:, 0] = np.arange(20, dtype=np.float64)  # non-constant column 0
     scaler = ZScoreScaler()
     scaler.fit(X)
     dropped = scaler.get_dropped_indices()
-    assert 1 in dropped or 2 in dropped  # columns 1 and 2 are constant
+    assert 1 in dropped and 2 in dropped  # columns 1 and 2 are constant
+    # sklearn semantics: degenerate columns get scale 1 and are still centered
+    scaler.transform_inplace(X)
+    assert np.allclose(X[:, 1], 0.0, atol=0.0)
+    assert np.allclose(X[:, 2], 0.0, atol=0.0)
 
 
 # ---------------------------------------------------------------------------
@@ -109,8 +159,8 @@ def test_lpnorm_scaler_l2(regression_data):
     X, y, n, p = regression_data
     scaler = LpNormScaler(NormType.L2)
     scaler.fit(X)
-    X_scaled = X.copy()
-    X_scaled = scaler.transform_inplace(X_scaled)
+    X_scaled = X.copy(order="F")
+    scaler.transform_inplace(X_scaled)
     # Each column should have L2 norm ≈ 1
     col_norms = np.linalg.norm(X_scaled, axis=0)
     assert np.allclose(col_norms, 1.0, atol=1e-6)
@@ -120,11 +170,22 @@ def test_lpnorm_scaler_l1(regression_data):
     X, y, n, p = regression_data
     scaler = LpNormScaler(NormType.L1)
     scaler.fit(X)
-    X_scaled = X.copy()
-    X_scaled = scaler.transform_inplace(X_scaled)
+    X_scaled = X.copy(order="F")
+    scaler.transform_inplace(X_scaled)
     # Each column should have L1 norm ≈ 1
     col_norms = np.sum(np.abs(X_scaled), axis=0)
     assert np.allclose(col_norms, 1.0, atol=1e-6)
+
+
+def test_lpnorm_center_only(regression_data):
+    """center=True, scale=False only removes the column means (SPCA usage)."""
+    X, y, n, p = regression_data
+    scaler = LpNormScaler(NormType.L2, center=True, scale=False)
+    X_scaled = X.copy(order="F")
+    scaler.fit_transform_inplace(X_scaled)
+    assert np.allclose(X_scaled.mean(axis=0), 0.0, atol=1e-10)
+    assert np.allclose(X_scaled, X - X.mean(axis=0), atol=1e-12)
+    assert np.allclose(scaler.get_scales(), 1.0, atol=0.0)
 
 
 def test_lpnorm_scaler_not_fitted_initially():
