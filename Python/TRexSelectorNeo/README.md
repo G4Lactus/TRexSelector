@@ -14,19 +14,29 @@ J. Machkour, M. Muma, and D. P. Palomar, "High-dimensional false discovery rate 
 
 ---
 
-## Requirements
-
-- Python >= 3.10, NumPy >= 1.26
-- C++20 compiler, CMake >= 3.24, Eigen3, Boost, Cereal, OpenMP — only when building from source
-
----
-
 ## Installation
+
+**From PyPI** — binary wheels are provided for Linux (x86_64), macOS (arm64), and Windows (x86_64), so no compiler is needed:
 
 ```bash
 pip install TRexSelectorNeo
-# or from GitHub:
-pip install git+https://github.com/G4Lactus/TRexSelector.git#subdirectory=Python/TRexSelector
+```
+
+Requirements: Python ≥ 3.10 and NumPy ≥ 1.26 (installed automatically).
+
+**From source (GitHub)** — builds the C++ backend on your machine; requires a C++20 compiler, CMake ≥ 3.24, and the C++ dependencies Eigen3, Boost ≥ 1.80, Cereal, and OpenMP (see the [C++ core README](../../cpp/README.md) for how to install them per platform):
+
+```bash
+pip install git+https://github.com/G4Lactus/TRexSelector.git#subdirectory=Python/TRexSelectorNeo
+```
+
+**Development install** — from a clone of the repository, as an editable install without build isolation (pybind11, scikit-build-core, and CMake must already be available in the active environment):
+
+```bash
+pip install --no-build-isolation -e Python/TRexSelectorNeo
+
+# Run the test suite against the installed package
+pytest Python/TRexSelectorNeo/tests -q
 ```
 
 ---
@@ -38,9 +48,10 @@ import numpy as np
 import trex_selector_neo
 
 rng = np.random.default_rng(123)
-n, p, num_act = 75, 150, 3
-beta = np.zeros(p); beta[:num_act] = 1.0
-true_actives = list(np.nonzero(beta)[0])  # 0-based
+n, p, num_act = 75, 150, 3        # observations, variables, true actives
+beta = np.zeros(p)
+beta[:num_act] = 1.0              # coefficient vector with sparse support
+true_actives = np.nonzero(beta)[0].tolist()  # 0-based indices
 
 X = rng.standard_normal((n, p))
 y = X @ beta + rng.standard_normal(n)
@@ -51,6 +62,19 @@ sel.select()
 print(f"True active variables: {true_actives}")
 print(f"Selected variables:    {sel.selected_indices}")
 ```
+
+```text
+True active variables: [0, 1, 2]
+Selected variables:    [0, 1, 2]
+```
+
+For a preset target FDR of 5%, the T-Rex selector recovers all true active variables with no
+false positives in this example. Choose the target FDR (`tFDR`) according to the requirements
+of your application.
+
+All selector variants (`TRexSelector`, `TRexDASelector`, `TRexGVSSelector`,
+`TRexScreeningSelector`, `TRexBiobankScreeningSelector`, `TRexSPCASelector`) follow the same
+construct → `select()` → inspect pattern.
 
 ---
 
