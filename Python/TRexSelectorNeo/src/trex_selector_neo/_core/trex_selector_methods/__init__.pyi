@@ -69,6 +69,14 @@ class BiobankScreenTRexControl:
     def target_FDR_trex(self, arg0: typing.SupportsFloat | typing.SupportsIndex) -> None:
         ...
     @property
+    def trex_screen_ctrl(self) -> ScreenTRexControlParameter:
+        """
+        Nested Screen-TRex control shared by both the screening and fallback-T-Rex paths. Set the screening method via trex_screen_ctrl.trex_method and the base algorithm (K, solver_type, ...) via trex_screen_ctrl.trex_ctrl. Its lloop_strategy is forced to STANDARD by the default ctor.
+        """
+    @trex_screen_ctrl.setter
+    def trex_screen_ctrl(self, arg0: ScreenTRexControlParameter) -> None:
+        ...
+    @property
     def upper_bound_FDR(self) -> float:
         """
         Upper bound on the FDR search range.
@@ -1051,12 +1059,12 @@ class TRexBiobankScreeningSelector:
     Biobank-scale T-Rex selector for FDR-controlled variable selection across one or many phenotypes.
     """
     @typing.overload
-    def __init__(self, X: typing.Annotated[numpy.typing.NDArray[numpy.float64], "[m, n]", "flags.writeable", "flags.f_contiguous"], y: typing.Annotated[numpy.typing.NDArray[numpy.float64], "[m, 1]", "flags.writeable"], biosctrex_ctrl: BiobankScreenTRexControl = ..., seed: typing.SupportsInt | typing.SupportsIndex = -1, verbose: bool = False) -> None:
+    def __init__(self, X: typing.Annotated[numpy.typing.NDArray[numpy.float64], "[m, n]", "flags.writeable", "flags.f_contiguous"], y: typing.Annotated[numpy.typing.NDArray[numpy.float64], "[m, 1]", "flags.writeable"], bio_ctrl: BiobankScreenTRexControl = ..., seed: typing.SupportsInt | typing.SupportsIndex = -1, verbose: bool = False) -> None:
         """
         Construct for a single phenotype (1-D y). X and y are accessed zero-copy.
         """
     @typing.overload
-    def __init__(self, X: typing.Annotated[numpy.typing.NDArray[numpy.float64], "[m, n]", "flags.writeable", "flags.f_contiguous"], Y: typing.Annotated[numpy.typing.NDArray[numpy.float64], "[m, n]", "flags.writeable", "flags.f_contiguous"], biosctrex_ctrl: BiobankScreenTRexControl = ..., seed: typing.SupportsInt | typing.SupportsIndex = -1, verbose: bool = False) -> None:
+    def __init__(self, X: typing.Annotated[numpy.typing.NDArray[numpy.float64], "[m, n]", "flags.writeable", "flags.f_contiguous"], Y: typing.Annotated[numpy.typing.NDArray[numpy.float64], "[m, n]", "flags.writeable", "flags.f_contiguous"], bio_ctrl: BiobankScreenTRexControl = ..., seed: typing.SupportsInt | typing.SupportsIndex = -1, verbose: bool = False) -> None:
         """
         Construct for multiple phenotypes (2-D Y). X and Y are accessed zero-copy.
         """

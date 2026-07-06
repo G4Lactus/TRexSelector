@@ -12,6 +12,10 @@ class LpNormScaler:
         ...
     def fit(self, X: typing.Annotated[numpy.typing.NDArray[numpy.float64], "[m, n]", "flags.writeable", "flags.f_contiguous"], threshold: typing.SupportsFloat | typing.SupportsIndex = 1e-12) -> LpNormScaler:
         ...
+    def fit_transform(self, X: typing.Annotated[numpy.typing.NDArray[numpy.float64], "[m, n]", "flags.f_contiguous"], threshold: typing.SupportsFloat | typing.SupportsIndex = 1e-12) -> typing.Annotated[numpy.typing.NDArray[numpy.float64], "[m, n]"]:
+        """
+        Fit on X, then return a normalized copy (any memory order; X unchanged).
+        """
     def fit_transform_inplace(self, X: typing.Annotated[numpy.typing.NDArray[numpy.float64], "[m, n]", "flags.writeable", "flags.f_contiguous"], threshold: typing.SupportsFloat | typing.SupportsIndex = 1e-12) -> LpNormScaler:
         ...
     def get_center(self) -> bool:
@@ -26,6 +30,10 @@ class LpNormScaler:
         ...
     def get_scales(self) -> typing.Annotated[numpy.typing.NDArray[numpy.float64], "[m, 1]"]:
         ...
+    def inverse_transform(self, X_normed: typing.Annotated[numpy.typing.NDArray[numpy.float64], "[m, n]", "flags.f_contiguous"]) -> typing.Annotated[numpy.typing.NDArray[numpy.float64], "[m, n]"]:
+        """
+        Return a denormalized copy of X_normed (any memory order; input unchanged).
+        """
     def inverse_transform_inplace(self, X_normed: typing.Annotated[numpy.typing.NDArray[numpy.float64], "[m, n]", "flags.writeable", "flags.f_contiguous"]) -> None:
         ...
     def is_fitted(self) -> bool:
@@ -34,6 +42,10 @@ class LpNormScaler:
         ...
     def save(self, filename: str) -> None:
         ...
+    def transform(self, X: typing.Annotated[numpy.typing.NDArray[numpy.float64], "[m, n]", "flags.f_contiguous"]) -> typing.Annotated[numpy.typing.NDArray[numpy.float64], "[m, n]"]:
+        """
+        Return a normalized copy of X (any memory order accepted; X unchanged).
+        """
     def transform_inplace(self, X: typing.Annotated[numpy.typing.NDArray[numpy.float64], "[m, n]", "flags.writeable", "flags.f_contiguous"]) -> None:
         ...
 class NormType:
@@ -150,6 +162,10 @@ class ZScoreScaler:
         ...
     def fit(self, X: typing.Annotated[numpy.typing.NDArray[numpy.float64], "[m, n]", "flags.writeable", "flags.f_contiguous"], threshold: typing.SupportsFloat | typing.SupportsIndex = 1e-12) -> ZScoreScaler:
         ...
+    def fit_transform(self, X: typing.Annotated[numpy.typing.NDArray[numpy.float64], "[m, n]", "flags.f_contiguous"], threshold: typing.SupportsFloat | typing.SupportsIndex = 1e-12) -> typing.Annotated[numpy.typing.NDArray[numpy.float64], "[m, n]"]:
+        """
+        Fit on X, then return a scaled copy (any memory order; X unchanged).
+        """
     def fit_transform_inplace(self, X: typing.Annotated[numpy.typing.NDArray[numpy.float64], "[m, n]", "flags.writeable", "flags.f_contiguous"], threshold: typing.SupportsFloat | typing.SupportsIndex = 1e-12) -> ZScoreScaler:
         ...
     def get_center(self) -> bool:
@@ -162,6 +178,10 @@ class ZScoreScaler:
         ...
     def get_scales(self) -> typing.Annotated[numpy.typing.NDArray[numpy.float64], "[m, 1]"]:
         ...
+    def inverse_transform(self, X_scaled: typing.Annotated[numpy.typing.NDArray[numpy.float64], "[m, n]", "flags.f_contiguous"]) -> typing.Annotated[numpy.typing.NDArray[numpy.float64], "[m, n]"]:
+        """
+        Return an unscaled copy of X_scaled (any memory order; input unchanged).
+        """
     def inverse_transform_inplace(self, X_scaled: typing.Annotated[numpy.typing.NDArray[numpy.float64], "[m, n]", "flags.writeable", "flags.f_contiguous"]) -> None:
         ...
     def is_fitted(self) -> bool:
@@ -170,6 +190,10 @@ class ZScoreScaler:
         ...
     def save(self, filename: str) -> None:
         ...
+    def transform(self, X: typing.Annotated[numpy.typing.NDArray[numpy.float64], "[m, n]", "flags.f_contiguous"]) -> typing.Annotated[numpy.typing.NDArray[numpy.float64], "[m, n]"]:
+        """
+        Return a scaled copy of X (any memory order accepted; X unchanged).
+        """
     def transform_inplace(self, X: typing.Annotated[numpy.typing.NDArray[numpy.float64], "[m, n]", "flags.writeable", "flags.f_contiguous"]) -> None:
         ...
 L1: NormType  # value = <NormType.L1: 0>

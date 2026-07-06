@@ -160,6 +160,57 @@ def test_gvs_lambda2_used(signal_data, fast_control):
 
 
 # ---------------------------------------------------------------------------
+# Solver derivation warning
+# ---------------------------------------------------------------------------
+
+def test_gvs_warns_on_non_matching_solver(signal_data):
+    """A user-set solver_type that does not match the gvs_type-derived solver
+    is ignored by the C++ wrapper; the Python wrapper must warn about it."""
+    import warnings
+    X, y, n, p = signal_data
+    gvs_ctrl = trex_selector_neo.TRexGVSControlParameter()
+    gvs_ctrl.gvs_type = trex_selector_neo.GVSType.IEN
+
+    ctrl = trex_selector_neo.TRexControlParameter()
+    ctrl.solver_type = trex_selector_neo.SolverTypeForTRex.TOMP
+    with pytest.warns(UserWarning, match="derives solver TIENET_AUG"):
+        trex_selector_neo.TRexGVSSelector(X, y, gvs_control=gvs_ctrl,
+                                          trex_control=ctrl, verbose=False)
+
+    # Default (TLARS) and matching solver stay silent
+    for solver in (trex_selector_neo.SolverTypeForTRex.TLARS,
+                   trex_selector_neo.SolverTypeForTRex.TIENET_AUG):
+        ctrl_ok = trex_selector_neo.TRexControlParameter()
+        ctrl_ok.solver_type = solver
+        with warnings.catch_warnings():
+            warnings.simplefilter("error")
+            trex_selector_neo.TRexGVSSelector(X, y, gvs_control=gvs_ctrl,
+                                              trex_control=ctrl_ok, verbose=False)
+
+
+def test_gvs_warns_on_lambda2_zero(signal_data):
+    """lambda_2 == 0 is the degenerate no-ridge case, not automatic CV; the
+    wrapper must warn so users don't silently get pure T-LASSO."""
+    X, y, n, p = signal_data
+    gvs_ctrl = trex_selector_neo.TRexGVSControlParameter()
+    gvs_ctrl.lambda_2 = 0.0
+    with pytest.warns(UserWarning, match="degenerate no-ridge"):
+        trex_selector_neo.TRexGVSSelector(X, y, gvs_control=gvs_ctrl, verbose=False)
+
+
+def test_gvs_no_lambda2_warning_for_auto_or_positive(signal_data):
+    """lambda_2 < 0 (auto/CV) and lambda_2 > 0 (fixed) must not warn."""
+    import warnings
+    X, y, n, p = signal_data
+    for lam in (-1.0, 0.05):
+        gvs_ctrl = trex_selector_neo.TRexGVSControlParameter()
+        gvs_ctrl.lambda_2 = lam
+        with warnings.catch_warnings():
+            warnings.simplefilter("error", UserWarning)
+            trex_selector_neo.TRexGVSSelector(X, y, gvs_control=gvs_ctrl, verbose=False)
+
+
+# ---------------------------------------------------------------------------
 # LinkageMethod variants (non-Ward only — Ward requires Euclidean)
 # ---------------------------------------------------------------------------
 

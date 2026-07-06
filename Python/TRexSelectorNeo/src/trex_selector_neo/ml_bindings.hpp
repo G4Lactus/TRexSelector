@@ -92,6 +92,47 @@ private:
 // =====================================================================================
 
 /**
+ * @brief Returning, layout-agnostic counterparts to the scalers' zero-copy
+ *        `*_inplace` methods.
+ *
+ * @details A `const Eigen::Ref<const Eigen::MatrixXd>&` parameter accepts any
+ *          2-D float64 numpy array regardless of memory order — pybind copies
+ *          when the layout/dtype does not match — so the caller's array is
+ *          never mutated. Returning an `Eigen::MatrixXd` by value yields a
+ *          fresh (column-major) numpy array. This restores the natural
+ *          "transform and assign" idiom (`Xt = scaler.transform(X)`) that the
+ *          in-place API cannot offer, and sidesteps the requirement that the
+ *          input be a writeable Fortran-ordered buffer.
+ */
+template <typename Scaler>
+Eigen::MatrixXd scaler_transform_copy(Scaler& self,
+                                      const Eigen::Ref<const Eigen::MatrixXd>& X) {
+    Eigen::MatrixXd out = X;
+    Eigen::Map<Eigen::MatrixXd> m(out.data(), out.rows(), out.cols());
+    self.transform_inplace(m);
+    return out;
+}
+
+template <typename Scaler>
+Eigen::MatrixXd scaler_fit_transform_copy(Scaler& self,
+                                          const Eigen::Ref<const Eigen::MatrixXd>& X,
+                                          double threshold) {
+    Eigen::MatrixXd out = X;
+    Eigen::Map<Eigen::MatrixXd> m(out.data(), out.rows(), out.cols());
+    self.fit_transform_inplace(m, threshold);
+    return out;
+}
+
+template <typename Scaler>
+Eigen::MatrixXd scaler_inverse_transform_copy(const Scaler& self,
+                                              const Eigen::Ref<const Eigen::MatrixXd>& X) {
+    Eigen::MatrixXd out = X;
+    Eigen::Map<Eigen::MatrixXd> m(out.data(), out.rows(), out.cols());
+    self.inverse_transform_inplace(m);
+    return out;
+}
+
+/**
  * @brief Bind machine learning methods to a Python module.
  *
  * @param m The Python module to which the methods will be bound.
@@ -115,8 +156,12 @@ inline void bind_ml_methods(py::module& m) {
      *          It computes the statistics on a training set so they can later be
      *          applied to a validation or test set via `transform_inplace`.
      *
-     * @note The *_inplace methods mutate the passed array directly (zero-copy);
-     *       it must be Fortran-ordered float64 (e.g. np.asfortranarray(X)).
+     * @note Two families of methods are provided. The `transform` /
+     *       `fit_transform` / `inverse_transform` methods accept an array of
+     *       any memory order and RETURN a new transformed array, leaving the
+     *       input untouched (the ergonomic default). The `*_inplace` methods
+     *       mutate the passed array directly (zero-copy) and therefore require
+     *       a writeable Fortran-ordered float64 array (e.g. np.asfortranarray(X)).
      */
     py::class_<ZScoreScaler>(m, "ZScoreScaler")
         .def(py::init<bool, bool>(),
@@ -128,6 +173,14 @@ inline void bind_ml_methods(py::module& m) {
             return self;
         }, py::arg("X"), py::arg("threshold") = 1e-12,
            py::return_value_policy::reference_internal)
+        .def("transform", &scaler_transform_copy<ZScoreScaler>, py::arg("X"),
+             "Return a scaled copy of X (any memory order accepted; X unchanged).")
+        .def("fit_transform", &scaler_fit_transform_copy<ZScoreScaler>,
+             py::arg("X"), py::arg("threshold") = 1e-12,
+             "Fit on X, then return a scaled copy (any memory order; X unchanged).")
+        .def("inverse_transform", &scaler_inverse_transform_copy<ZScoreScaler>,
+             py::arg("X_scaled"),
+             "Return an unscaled copy of X_scaled (any memory order; input unchanged).")
         .def("transform_inplace",
             [](ZScoreScaler& self, Eigen::Ref<Eigen::MatrixXd> X) {
             Eigen::Map<Eigen::MatrixXd> X_map(X.data(), X.rows(), X.cols());
@@ -174,8 +227,12 @@ inline void bind_ml_methods(py::module& m) {
      *          switches follow R's scale(): the norm is computed around the applied
      *          center (around 0 when `center` is disabled).
      *
-     * @note The *_inplace methods mutate the passed array directly (zero-copy);
-     *       it must be Fortran-ordered float64 (e.g. np.asfortranarray(X)).
+     * @note Two families of methods are provided. The `transform` /
+     *       `fit_transform` / `inverse_transform` methods accept an array of
+     *       any memory order and RETURN a new transformed array, leaving the
+     *       input untouched (the ergonomic default). The `*_inplace` methods
+     *       mutate the passed array directly (zero-copy) and therefore require
+     *       a writeable Fortran-ordered float64 array (e.g. np.asfortranarray(X)).
      */
     py::class_<LpNormScaler>(m, "LpNormScaler")
         .def(py::init<LpNormScaler::NormType, bool, bool>(),
@@ -189,6 +246,14 @@ inline void bind_ml_methods(py::module& m) {
                 return self;
         }, py::arg("X"), py::arg("threshold") = 1e-12,
            py::return_value_policy::reference_internal)
+        .def("transform", &scaler_transform_copy<LpNormScaler>, py::arg("X"),
+             "Return a normalized copy of X (any memory order accepted; X unchanged).")
+        .def("fit_transform", &scaler_fit_transform_copy<LpNormScaler>,
+             py::arg("X"), py::arg("threshold") = 1e-12,
+             "Fit on X, then return a normalized copy (any memory order; X unchanged).")
+        .def("inverse_transform", &scaler_inverse_transform_copy<LpNormScaler>,
+             py::arg("X_normed"),
+             "Return a denormalized copy of X_normed (any memory order; input unchanged).")
         .def("transform_inplace",
              [](LpNormScaler& self, Eigen::Ref<Eigen::MatrixXd> X) {
             Eigen::Map<Eigen::MatrixXd> X_map(X.data(), X.rows(), X.cols());
