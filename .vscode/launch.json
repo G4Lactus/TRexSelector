@@ -46,7 +46,7 @@
     },
 
     // -----------------------------------------------------------------------
-    // Python Package (Python/TRexSelector/)
+    // Python Package (Python/TRexSelectorNeo/)
     // -----------------------------------------------------------------------
 
     // Debug the full pytest suite (requires Python: Install (Editable) first)
@@ -56,7 +56,7 @@
         "request": "launch",
         "module": "pytest",
         "args": ["tests/", "-v"],
-        "cwd": "${workspaceFolder}/Python/TRexSelector",
+        "cwd": "${workspaceFolder}/Python/TRexSelectorNeo",
         // Set false to step into C extension / pybind11 code via mixed-mode debugging
         "justMyCode": true
     },
