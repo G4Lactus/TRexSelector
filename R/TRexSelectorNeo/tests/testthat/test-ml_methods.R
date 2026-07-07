@@ -688,3 +688,100 @@ test_that("RidgeSolver rejects negative lambda", {
   expect_error(RidgeSolver$new()$solve(matrix(rnorm(20), 5, 4), rnorm(5),
                                         lambda = -1))
 })
+
+
+# =============================================================================
+# Group 15: ElasticNet — coordinate-descent path (enet_gaussian)
+# Index convention: lambda grid is DESCENDING (index 1 = largest lambda).
+# =============================================================================
+
+test_that("ElasticNet path: coef is p x n_lambda, converges, dev_ratio rises", {
+  set.seed(1)
+  n <- 60; p <- 10
+  X <- matrix(rnorm(n * p), n, p)
+  y <- as.numeric(X[, 1] * 2 + X[, 3] - X[, 6] + rnorm(n))
+  en <- ElasticNet$new()
+  en$fit(X, y, alpha = 1.0, n_lambda = 60)
+  cf <- en$get_coef()
+  lam <- en$get_lambdas()
+  expect_equal(nrow(cf), p)
+  expect_equal(ncol(cf), length(lam))
+  expect_true(all(diff(lam) <= 0), label = "lambda grid descending")
+  expect_true(en$converged())
+  dev <- en$get_dev_ratio()
+  expect_true(all(diff(dev) >= -1e-8), label = "dev_ratio non-decreasing")
+  # true signal active at the least-regularised end (last column)
+  expect_true(any(abs(cf[c(1, 3, 6), ncol(cf)]) > 1e-3))
+})
+
+test_that("ElasticNet predict has shape nrow(X_new) x n_lambda", {
+  set.seed(2)
+  n <- 40; p <- 6
+  X <- matrix(rnorm(n * p), n, p)
+  y <- as.numeric(X[, 1] - X[, 2] + rnorm(n))
+  en <- ElasticNet$new()$fit(X, y, alpha = 0.5, n_lambda = 30)
+  pr <- en$predict(X[1:5, ])
+  expect_equal(nrow(pr), 5L)
+  expect_equal(ncol(pr), length(en$get_lambdas()))
+})
+
+test_that("ElasticNet fit_grid matches auto path at the same lambdas", {
+  set.seed(3)
+  n <- 50; p <- 8
+  X <- matrix(rnorm(n * p), n, p)
+  y <- as.numeric(X[, 1] * 1.5 + rnorm(n))
+  auto <- ElasticNet$new()$fit(X, y, alpha = 0.5, n_lambda = 40)
+  grid <- ElasticNet$new()$fit_grid(X, y, auto$get_lambdas(), alpha = 0.5)
+  expect_equal(grid$get_coef(), auto$get_coef(), tolerance = 1e-9)
+})
+
+test_that("ElasticNet ridge limit (alpha=0) leaves all coefficients non-zero", {
+  set.seed(4)
+  n <- 40; p <- 6
+  X <- matrix(rnorm(n * p), n, p)
+  y <- as.numeric(X %*% rep(1, p) + rnorm(n))
+  en <- ElasticNet$new()$fit(X, y, alpha = 0.0, n_lambda = 30)
+  last <- en$get_coef()[, ncol(en$get_coef())]
+  expect_true(all(abs(last) > 0))
+})
+
+
+# =============================================================================
+# Group 16: ElasticNetCV — K-fold CV lambda selection (enet_cv_ccd)
+# Index convention: grid DESCENDING, indices 1-based; index_1se <= index_min.
+# =============================================================================
+
+test_that("ElasticNetCV: cv_1se >= cv_min and index_1se <= index_min (1-based)", {
+  set.seed(5)
+  n <- 80; p <- 12
+  X <- matrix(rnorm(n * p), n, p)
+  y <- as.numeric(X[, 1] * 2 - X[, 4] + rnorm(n))
+  cv <- ElasticNetCV$new()
+  cv$fit(X, y, alpha = 0.5, n_folds = 5, n_lambda = 100, seed = 0)
+  lam <- cv$get_lambdas()
+  expect_true(all(diff(lam) <= 0), label = "lambda grid descending")
+  expect_gte(cv$cv_1se(), cv$cv_min())
+  idx_min <- cv$index_min()
+  idx_1se <- cv$index_1se()
+  expect_true(idx_min >= 1L && idx_min <= length(lam))
+  expect_true(idx_1se >= 1L && idx_1se <= idx_min)
+  expect_length(cv$get_cv_errors(), length(lam))
+  expect_length(cv$get_cv_std(), length(lam))
+})
+
+test_that("ElasticNetCV is deterministic under a fixed seed", {
+  set.seed(6)
+  n <- 60; p <- 8
+  X <- matrix(rnorm(n * p), n, p)
+  y <- as.numeric(X[, 1] - X[, 3] + rnorm(n))
+  a <- ElasticNetCV$new()$fit(X, y, alpha = 0.5, n_folds = 5, n_lambda = 50, seed = 9)
+  b <- ElasticNetCV$new()$fit(X, y, alpha = 0.5, n_folds = 5, n_lambda = 50, seed = 9)
+  expect_equal(a$cv_min(), b$cv_min())
+  expect_equal(a$get_cv_errors(), b$get_cv_errors())
+})
+
+test_that("ElasticNetCV rejects dimension mismatch and invalid folds", {
+  X <- matrix(rnorm(50 * 5), 50, 5)
+  expect_error(ElasticNetCV$new()$fit(X, rnorm(49)))
+  expect_error(ElasticNetCV$new()$fit(X, rnorm(50), n_folds = 1))
+})

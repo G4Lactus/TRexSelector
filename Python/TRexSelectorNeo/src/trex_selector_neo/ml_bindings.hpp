@@ -30,9 +30,10 @@
 #include <ml_methods/scaler_methods/z_score_scaler.hpp>
 #include <ml_methods/scaler_methods/lp_norm_scaler.hpp>
 #include <ml_methods/scaler_methods/data_transformer.hpp>
-// ml_methods includes (model_selection: ridge_cv/ridge_gcv moved to TRex_Research — bindings TBD)
-// #include <ml_methods/model_selection/ridge_cv.hpp>
-// #include <ml_methods/model_selection/ridge_gcv.hpp>
+// ml_methods includes (model_selection: the former ridge_cv/ridge_gcv were
+// moved to TRex_Research; the SVD-path ridge CV and the CCD elastic-net remain)
+#include <ml_methods/model_selection/ridge_cv_svd.hpp>
+#include <ml_methods/model_selection/enet_cv_ccd.hpp>
 #include <ml_methods/svd/svd.hpp>
 #include <ml_methods/pca/pca.hpp>
 #include <ml_methods/ridge_regression/ridge.hpp>
@@ -285,10 +286,137 @@ inline void bind_ml_methods(py::module& m) {
 
 
     // =========================================================================
-    // Ridge Regression CV bindings intentionally omitted: ridge_cv / ridge_gcv
-    // were moved to TRex_Research. Python bindings for ridge_cv_svd and
-    // enet_cv_ccd are out of scope here (see project notes).
+    // Model selection: Ridge CV (SVD path) and Elastic-Net (CCD path + CV)
     // =========================================================================
+    using trex::ml_methods::model_selection::ridge_cv_svd;
+    using trex::ml_methods::model_selection::enet_gaussian;
+    using trex::ml_methods::model_selection::enet_cv_ccd;
+
+    /**
+     * @brief K-fold cross-validated ridge regression (SVD path per fold).
+     *
+     * @details Selects the ridge penalty by K-fold CV over a log-spaced grid,
+     *          returning glmnet-style lambda.min / lambda.1se. Mirrors the R
+     *          RidgeCV R6 class. Indices are 0-based (add 1 for R parity).
+     */
+    py::class_<ridge_cv_svd>(m, "RidgeCV")
+        .def(py::init<>())
+        .def("fit",
+            [](ridge_cv_svd& self, Eigen::Ref<const Eigen::MatrixXd> X,
+               Eigen::Ref<const Eigen::VectorXd> y, int n_folds,
+               Eigen::Index n_lambda, double lambda_ratio, unsigned int seed)
+               -> ridge_cv_svd& {
+                self.fit(X, y, n_folds, n_lambda, lambda_ratio, seed);
+                return self;
+            },
+            py::arg("X"), py::arg("y"), py::arg("n_folds") = 10,
+            py::arg("n_lambda") = 1000, py::arg("lambda_ratio") = 1000.0,
+            py::arg("seed") = 0, py::return_value_policy::reference_internal,
+            "Fit K-fold CV over a log-spaced ridge grid.")
+        .def("cv_min", &ridge_cv_svd::cv_min, "lambda minimizing mean CV MSE.")
+        .def("cv_1se", &ridge_cv_svd::cv_1se, "Largest lambda within 1 SE of the min.")
+        .def("index_min", &ridge_cv_svd::index_min, "0-based index of lambda.min.")
+        .def("index_1se", &ridge_cv_svd::index_1se, "0-based index of lambda.1se.")
+        .def("lambdas", &ridge_cv_svd::lambdas, "Lambda grid used (descending).")
+        .def("cv_mse", &ridge_cv_svd::cv_mse, "Mean CV MSE per lambda.")
+        .def("cv_sem", &ridge_cv_svd::cv_sem, "Standard error of the CV MSE per lambda.");
+
+    /**
+     * @brief Elastic-net coordinate-descent path (glmnet-equivalent).
+     *
+     * @details Fits the EN coefficient path over an auto-generated glmnet-style
+     *          lambda grid, or over an explicit grid via fit_grid(). Reports
+     *          coefficients in the ORIGINAL predictor scale, intercepts, the
+     *          deviance-ratio path, and predictions for new data.
+     */
+    py::class_<enet_gaussian>(m, "ElasticNet")
+        .def(py::init<>())
+        .def("fit",
+            [](enet_gaussian& self, Eigen::Ref<const Eigen::MatrixXd> X,
+               Eigen::Ref<const Eigen::VectorXd> y, double alpha,
+               Eigen::Index n_lambda, double lambda_min_ratio, bool standardize,
+               bool intercept, bool use_strong_rule, int max_iter, double tol)
+               -> enet_gaussian& {
+                self.fit(X, y, alpha, n_lambda, lambda_min_ratio, standardize,
+                         intercept, use_strong_rule, max_iter, tol);
+                return self;
+            },
+            py::arg("X"), py::arg("y"), py::arg("alpha") = 1.0,
+            py::arg("n_lambda") = 100, py::arg("lambda_min_ratio") = -1.0,
+            py::arg("standardize") = true, py::arg("intercept") = true,
+            py::arg("use_strong_rule") = false, py::arg("max_iter") = 100000,
+            py::arg("tol") = 1e-7, py::return_value_policy::reference_internal,
+            "Fit the EN path over an auto-generated glmnet-style lambda grid "
+            "(alpha: 1 = lasso, 0 = ridge).")
+        .def("fit_grid",
+            [](enet_gaussian& self, Eigen::Ref<const Eigen::MatrixXd> X,
+               Eigen::Ref<const Eigen::VectorXd> y,
+               Eigen::Ref<const Eigen::VectorXd> lambda_grid, double alpha,
+               bool standardize, bool intercept, bool use_strong_rule,
+               int max_iter, double tol) -> enet_gaussian& {
+                self.fit(X, y, lambda_grid, alpha, standardize, intercept,
+                         use_strong_rule, max_iter, tol);
+                return self;
+            },
+            py::arg("X"), py::arg("y"), py::arg("lambda_grid"),
+            py::arg("alpha") = 1.0, py::arg("standardize") = true,
+            py::arg("intercept") = true, py::arg("use_strong_rule") = false,
+            py::arg("max_iter") = 100000, py::arg("tol") = 1e-7,
+            py::return_value_policy::reference_internal,
+            "Fit the EN path at an explicit lambda grid (sorted descending "
+            "internally); use to evaluate at exactly glmnet's lambda sequence.")
+        .def("coef", &enet_gaussian::coef,
+             "Coefficient path in original predictor scale (p x n_lambda).")
+        .def("intercepts", &enet_gaussian::intercepts,
+             "Intercept per lambda (zero if intercept=False).")
+        .def("lambdas", &enet_gaussian::lambdas, "Lambda grid used (descending).")
+        .def("dev_ratio", &enet_gaussian::dev_ratio,
+             "Fraction of null deviance explained per fitted lambda (glmnet %Dev).")
+        .def("converged", &enet_gaussian::converged,
+             "True if every lambda reached the convergence tolerance.")
+        .def("n_nonconverged", &enet_gaussian::n_nonconverged,
+             "Number of lambda points that hit max_iter without converging.")
+        .def("predict",
+            [](const enet_gaussian& self, Eigen::Ref<const Eigen::MatrixXd> X_new) {
+                return self.predict(X_new);
+            },
+            py::arg("X_new"), "Predictions per lambda: (X_new @ coef) + intercept.");
+
+    /**
+     * @brief K-fold cross-validated elastic net (coordinate-descent per fold).
+     *
+     * @details Selects the elastic-net penalty by K-fold CV over a shared
+     *          glmnet-style grid, returning lambda.min / lambda.1se. The mixing
+     *          alpha defaults to 0 (ridge), matching the C++ default. Indices
+     *          are 0-based (add 1 for R parity).
+     */
+    py::class_<enet_cv_ccd>(m, "ElasticNetCV")
+        .def(py::init<>())
+        .def("fit",
+            [](enet_cv_ccd& self, Eigen::Ref<const Eigen::MatrixXd> X,
+               Eigen::Ref<const Eigen::VectorXd> y, double alpha, int n_folds,
+               Eigen::Index n_lambda, double lambda_min_ratio, unsigned int seed,
+               bool standardize, bool intercept, int max_iter, double tol)
+               -> enet_cv_ccd& {
+                self.fit(X, y, alpha, n_folds, n_lambda, lambda_min_ratio, seed,
+                         standardize, intercept, max_iter, tol);
+                return self;
+            },
+            py::arg("X"), py::arg("y"), py::arg("alpha") = 0.0,
+            py::arg("n_folds") = 10, py::arg("n_lambda") = 100,
+            py::arg("lambda_min_ratio") = -1.0, py::arg("seed") = 0,
+            py::arg("standardize") = true, py::arg("intercept") = true,
+            py::arg("max_iter") = 100000, py::arg("tol") = 1e-7,
+            py::return_value_policy::reference_internal,
+            "Fit K-fold CV over a glmnet-style EN grid (alpha: 1 = lasso, "
+            "0 = ridge).")
+        .def("cv_min", &enet_cv_ccd::cv_min, "lambda minimizing mean CV MSE.")
+        .def("cv_1se", &enet_cv_ccd::cv_1se, "Largest lambda within 1 SE of the min.")
+        .def("index_min", &enet_cv_ccd::index_min, "0-based index of lambda.min.")
+        .def("index_1se", &enet_cv_ccd::index_1se, "0-based index of lambda.1se.")
+        .def("lambdas", &enet_cv_ccd::lambdas, "Lambda grid used (descending).")
+        .def("cv_mse", &enet_cv_ccd::cv_mse, "Mean CV MSE per lambda.")
+        .def("cv_sem", &enet_cv_ccd::cv_sem, "Standard error of the CV MSE per lambda.");
 
 
     // =================================================================================

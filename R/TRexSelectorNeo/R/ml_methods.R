@@ -415,6 +415,235 @@ RidgeCV <- R6::R6Class("RidgeCV",
 
 
 # ==============================================================================
+# ElasticNet
+# ==============================================================================
+
+#' @title Elastic Net (coordinate-descent path)
+#'
+#' @description Fits the elastic-net coefficient path via coordinate descent
+#'   over a glmnet-style lambda grid (or an explicit grid). Reports coefficients
+#'   in the original predictor scale, intercepts, the deviance-ratio path, and
+#'   predictions for new data. The mixing parameter \code{alpha} interpolates
+#'   between lasso (\code{alpha = 1}) and ridge (\code{alpha = 0}).
+#'
+#' @examples
+#' set.seed(1)
+#' n <- 50; p <- 8
+#' X <- matrix(rnorm(n * p), n, p)
+#' y <- X[, 1] * 2 + X[, 3] - X[, 5] + rnorm(n)
+#' en <- ElasticNet$new()
+#' en$fit(X, y, alpha = 1.0)
+#' dim(en$get_coef())        # p x n_lambda
+#' en$predict(X[1:5, ])
+#'
+#' @export
+ElasticNet <- R6::R6Class("ElasticNet",
+  private = list(
+    cpp_ptr = NULL
+  ),
+  public = list(
+    #' @description Initialize the ElasticNet object.
+    initialize = function() {
+      private$cpp_ptr <- enet_create()
+    },
+
+    #' @description Fit the EN path over an auto-generated glmnet-style grid.
+    #'
+    #' @param X Predictor matrix (n x p).
+    #' @param y Response vector (n).
+    #' @param alpha Mixing in \code{[0, 1]}: 1 = lasso, 0 = ridge (default 1).
+    #' @param n_lambda Grid size (default 100).
+    #' @param lambda_min_ratio Ratio lambda_min/lambda_max; negative (default)
+    #'   auto-selects glmnet's rule.
+    #' @param standardize Standardize columns to unit SD (default TRUE).
+    #' @param intercept Fit an unpenalized intercept (default TRUE).
+    #' @param use_strong_rule Enable the sequential strong rule (default FALSE).
+    #' @param max_iter Max CD sweeps per lambda (default 100000).
+    #' @param tol Convergence tolerance (default 1e-7).
+    #' @return Invisibly returns \code{self}.
+    fit = function(X, y, alpha = 1.0, n_lambda = 100, lambda_min_ratio = -1.0,
+                   standardize = TRUE, intercept = TRUE, use_strong_rule = FALSE,
+                   max_iter = 100000, tol = 1e-7) {
+      if (!is.matrix(X)) X <- as.matrix(X)
+      stopifnot(is.numeric(y), nrow(X) == length(y))
+      enet_fit(private$cpp_ptr, X, as.numeric(y), as.numeric(alpha),
+               as.integer(n_lambda), as.numeric(lambda_min_ratio),
+               as.logical(standardize), as.logical(intercept),
+               as.logical(use_strong_rule), as.integer(max_iter), as.numeric(tol))
+      invisible(self)
+    },
+
+    #' @description Fit the EN path at an explicit lambda grid (sorted
+    #'   descending internally); use to evaluate at exactly glmnet's sequence.
+    #'
+    #' @param X Predictor matrix (n x p).
+    #' @param y Response vector (n).
+    #' @param lambda_grid Explicit lambda values (any order, > 0).
+    #' @param alpha Mixing in \code{[0, 1]} (default 1).
+    #' @param standardize Standardize columns to unit SD (default TRUE).
+    #' @param intercept Fit an unpenalized intercept (default TRUE).
+    #' @param use_strong_rule Enable the sequential strong rule (default FALSE).
+    #' @param max_iter Max CD sweeps per lambda (default 100000).
+    #' @param tol Convergence tolerance (default 1e-7).
+    #' @return Invisibly returns \code{self}.
+    fit_grid = function(X, y, lambda_grid, alpha = 1.0, standardize = TRUE,
+                        intercept = TRUE, use_strong_rule = FALSE,
+                        max_iter = 100000, tol = 1e-7) {
+      if (!is.matrix(X)) X <- as.matrix(X)
+      stopifnot(is.numeric(y), nrow(X) == length(y), is.numeric(lambda_grid))
+      enet_fit_grid(private$cpp_ptr, X, as.numeric(y), as.numeric(lambda_grid),
+                    as.numeric(alpha), as.logical(standardize),
+                    as.logical(intercept), as.logical(use_strong_rule),
+                    as.integer(max_iter), as.numeric(tol))
+      invisible(self)
+    },
+
+    #' @description Coefficient path in original predictor scale (p x n_lambda).
+    #' @return Numeric matrix.
+    get_coef = function() {
+      enet_get_coef(private$cpp_ptr)
+    },
+
+    #' @description Intercept per lambda (zero if \code{intercept = FALSE}).
+    #' @return Numeric vector.
+    get_intercepts = function() {
+      enet_get_intercepts(private$cpp_ptr)
+    },
+
+    #' @description Lambda grid actually used (descending).
+    #' @return Numeric vector.
+    get_lambdas = function() {
+      enet_get_lambdas(private$cpp_ptr)
+    },
+
+    #' @description Fraction of null deviance explained per lambda (glmnet %Dev).
+    #' @return Numeric vector.
+    get_dev_ratio = function() {
+      enet_get_dev_ratio(private$cpp_ptr)
+    },
+
+    #' @description Whether every lambda reached the convergence tolerance.
+    #' @return Logical scalar.
+    converged = function() {
+      enet_converged(private$cpp_ptr)
+    },
+
+    #' @description Predictions per lambda for new data.
+    #' @param X_new Predictor matrix with the same number of columns as the fit.
+    #' @return Numeric matrix (nrow(X_new) x n_lambda).
+    predict = function(X_new) {
+      if (!is.matrix(X_new)) X_new <- as.matrix(X_new)
+      enet_predict(private$cpp_ptr, X_new)
+    }
+  )
+)
+
+
+# ==============================================================================
+# ElasticNetCV
+# ==============================================================================
+
+#' @title Elastic Net with Cross-Validation
+#'
+#' @description Selects the elastic-net penalty by K-fold cross-validation over
+#'   a shared glmnet-style lambda grid (coordinate descent per fold), returning
+#'   \code{lambda.min} and \code{lambda.1se}. The mixing parameter \code{alpha}
+#'   interpolates between lasso (\code{alpha = 1}) and ridge (\code{alpha = 0}).
+#'
+#' @examples
+#' set.seed(1)
+#' n <- 60; p <- 10
+#' X <- matrix(rnorm(n * p), n, p)
+#' y <- X[, 1] * 2 - X[, 4] + rnorm(n)
+#' cv <- ElasticNetCV$new()
+#' cv$fit(X, y, alpha = 0.5)
+#' cv$cv_min()
+#'
+#' @export
+ElasticNetCV <- R6::R6Class("ElasticNetCV",
+  private = list(
+    cpp_ptr = NULL
+  ),
+  public = list(
+    #' @description Initialize the ElasticNetCV object.
+    initialize = function() {
+      private$cpp_ptr <- enet_cv_create()
+    },
+
+    #' @description Fit K-fold CV over a glmnet-style grid.
+    #'
+    #' @param X Predictor matrix (n x p).
+    #' @param y Response vector (n).
+    #' @param alpha Mixing in \code{[0, 1]}: 1 = lasso, 0 = ridge (default 0).
+    #' @param n_folds Number of folds (default 10).
+    #' @param n_lambda Grid size (default 100).
+    #' @param lambda_min_ratio Ratio lambda_min/lambda_max; negative (default)
+    #'   auto-selects glmnet's rule.
+    #' @param seed Fold-permutation RNG seed (default 0).
+    #' @param standardize Standardize columns to unit SD (default TRUE).
+    #' @param intercept Fit an unpenalized intercept (default TRUE).
+    #' @param max_iter Max CD sweeps per lambda (default 100000).
+    #' @param tol Convergence tolerance (default 1e-7).
+    #' @return Invisibly returns \code{self}.
+    fit = function(X, y, alpha = 0.0, n_folds = 10, n_lambda = 100,
+                   lambda_min_ratio = -1.0, seed = 0, standardize = TRUE,
+                   intercept = TRUE, max_iter = 100000, tol = 1e-7) {
+      if (!is.matrix(X)) X <- as.matrix(X)
+      stopifnot(is.numeric(y), nrow(X) == length(y))
+      enet_cv_fit(private$cpp_ptr, X, as.numeric(y), as.numeric(alpha),
+                  as.integer(n_folds), as.integer(n_lambda),
+                  as.numeric(lambda_min_ratio), as.integer(seed),
+                  as.logical(standardize), as.logical(intercept),
+                  as.integer(max_iter), as.numeric(tol))
+      invisible(self)
+    },
+
+    #' @description Lambda that minimizes the mean CV error.
+    #' @return Scalar numeric.
+    cv_min = function() {
+      enet_cv_min(private$cpp_ptr)
+    },
+
+    #' @description Largest lambda within one SE of the minimum (1SE rule).
+    #' @return Scalar numeric.
+    cv_1se = function() {
+      enet_cv_1se(private$cpp_ptr)
+    },
+
+    #' @description Index (1-based) of \code{lambda.min}.
+    #' @return Integer.
+    index_min = function() {
+      enet_cv_index_min(private$cpp_ptr) + 1L
+    },
+
+    #' @description Index (1-based) of \code{lambda.1se}.
+    #' @return Integer.
+    index_1se = function() {
+      enet_cv_index_1se(private$cpp_ptr) + 1L
+    },
+
+    #' @description Lambda grid used (descending).
+    #' @return Numeric vector.
+    get_lambdas = function() {
+      enet_cv_get_lambdas(private$cpp_ptr)
+    },
+
+    #' @description Mean CV MSE per lambda.
+    #' @return Numeric vector.
+    get_cv_errors = function() {
+      enet_cv_get_cv_errors(private$cpp_ptr)
+    },
+
+    #' @description Standard error of the CV MSE per lambda.
+    #' @return Numeric vector.
+    get_cv_std = function() {
+      enet_cv_get_cv_std(private$cpp_ptr)
+    }
+  )
+)
+
+
+# ==============================================================================
 # SVDSolver
 # ==============================================================================
 
