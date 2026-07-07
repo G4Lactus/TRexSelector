@@ -315,6 +315,12 @@ protected:
      */
     bool X_is_normalized_{false};
 
+    /** @brief Restore X to its original scale and release the shared-buffer
+     *  claim. Idempotent (no-op if X is already denormalized). Subclasses that
+     *  restore X at the end of their own select() override must call this
+     *  instead of denormalizing directly, so the buffer claim is released. */
+    void denormalizeAndReleaseX();
+
     // ============================================================
     // Data Members — Results
     // ============================================================

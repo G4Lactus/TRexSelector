@@ -489,4 +489,71 @@ TEST(TRexCoreTest, DirectDummies_HonourUserSeedAndAreStableWithinRun) {
 }
 
 // ========================================================================================
+// Shared-buffer claim guard
+// ========================================================================================
+
+/** @brief Two selectors on the SAME Eigen::Map must not coexist: the second
+ *  construction throws, because both would normalize/restore the one buffer in
+ *  place and silently corrupt each other. */
+TEST(TRexCoreTest, SharedBufferClaim_ThrowsOnSecondSelector) {
+    SyntheticData data(60, 15, {1, 2, 3}, {5.0, -3.0, 2.0}, 1.0, 42);
+    auto X = data.getX();
+    auto y = data.getY();
+    Eigen::Map<Eigen::MatrixXd> X_map(X.data(), X.rows(), X.cols());
+    Eigen::Map<Eigen::VectorXd> y_map(y.data(), y.size());
+
+    TRexControlParameter ctrl;
+    ctrl.K = 3;
+    ctrl.max_dummy_multiplier = 2;
+
+    TRexSelector first(X_map, y_map, 0.1, ctrl, 42, false);
+    // Second selector on the SAME buffer while `first` still holds it normalized.
+    EXPECT_THROW(
+        { TRexSelector second(X_map, y_map, 0.1, ctrl, 42, false); },
+        std::runtime_error);
+}
+
+/** @brief After a selector finishes select() (which restores X and releases the
+ *  claim) a new selector on the same buffer is allowed — mirrors the biobank
+ *  screen->fallback pattern. */
+TEST(TRexCoreTest, SharedBufferClaim_ReleasedAfterSelect) {
+    SyntheticData data(60, 15, {1, 2, 3}, {5.0, -3.0, 2.0}, 1.0, 42);
+    auto X = data.getX();
+    auto y = data.getY();
+    Eigen::Map<Eigen::MatrixXd> X_map(X.data(), X.rows(), X.cols());
+    Eigen::Map<Eigen::VectorXd> y_map(y.data(), y.size());
+
+    TRexControlParameter ctrl;
+    ctrl.K = 3;
+    ctrl.max_dummy_multiplier = 2;
+
+    {
+        TRexSelector first(X_map, y_map, 0.1, ctrl, 42, false);
+        first.select();   // restores X, releases the claim
+        // Second selector on the same buffer is now permitted.
+        EXPECT_NO_THROW(
+            { TRexSelector second(X_map, y_map, 0.1, ctrl, 42, false); });
+    }
+}
+
+/** @brief Selectors on DISTINCT buffers never conflict. */
+TEST(TRexCoreTest, SharedBufferClaim_DistinctBuffersOk) {
+    SyntheticData data(60, 15, {1, 2, 3}, {5.0, -3.0, 2.0}, 1.0, 42);
+    auto Xa = data.getX();
+    auto Xb = data.getX();   // independent copy
+    auto y = data.getY();
+    Eigen::Map<Eigen::MatrixXd> Xam(Xa.data(), Xa.rows(), Xa.cols());
+    Eigen::Map<Eigen::MatrixXd> Xbm(Xb.data(), Xb.rows(), Xb.cols());
+    Eigen::Map<Eigen::VectorXd> y_map(y.data(), y.size());
+
+    TRexControlParameter ctrl;
+    ctrl.K = 3;
+    ctrl.max_dummy_multiplier = 2;
+
+    TRexSelector s1(Xam, y_map, 0.1, ctrl, 42, false);
+    EXPECT_NO_THROW(
+        { TRexSelector s2(Xbm, y_map, 0.1, ctrl, 42, false); });
+}
+
+// ========================================================================================
 } /* End of namespace trex::test::trex_selector_methods::trex_core */
