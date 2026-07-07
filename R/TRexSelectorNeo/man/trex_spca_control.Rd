@@ -11,6 +11,7 @@ trex_spca_control(
   lambda_2 = -1,
   lambda2_method = "CV_1SE_CCD",
   en_solver = "TENET_AUG",
+  tenet_aug_use_lars = FALSE,
   K = 20L,
   max_dummy_multiplier = 10L
 )
@@ -41,7 +42,14 @@ a positive value is used as-is.}
 
 \item{en_solver}{Character, Elastic Net solver variant used internally:
 \code{"TENET_AUG"} (default, row-augmented LASSO) or \code{"TENET"}
-(Gram-based).}
+(Gram-based). Both select the same variables; this is a solver-equivalence
+switch, not a LARS-vs-LASSO choice (see \code{tenet_aug_use_lars}).}
+
+\item{tenet_aug_use_lars}{Logical. When \code{en_solver = "TENET_AUG"}, run
+the per-PC augmented sub-selector with a pure-LARS inner path that never
+drops variables (\code{TRUE}) instead of the default LASSO inner path
+(\code{FALSE}, default). This is the LARS-vs-LASSO distinction; ignored for
+\code{en_solver = "TENET"}.}
 
 \item{K}{Integer, number of T-Rex random experiments per PC (default: 20).}
 

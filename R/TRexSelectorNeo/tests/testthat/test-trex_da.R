@@ -56,6 +56,32 @@ test_that("TRexDASelector executes correctly with valid data", {
 
 
 
+test_that("TRexDASelector supports da_method = 'NN' (nearest-neighbour sweep)", {
+  set.seed(42)
+  n <- 50
+  p <- 20
+  X <- matrix(rnorm(n * p), n, p)
+  y <- X[, 1] * 5 + X[, 2] * -4 + X[, 3] * 3 + rnorm(n)
+
+  # NN must be accepted (previously the R glue threw "Unknown DAMethod").
+  # hc_grid_length = 0 lets the core auto-select min(20, p).
+  selector <- TRexDASelector$new(
+    X, y, tFDR = 0.2, verbose = FALSE,
+    da_control = trex_da_control(da_method = "NN"),
+    control = trex_control(K = 5)
+  )
+  expect_no_error(selector$select())
+  expect_identical(selector$da_method_used, "NN")
+  expect_type(selector$selected_indices, "integer")
+  if (length(selector$selected_indices) > 0) {
+    expect_true(all(selector$selected_indices >= 1 &
+                    selector$selected_indices <= p))
+  }
+  # NN runs a BT-style rho grid
+  expect_gt(length(selector$rho_grid), 0L)
+})
+
+
 test_that("TRexDASelector behaves memory safe with memory mapping enabled", {
 
   set.seed(42)

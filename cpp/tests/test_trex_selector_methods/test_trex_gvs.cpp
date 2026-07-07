@@ -358,5 +358,51 @@ TEST_F(TRexGVSTest, EndToEnd_TENETAugMatchesTENET) {
         << "TENET and TENETAug selected different variable sets.";
 }
 
+
+/** @brief DIAGNOSTIC: equivalence must also hold at a FIXED lambda_2 (the doc
+ *  claims mathematical equivalence for any lambda2 > 0). Reproduces the R
+ *  conditions where a divergence was observed: fixed lambda_2 = 0.1, small
+ *  design, default-ish K / dummy multiplier. */
+TEST_F(TRexGVSTest, EndToEnd_TENETAugMatchesTENET_FixedLambda2) {
+    const Eigen::Index n = 60, p = 15;
+
+    // Unstructured iid-Gaussian design with signal in a few columns, mirroring
+    // the R reproduction (which diverged). Built once, shared by both variants.
+    Eigen::MatrixXd Xd(n, p);
+    Eigen::VectorXd yd(n);
+    {
+        std::mt19937 rng(123);
+        std::normal_distribution<double> N01(0.0, 1.0);
+        for (Eigen::Index j = 0; j < p; ++j)
+            for (Eigen::Index i = 0; i < n; ++i) Xd(i, j) = N01(rng);
+        for (Eigen::Index i = 0; i < n; ++i)
+            yd(i) = 3.0 * Xd(i, 0) - 2.0 * Xd(i, 1) + 2.0 * Xd(i, 4) + N01(rng);
+    }
+
+    auto run_variant = [&](ENSolverType en_solver, SolverTypeForTRex st) {
+        Eigen::Map<Eigen::MatrixXd> Xm(Xd.data(), Xd.rows(), Xd.cols());
+        Eigen::Map<Eigen::VectorXd> ym(yd.data(), yd.size());
+        TRexGVSControlParameter ctrl;
+        ctrl.gvs_type  = GVSType::EN;
+        ctrl.en_solver = en_solver;
+        ctrl.lambda_2  = 0.1;                    // FIXED, > 0
+        ctrl.trex_ctrl.solver_type = st;
+        ctrl.trex_ctrl.K = 20;
+        ctrl.trex_ctrl.max_dummy_multiplier = 10;
+        TRexGVSSelector trex(Xm, ym, 0.2, ctrl, 1, false);
+        return trex.select().selected_var;
+    };
+
+    const Eigen::VectorXi sel_tenet =
+        run_variant(ENSolverType::TENET, SolverTypeForTRex::TENET);
+    const Eigen::VectorXi sel_aug =
+        run_variant(ENSolverType::TENET_AUG, SolverTypeForTRex::TENET_AUG);
+
+    EXPECT_TRUE((sel_tenet.array() == sel_aug.array()).all())
+        << "TENET and TENETAug diverged at fixed lambda_2 = 0.1.\n"
+        << "  TENET     n_selected = " << sel_tenet.sum() << "\n"
+        << "  TENETAug  n_selected = " << sel_aug.sum();
+}
+
 // ========================================================================================
 } /* End of namespace trex::test::trex_selector_methods::trex_gvs */

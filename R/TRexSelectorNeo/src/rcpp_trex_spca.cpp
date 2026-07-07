@@ -77,6 +77,14 @@ TRexSPCAControlParameter parse_spca_control(const Rcpp::List& spca_ctrl_list) {
         }
     }
 
+    // LARS-vs-LASSO inner path for the per-PC TENET_AUG sub-selector. The SPCA
+    // orchestrator copies gvs_ctrl (overriding only gvs_type/en_solver), so the
+    // flag flows through to each per-PC augmented solver.
+    if (spca_ctrl_list.containsElementNamed("tenet_aug_use_lars")) {
+        ctrl.gvs_ctrl.tenet_aug_use_lars =
+            Rcpp::as<bool>(spca_ctrl_list["tenet_aug_use_lars"]);
+    }
+
     if (spca_ctrl_list.containsElementNamed("lambda2_method")) {
         std::string method_str = spca_ctrl_list["lambda2_method"];
         if (method_str == "CV_1SE_SVD") {

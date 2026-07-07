@@ -173,11 +173,8 @@ tc::TRexSelector::SelectionResult ScreenTRexSelector::select() {
     warm_start_mgr_.cleanup();
     if (memmap_mgr_) { memmap_mgr_->cleanup(); }
 
-    // 11. Restore X to original scale
-    if (X_is_normalized_) {
-        dn::denormalizeX(*X_, norm_params_);
-        X_is_normalized_ = false;
-    }
+    // 11. Restore X to original scale (and release the shared-buffer claim)
+    denormalizeAndReleaseX();
 
     return static_cast<tc::TRexSelector::SelectionResult>(screen_result_);
 }

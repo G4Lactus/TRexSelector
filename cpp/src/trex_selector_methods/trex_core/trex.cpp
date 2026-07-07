@@ -14,7 +14,9 @@
 #include <cstddef>
 #include <iomanip>
 #include <iostream>
+#include <mutex>
 #include <random>
+#include <set>
 #include <sstream>
 #include <string>
 
@@ -37,6 +39,53 @@ namespace wsm = trex::trex_selector_methods::utils::warm_start_manager;
 namespace mm = trex::trex_selector_methods::utils::memmap_manager;
 namespace sd = trex::trex_selector_methods::utils::solver_dispatch;
 namespace er = trex::trex_selector_methods::utils::experiment_runner;
+
+// ===================================================================================
+
+// ---------------------------------------------------------------------------
+// Shared-buffer claim registry
+// ---------------------------------------------------------------------------
+// TRexSelector normalizes X in place (via an Eigen::Map into caller memory)
+// at construction and restores it when select() finishes or on destruction.
+// Two selectors mapped onto the SAME buffer therefore corrupt each other: the
+// first to restore leaves the buffer raw, so the second silently runs on
+// unnormalized data. This registry enforces the contract that at most one live
+// selector may hold a given buffer in its normalized state, turning the silent
+// corruption into a clear, immediate error. Keyed on the buffer base pointer;
+// mutex-guarded so concurrent construction (e.g. under OpenMP) is safe.
+namespace {
+
+std::mutex& bufferRegistryMutex() {
+    static std::mutex m;
+    return m;
+}
+
+std::set<const void*>& bufferRegistry() {
+    static std::set<const void*> reg;
+    return reg;
+}
+
+void claimBufferOrThrow(const void* ptr) {
+    if (ptr == nullptr) { return; }
+    std::lock_guard<std::mutex> lock(bufferRegistryMutex());
+    if (!bufferRegistry().insert(ptr).second) {
+        throw std::runtime_error(
+            "TRexSelector: the input matrix X is already held by another live "
+            "T-Rex selector, which normalizes X in place. Constructing a second "
+            "selector on the same matrix would corrupt both. Give each selector "
+            "its own copy of X, or run them one at a time (construct, select, "
+            "and let each selector go out of scope before creating the next).");
+    }
+}
+
+void releaseBuffer(const void* ptr) {
+    if (ptr == nullptr) { return; }
+    std::lock_guard<std::mutex> lock(bufferRegistryMutex());
+    bufferRegistry().erase(ptr);
+}
+
+} // namespace
+
 
 // ===================================================================================
 
@@ -102,6 +151,17 @@ TRexSelector::TRexSelector(
 
     // 2. Data Preprocessing: Normalize X, center y
     // -----------------------------------------------------
+    // Claim X's buffer BEFORE mutating it: throws if another live selector
+    // already holds this matrix normalized. Released when X is denormalized
+    // (end of select() or destructor). The scope guard releases the claim if
+    // any later construction step throws, so a failed constructor never leaks.
+    claimBufferOrThrow(X_->data());
+    struct ClaimGuard {
+        const void* ptr;
+        bool armed = true;
+        ~ClaimGuard() { if (armed) { releaseBuffer(ptr); } }
+    } claim_guard{X_->data()};
+
     eps_ = (trex_ctrl_.solver_params.tol > 0.0) ?
             trex_ctrl_.solver_params.tol : std::numeric_limits<double>::epsilon();
     dn::centerY(y_, norm_params_);
@@ -144,6 +204,9 @@ TRexSelector::TRexSelector(
     permutation_base_seed_ = (seed_ >= 0)
         ? static_cast<unsigned int>(seed_)
         : std::random_device{}();
+
+    // Construction succeeded: keep the buffer claim (released on denormalize).
+    claim_guard.armed = false;
 }
 
 
@@ -155,9 +218,19 @@ TRexSelector::~TRexSelector() {
     // Helper modules clean up via their own destructors.
 
     // Restore X to original scale (necessary since we use a Map).
+    denormalizeAndReleaseX();
+}
+
+
+// ===================================================================================
+// Denormalize + release the shared-buffer claim (single source of truth)
+// ===================================================================================
+
+void TRexSelector::denormalizeAndReleaseX() {
     if (X_is_normalized_) {
         dn::denormalizeX(*X_, norm_params_);
         X_is_normalized_ = false;
+        releaseBuffer(X_->data());
     }
 }
 
@@ -328,10 +401,7 @@ TRexSelector::SelectionResult TRexSelector::select() {
     // 7. Restore X to original scale
     // -----------------------------------------------------
     if (verbose_) { printProgress("Denormalizing X to original scale.\n"); }
-    if (X_is_normalized_) {
-        dn::denormalizeX(*X_, norm_params_);
-        X_is_normalized_ = false;
-    }
+    denormalizeAndReleaseX();
 
     return result;
 }

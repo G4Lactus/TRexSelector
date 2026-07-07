@@ -117,13 +117,16 @@ trex_control <- function(solver = "TLARS",
 #'
 #' @description Build a control list for the dependency-aware dummy generation in TRexDASelector.
 #'
-#' @param da_method Dependency estimation method: "BT", "AR1", "EQUI" (default: "BT").
+#' @param da_method Dependency estimation method: "BT", "AR1", "EQUI", "NN"
+#'   (default: "BT"). "NN" is a nearest-neighbour correlation-threshold sweep
+#'   (BT-style) over a rho grid of length \code{hc_grid_length}.
 #' @param cor_coef Correlation coefficient for AR1/EQUI. -2.0 triggers auto-estimation
 #'   (default: -2.0).
 #' @param rho_thr_DA Threshold below which equi-correlation is skipped (default: 0.02).
 #' @param hc_linkage Hierarchical clustering linkage: "Single", "Complete", "Average",
 #'   "WPGMA", "Ward" (default: "Single").
-#' @param hc_grid_length Number of grid points for BT calibration (default: 0).
+#' @param hc_grid_length Number of grid points for BT/NN calibration. \code{0}
+#'   (default) lets the core auto-select \code{min(20, p)}.
 #'
 #' @return A named list for use in TRexDASelector.
 #'
@@ -171,7 +174,15 @@ trex_da_control <- function(da_method = "BT",
 #'   \code{"CV_1SE_SVD"}, \code{"CV_MIN_SVD"}.
 #' @param en_solver Elastic Net solver variant for \code{gvs_type = "EN"}:
 #'   \code{"TENET"} (default, Gram-based) or \code{"TENET_AUG"}
-#'   (row-augmented LASSO).
+#'   (row-augmented LASSO). Both are mathematically equivalent for
+#'   \code{lambda_2 > 0} and select the same variables; this switch exists to
+#'   validate solver equivalence, \strong{not} to choose a LARS vs LASSO path
+#'   (for that, see \code{tenet_aug_use_lars}).
+#' @param tenet_aug_use_lars Logical. When \code{en_solver = "TENET_AUG"}, run
+#'   the augmented system with a pure-LARS inner path that never drops variables
+#'   (\code{TRUE}) instead of the default LASSO inner path that can
+#'   (\code{FALSE}, default). This is the LARS-vs-LASSO distinction. Ignored for
+#'   \code{en_solver = "TENET"}.
 #' @param groups Integer vector of manually specified group assignments (1-based, default: NULL).
 #'
 #' @return A named list for use in TRexGVSSelector.
@@ -187,19 +198,21 @@ trex_gvs_control <- function(gvs_type = "EN",
                              lambda_2 = -1.0,
                              lambda2_method = "CV_1SE_CCD",
                              en_solver = "TENET",
+                             tenet_aug_use_lars = FALSE,
                              groups = NULL) {
   lambda2_method <- match.arg(lambda2_method,
                               c("CV_1SE_CCD", "CV_MIN_CCD",
                                 "CV_1SE_SVD", "CV_MIN_SVD"))
   en_solver <- match.arg(en_solver, c("TENET", "TENET_AUG"))
   list(
-    gvs_type       = gvs_type,
-    corr_max       = corr_max,
-    hc_linkage     = hc_linkage,
-    lambda_2       = lambda_2,
-    lambda2_method = lambda2_method,
-    en_solver      = en_solver,
-    groups         = groups
+    gvs_type           = gvs_type,
+    corr_max           = corr_max,
+    hc_linkage         = hc_linkage,
+    lambda_2           = lambda_2,
+    lambda2_method     = lambda2_method,
+    en_solver          = en_solver,
+    tenet_aug_use_lars = as.logical(tenet_aug_use_lars),
+    groups             = groups
   )
 }
 

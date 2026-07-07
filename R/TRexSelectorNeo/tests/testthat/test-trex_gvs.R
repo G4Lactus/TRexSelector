@@ -146,28 +146,30 @@ test_that("TRexGVSSelector warns when control$solver does not match the derived 
   set.seed(42)
   n <- 50
   p <- 10
-  X <- matrix(rnorm(n * p), n, p)
   y <- rnorm(n)
+  # A live selector holds its X buffer normalized in place, so each selector
+  # needs its own copy (see the shared-buffer claim guard). fresh() supplies one.
+  fresh <- function() matrix(rnorm(n * p), n, p)
 
   # Non-matching solver: warning names the derived solver
   expect_warning(
-    TRexGVSSelector$new(X, y, gvs_control = trex_gvs_control(gvs_type = "IEN"),
+    TRexGVSSelector$new(fresh(), y, gvs_control = trex_gvs_control(gvs_type = "IEN"),
                         control = trex_control(solver = "TOMP"), verbose = FALSE),
     'derives solver "TIENET_AUG"'
   )
   expect_warning(
-    TRexGVSSelector$new(X, y, gvs_control = trex_gvs_control(gvs_type = "EN"),
+    TRexGVSSelector$new(fresh(), y, gvs_control = trex_gvs_control(gvs_type = "EN"),
                         control = trex_control(solver = "TLASSO"), verbose = FALSE),
     'derives solver "TENET"'
   )
 
   # Default solver ("TLARS") and matching solver stay silent
   expect_no_warning(
-    TRexGVSSelector$new(X, y, gvs_control = trex_gvs_control(gvs_type = "IEN"),
+    TRexGVSSelector$new(fresh(), y, gvs_control = trex_gvs_control(gvs_type = "IEN"),
                         verbose = FALSE)
   )
   expect_no_warning(
-    TRexGVSSelector$new(X, y, gvs_control = trex_gvs_control(gvs_type = "EN"),
+    TRexGVSSelector$new(fresh(), y, gvs_control = trex_gvs_control(gvs_type = "EN"),
                         control = trex_control(solver = "TENET"), verbose = FALSE)
   )
 })
@@ -177,23 +179,24 @@ test_that("TRexGVSSelector warns when lambda_2 == 0 (degenerate no-ridge)", {
   set.seed(42)
   n <- 50
   p <- 10
-  X <- matrix(rnorm(n * p), n, p)
   y <- rnorm(n)
+  # Each live selector needs its own X buffer (shared-buffer claim guard).
+  fresh <- function() matrix(rnorm(n * p), n, p)
 
   expect_warning(
-    TRexGVSSelector$new(X, y,
+    TRexGVSSelector$new(fresh(), y,
                         gvs_control = trex_gvs_control(gvs_type = "EN", lambda_2 = 0),
                         verbose = FALSE),
     "degenerate no-ridge"
   )
   # Auto (-1) and fixed positive must not warn
   expect_no_warning(
-    TRexGVSSelector$new(X, y,
+    TRexGVSSelector$new(fresh(), y,
                         gvs_control = trex_gvs_control(gvs_type = "EN", lambda_2 = -1),
                         verbose = FALSE)
   )
   expect_no_warning(
-    TRexGVSSelector$new(X, y,
+    TRexGVSSelector$new(fresh(), y,
                         gvs_control = trex_gvs_control(gvs_type = "EN", lambda_2 = 0.05),
                         verbose = FALSE)
   )
@@ -358,4 +361,35 @@ test_that("TRexScreeningSelector correctly executes confidence-based bootstrappi
 
   # Ensure FDR is bounded properly
   expect_true(res_boot_fdr >= 0.0 && res_boot_fdr <= 1.0)
+})
+
+
+test_that("TRexGVSSelector honors tenet_aug_use_lars (LARS vs LASSO inner path)", {
+  set.seed(42)
+  n <- 60; p <- 15
+  X <- matrix(rnorm(n * p), n, p)
+  y <- as.numeric(X[, 1] * 3 + X[, 2] * -2 + X[, 5] * 2 + rnorm(n))
+
+  # tenet_aug_use_lars is the LARS-vs-LASSO inner-path switch for TENET_AUG.
+  # (en_solver TENET vs TENET_AUG is an equivalence knob, NOT this distinction.)
+  ctrl_lasso <- trex_gvs_control(gvs_type = "EN", en_solver = "TENET_AUG",
+                                 tenet_aug_use_lars = FALSE)
+  ctrl_lars  <- trex_gvs_control(gvs_type = "EN", en_solver = "TENET_AUG",
+                                 tenet_aug_use_lars = TRUE)
+  expect_false(ctrl_lasso$tenet_aug_use_lars)
+  expect_true(ctrl_lars$tenet_aug_use_lars)
+
+  # Each selector normalizes its X buffer in place, so run them one at a time
+  # (a helper that constructs, selects, and returns the result) rather than
+  # holding two live selectors on the same matrix (shared-buffer claim guard).
+  run <- function(ctrl) {
+    s <- TRexGVSSelector$new(X, y, tFDR = 0.2, seed = 1, verbose = FALSE,
+                             gvs_control = ctrl)
+    s$select()
+    sort(s$selected_indices)
+  }
+  sel_lasso <- run(ctrl_lasso)
+  sel_lars  <- run(ctrl_lars)
+  expect_type(sel_lasso, "integer")
+  expect_type(sel_lars, "integer")
 })
