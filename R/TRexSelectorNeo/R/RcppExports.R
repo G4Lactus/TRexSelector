@@ -385,6 +385,116 @@ ridge_cv_get_cv_std <- function(ptr) {
     .Call(`_TRexSelectorNeo_ridge_cv_get_cv_std`, ptr)
 }
 
+#' @title Create Elastic Net path
+#' @return XPtr to enet_path
+#' @noRd
+enet_create <- function() {
+    .Call(`_TRexSelectorNeo_enet_create`)
+}
+
+#' @title Fit Elastic Net over an auto-generated glmnet-style grid
+#' @noRd
+enet_fit <- function(ptr, X, y, alpha, n_lambda, lambda_min_ratio, standardize, intercept, use_strong_rule, max_iter, tol) {
+    invisible(.Call(`_TRexSelectorNeo_enet_fit`, ptr, X, y, alpha, n_lambda, lambda_min_ratio, standardize, intercept, use_strong_rule, max_iter, tol))
+}
+
+#' @title Fit Elastic Net at an explicit lambda grid
+#' @noRd
+enet_fit_grid <- function(ptr, X, y, lambda_grid, alpha, standardize, intercept, use_strong_rule, max_iter, tol) {
+    invisible(.Call(`_TRexSelectorNeo_enet_fit_grid`, ptr, X, y, lambda_grid, alpha, standardize, intercept, use_strong_rule, max_iter, tol))
+}
+
+#' @title Elastic Net coefficient path (p x n_lambda, original scale)
+#' @noRd
+enet_get_coef <- function(ptr) {
+    .Call(`_TRexSelectorNeo_enet_get_coef`, ptr)
+}
+
+#' @title Elastic Net intercepts per lambda
+#' @noRd
+enet_get_intercepts <- function(ptr) {
+    .Call(`_TRexSelectorNeo_enet_get_intercepts`, ptr)
+}
+
+#' @title Elastic Net lambda grid (descending)
+#' @noRd
+enet_get_lambdas <- function(ptr) {
+    .Call(`_TRexSelectorNeo_enet_get_lambdas`, ptr)
+}
+
+#' @title Elastic Net deviance-ratio path (glmnet %Dev)
+#' @noRd
+enet_get_dev_ratio <- function(ptr) {
+    .Call(`_TRexSelectorNeo_enet_get_dev_ratio`, ptr)
+}
+
+#' @title Whether every lambda converged
+#' @noRd
+enet_converged <- function(ptr) {
+    .Call(`_TRexSelectorNeo_enet_converged`, ptr)
+}
+
+#' @title Predictions per lambda for new data
+#' @noRd
+enet_predict <- function(ptr, X_new) {
+    .Call(`_TRexSelectorNeo_enet_predict`, ptr, X_new)
+}
+
+#' @title Create Elastic Net CV
+#' @return XPtr to enet_cv
+#' @noRd
+enet_cv_create <- function() {
+    .Call(`_TRexSelectorNeo_enet_cv_create`)
+}
+
+#' @title Fit Elastic Net CV over a glmnet-style grid
+#' @noRd
+enet_cv_fit <- function(ptr, X, y, alpha, n_folds, n_lambda, lambda_min_ratio, seed, standardize, intercept, max_iter, tol) {
+    invisible(.Call(`_TRexSelectorNeo_enet_cv_fit`, ptr, X, y, alpha, n_folds, n_lambda, lambda_min_ratio, seed, standardize, intercept, max_iter, tol))
+}
+
+#' @title Elastic Net CV lambda.min
+#' @noRd
+enet_cv_min <- function(ptr) {
+    .Call(`_TRexSelectorNeo_enet_cv_min`, ptr)
+}
+
+#' @title Elastic Net CV lambda.1se
+#' @noRd
+enet_cv_1se <- function(ptr) {
+    .Call(`_TRexSelectorNeo_enet_cv_1se`, ptr)
+}
+
+#' @title Elastic Net CV index of lambda.min (0-based)
+#' @noRd
+enet_cv_index_min <- function(ptr) {
+    .Call(`_TRexSelectorNeo_enet_cv_index_min`, ptr)
+}
+
+#' @title Elastic Net CV index of lambda.1se (0-based)
+#' @noRd
+enet_cv_index_1se <- function(ptr) {
+    .Call(`_TRexSelectorNeo_enet_cv_index_1se`, ptr)
+}
+
+#' @title Elastic Net CV lambda grid (descending)
+#' @noRd
+enet_cv_get_lambdas <- function(ptr) {
+    .Call(`_TRexSelectorNeo_enet_cv_get_lambdas`, ptr)
+}
+
+#' @title Elastic Net CV mean MSE per lambda
+#' @noRd
+enet_cv_get_cv_errors <- function(ptr) {
+    .Call(`_TRexSelectorNeo_enet_cv_get_cv_errors`, ptr)
+}
+
+#' @title Elastic Net CV standard error per lambda
+#' @noRd
+enet_cv_get_cv_std <- function(ptr) {
+    .Call(`_TRexSelectorNeo_enet_cv_get_cv_std`, ptr)
+}
+
 #' @title Compute SVD
 #'
 #' @description Computes the top-M SVD of a matrix, dispatching between direct,
