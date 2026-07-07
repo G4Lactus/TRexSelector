@@ -34,6 +34,7 @@
 #include <ml_methods/scaler_methods/z_score_scaler.hpp>
 #include <ml_methods/scaler_methods/lp_norm_scaler.hpp>
 #include <ml_methods/model_selection/ridge_cv_svd.hpp>
+#include <ml_methods/model_selection/enet_cv_ccd.hpp>
 #include <ml_methods/svd/svd.hpp>
 #include <ml_methods/pca/pca.hpp>
 #include <ml_methods/ridge_regression/ridge.hpp>
@@ -73,6 +74,11 @@ using namespace trex::ml_methods::model_selection;
 // The ridge_cv_* endpoints are backed by the SVD-path implementation
 // (the former ridge_cv and the GCV variant were removed from the core).
 using ridge_cv = trex::ml_methods::model_selection::ridge_cv_svd;
+
+// Elastic-net (coordinate-descent) endpoints: enet_path is the glmnet-style
+// path fit, enet_cv its K-fold CV lambda selector.
+using enet_path = trex::ml_methods::model_selection::enet_gaussian;
+using enet_cv   = trex::ml_methods::model_selection::enet_cv_ccd;
 using namespace trex::ml_methods::svd;
 using namespace trex::ml_methods::pca;
 using namespace trex::ml_methods::ridge;

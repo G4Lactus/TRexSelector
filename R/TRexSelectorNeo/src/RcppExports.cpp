@@ -459,6 +459,230 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// enet_create
+XPtr<enet_path> enet_create();
+RcppExport SEXP _TRexSelectorNeo_enet_create() {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    rcpp_result_gen = Rcpp::wrap(enet_create());
+    return rcpp_result_gen;
+END_RCPP
+}
+// enet_fit
+void enet_fit(XPtr<enet_path> ptr, const Eigen::MatrixXd& X, const Eigen::VectorXd& y, double alpha, int n_lambda, double lambda_min_ratio, bool standardize, bool intercept, bool use_strong_rule, int max_iter, double tol);
+RcppExport SEXP _TRexSelectorNeo_enet_fit(SEXP ptrSEXP, SEXP XSEXP, SEXP ySEXP, SEXP alphaSEXP, SEXP n_lambdaSEXP, SEXP lambda_min_ratioSEXP, SEXP standardizeSEXP, SEXP interceptSEXP, SEXP use_strong_ruleSEXP, SEXP max_iterSEXP, SEXP tolSEXP) {
+BEGIN_RCPP
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< XPtr<enet_path> >::type ptr(ptrSEXP);
+    Rcpp::traits::input_parameter< const Eigen::MatrixXd& >::type X(XSEXP);
+    Rcpp::traits::input_parameter< const Eigen::VectorXd& >::type y(ySEXP);
+    Rcpp::traits::input_parameter< double >::type alpha(alphaSEXP);
+    Rcpp::traits::input_parameter< int >::type n_lambda(n_lambdaSEXP);
+    Rcpp::traits::input_parameter< double >::type lambda_min_ratio(lambda_min_ratioSEXP);
+    Rcpp::traits::input_parameter< bool >::type standardize(standardizeSEXP);
+    Rcpp::traits::input_parameter< bool >::type intercept(interceptSEXP);
+    Rcpp::traits::input_parameter< bool >::type use_strong_rule(use_strong_ruleSEXP);
+    Rcpp::traits::input_parameter< int >::type max_iter(max_iterSEXP);
+    Rcpp::traits::input_parameter< double >::type tol(tolSEXP);
+    enet_fit(ptr, X, y, alpha, n_lambda, lambda_min_ratio, standardize, intercept, use_strong_rule, max_iter, tol);
+    return R_NilValue;
+END_RCPP
+}
+// enet_fit_grid
+void enet_fit_grid(XPtr<enet_path> ptr, const Eigen::MatrixXd& X, const Eigen::VectorXd& y, const Eigen::VectorXd& lambda_grid, double alpha, bool standardize, bool intercept, bool use_strong_rule, int max_iter, double tol);
+RcppExport SEXP _TRexSelectorNeo_enet_fit_grid(SEXP ptrSEXP, SEXP XSEXP, SEXP ySEXP, SEXP lambda_gridSEXP, SEXP alphaSEXP, SEXP standardizeSEXP, SEXP interceptSEXP, SEXP use_strong_ruleSEXP, SEXP max_iterSEXP, SEXP tolSEXP) {
+BEGIN_RCPP
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< XPtr<enet_path> >::type ptr(ptrSEXP);
+    Rcpp::traits::input_parameter< const Eigen::MatrixXd& >::type X(XSEXP);
+    Rcpp::traits::input_parameter< const Eigen::VectorXd& >::type y(ySEXP);
+    Rcpp::traits::input_parameter< const Eigen::VectorXd& >::type lambda_grid(lambda_gridSEXP);
+    Rcpp::traits::input_parameter< double >::type alpha(alphaSEXP);
+    Rcpp::traits::input_parameter< bool >::type standardize(standardizeSEXP);
+    Rcpp::traits::input_parameter< bool >::type intercept(interceptSEXP);
+    Rcpp::traits::input_parameter< bool >::type use_strong_rule(use_strong_ruleSEXP);
+    Rcpp::traits::input_parameter< int >::type max_iter(max_iterSEXP);
+    Rcpp::traits::input_parameter< double >::type tol(tolSEXP);
+    enet_fit_grid(ptr, X, y, lambda_grid, alpha, standardize, intercept, use_strong_rule, max_iter, tol);
+    return R_NilValue;
+END_RCPP
+}
+// enet_get_coef
+Eigen::MatrixXd enet_get_coef(XPtr<enet_path> ptr);
+RcppExport SEXP _TRexSelectorNeo_enet_get_coef(SEXP ptrSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< XPtr<enet_path> >::type ptr(ptrSEXP);
+    rcpp_result_gen = Rcpp::wrap(enet_get_coef(ptr));
+    return rcpp_result_gen;
+END_RCPP
+}
+// enet_get_intercepts
+Eigen::VectorXd enet_get_intercepts(XPtr<enet_path> ptr);
+RcppExport SEXP _TRexSelectorNeo_enet_get_intercepts(SEXP ptrSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< XPtr<enet_path> >::type ptr(ptrSEXP);
+    rcpp_result_gen = Rcpp::wrap(enet_get_intercepts(ptr));
+    return rcpp_result_gen;
+END_RCPP
+}
+// enet_get_lambdas
+Eigen::VectorXd enet_get_lambdas(XPtr<enet_path> ptr);
+RcppExport SEXP _TRexSelectorNeo_enet_get_lambdas(SEXP ptrSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< XPtr<enet_path> >::type ptr(ptrSEXP);
+    rcpp_result_gen = Rcpp::wrap(enet_get_lambdas(ptr));
+    return rcpp_result_gen;
+END_RCPP
+}
+// enet_get_dev_ratio
+Eigen::VectorXd enet_get_dev_ratio(XPtr<enet_path> ptr);
+RcppExport SEXP _TRexSelectorNeo_enet_get_dev_ratio(SEXP ptrSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< XPtr<enet_path> >::type ptr(ptrSEXP);
+    rcpp_result_gen = Rcpp::wrap(enet_get_dev_ratio(ptr));
+    return rcpp_result_gen;
+END_RCPP
+}
+// enet_converged
+bool enet_converged(XPtr<enet_path> ptr);
+RcppExport SEXP _TRexSelectorNeo_enet_converged(SEXP ptrSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< XPtr<enet_path> >::type ptr(ptrSEXP);
+    rcpp_result_gen = Rcpp::wrap(enet_converged(ptr));
+    return rcpp_result_gen;
+END_RCPP
+}
+// enet_predict
+Eigen::MatrixXd enet_predict(XPtr<enet_path> ptr, const Eigen::MatrixXd& X_new);
+RcppExport SEXP _TRexSelectorNeo_enet_predict(SEXP ptrSEXP, SEXP X_newSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< XPtr<enet_path> >::type ptr(ptrSEXP);
+    Rcpp::traits::input_parameter< const Eigen::MatrixXd& >::type X_new(X_newSEXP);
+    rcpp_result_gen = Rcpp::wrap(enet_predict(ptr, X_new));
+    return rcpp_result_gen;
+END_RCPP
+}
+// enet_cv_create
+XPtr<enet_cv> enet_cv_create();
+RcppExport SEXP _TRexSelectorNeo_enet_cv_create() {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    rcpp_result_gen = Rcpp::wrap(enet_cv_create());
+    return rcpp_result_gen;
+END_RCPP
+}
+// enet_cv_fit
+void enet_cv_fit(XPtr<enet_cv> ptr, const Eigen::MatrixXd& X, const Eigen::VectorXd& y, double alpha, int n_folds, int n_lambda, double lambda_min_ratio, unsigned int seed, bool standardize, bool intercept, int max_iter, double tol);
+RcppExport SEXP _TRexSelectorNeo_enet_cv_fit(SEXP ptrSEXP, SEXP XSEXP, SEXP ySEXP, SEXP alphaSEXP, SEXP n_foldsSEXP, SEXP n_lambdaSEXP, SEXP lambda_min_ratioSEXP, SEXP seedSEXP, SEXP standardizeSEXP, SEXP interceptSEXP, SEXP max_iterSEXP, SEXP tolSEXP) {
+BEGIN_RCPP
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< XPtr<enet_cv> >::type ptr(ptrSEXP);
+    Rcpp::traits::input_parameter< const Eigen::MatrixXd& >::type X(XSEXP);
+    Rcpp::traits::input_parameter< const Eigen::VectorXd& >::type y(ySEXP);
+    Rcpp::traits::input_parameter< double >::type alpha(alphaSEXP);
+    Rcpp::traits::input_parameter< int >::type n_folds(n_foldsSEXP);
+    Rcpp::traits::input_parameter< int >::type n_lambda(n_lambdaSEXP);
+    Rcpp::traits::input_parameter< double >::type lambda_min_ratio(lambda_min_ratioSEXP);
+    Rcpp::traits::input_parameter< unsigned int >::type seed(seedSEXP);
+    Rcpp::traits::input_parameter< bool >::type standardize(standardizeSEXP);
+    Rcpp::traits::input_parameter< bool >::type intercept(interceptSEXP);
+    Rcpp::traits::input_parameter< int >::type max_iter(max_iterSEXP);
+    Rcpp::traits::input_parameter< double >::type tol(tolSEXP);
+    enet_cv_fit(ptr, X, y, alpha, n_folds, n_lambda, lambda_min_ratio, seed, standardize, intercept, max_iter, tol);
+    return R_NilValue;
+END_RCPP
+}
+// enet_cv_min
+double enet_cv_min(XPtr<enet_cv> ptr);
+RcppExport SEXP _TRexSelectorNeo_enet_cv_min(SEXP ptrSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< XPtr<enet_cv> >::type ptr(ptrSEXP);
+    rcpp_result_gen = Rcpp::wrap(enet_cv_min(ptr));
+    return rcpp_result_gen;
+END_RCPP
+}
+// enet_cv_1se
+double enet_cv_1se(XPtr<enet_cv> ptr);
+RcppExport SEXP _TRexSelectorNeo_enet_cv_1se(SEXP ptrSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< XPtr<enet_cv> >::type ptr(ptrSEXP);
+    rcpp_result_gen = Rcpp::wrap(enet_cv_1se(ptr));
+    return rcpp_result_gen;
+END_RCPP
+}
+// enet_cv_index_min
+int enet_cv_index_min(XPtr<enet_cv> ptr);
+RcppExport SEXP _TRexSelectorNeo_enet_cv_index_min(SEXP ptrSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< XPtr<enet_cv> >::type ptr(ptrSEXP);
+    rcpp_result_gen = Rcpp::wrap(enet_cv_index_min(ptr));
+    return rcpp_result_gen;
+END_RCPP
+}
+// enet_cv_index_1se
+int enet_cv_index_1se(XPtr<enet_cv> ptr);
+RcppExport SEXP _TRexSelectorNeo_enet_cv_index_1se(SEXP ptrSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< XPtr<enet_cv> >::type ptr(ptrSEXP);
+    rcpp_result_gen = Rcpp::wrap(enet_cv_index_1se(ptr));
+    return rcpp_result_gen;
+END_RCPP
+}
+// enet_cv_get_lambdas
+Eigen::VectorXd enet_cv_get_lambdas(XPtr<enet_cv> ptr);
+RcppExport SEXP _TRexSelectorNeo_enet_cv_get_lambdas(SEXP ptrSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< XPtr<enet_cv> >::type ptr(ptrSEXP);
+    rcpp_result_gen = Rcpp::wrap(enet_cv_get_lambdas(ptr));
+    return rcpp_result_gen;
+END_RCPP
+}
+// enet_cv_get_cv_errors
+Eigen::VectorXd enet_cv_get_cv_errors(XPtr<enet_cv> ptr);
+RcppExport SEXP _TRexSelectorNeo_enet_cv_get_cv_errors(SEXP ptrSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< XPtr<enet_cv> >::type ptr(ptrSEXP);
+    rcpp_result_gen = Rcpp::wrap(enet_cv_get_cv_errors(ptr));
+    return rcpp_result_gen;
+END_RCPP
+}
+// enet_cv_get_cv_std
+Eigen::VectorXd enet_cv_get_cv_std(XPtr<enet_cv> ptr);
+RcppExport SEXP _TRexSelectorNeo_enet_cv_get_cv_std(SEXP ptrSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< XPtr<enet_cv> >::type ptr(ptrSEXP);
+    rcpp_result_gen = Rcpp::wrap(enet_cv_get_cv_std(ptr));
+    return rcpp_result_gen;
+END_RCPP
+}
 // svd_compute
 Rcpp::List svd_compute(const Eigen::MatrixXd& X, int M);
 RcppExport SEXP _TRexSelectorNeo_svd_compute(SEXP XSEXP, SEXP MSEXP) {
@@ -2098,6 +2322,24 @@ static const R_CallMethodDef CallEntries[] = {
     {"_TRexSelectorNeo_ridge_cv_get_lambdas", (DL_FUNC) &_TRexSelectorNeo_ridge_cv_get_lambdas, 1},
     {"_TRexSelectorNeo_ridge_cv_get_cv_errors", (DL_FUNC) &_TRexSelectorNeo_ridge_cv_get_cv_errors, 1},
     {"_TRexSelectorNeo_ridge_cv_get_cv_std", (DL_FUNC) &_TRexSelectorNeo_ridge_cv_get_cv_std, 1},
+    {"_TRexSelectorNeo_enet_create", (DL_FUNC) &_TRexSelectorNeo_enet_create, 0},
+    {"_TRexSelectorNeo_enet_fit", (DL_FUNC) &_TRexSelectorNeo_enet_fit, 11},
+    {"_TRexSelectorNeo_enet_fit_grid", (DL_FUNC) &_TRexSelectorNeo_enet_fit_grid, 10},
+    {"_TRexSelectorNeo_enet_get_coef", (DL_FUNC) &_TRexSelectorNeo_enet_get_coef, 1},
+    {"_TRexSelectorNeo_enet_get_intercepts", (DL_FUNC) &_TRexSelectorNeo_enet_get_intercepts, 1},
+    {"_TRexSelectorNeo_enet_get_lambdas", (DL_FUNC) &_TRexSelectorNeo_enet_get_lambdas, 1},
+    {"_TRexSelectorNeo_enet_get_dev_ratio", (DL_FUNC) &_TRexSelectorNeo_enet_get_dev_ratio, 1},
+    {"_TRexSelectorNeo_enet_converged", (DL_FUNC) &_TRexSelectorNeo_enet_converged, 1},
+    {"_TRexSelectorNeo_enet_predict", (DL_FUNC) &_TRexSelectorNeo_enet_predict, 2},
+    {"_TRexSelectorNeo_enet_cv_create", (DL_FUNC) &_TRexSelectorNeo_enet_cv_create, 0},
+    {"_TRexSelectorNeo_enet_cv_fit", (DL_FUNC) &_TRexSelectorNeo_enet_cv_fit, 12},
+    {"_TRexSelectorNeo_enet_cv_min", (DL_FUNC) &_TRexSelectorNeo_enet_cv_min, 1},
+    {"_TRexSelectorNeo_enet_cv_1se", (DL_FUNC) &_TRexSelectorNeo_enet_cv_1se, 1},
+    {"_TRexSelectorNeo_enet_cv_index_min", (DL_FUNC) &_TRexSelectorNeo_enet_cv_index_min, 1},
+    {"_TRexSelectorNeo_enet_cv_index_1se", (DL_FUNC) &_TRexSelectorNeo_enet_cv_index_1se, 1},
+    {"_TRexSelectorNeo_enet_cv_get_lambdas", (DL_FUNC) &_TRexSelectorNeo_enet_cv_get_lambdas, 1},
+    {"_TRexSelectorNeo_enet_cv_get_cv_errors", (DL_FUNC) &_TRexSelectorNeo_enet_cv_get_cv_errors, 1},
+    {"_TRexSelectorNeo_enet_cv_get_cv_std", (DL_FUNC) &_TRexSelectorNeo_enet_cv_get_cv_std, 1},
     {"_TRexSelectorNeo_svd_compute", (DL_FUNC) &_TRexSelectorNeo_svd_compute, 2},
     {"_TRexSelectorNeo_pca_create", (DL_FUNC) &_TRexSelectorNeo_pca_create, 4},
     {"_TRexSelectorNeo_pca_fit", (DL_FUNC) &_TRexSelectorNeo_pca_fit, 1},

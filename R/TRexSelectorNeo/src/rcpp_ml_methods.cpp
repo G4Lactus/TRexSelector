@@ -2,6 +2,7 @@
 #include <ml_methods/scaler_methods/z_score_scaler.hpp>
 #include <ml_methods/scaler_methods/lp_norm_scaler.hpp>
 #include <ml_methods/model_selection/ridge_cv_svd.hpp>
+#include <ml_methods/model_selection/enet_cv_ccd.hpp>
 #include <ml_methods/svd/svd.hpp>
 #include <ml_methods/pca/pca.hpp>
 #include <ml_methods/ridge_regression/ridge.hpp>
@@ -19,6 +20,11 @@ using namespace Rcpp;
 // The exported ridge_cv_* endpoints keep their names; the backing class is the
 // SVD-path implementation (the former ridge_cv and the GCV variant were removed).
 using ridge_cv = trex::ml_methods::model_selection::ridge_cv_svd;
+
+// Elastic-net (coordinate-descent) backing classes: enet_gaussian is the path
+// fit (glmnet-equivalent), enet_cv_ccd its K-fold CV lambda selector.
+using enet_path = trex::ml_methods::model_selection::enet_gaussian;
+using enet_cv   = trex::ml_methods::model_selection::enet_cv_ccd;
 
 // =================================================================================
 
@@ -497,6 +503,208 @@ Eigen::VectorXd ridge_cv_get_cv_errors(
 // [[Rcpp::export]]
 Eigen::VectorXd ridge_cv_get_cv_std(
     XPtr<ridge_cv> ptr // NOLINT(performance-unnecessary-value-param)
+) {
+    return ptr->cv_sem();
+}
+
+// =================================================================================
+// Elastic Net — coordinate-descent path (enet_gaussian)
+// =================================================================================
+
+//' @title Create Elastic Net path
+//' @return XPtr to enet_path
+//' @noRd
+// [[Rcpp::export]]
+XPtr<enet_path> enet_create() {
+    return XPtr<enet_path>(new enet_path());
+}
+
+//' @title Fit Elastic Net over an auto-generated glmnet-style grid
+//' @noRd
+// [[Rcpp::export]]
+void enet_fit(
+    XPtr<enet_path> ptr, // NOLINT(performance-unnecessary-value-param)
+    const Eigen::MatrixXd& X,
+    const Eigen::VectorXd& y,
+    double alpha,
+    int n_lambda,
+    double lambda_min_ratio,
+    bool standardize,
+    bool intercept,
+    bool use_strong_rule,
+    int max_iter,
+    double tol
+) {
+    ptr->fit(X, y, alpha, n_lambda, lambda_min_ratio, standardize,
+             intercept, use_strong_rule, max_iter, tol);
+}
+
+//' @title Fit Elastic Net at an explicit lambda grid
+//' @noRd
+// [[Rcpp::export]]
+void enet_fit_grid(
+    XPtr<enet_path> ptr, // NOLINT(performance-unnecessary-value-param)
+    const Eigen::MatrixXd& X,
+    const Eigen::VectorXd& y,
+    const Eigen::VectorXd& lambda_grid,
+    double alpha,
+    bool standardize,
+    bool intercept,
+    bool use_strong_rule,
+    int max_iter,
+    double tol
+) {
+    ptr->fit(X, y, lambda_grid, alpha, standardize, intercept,
+             use_strong_rule, max_iter, tol);
+}
+
+//' @title Elastic Net coefficient path (p x n_lambda, original scale)
+//' @noRd
+// [[Rcpp::export]]
+Eigen::MatrixXd enet_get_coef(
+    XPtr<enet_path> ptr // NOLINT(performance-unnecessary-value-param)
+) {
+    return ptr->coef();
+}
+
+//' @title Elastic Net intercepts per lambda
+//' @noRd
+// [[Rcpp::export]]
+Eigen::VectorXd enet_get_intercepts(
+    XPtr<enet_path> ptr // NOLINT(performance-unnecessary-value-param)
+) {
+    return ptr->intercepts();
+}
+
+//' @title Elastic Net lambda grid (descending)
+//' @noRd
+// [[Rcpp::export]]
+Eigen::VectorXd enet_get_lambdas(
+    XPtr<enet_path> ptr // NOLINT(performance-unnecessary-value-param)
+) {
+    return ptr->lambdas();
+}
+
+//' @title Elastic Net deviance-ratio path (glmnet %Dev)
+//' @noRd
+// [[Rcpp::export]]
+Eigen::VectorXd enet_get_dev_ratio(
+    XPtr<enet_path> ptr // NOLINT(performance-unnecessary-value-param)
+) {
+    return ptr->dev_ratio();
+}
+
+//' @title Whether every lambda converged
+//' @noRd
+// [[Rcpp::export]]
+bool enet_converged(
+    XPtr<enet_path> ptr // NOLINT(performance-unnecessary-value-param)
+) {
+    return ptr->converged();
+}
+
+//' @title Predictions per lambda for new data
+//' @noRd
+// [[Rcpp::export]]
+Eigen::MatrixXd enet_predict(
+    XPtr<enet_path> ptr, // NOLINT(performance-unnecessary-value-param)
+    const Eigen::MatrixXd& X_new
+) {
+    return ptr->predict(X_new);
+}
+
+// =================================================================================
+// Elastic Net CV — coordinate-descent per fold (enet_cv_ccd)
+// =================================================================================
+
+//' @title Create Elastic Net CV
+//' @return XPtr to enet_cv
+//' @noRd
+// [[Rcpp::export]]
+XPtr<enet_cv> enet_cv_create() {
+    return XPtr<enet_cv>(new enet_cv());
+}
+
+//' @title Fit Elastic Net CV over a glmnet-style grid
+//' @noRd
+// [[Rcpp::export]]
+void enet_cv_fit(
+    XPtr<enet_cv> ptr, // NOLINT(performance-unnecessary-value-param)
+    const Eigen::MatrixXd& X,
+    const Eigen::VectorXd& y,
+    double alpha,
+    int n_folds,
+    int n_lambda,
+    double lambda_min_ratio,
+    unsigned int seed,
+    bool standardize,
+    bool intercept,
+    int max_iter,
+    double tol
+) {
+    ptr->fit(X, y, alpha, n_folds, n_lambda, lambda_min_ratio, seed,
+             standardize, intercept, max_iter, tol);
+}
+
+//' @title Elastic Net CV lambda.min
+//' @noRd
+// [[Rcpp::export]]
+double enet_cv_min(
+    XPtr<enet_cv> ptr // NOLINT(performance-unnecessary-value-param)
+) {
+    return ptr->cv_min();
+}
+
+//' @title Elastic Net CV lambda.1se
+//' @noRd
+// [[Rcpp::export]]
+double enet_cv_1se(
+    XPtr<enet_cv> ptr // NOLINT(performance-unnecessary-value-param)
+) {
+    return ptr->cv_1se();
+}
+
+//' @title Elastic Net CV index of lambda.min (0-based)
+//' @noRd
+// [[Rcpp::export]]
+int enet_cv_index_min(
+    XPtr<enet_cv> ptr // NOLINT(performance-unnecessary-value-param)
+) {
+    return static_cast<int>(ptr->index_min());
+}
+
+//' @title Elastic Net CV index of lambda.1se (0-based)
+//' @noRd
+// [[Rcpp::export]]
+int enet_cv_index_1se(
+    XPtr<enet_cv> ptr // NOLINT(performance-unnecessary-value-param)
+) {
+    return static_cast<int>(ptr->index_1se());
+}
+
+//' @title Elastic Net CV lambda grid (descending)
+//' @noRd
+// [[Rcpp::export]]
+Eigen::VectorXd enet_cv_get_lambdas(
+    XPtr<enet_cv> ptr // NOLINT(performance-unnecessary-value-param)
+) {
+    return ptr->lambdas();
+}
+
+//' @title Elastic Net CV mean MSE per lambda
+//' @noRd
+// [[Rcpp::export]]
+Eigen::VectorXd enet_cv_get_cv_errors(
+    XPtr<enet_cv> ptr // NOLINT(performance-unnecessary-value-param)
+) {
+    return ptr->cv_mse();
+}
+
+//' @title Elastic Net CV standard error per lambda
+//' @noRd
+// [[Rcpp::export]]
+Eigen::VectorXd enet_cv_get_cv_std(
+    XPtr<enet_cv> ptr // NOLINT(performance-unnecessary-value-param)
 ) {
     return ptr->cv_sem();
 }
