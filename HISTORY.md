@@ -4,6 +4,84 @@
 
 ????-??-??
 
+### 2026-07-07
+
+#### Shared-buffer safety guard (new runtime check)
+
+- `TRexSelector` (and every derived selector) normalizes the input matrix `X`
+  in place via an `Eigen::Map` and restores it when `select()` finishes or on
+  destruction. Two selectors mapped onto the SAME buffer therefore silently
+  corrupted each other: the first to restore left the buffer un-normalized, so
+  the second ran on raw data (typically selecting everything). The core now
+  claims a buffer when it normalizes it and throws a clear error if a second
+  live selector is constructed on the same matrix. Fix each caller by giving
+  each selector its own copy of `X`, or by running selectors one at a time
+  (construct, `select()`, and let each go out of scope before the next). The
+  guard is in the C++ core, so C++, R, and Python all benefit; internal
+  sequential orchestrators (SPCA per-PC, biobank screen->fallback) are
+  unaffected because `select()` releases the claim before the next selector
+  is built.
+
+#### R <-> Python binding parity
+
+- Elastic-net model selection is now exposed in BOTH languages: `ElasticNet`
+  (glmnet-style coordinate-descent coefficient path, backed by `enet_gaussian`)
+  and `ElasticNetCV` (K-fold CV lambda.min/1se selection, backed by
+  `enet_cv_ccd`). `RidgeCV` (SVD-path ridge CV, `ridge_cv_svd`) is added to
+  Python, which previously exposed no model-selection CV at all. Verified
+  R and Python produce bit-identical elastic-net paths on shared data.
+- R gains `da_method = "NN"` in `trex_da_control()` — the nearest-neighbour
+  correlation-threshold DA sweep (`DAMethod::NN`), which Python already
+  exposed; the R glue previously rejected it. `hc_grid_length = 0` lets the
+  core auto-select `min(20, p)`.
+- R gains `tenet_aug_use_lars` in `trex_gvs_control()` and
+  `trex_spca_control()` — the LARS-vs-LASSO inner-path switch for `TENET_AUG`
+  (Python already had it). Documentation clarifies that `en_solver`
+  (`TENET` vs `TENET_AUG`) is a solver-EQUIVALENCE knob (both select the same
+  variables), NOT the LARS-vs-LASSO distinction.
+- `TENETAug_Solver` / `TIENETAug_Solver` are exported from the R package (were
+  internal-only), with plain and mmap creators, 1-based group accessors, and
+  save/load.
+
+#### GVS / SPCA / clustering fixes
+
+- BREAKING (R): `gvs_type = "IEN"` now derives the `TIENET_AUG` solver
+  (matching the 2026-07-05 solver rework and the C++/Python wrappers); the R
+  wrapper previously forced the old `TLASSO` solver.
+- `TRexGVSSelector` now emits a warning when `control$solver` / `solver_type`
+  is set to a value that does not match the solver derived from `gvs_type`
+  (the field is silently overridden).
+- `lambda_2 == 0` (degenerate no-ridge / pure T-LASSO) now emits a warning —
+  the `-1` auto / `0` degenerate / `> 0` fixed sentinel convention had tripped
+  in-house callers.
+- Ward + `Correlation_LSH_Approx` is now permitted in both the R and Python
+  clustering glues (the core dispatcher supports it, running Ward in a 64-D
+  SimHash-projected Euclidean space; the glues wrongly rejected every
+  non-Euclidean metric under Ward).
+
+#### Python API
+
+- `TRexBiobankScreeningSelector`: the control parameter `biosctrex_ctrl` is
+  renamed to `bio_ctrl`, and `BiobankScreenTRexControl` now exposes its nested
+  `trex_screen_ctrl` (and that control's nested `trex_ctrl`), so Python can set
+  K, solver, screening method, etc., at parity with the R knobs.
+- Scalers gain returning, layout-agnostic `transform()` / `fit_transform()` /
+  `inverse_transform()` methods alongside the strict zero-copy
+  `*_inplace` variants (which require a writeable Fortran-ordered float64
+  buffer), removing the sharpest edge in the Python scaler API.
+
+#### Core fixes
+
+- `TENETAug_Solver` / `TIENETAug_Solver` deserialization: loading into an
+  already-constructed solver (the R/Python bindings' `load()` path) now rebuilds
+  the augmented maps and reconnects the inner solver unconditionally on load,
+  instead of gating on a null-map check that only held for fresh-object loads —
+  fixing checkpoint resume through the bindings.
+- `cmake --install` now prunes the package-owned header trees before copying,
+  so a renamed or deleted header can no longer poison the local install tree
+  (a stale header that `#include`d a since-renamed file previously broke every
+  consumer until the install was cleaned by hand).
+
 ### 2026-07-05
 
 #### T-solver review fixes (tsolvers module)
