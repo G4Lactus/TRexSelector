@@ -36,6 +36,10 @@ TRexGVSControlParameter parse_gvs_parameter(const Rcpp::List& control) {
                         "'. Use 'TENET' or 'TENET_AUG'.");
     }
 
+    if (control.containsElementNamed("tenet_aug_use_lars")) {
+        params.tenet_aug_use_lars = Rcpp::as<bool>(control["tenet_aug_use_lars"]);
+    }
+
     if (control.containsElementNamed("corr_max")) params.corr_max = control["corr_max"];
 
     if (control.containsElementNamed("hc_linkage")) {

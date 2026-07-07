@@ -13,8 +13,8 @@ extern TRexControlParameter parse_control_parameter(const Rcpp::List& control);
 /**
  * @brief Parses an R list into a TRexDAControlParameter C++ struct.
  * 
- * Extracts dependency-aware specific configurations like da_method (BT, AR1, EQUI), 
- * correlation coefficients, and threshold levels.
+ * Extracts dependency-aware specific configurations like da_method (BT, AR1,
+ * EQUI, NN), correlation coefficients, and threshold levels.
  * 
  * @param control List of parameters passed from R.
  * @return Populated TRexDAControlParameter instance.
@@ -27,6 +27,7 @@ TRexDAControlParameter parse_da_parameter(const Rcpp::List& control) {
         if (method == "BT") params.method = DAMethod::BT;
         else if (method == "AR1") params.method = DAMethod::AR1;
         else if (method == "EQUI") params.method = DAMethod::EQUI;
+        else if (method == "NN") params.method = DAMethod::NN;
         else Rcpp::stop("Unknown DAMethod: " + method);
     }
 
@@ -129,6 +130,7 @@ std::string trex_da_get_method_string(XPtr<RTRexDASelector> r_ptr) {
     if (m == DAMethod::BT) return "BT";
     if (m == DAMethod::AR1) return "AR1";
     if (m == DAMethod::EQUI) return "EQUI";
+    if (m == DAMethod::NN) return "NN";
     return "UNKNOWN";
 }
 

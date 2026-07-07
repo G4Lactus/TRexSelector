@@ -13,7 +13,9 @@ trex_da_control(
 )
 }
 \arguments{
-\item{da_method}{Dependency estimation method: "BT", "AR1", "EQUI" (default: "BT").}
+\item{da_method}{Dependency estimation method: "BT", "AR1", "EQUI", "NN"
+(default: "BT"). "NN" is a nearest-neighbour correlation-threshold sweep
+(BT-style) over a rho grid of length \code{hc_grid_length}.}
 
 \item{cor_coef}{Correlation coefficient for AR1/EQUI. -2.0 triggers auto-estimation
 (default: -2.0).}
@@ -23,7 +25,8 @@ trex_da_control(
 \item{hc_linkage}{Hierarchical clustering linkage: "Single", "Complete", "Average",
 "WPGMA", "Ward" (default: "Single").}
 
-\item{hc_grid_length}{Number of grid points for BT calibration (default: 0).}
+\item{hc_grid_length}{Number of grid points for BT/NN calibration. \code{0}
+(default) lets the core auto-select \code{min(20, p)}.}
 }
 \value{
 A named list for use in TRexDASelector.

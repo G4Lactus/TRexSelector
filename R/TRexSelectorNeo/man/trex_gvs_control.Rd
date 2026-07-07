@@ -11,6 +11,7 @@ trex_gvs_control(
   lambda_2 = -1,
   lambda2_method = "CV_1SE_CCD",
   en_solver = "TENET",
+  tenet_aug_use_lars = FALSE,
   groups = NULL
 )
 }
@@ -34,7 +35,16 @@ pure T-LASSO case (no ridge); a positive value is used as-is.}
 
 \item{en_solver}{Elastic Net solver variant for \code{gvs_type = "EN"}:
 \code{"TENET"} (default, Gram-based) or \code{"TENET_AUG"}
-(row-augmented LASSO).}
+(row-augmented LASSO). Both are mathematically equivalent for
+\code{lambda_2 > 0} and select the same variables; this switch exists to
+validate solver equivalence, \strong{not} to choose a LARS vs LASSO path
+(for that, see \code{tenet_aug_use_lars}).}
+
+\item{tenet_aug_use_lars}{Logical. When \code{en_solver = "TENET_AUG"}, run
+the augmented system with a pure-LARS inner path that never drops variables
+(\code{TRUE}) instead of the default LASSO inner path that can
+(\code{FALSE}, default). This is the LARS-vs-LASSO distinction. Ignored for
+\code{en_solver = "TENET"}.}
 
 \item{groups}{Integer vector of manually specified group assignments (1-based, default: NULL).}
 }

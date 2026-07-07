@@ -28,7 +28,13 @@
 #'   \code{"CV_1SE_SVD"}, \code{"CV_MIN_SVD"}.
 #' @param en_solver Character, Elastic Net solver variant used internally:
 #'   \code{"TENET_AUG"} (default, row-augmented LASSO) or \code{"TENET"}
-#'   (Gram-based).
+#'   (Gram-based). Both select the same variables; this is a solver-equivalence
+#'   switch, not a LARS-vs-LASSO choice (see \code{tenet_aug_use_lars}).
+#' @param tenet_aug_use_lars Logical. When \code{en_solver = "TENET_AUG"}, run
+#'   the per-PC augmented sub-selector with a pure-LARS inner path that never
+#'   drops variables (\code{TRUE}) instead of the default LASSO inner path
+#'   (\code{FALSE}, default). This is the LARS-vs-LASSO distinction; ignored for
+#'   \code{en_solver = "TENET"}.
 #' @param K Integer, number of T-Rex random experiments per PC (default: 20).
 #' @param max_dummy_multiplier Integer, maximum dummy feature multiplier for
 #'   T-Rex sub-selection (default: 10).
@@ -47,6 +53,7 @@ trex_spca_control <- function(mode                   = "ActiveSet",
                               lambda_2               = -1.0,
                               lambda2_method          = "CV_1SE_CCD",
                               en_solver              = "TENET_AUG",
+                              tenet_aug_use_lars     = FALSE,
                               K                      = 20L,
                               max_dummy_multiplier   = 10L) {
   mode          <- match.arg(mode,          c("ActiveSet", "Thresholded"))
@@ -68,6 +75,7 @@ trex_spca_control <- function(mode                   = "ActiveSet",
     lambda_2              = as.numeric(lambda_2),
     lambda2_method        = lambda2_method,
     en_solver             = en_solver,
+    tenet_aug_use_lars    = as.logical(tenet_aug_use_lars),
     K                     = as.integer(K),
     max_dummy_multiplier  = as.integer(max_dummy_multiplier)
   )

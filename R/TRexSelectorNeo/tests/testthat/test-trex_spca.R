@@ -36,13 +36,15 @@ test_that("trex_spca_control returns a named list with correct defaults", {
   ctrl_def <- trex_spca_control()
   expect_named(ctrl_def, c("mode", "lambda2_ridge_loadings", "gvs_type",
                             "lambda_2", "lambda2_method",
-                            "en_solver", "K", "max_dummy_multiplier"))
+                            "en_solver", "tenet_aug_use_lars", "K",
+                            "max_dummy_multiplier"))
   expect_equal(ctrl_def$mode,                   "ActiveSet")
   expect_equal(ctrl_def$lambda2_ridge_loadings,  1e-6)
   expect_equal(ctrl_def$gvs_type,               "EN")
   expect_equal(ctrl_def$lambda_2,            -1.0)
   expect_equal(ctrl_def$lambda2_method,          "CV_1SE_CCD")
   expect_equal(ctrl_def$en_solver,              "TENET_AUG")
+  expect_false(ctrl_def$tenet_aug_use_lars)
   expect_equal(ctrl_def$K,                       20L)
   expect_equal(ctrl_def$max_dummy_multiplier,    10L)
 })
@@ -239,4 +241,23 @@ test_that("TRexSPCASelector warns when lambda_2 == 0 (degenerate no-ridge)", {
   ctrl_pos  <- trex_spca_control(K = 3L, max_dummy_multiplier = 3L, lambda_2 = 0.05)
   expect_no_warning(TRexSPCASelector$new(d$X, M, tFDR, control = ctrl_auto, seed = 1L))
   expect_no_warning(TRexSPCASelector$new(d$X, M, tFDR, control = ctrl_pos,  seed = 1L))
+})
+
+
+test_that("TRexSPCASelector accepts tenet_aug_use_lars (LARS vs LASSO inner path)", {
+  d <- local_fixture()
+  M <- 2L; tFDR <- 0.3
+  # tenet_aug_use_lars flows through the per-PC TENET_AUG sub-selector.
+  ctrl_lasso <- trex_spca_control(K = 3L, max_dummy_multiplier = 3L,
+                                  tenet_aug_use_lars = FALSE)
+  ctrl_lars  <- trex_spca_control(K = 3L, max_dummy_multiplier = 3L,
+                                  tenet_aug_use_lars = TRUE)
+  expect_false(ctrl_lasso$tenet_aug_use_lars)
+  expect_true(ctrl_lars$tenet_aug_use_lars)
+  expect_no_error(
+    r1 <- TRexSPCASelector$new(d$X, M, tFDR, control = ctrl_lasso, seed = 1L)$select())
+  expect_no_error(
+    r2 <- TRexSPCASelector$new(d$X, M, tFDR, control = ctrl_lars, seed = 1L)$select())
+  expect_equal(dim(r1$V), c(d$p, M))
+  expect_equal(dim(r2$V), c(d$p, M))
 })
