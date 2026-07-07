@@ -10,6 +10,9 @@ from trex_selector_neo.ml_methods import (
     ZScoreScaler,
     LpNormScaler,
     NormType,
+    RidgeCV,
+    ElasticNet,
+    ElasticNetCV,
 )
 
 
@@ -247,3 +250,92 @@ def test_lpnorm_fit_returns_self(regression_data):
     result = scaler.fit(X)
     assert result is scaler
     assert scaler.is_fitted()
+
+
+# ---------------------------------------------------------------------------
+# Model selection: RidgeCV
+# ---------------------------------------------------------------------------
+
+def test_ridge_cv_fit_returns_self_and_selects_lambda(regression_data):
+    X, y, n, p = regression_data
+    cv = RidgeCV()
+    assert cv.fit(X, y, n_folds=5, n_lambda=100, seed=0) is cv
+    lam = np.asarray(cv.lambdas())
+    assert lam.ndim == 1 and len(lam) == 100
+    # ridge_cv_svd uses an ASCENDING grid (low -> high lambda)
+    assert np.all(np.diff(lam) >= 0), "ridge lambda grid is ascending"
+    # 1se rule selects a lambda at least as regularized (larger) than the min,
+    # which in an ascending grid means index_1se >= index_min
+    assert cv.cv_1se() >= cv.cv_min()
+    assert 0 <= cv.index_min() < len(lam)
+    assert cv.index_min() <= cv.index_1se() < len(lam)
+    assert len(np.asarray(cv.cv_mse())) == len(lam)
+    assert len(np.asarray(cv.cv_sem())) == len(lam)
+
+
+def test_ridge_cv_deterministic_under_seed(regression_data):
+    X, y, n, p = regression_data
+    a = RidgeCV().fit(X, y, n_folds=5, n_lambda=50, seed=7)
+    b = RidgeCV().fit(X, y, n_folds=5, n_lambda=50, seed=7)
+    assert a.cv_min() == b.cv_min()
+    assert np.allclose(np.asarray(a.cv_mse()), np.asarray(b.cv_mse()))
+
+
+# ---------------------------------------------------------------------------
+# Model selection: ElasticNet (coordinate-descent path)
+# ---------------------------------------------------------------------------
+
+def test_elasticnet_path_shapes_and_recovery(regression_data):
+    X, y, n, p = regression_data
+    en = ElasticNet()
+    assert en.fit(X, y, alpha=1.0, n_lambda=60) is en
+    coef = np.asarray(en.coef())
+    lam = np.asarray(en.lambdas())
+    assert coef.shape == (p, len(lam))
+    assert en.converged()
+    # deviance ratio is non-decreasing along a descending lambda path
+    dev = np.asarray(en.dev_ratio())
+    assert np.all(np.diff(dev) >= -1e-8)
+    # predictions align with the path
+    pred = np.asarray(en.predict(X))
+    assert pred.shape == (n, len(lam))
+    # true signal (cols 0,1) is active at the least-regularized end
+    assert np.any(np.abs(coef[:2, -1]) > 1e-3)
+
+
+def test_elasticnet_fit_grid_matches_auto_path(regression_data):
+    X, y, n, p = regression_data
+    auto = ElasticNet().fit(X, y, alpha=0.5, n_lambda=40)
+    grid = ElasticNet().fit_grid(X, y, auto.lambdas(), alpha=0.5)
+    assert np.allclose(np.asarray(grid.coef()), np.asarray(auto.coef()), atol=1e-10)
+
+
+def test_elasticnet_ridge_limit_is_dense(regression_data):
+    """alpha=0 (ridge) leaves all coefficients non-zero."""
+    X, y, n, p = regression_data
+    en = ElasticNet().fit(X, y, alpha=0.0, n_lambda=30)
+    coef_last = np.asarray(en.coef())[:, -1]
+    assert np.all(np.abs(coef_last) > 0.0)
+
+
+# ---------------------------------------------------------------------------
+# Model selection: ElasticNetCV
+# ---------------------------------------------------------------------------
+
+def test_elasticnet_cv_selects_lambda(regression_data):
+    X, y, n, p = regression_data
+    cv = ElasticNetCV()
+    assert cv.fit(X, y, alpha=0.5, n_folds=5, n_lambda=100, seed=0) is cv
+    lam = np.asarray(cv.lambdas())
+    assert np.all(np.diff(lam) <= 0)
+    assert cv.cv_1se() >= cv.cv_min()
+    assert 0 <= cv.index_1se() <= cv.index_min() < len(lam)
+    assert len(np.asarray(cv.cv_mse())) == len(lam)
+
+
+def test_elasticnet_cv_deterministic_under_seed(regression_data):
+    X, y, n, p = regression_data
+    a = ElasticNetCV().fit(X, y, alpha=0.5, n_folds=5, n_lambda=50, seed=3)
+    b = ElasticNetCV().fit(X, y, alpha=0.5, n_folds=5, n_lambda=50, seed=3)
+    assert a.cv_min() == b.cv_min()
+    assert np.allclose(np.asarray(a.cv_mse()), np.asarray(b.cv_mse()))
