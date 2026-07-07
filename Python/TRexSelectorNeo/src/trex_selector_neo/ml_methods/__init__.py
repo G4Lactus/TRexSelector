@@ -8,6 +8,9 @@ from .._core.ml_methods import (
     PCAResult,
     PCA,
     RidgeSolver,
+    RidgeCV,
+    ElasticNet,
+    ElasticNetCV,
 )
 
 __all__ = [
@@ -19,4 +22,7 @@ __all__ = [
     "PCAResult",
     "PCA",
     "RidgeSolver",
+    "RidgeCV",
+    "ElasticNet",
+    "ElasticNetCV",
 ]
