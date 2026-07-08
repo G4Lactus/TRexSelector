@@ -744,6 +744,18 @@ trex_gvs_get_selected_indices <- function(r_ptr) {
     .Call(`_TRexSelectorNeo_trex_gvs_get_selected_indices`, r_ptr)
 }
 
+#' @title Get per-variable cluster labels
+#' @noRd
+trex_gvs_get_groups <- function(r_ptr) {
+    .Call(`_TRexSelectorNeo_trex_gvs_get_groups`, r_ptr)
+}
+
+#' @title Get cluster labels (names)
+#' @noRd
+trex_gvs_get_group_labels <- function(r_ptr) {
+    .Call(`_TRexSelectorNeo_trex_gvs_get_group_labels`, r_ptr)
+}
+
 #' @title Create RTRexScreeningSelector
 #'
 #' @details Instantiates a Screen-TRex selector object.

@@ -119,6 +119,27 @@ TRexGVSSelector <- R6::R6Class("TRexGVSSelector",
         stop("Field is read-only.")
       }
       trex_gvs_get_max_clusters(private$ptr)
+    },
+
+    #' @field groups Integer vector of length \code{p} giving the 1-based cluster
+    #'   label assigned to each variable (prior groups for Route 1, or the
+    #'   hierarchical-clustering assignment for Route 2). Enables computing
+    #'   cluster diagnostics (e.g. purity) on the R side.
+    groups = function(value) {
+      if (!missing(value)) {
+        stop("Field is read-only.")
+      }
+      trex_gvs_get_groups(private$ptr)
+    },
+
+    #' @field group_labels Optional human-readable cluster names (length
+    #'   \code{max_clusters}), or an empty character vector when none were
+    #'   supplied.
+    group_labels = function(value) {
+      if (!missing(value)) {
+        stop("Field is read-only.")
+      }
+      trex_gvs_get_group_labels(private$ptr)
     }
   )
 )

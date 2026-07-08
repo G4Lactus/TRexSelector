@@ -430,3 +430,46 @@ test_that("cv_seed makes EN-CV lambda_2 selection reproducible per trial", {
   }
   expect_identical(run(777), run(777))
 })
+
+
+test_that("TRexGVSSelector exposes per-variable cluster labels (groups)", {
+  set.seed(42)
+  n <- 60; p <- 12
+  X <- matrix(rnorm(n * p), n, p)
+  y <- as.numeric(X[, 1] * 3 + X[, 2] * -2 + X[, 5] * 2 + rnorm(n))
+
+  # Route 1 (prior groups): the exposed labels must round-trip exactly, so the
+  # R side can compute real cluster diagnostics (purity) instead of a stand-in.
+  prior <- rep(1:4, each = 3)  # 4 clusters of 3, 1-based
+  s <- TRexGVSSelector$new(X, y, tFDR = 0.2, seed = 1, verbose = FALSE,
+                           gvs_control = trex_gvs_control(gvs_type = "EN",
+                                                          groups = prior))
+  s$select()
+
+  g <- s$groups
+  expect_type(g, "integer")
+  expect_length(g, p)
+  expect_true(all(g >= 1L))                       # 1-based on the R side
+  expect_identical(g, as.integer(prior))          # prior labels preserved
+  expect_identical(length(unique(g)), s$max_clusters)
+
+  # Real HAC-style purity is now computable from groups (no fabricated number).
+  purity <- max(table(g)) / p
+  expect_gte(purity, 0); expect_lte(purity, 1)
+})
+
+
+test_that("TRexGVSSelector groups reflects HAC assignment for Route 2", {
+  set.seed(7)
+  n <- 60; p <- 10
+  X <- matrix(rnorm(n * p), n, p)
+  y <- as.numeric(X[, 1] * 3 + X[, 2] * -2 + rnorm(n))
+
+  # Route 2 (auto-cluster): no prior groups supplied, labels come from HAC.
+  s <- TRexGVSSelector$new(X, y, tFDR = 0.2, seed = 1, verbose = FALSE,
+                           gvs_control = trex_gvs_control(gvs_type = "EN"))
+  s$select()
+  g <- s$groups
+  expect_length(g, p)
+  expect_identical(length(unique(g)), s$max_clusters)
+})

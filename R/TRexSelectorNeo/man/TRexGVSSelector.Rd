@@ -29,6 +29,15 @@ sel$selected_indices
     \item{\code{gvs_type}}{The augmentation policy name used (e.g., "EN", "IEN").}
 
     \item{\code{max_clusters}}{The number of unique clusters dynamically formulated.}
+
+    \item{\code{groups}}{Integer vector of length \code{p} giving the 1-based cluster
+label assigned to each variable (prior groups for Route 1, or the
+hierarchical-clustering assignment for Route 2). Enables computing
+cluster diagnostics (e.g. purity) on the R side.}
+
+    \item{\code{group_labels}}{Optional human-readable cluster names (length
+\code{max_clusters}), or an empty character vector when none were
+supplied.}
   }
   \if{html}{\out{</div>}}
 }

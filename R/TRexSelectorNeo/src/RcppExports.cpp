@@ -1076,6 +1076,28 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// trex_gvs_get_groups
+IntegerVector trex_gvs_get_groups(XPtr<RTRexGVSSelector> r_ptr);
+RcppExport SEXP _TRexSelectorNeo_trex_gvs_get_groups(SEXP r_ptrSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< XPtr<RTRexGVSSelector> >::type r_ptr(r_ptrSEXP);
+    rcpp_result_gen = Rcpp::wrap(trex_gvs_get_groups(r_ptr));
+    return rcpp_result_gen;
+END_RCPP
+}
+// trex_gvs_get_group_labels
+CharacterVector trex_gvs_get_group_labels(XPtr<RTRexGVSSelector> r_ptr);
+RcppExport SEXP _TRexSelectorNeo_trex_gvs_get_group_labels(SEXP r_ptrSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< XPtr<RTRexGVSSelector> >::type r_ptr(r_ptrSEXP);
+    rcpp_result_gen = Rcpp::wrap(trex_gvs_get_group_labels(r_ptr));
+    return rcpp_result_gen;
+END_RCPP
+}
 // trex_screening_create
 XPtr<RTRexScreeningSelector> trex_screening_create(Rcpp::NumericMatrix X, Rcpp::NumericVector y, Rcpp::List screen_control_list, Rcpp::List trex_control_list, int seed, bool verbose);
 RcppExport SEXP _TRexSelectorNeo_trex_screening_create(SEXP XSEXP, SEXP ySEXP, SEXP screen_control_listSEXP, SEXP trex_control_listSEXP, SEXP seedSEXP, SEXP verboseSEXP) {
@@ -2372,6 +2394,8 @@ static const R_CallMethodDef CallEntries[] = {
     {"_TRexSelectorNeo_trex_gvs_get_gvs_type", (DL_FUNC) &_TRexSelectorNeo_trex_gvs_get_gvs_type, 1},
     {"_TRexSelectorNeo_trex_gvs_get_max_clusters", (DL_FUNC) &_TRexSelectorNeo_trex_gvs_get_max_clusters, 1},
     {"_TRexSelectorNeo_trex_gvs_get_selected_indices", (DL_FUNC) &_TRexSelectorNeo_trex_gvs_get_selected_indices, 1},
+    {"_TRexSelectorNeo_trex_gvs_get_groups", (DL_FUNC) &_TRexSelectorNeo_trex_gvs_get_groups, 1},
+    {"_TRexSelectorNeo_trex_gvs_get_group_labels", (DL_FUNC) &_TRexSelectorNeo_trex_gvs_get_group_labels, 1},
     {"_TRexSelectorNeo_trex_screening_create", (DL_FUNC) &_TRexSelectorNeo_trex_screening_create, 6},
     {"_TRexSelectorNeo_trex_screening_mmap_create", (DL_FUNC) &_TRexSelectorNeo_trex_screening_mmap_create, 6},
     {"_TRexSelectorNeo_trex_screening_select", (DL_FUNC) &_TRexSelectorNeo_trex_screening_select, 1},

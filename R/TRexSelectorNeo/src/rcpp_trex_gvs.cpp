@@ -176,3 +176,24 @@ IntegerVector trex_gvs_get_selected_indices(XPtr<RTRexGVSSelector> r_ptr) {
     }
     return r_indices;
 }
+
+//' @title Get per-variable cluster labels
+//' @noRd
+// [[Rcpp::export]]
+IntegerVector trex_gvs_get_groups(XPtr<RTRexGVSSelector> r_ptr) {
+    const Eigen::VectorXi& g = r_ptr->get()->getGVSResult().groups_vec;
+    IntegerVector r_groups(g.size());
+    for (Eigen::Index i = 0; i < g.size(); ++i) {
+        r_groups[i] = g[i] + 1; // 0-based cluster IDs -> 1-based for R
+    }
+    return r_groups;
+}
+
+//' @title Get cluster labels (names)
+//' @noRd
+// [[Rcpp::export]]
+CharacterVector trex_gvs_get_group_labels(XPtr<RTRexGVSSelector> r_ptr) {
+    const std::vector<std::string>& labels =
+        r_ptr->get()->getGVSResult().group_labels;
+    return CharacterVector(labels.begin(), labels.end());
+}
