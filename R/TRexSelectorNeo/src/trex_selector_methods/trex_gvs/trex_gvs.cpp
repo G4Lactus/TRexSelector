@@ -934,8 +934,18 @@ void TRexGVSSelector::prepareDummiesForLStep(LStepContext& ctx)
             }
             assembleDummyBlock(k, dmap);
             if (!ien) {
-                dn::centerAndL2NormalizeMatrix(dmap, eps_, verbose_,
-                                               trex_ctrl_.scaling_mode);
+            // FIX (2026-07-08): dummies enter the solver AS DRAWN (centered
+            // only, NO per-column norm equalization). The cluster-MVN draw
+            // already carries the correct population scale (Sigma_m computed
+            // on the normalized X_); its random realized column norms are an
+            // essential part of the dummy null distribution. Exactly
+            // unit-normalizing each dummy column erased that fluctuation and
+            // made dummies systematically less competitive in the EN path --
+            // measured on the trex_spca rdump10 head-to-head (identical X and
+            // lambda_2): PC1 FDR inflated from ~0.10 (CRAN R reference, which
+            // keeps the fluctuation) to ~0.13. Center-only matches the R
+            // pipeline (dummies are centered by the augmented scale() there).
+                dmap.rowwise() -= dmap.colwise().mean();
             }
             // Bind the long-lived Map for runKExperiments. The owning
             // storage is the mmap file managed by memmap_mgr_.
@@ -951,9 +961,19 @@ void TRexGVSSelector::prepareDummiesForLStep(LStepContext& ctx)
         for (std::size_t k = 0; k < K; ++k) {
             assembleDummyBlock(k, D_solver_bufs_[k]);
             if (!ien) {
-                dn::centerAndL2NormalizeMatrix(D_solver_bufs_[k], eps_,
-                                               verbose_,
-                                               trex_ctrl_.scaling_mode);
+            // FIX (2026-07-08): dummies enter the solver AS DRAWN (centered
+            // only, NO per-column norm equalization). The cluster-MVN draw
+            // already carries the correct population scale (Sigma_m computed
+            // on the normalized X_); its random realized column norms are an
+            // essential part of the dummy null distribution. Exactly
+            // unit-normalizing each dummy column erased that fluctuation and
+            // made dummies systematically less competitive in the EN path --
+            // measured on the trex_spca rdump10 head-to-head (identical X and
+            // lambda_2): PC1 FDR inflated from ~0.10 (CRAN R reference, which
+            // keeps the fluctuation) to ~0.13. Center-only matches the R
+            // pipeline (dummies are centered by the augmented scale() there).
+                D_solver_bufs_[k].rowwise() -=
+                    D_solver_bufs_[k].colwise().mean();
             }
             D_solver_maps_[k] = std::make_unique<Eigen::Map<Eigen::MatrixXd>>(
                 D_solver_bufs_[k].data(),
