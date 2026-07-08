@@ -78,9 +78,17 @@ TRexBiobankScreeningSelector <- R6::R6Class("TRexBiobankScreeningSelector",
 
     #' @description Run the Biobank Screening algorithm.
     #'
-    #' @return A list with results. For vector 'Y', it gives a single phenotype result.
-    #' For matrix 'Y', it gives a multi-phenotype result containing a `$statistics` data.frame
-    #' and `$selected_indices` arrays.
+    #' @return For a vector \code{Y}, a single per-phenotype record: a named list
+    #'   with \code{phenotype_index}, \code{selected_indices}, \code{estimated_FDR},
+    #'   \code{method_used}, \code{estimated_FDR_screen_ordinary},
+    #'   \code{estimated_FDR_screen_bootstrap}, \code{selected_indices_screen_ordinary},
+    #'   \code{selected_indices_screen_bootstrap}, and \code{used_fallback_trex}
+    #'   (indices are 1-based). For a matrix \code{Y}, a plain list of such records,
+    #'   one per column, so \code{res[[i]]} has the same shape as the vector case.
+    #'   This mirrors the Python binding, which returns one result object (vector)
+    #'   or a list of them (matrix). A tidy summary table is one line away, e.g.
+    #'   \code{do.call(rbind, lapply(res, function(r)}
+    #'   \code{as.data.frame(r[c("phenotype_index", "estimated_FDR", "method_used", "used_fallback_trex")])))}.
     select = function() {
       if (private$is_multi) {
         return(trex_biobank_screening_screen_phenotypes(private$ptr))

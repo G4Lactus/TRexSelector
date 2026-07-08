@@ -77,21 +77,32 @@ test_that("TRexBiobankScreeningSelector screens multiple phenotypes correctly (2
   selector <- TRexBiobankScreeningSelector$new(X, Y, verbose = FALSE)
   res <- selector$select()
 
-  # Check overarching object structure
+  # 2-D returns a plain list of per-phenotype records: res[[i]] has the same
+  # shape as the 1-D return (mirrors Python's list[BiobankScreenTRexResult]).
   expect_type(res, "list")
-  expect_true("statistics" %in% names(res))
-  expect_true("selected_indices" %in% names(res))
+  expect_equal(length(res), 3)
 
-  # Validate DataFrame properties
-  stats <- res$statistics
+  record_fields <- c("phenotype_index", "selected_indices", "estimated_FDR",
+                     "method_used", "estimated_FDR_screen_ordinary",
+                     "estimated_FDR_screen_bootstrap",
+                     "selected_indices_screen_ordinary",
+                     "selected_indices_screen_bootstrap", "used_fallback_trex")
+
+  for (i in seq_len(3)) {
+    rec <- res[[i]]
+    expect_type(rec, "list")
+    expect_true(all(record_fields %in% names(rec)),
+                label = paste("phenotype", i, "record fields"))
+    expect_equal(rec$phenotype_index, i)
+  }
+
+  # The former $statistics data.frame is a one-line projection of the records.
+  stats <- do.call(rbind, lapply(res, function(r) {
+    as.data.frame(r[c("phenotype_index", "estimated_FDR",
+                      "method_used", "used_fallback_trex")])
+  }))
   expect_s3_class(stats, "data.frame")
   expect_equal(nrow(stats), 3)
-
-  required_cols <- c("phenotype_index", "estimated_FDR", "method_used", "used_fallback_trex")
-  expect_true(all(required_cols %in% colnames(stats)))
-
-  # Ensure indices list matches phenotypes
-  expect_equal(length(res$selected_indices), 3)
 })
 
 
@@ -200,35 +211,23 @@ test_that("TRexBiobankScreeningSelector 2D result has 1-based phenotype_index an
   selector <- TRexBiobankScreeningSelector$new(X, Y, verbose = FALSE)
   res <- selector$select()
 
-  stats <- res$statistics
+  # 2-D returns a list of q per-phenotype records.
+  expect_equal(length(res), q)
 
-  # phenotype_index column is 1-based: 1, 2, ..., q
-  expect_equal(stats$phenotype_index, seq_len(q))
+  # phenotype_index is 1-based: res[[i]]$phenotype_index == i
+  expect_equal(vapply(res, function(r) r$phenotype_index, numeric(1)),
+               as.numeric(seq_len(q)))
 
-  # selected_indices list: each element is 1-based in [1, p]
-  sel_list <- res$selected_indices
-  expect_equal(length(sel_list), q)
+  # each record's index vectors are 1-based integers in [1, p]
+  index_fields <- c("selected_indices", "selected_indices_screen_ordinary",
+                    "selected_indices_screen_bootstrap")
   for (i in seq_len(q)) {
-    idx_i <- sel_list[[i]]
-    expect_type(idx_i, "integer")
-    if (length(idx_i) > 0) {
-      expect_true(all(idx_i >= 1L & idx_i <= p),
-                  label = paste("phenotype", i, "1-based in [1,p]"))
-    }
-  }
-
-  # sub-method index lists are present and each element is 1-based in [1, p]
-  expect_true("selected_indices_screen_ordinary" %in% names(res))
-  expect_true("selected_indices_screen_bootstrap" %in% names(res))
-
-  for (field in c("selected_indices_screen_ordinary", "selected_indices_screen_bootstrap")) {
-    sub_list <- res[[field]]
-    expect_equal(length(sub_list), q, label = paste(field, "length"))
-    for (i in seq_len(q)) {
-      sub_idx <- sub_list[[i]]
-      expect_type(sub_idx, "integer")
-      if (length(sub_idx) > 0) {
-        expect_true(all(sub_idx >= 1L & sub_idx <= p),
+    rec <- res[[i]]
+    for (field in index_fields) {
+      idx <- rec[[field]]
+      expect_type(idx, "integer")
+      if (length(idx) > 0) {
+        expect_true(all(idx >= 1L & idx <= p),
                     label = paste(field, "phenotype", i, "1-based in [1,p]"))
       }
     }

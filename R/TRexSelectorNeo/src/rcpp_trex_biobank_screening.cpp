@@ -80,14 +80,14 @@ IntegerVector convert_indices_1based(const std::vector<std::size_t>& cpp_indices
     return r_indices;
 }
 
-//' @title Screen Single Phenotype
-//' @noRd
-// [[Rcpp::export]]
-List trex_biobank_screening_screen_phenotype(XPtr<RTRexBiobankScreeningSelector> r_ptr) {
-    auto res = r_ptr->get()->screenPhenotype();
-    
+// Build the canonical per-phenotype record (a 9-field named list). This is the
+// single source of truth for the biobank result shape: the 1-D getter returns
+// one such record, and the 2-D getter returns a plain list of them. Keeping the
+// record identical across both paths mirrors the Python binding, which hands
+// back one BiobankScreenTRexResult (1-D) or a list of them (matrix).
+List biobank_result_to_record(const BiobankScreenTRexResult& res) {
     return List::create(
-        Named("phenotype_index") = res.phenotype_index + 1,
+        Named("phenotype_index") = res.phenotype_index + 1, // 1-based for R
         Named("selected_indices") = convert_indices_1based(res.selected_indices),
         Named("estimated_FDR") = res.estimated_FDR,
         Named("method_used") = res.method_used,
@@ -99,47 +99,28 @@ List trex_biobank_screening_screen_phenotype(XPtr<RTRexBiobankScreeningSelector>
     );
 }
 
+//' @title Screen Single Phenotype
+//' @noRd
+// [[Rcpp::export]]
+List trex_biobank_screening_screen_phenotype(XPtr<RTRexBiobankScreeningSelector> r_ptr) {
+    return biobank_result_to_record(r_ptr->get()->screenPhenotype());
+}
+
 //' @title Screen Multiple Phenotypes
 //' @noRd
 // [[Rcpp::export]]
 List trex_biobank_screening_screen_phenotypes(XPtr<RTRexBiobankScreeningSelector> r_ptr) {
     auto results = r_ptr->get()->screenPhenotypes();
     std::size_t n = results.size();
-    
-    IntegerVector pheno_idx(n);
-    NumericVector est_FDR(n), est_FDR_ord(n), est_FDR_boot(n);
-    CharacterVector methods(n);
-    LogicalVector used_fallback(n);
-    
-    List sel_idx(n), sel_ord(n), sel_boot(n);
-    
+
+    // A plain list of per-phenotype records: res[[i]] has the same shape as the
+    // 1-D return. The former struct-of-arrays layout ($statistics data.frame +
+    // parallel index lists) is dropped; every field it carried now lives inside
+    // each record, so no information is lost and the shape matches Python's
+    // list[BiobankScreenTRexResult].
+    List out(n);
     for (std::size_t i = 0; i < n; ++i) {
-        const auto& res = results[i];
-        pheno_idx[i] = res.phenotype_index + 1; // 1-based indexing
-        est_FDR[i] = res.estimated_FDR;
-        methods[i] = res.method_used;
-        est_FDR_ord[i] = res.estimated_FDR_screen_ordinary;
-        est_FDR_boot[i] = res.estimated_FDR_screen_bootstrap;
-        used_fallback[i] = res.used_fallback_trex;
-        
-        sel_idx[i] = convert_indices_1based(res.selected_indices);
-        sel_ord[i] = convert_indices_1based(res.selected_indices_screen_ordinary);
-        sel_boot[i] = convert_indices_1based(res.selected_indices_screen_bootstrap);
+        out[i] = biobank_result_to_record(results[i]);
     }
-    
-    DataFrame stats = DataFrame::create(
-        Named("phenotype_index") = pheno_idx,
-        Named("estimated_FDR") = est_FDR,
-        Named("method_used") = methods,
-        Named("estimated_FDR_screen_ordinary") = est_FDR_ord,
-        Named("estimated_FDR_screen_bootstrap") = est_FDR_boot,
-        Named("used_fallback_trex") = used_fallback
-    );
-    
-    return List::create(
-        Named("statistics") = stats,
-        Named("selected_indices") = sel_idx,
-        Named("selected_indices_screen_ordinary") = sel_ord,
-        Named("selected_indices_screen_bootstrap") = sel_boot
-    );
+    return out;
 }

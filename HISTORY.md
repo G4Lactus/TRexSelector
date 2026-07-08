@@ -4,6 +4,33 @@
 
 ????-??-??
 
+### 2026-07-08
+
+#### R <-> Python binding parity
+
+- BREAKING (R): `TRexBiobankScreeningSelector$select()` now returns the same
+  per-phenotype record shape as the Python binding. A matrix `Y` previously
+  returned a list with a `$statistics` data.frame plus parallel top-level
+  `$selected_indices` / `$selected_indices_screen_ordinary` /
+  `$selected_indices_screen_bootstrap` lists; it now returns a plain list of
+  records, one per phenotype, where `res[[i]]` has the identical shape to the
+  single-phenotype (vector `Y`) return. No information is lost — every
+  `$statistics` column and index list is a field of each record — and the
+  summary table is a one-line projection:
+  `do.call(rbind, lapply(res, function(r) as.data.frame(r[c("phenotype_index", "estimated_FDR", "method_used", "used_fallback_trex")])))`.
+  This matches Python, which returns one `BiobankScreenTRexResult` (vector) or a
+  list of them (matrix).
+- R gains `prior_groups` + `rho_grid_labels` in `trex_da_control()` — the
+  prior-groups dependency-aware path (`setupDA_PriorGroups`), which Python
+  already exposed; the R glue previously could not route to it. `hc_grid_length`
+  is now actually read by the DA glue (it was silently inert before).
+- R gains `cv_seed` / `cv_n_folds` / `cv_n_lambda` in `trex_gvs_control()` — the
+  cross-validation fold controls for the CV `lambda2_method` paths (`cv_seed`
+  enables per-trial fold reproducibility), at parity with Python.
+- `TRexGVSSelector` gains read-only `$groups` (1-based per-variable cluster
+  labels, length `p`) and `$group_labels`, so cluster diagnostics (e.g. purity)
+  can be computed R-side; Python exposes the same via `GVSSelectionResult`.
+
 ### 2026-07-07
 
 #### Shared-buffer safety guard (new runtime check)
