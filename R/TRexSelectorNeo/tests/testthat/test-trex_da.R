@@ -82,6 +82,75 @@ test_that("TRexDASelector supports da_method = 'NN' (nearest-neighbour sweep)", 
 })
 
 
+test_that("TRexDASelector supports the prior-groups DA path", {
+  set.seed(42)
+  n <- 60
+  p <- 8
+  X <- matrix(rnorm(n * p), n, p)
+  y <- X[, 1] * 5 + X[, 2] * -4 + X[, 3] * 3 + rnorm(n)
+
+  # Two-level prior hierarchy (fine -> coarse) over p = 8 variables.
+  # When prior_groups is supplied, da_method is ignored and the core routes
+  # through setupDA_PriorGroups() (previously unreachable from R).
+  fine   <- c(1, 1, 2, 2, 3, 3, 4, 4)
+  coarse <- c(1, 1, 1, 1, 2, 2, 2, 2)
+
+  selector <- TRexDASelector$new(
+    X, y, tFDR = 0.2, verbose = FALSE,
+    da_control = trex_da_control(
+      prior_groups    = list(fine, coarse),
+      rho_grid_labels = c(0.3, 0.7)
+    ),
+    control = trex_control(K = 5)
+  )
+  expect_no_error(selector$select())
+  expect_type(selector$selected_indices, "integer")
+  if (length(selector$selected_indices) > 0) {
+    expect_true(all(selector$selected_indices >= 1 &
+                    selector$selected_indices <= p))
+  }
+  # rho_grid carries the two supplied labels (BT-style 3D calibration).
+  expect_equal(sort(selector$rho_grid), c(0.3, 0.7))
+})
+
+
+test_that("prior_groups defaults rho_grid to 1..L when rho_grid_labels omitted", {
+  set.seed(7)
+  n <- 60
+  p <- 6
+  X <- matrix(rnorm(n * p), n, p)
+  y <- X[, 1] * 4 + X[, 2] * -3 + rnorm(n)
+
+  selector <- TRexDASelector$new(
+    X, y, tFDR = 0.2, verbose = FALSE,
+    da_control = trex_da_control(
+      prior_groups = list(c(1, 1, 2, 2, 3, 3), c(1, 1, 1, 2, 2, 2))
+    ),
+    control = trex_control(K = 5)
+  )
+  expect_no_error(selector$select())
+  # Default labels are 1, 2, ..., L.
+  expect_equal(sort(selector$rho_grid), c(1, 2))
+})
+
+
+test_that("prior_groups rejects a level whose length != p", {
+  set.seed(42)
+  n <- 40
+  p <- 6
+  X <- matrix(rnorm(n * p), n, p)
+  y <- rnorm(n)
+
+  expect_error(
+    TRexDASelector$new(
+      X, y, verbose = FALSE,
+      da_control = trex_da_control(prior_groups = list(c(1, 1, 2)))  # length 3 != p
+    ),
+    "length"
+  )
+})
+
+
 test_that("TRexDASelector behaves memory safe with memory mapping enabled", {
 
   set.seed(42)

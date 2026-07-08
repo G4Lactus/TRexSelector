@@ -34,6 +34,11 @@ TRexDAControlParameter parse_da_parameter(const Rcpp::List& control) {
     if (control.containsElementNamed("cor_coef")) params.cor_coef = control["cor_coef"];
     if (control.containsElementNamed("rho_thr_DA")) params.rho_thr_DA = control["rho_thr_DA"];
     
+    if (control.containsElementNamed("hc_grid_length")) {
+        params.hc_grid_length =
+            static_cast<std::size_t>(Rcpp::as<int>(control["hc_grid_length"]));
+    }
+
     if (control.containsElementNamed("hc_linkage")) {
         std::string linkage = control["hc_linkage"];
         if (linkage == "Single") params.hc_linkage = trx_ml_hac_LinkageMethod::Single;
@@ -42,6 +47,31 @@ TRexDAControlParameter parse_da_parameter(const Rcpp::List& control) {
         else if (linkage == "WPGMA") params.hc_linkage = trx_ml_hac_LinkageMethod::WPGMA;
         else if (linkage == "Ward") params.hc_linkage = trx_ml_hac_LinkageMethod::Ward;
         else Rcpp::stop("Unknown LinkageMethod: " + linkage);
+    }
+
+    // Prior-groups hierarchy: a list of L integer vectors, each of length p.
+    // When supplied, the core routes through setupDA_PriorGroups() and the
+    // da_method field is ignored. Labels are matched by equality, so the 1-based
+    // labels natural to R need no adjustment.
+    if (control.containsElementNamed("prior_groups") &&
+        !Rf_isNull(control["prior_groups"])) {
+        Rcpp::List levels = control["prior_groups"];
+        params.prior_groups.reserve(static_cast<std::size_t>(levels.size()));
+        for (R_xlen_t l = 0; l < levels.size(); ++l) {
+            Rcpp::IntegerVector labels = levels[l];
+            std::vector<Eigen::Index> level_labels;
+            level_labels.reserve(static_cast<std::size_t>(labels.size()));
+            for (R_xlen_t j = 0; j < labels.size(); ++j) {
+                level_labels.push_back(static_cast<Eigen::Index>(labels[j]));
+            }
+            params.prior_groups.push_back(std::move(level_labels));
+        }
+    }
+
+    if (control.containsElementNamed("rho_grid_labels") &&
+        !Rf_isNull(control["rho_grid_labels"])) {
+        Rcpp::NumericVector labels = control["rho_grid_labels"];
+        params.rho_grid_labels.assign(labels.begin(), labels.end());
     }
 
     return params;

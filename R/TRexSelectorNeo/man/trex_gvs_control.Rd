@@ -12,7 +12,10 @@ trex_gvs_control(
   lambda2_method = "CV_1SE_CCD",
   en_solver = "TENET",
   tenet_aug_use_lars = FALSE,
-  groups = NULL
+  groups = NULL,
+  cv_n_folds = 10,
+  cv_n_lambda = 1000,
+  cv_seed = -1
 )
 }
 \arguments{
@@ -47,6 +50,20 @@ the augmented system with a pure-LARS inner path that never drops variables
 \code{en_solver = "TENET"}.}
 
 \item{groups}{Integer vector of manually specified group assignments (1-based, default: NULL).}
+
+\item{cv_n_folds}{Number of folds for the k-fold cross-validation used by the
+CV \code{lambda2_method} paths (default: 10, matching \code{cv.glmnet}).
+Ignored when \code{lambda_2 >= 0}.}
+
+\item{cv_n_lambda}{Number of points on the geometric lambda grid searched by
+the CV auto-computation of \code{lambda_2} (default: 1000). Ignored when
+\code{lambda_2 >= 0}.}
+
+\item{cv_seed}{Seed for the deterministic fold-permutation RNG used by the CV
+\code{lambda2_method} paths. \code{-1} (default) derives it from the T-Rex
+\code{seed} (deterministic when \code{seed >= 0}, hardware entropy when
+\code{seed < 0}); a value \code{>= 0} overrides \code{seed} for CV folds
+only, giving per-trial fold reproducibility.}
 }
 \value{
 A named list for use in TRexGVSSelector.

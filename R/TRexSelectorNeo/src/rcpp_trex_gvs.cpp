@@ -75,6 +75,19 @@ TRexGVSControlParameter parse_gvs_parameter(const Rcpp::List& control) {
         for(int i=0; i<r_groups.size(); ++i) params.prior_groups[i] = r_groups[i] - 1;
     }
 
+    // Cross-validation controls for the CV lambda2_method paths (ignored when
+    // lambda_2 >= 0). cv_seed enables per-trial fold reproducibility.
+    if (control.containsElementNamed("cv_n_folds")) {
+        params.cv_n_folds = Rcpp::as<int>(control["cv_n_folds"]);
+    }
+    if (control.containsElementNamed("cv_n_lambda")) {
+        params.cv_n_lambda =
+            static_cast<Eigen::Index>(Rcpp::as<int>(control["cv_n_lambda"]));
+    }
+    if (control.containsElementNamed("cv_seed")) {
+        params.cv_seed = Rcpp::as<int>(control["cv_seed"]);
+    }
+
     return params;
 }
 

@@ -393,3 +393,40 @@ test_that("TRexGVSSelector honors tenet_aug_use_lars (LARS vs LASSO inner path)"
   expect_type(sel_lasso, "integer")
   expect_type(sel_lars, "integer")
 })
+
+
+test_that("trex_gvs_control exposes and coerces the CV fold controls", {
+  ctrl <- trex_gvs_control(cv_n_folds = 5, cv_n_lambda = 200, cv_seed = 123)
+  expect_identical(ctrl$cv_n_folds, 5L)
+  expect_identical(ctrl$cv_n_lambda, 200L)
+  expect_identical(ctrl$cv_seed, 123L)
+
+  # Defaults mirror the C++ core (cv.glmnet-style 10 folds, 1000-point grid,
+  # -1 = derive fold seed from the T-Rex seed).
+  d <- trex_gvs_control()
+  expect_identical(d$cv_n_folds, 10L)
+  expect_identical(d$cv_n_lambda, 1000L)
+  expect_identical(d$cv_seed, -1L)
+})
+
+
+test_that("cv_seed makes EN-CV lambda_2 selection reproducible per trial", {
+  set.seed(42)
+  n <- 60; p <- 15
+  X <- matrix(rnorm(n * p), n, p)
+  y <- as.numeric(X[, 1] * 3 + X[, 2] * -2 + X[, 5] * 2 + rnorm(n))
+
+  # An explicit cv_seed pins the CV fold permutation, so two independent runs
+  # with the same cv_seed must select the same variables. Each selector needs
+  # its own X copy (shared-buffer claim guard).
+  run <- function(cv_seed) {
+    s <- TRexGVSSelector$new(
+      matrix(X, n, p), y, tFDR = 0.2, seed = 1, verbose = FALSE,
+      gvs_control = trex_gvs_control(gvs_type = "EN", lambda_2 = -1.0,
+                                     cv_seed = cv_seed)
+    )
+    s$select()
+    sort(s$selected_indices)
+  }
+  expect_identical(run(777), run(777))
+})

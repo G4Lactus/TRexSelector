@@ -127,25 +127,41 @@ trex_control <- function(solver = "TLARS",
 #'   "WPGMA", "Ward" (default: "Single").
 #' @param hc_grid_length Number of grid points for BT/NN calibration. \code{0}
 #'   (default) lets the core auto-select \code{min(20, p)}.
+#' @param prior_groups Optional prior-groups hierarchy: a list of \code{L} integer
+#'   vectors, each of length \code{p}, giving group labels per variable from fine
+#'   to coarse. When supplied (non-\code{NULL}, non-empty), the prior-groups
+#'   dependency-aware path is used and \code{da_method} is ignored. Labels within
+#'   a level are matched by equality; variables sharing a label are group-mates.
+#'   (default: \code{NULL}).
+#' @param rho_grid_labels Optional numeric vector of semantic labels for each
+#'   prior-group level (e.g. correlation thresholds); must have the same length
+#'   as \code{prior_groups}. \code{NULL} (default) uses \code{1, 2, ..., L}.
+#'   Ignored unless \code{prior_groups} is supplied.
 #'
 #' @return A named list for use in TRexDASelector.
 #'
 #' @examples
 #' trex_da_control()
 #' trex_da_control(da_method = "BT", hc_linkage = "Average")
+#' # Prior-groups path (two-level hierarchy over p = 4 variables):
+#' trex_da_control(prior_groups = list(c(1, 1, 2, 2), c(1, 1, 1, 1)))
 #'
 #' @export
 trex_da_control <- function(da_method = "BT",
                             cor_coef = -2.0,
                             rho_thr_DA = 0.02,
                             hc_linkage = "Single",
-                            hc_grid_length = 0) {
+                            hc_grid_length = 0,
+                            prior_groups = NULL,
+                            rho_grid_labels = NULL) {
   list(
-    da_method     = da_method,
-    cor_coef      = cor_coef,
-    rho_thr_DA    = rho_thr_DA,
-    hc_linkage    = hc_linkage,
-    hc_grid_length = hc_grid_length
+    da_method       = da_method,
+    cor_coef        = cor_coef,
+    rho_thr_DA      = rho_thr_DA,
+    hc_linkage      = hc_linkage,
+    hc_grid_length  = hc_grid_length,
+    prior_groups    = prior_groups,
+    rho_grid_labels = rho_grid_labels
   )
 }
 
@@ -184,6 +200,17 @@ trex_da_control <- function(da_method = "BT",
 #'   (\code{FALSE}, default). This is the LARS-vs-LASSO distinction. Ignored for
 #'   \code{en_solver = "TENET"}.
 #' @param groups Integer vector of manually specified group assignments (1-based, default: NULL).
+#' @param cv_n_folds Number of folds for the k-fold cross-validation used by the
+#'   CV \code{lambda2_method} paths (default: 10, matching \code{cv.glmnet}).
+#'   Ignored when \code{lambda_2 >= 0}.
+#' @param cv_n_lambda Number of points on the geometric lambda grid searched by
+#'   the CV auto-computation of \code{lambda_2} (default: 1000). Ignored when
+#'   \code{lambda_2 >= 0}.
+#' @param cv_seed Seed for the deterministic fold-permutation RNG used by the CV
+#'   \code{lambda2_method} paths. \code{-1} (default) derives it from the T-Rex
+#'   \code{seed} (deterministic when \code{seed >= 0}, hardware entropy when
+#'   \code{seed < 0}); a value \code{>= 0} overrides \code{seed} for CV folds
+#'   only, giving per-trial fold reproducibility.
 #'
 #' @return A named list for use in TRexGVSSelector.
 #'
@@ -199,7 +226,10 @@ trex_gvs_control <- function(gvs_type = "EN",
                              lambda2_method = "CV_1SE_CCD",
                              en_solver = "TENET",
                              tenet_aug_use_lars = FALSE,
-                             groups = NULL) {
+                             groups = NULL,
+                             cv_n_folds = 10,
+                             cv_n_lambda = 1000,
+                             cv_seed = -1) {
   lambda2_method <- match.arg(lambda2_method,
                               c("CV_1SE_CCD", "CV_MIN_CCD",
                                 "CV_1SE_SVD", "CV_MIN_SVD"))
@@ -212,7 +242,10 @@ trex_gvs_control <- function(gvs_type = "EN",
     lambda2_method     = lambda2_method,
     en_solver          = en_solver,
     tenet_aug_use_lars = as.logical(tenet_aug_use_lars),
-    groups             = groups
+    groups             = groups,
+    cv_n_folds         = as.integer(cv_n_folds),
+    cv_n_lambda        = as.integer(cv_n_lambda),
+    cv_seed            = as.integer(cv_seed)
   )
 }
 
