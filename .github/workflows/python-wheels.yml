@@ -37,7 +37,7 @@ jobs:
       # -----------------------------------------------------------------------
       - name: Cache vcpkg binary archives (Windows)
         if: runner.os == 'Windows'
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ~\AppData\Local\vcpkg\archives
           key: vcpkg-wheels-${{ runner.os }}-${{ hashFiles('.github/workflows/python-wheels.yml') }}
@@ -135,7 +135,7 @@ jobs:
           CIBW_REPAIR_WHEEL_COMMAND_WINDOWS: delvewheel repair --add-path C:/libomp -w {dest_dir} {wheel}
 
       - name: Upload wheel artifacts
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v7
         with:
           name: wheels-${{ matrix.os }}
           path: ./wheelhouse/*.whl
@@ -154,7 +154,7 @@ jobs:
 
     steps:
       - name: Download all wheel artifacts
-        uses: actions/download-artifact@v5
+        uses: actions/download-artifact@v8
         with:
           pattern: wheels-*
           merge-multiple: true
