@@ -19,8 +19,9 @@
 #      build/debug/bin/. Notes:
 #        * self-generating probes (trex_01, spca_02/03/06, ts_01) just run;
 #        * da_01 / spca_05 read committed reference CSVs and finish quickly;
-#        * spca_04 / spca_07 need an external R dump passed via --dir <path>
-#          (~12 MB, not committed; see the trex_spca README);
+#        * spca_04 / spca_07 read the baked R dumps committed beside them
+#          (rdump/ + rdump10/, injected via TREX_SPCA_RDUMP{,10}_DIR; --dir
+#          overrides; see the trex_spca README);
 #        * gvs_01 targets the GVS-EN + TLARS combo the library now rejects (the
 #          GVS-EN FDR fix); it compiles but throws at run time by design.
 #
@@ -132,12 +133,19 @@ add_trex_diagnostic(validation_trex_spca_03_scaling_comparison
     trex_selector_methods/trex_spca/validation_trex_spca_03_scaling_comparison.cpp)
 add_trex_diagnostic(validation_trex_spca_04_rdump_pipeline
     trex_selector_methods/trex_spca/validation_trex_spca_04_rdump_pipeline.cpp)
+# Point spca_04 at the baked R dump committed beside the program (from the
+# co-located demo_trex_spca_02.R generator); --dir still overrides.
+target_compile_definitions(validation_trex_spca_04_rdump_pipeline PRIVATE
+    TREX_SPCA_RDUMP_DIR="${CMAKE_CURRENT_SOURCE_DIR}/trex_selector_methods/trex_spca/rdump")
 add_trex_diagnostic(validation_trex_spca_05_lambda2_foldmatch
     trex_selector_methods/trex_spca/validation_trex_spca_05_lambda2_foldmatch.cpp)
 add_trex_diagnostic(validation_trex_spca_06_handrolled_comparison
     trex_selector_methods/trex_spca/validation_trex_spca_06_handrolled_comparison.cpp)
 add_trex_diagnostic(validation_trex_spca_07_matrix_dump
     trex_selector_methods/trex_spca/validation_trex_spca_07_matrix_dump.cpp)
+# Point spca_07 at the baked rdump10 committed beside the program; --dir overrides.
+target_compile_definitions(validation_trex_spca_07_matrix_dump PRIVATE
+    TREX_SPCA_RDUMP10_DIR="${CMAKE_CURRENT_SOURCE_DIR}/trex_selector_methods/trex_spca/rdump10")
 
 # T-solver equivalence probe.
 add_trex_diagnostic(validation_ts_01_tenet_aug_comparison

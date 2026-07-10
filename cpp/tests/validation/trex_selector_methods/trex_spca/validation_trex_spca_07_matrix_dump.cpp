@@ -78,10 +78,15 @@ std::vector<double> load_lambda2(const std::string& path, int n_trials) {
 } // namespace
 
 int main(int argc, char** argv) {
-    // External R dump (not committed in the library; ~12 MB). Regenerate it with
-    // the R generator in the examples package and pass it via --dir <path>.
+    // R dump baked into the library beside this program (see the co-located
+    // demo_trex_spca_02.R generator run with RDUMP_DIR=rdump10); TREX_SPCA_RDUMP10_DIR
+    // is injected by CMake to that source folder. Override at runtime with --dir <path>.
+#ifdef TREX_SPCA_RDUMP10_DIR
+    std::string dir = TREX_SPCA_RDUMP10_DIR;
+#else
     std::string dir =
-        "R/trex_selector_methods/validation/trex_spca/rdump10";
+        "trex_selector_methods/trex_spca/rdump10";
+#endif
     int n_trials = 100;
     int seed_base = 9000;
     std::string out_path;

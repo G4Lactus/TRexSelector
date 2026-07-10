@@ -17,10 +17,30 @@ The goal is to confirm the Gram-based and augmented-LASSO elastic-net paths agre
 
 ---
 
+## Cross-language legs (all co-located here)
+
+| File | Role |
+| ---- | ---- |
+| `validation_ts_01_tenet_aug_comparison.cpp` | C++ diagnostic (self-generating; always exits 0) |
+| `validation_ts_01_tenet_aug_comparison.R` | R6-binding port of the same three-way equivalence check |
+| `validation_ts_01_tenet_aug_comparison.py` | Python-binding port |
+| `ts_demo_utils.{R,py}` | shared synthetic-data helper, co-located so each leg is self-contained |
+
+Each leg synthesises its own data (no reference dumps), so they just run.
+
+---
+
 ## Running
 
 ```bash
-./build/debug/bin/tsolvers/validation/validation_ts_01_tenet_aug_comparison/validation_ts_01_tenet_aug_comparison
+# C++ (compile via build_diagnostics, then run the binary)
+./build/debug/bin/.../validation_ts_01_tenet_aug_comparison
+
+# R6 bindings
+Rscript validation_ts_01_tenet_aug_comparison.R
+
+# Python bindings
+python validation_ts_01_tenet_aug_comparison.py
 ```
 
 ---
