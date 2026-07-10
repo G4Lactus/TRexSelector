@@ -8,23 +8,22 @@ opt-in cross-language validations in `tests/validation/`:
 - `validation_mlm_hac_01_rcompare` — C++ single-linkage HAC vs R `hclust(method="single")`.
 - `validation_mlm_hac_02_gvs_dummy_rcompare` — C++ GVS dummy clustering/covariance vs
   R `TRexSelector:::add_dummies_GVS()`.
+- `validation_ts_02_tlars_tlasso_rcompare` — C++ TLARS / TLASSO / TENET / TENET_AUG
+  solvers vs R `lars` / lasso / elastic-net reference paths.
 
 The files are committed to the repository so the validations are self-contained: running
 them needs no R toolchain and no access to any sibling repository — only the CSVs here.
 
 ## Which files are included
 
-This is a **subset** of a larger dump. Only the files the two HAC validations actually
-read are kept:
+The **full** dump is committed, since the three validations together read all of it:
 
 - `meta.csv`, `gvs_corrmax.csv`
 - `Xn_<i>.csv` (design matrices)
-- `r_clust_height_<i>.csv`, `r_clust_labels_<i>.csv` (validation 01)
-- `r_gvs_labels_<i>_<tag>.csv`, `r_gvs_sigma_<i>_<tag>.csv` (validation 02)
-
-The solver-comparison files from the original dump (`Dn_*`, `y_*`, `r_lar_*`, `r_lasso_*`,
-`r_en_*`, `r_enlar_*`) are intentionally excluded — they belong to the tsolvers example,
-not to these clustering checks.
+- `r_clust_height_<i>.csv`, `r_clust_labels_<i>.csv` (HAC validation 01)
+- `r_gvs_labels_<i>_<tag>.csv`, `r_gvs_sigma_<i>_<tag>.csv` (GVS validation 02)
+- `Dn_<i>.csv`, `y_<i>.csv` (t-solver inputs, ts_02)
+- `r_lar_*`, `r_lasso_*`, `r_en_*`, `r_enlar_*` (t-solver reference paths, ts_02)
 
 ## Provenance / how to regenerate
 
