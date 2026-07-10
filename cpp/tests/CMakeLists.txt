@@ -36,6 +36,7 @@ add_trex_test(test_utils_openmp test_utils/test_utils_openmp.cpp)
 add_trex_test(test_utils_logging test_utils/test_utils_logging.cpp)
 add_trex_test(test_utils_memmap test_utils/test_utils_memmap.cpp)
 add_trex_test(test_utils_dummygen test_utils/test_utils_dummygen.cpp)
+add_trex_test(test_utils_dummy_seeding test_utils/test_utils_dummy_seeding.cpp)
 add_trex_test(test_utils_noisegen test_utils/test_utils_noisegen.cpp)
 add_trex_test(test_utils_datagen test_utils/test_utils_datagen.cpp)
 

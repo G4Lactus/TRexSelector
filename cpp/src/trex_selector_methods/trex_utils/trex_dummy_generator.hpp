@@ -87,12 +87,12 @@ public:
         data_normalizer::ScalingMode scaling_mode = data_normalizer::ScalingMode::L2)
         : n_(n),
         distribution_(distribution),
-        seed_(seed),
         verbose_(verbose),
         scaling_mode_(scaling_mode),
         resolved_base_seed_((seed >= 0)
-            ? static_cast<unsigned int>(seed)
-            : std::random_device{}())
+            ? static_cast<std::uint64_t>(seed)
+            : ((static_cast<std::uint64_t>(std::random_device{}()) << 32)
+               | static_cast<std::uint64_t>(std::random_device{}())))
     {}
 
     /** @brief Destructor of DummyGenerator */
@@ -173,7 +173,7 @@ public:
     void generateInto(Eigen::Ref<Eigen::MatrixXd> target,
                       std::size_t experiment_id) const {
 
-        unsigned int base_seed = deriveSeed(experiment_id);
+        const std::uint64_t base_seed = deriveBlockSeed64(experiment_id, 0);
 
         dummygen::generate_dummies(
             target, n_,
@@ -191,28 +191,23 @@ public:
 
 
     /**
-     * @brief Generate dummies into target with explicit seed_factor.
+     * @brief Generate dummies into target with explicit L-loop tag.
      *
-     * @details Used by memory-mapped Standard/HCONCAT strategies to mirror
-     *          the seed derivation of generateAndStore(K, num_dummies, seed_factor).
+     * @details Used by memory-mapped Standard/SKIPL/HCONCAT strategies to
+     *          mirror the seed derivation of generateAndStore(K, num_dummies,
+     *          l_tag). With l_tag = 0 (HCONCAT convention) a full generation
+     *          reproduces bit-exactly the matrix an incremental expandInto()
+     *          build would produce — in-memory and memory-mapped paths agree.
      *
      * @param target       Matrix to write into (n × num_dummies, pre-sized).
      * @param experiment_k Experiment index k.
-     * @param seed_factor  L-loop iteration multiplier (0 = use k directly).
+     * @param l_tag        L-loop tag (0 = prefix-stable; L_iter for STANDARD).
      */
     void generateInto(Eigen::Ref<Eigen::MatrixXd> target,
                       std::size_t experiment_k,
-                      std::size_t seed_factor) const {
+                      std::size_t l_tag) const {
 
-        unsigned int unique_id;
-        if (seed_factor == 0) {
-            unique_id = static_cast<unsigned int>(experiment_k);
-        } else {
-            unique_id = dummygen::mix_seed(
-                static_cast<uint32_t>(experiment_k), seed_factor);
-        }
-
-        unsigned int base_seed = deriveSeed(unique_id);
+        const std::uint64_t base_seed = deriveBlockSeed64(experiment_k, l_tag);
 
         dummygen::generate_dummies(
             target, n_,
@@ -235,33 +230,36 @@ public:
      * @details Used by the HCONCAT memory-mapped path.  The first
      *          `existing_cols` columns are already on disk from the prior
      *          L-loop iteration and are left untouched.  Only the rightmost
-     *          `target.cols() - existing_cols` columns are generated.
+     *          `target.cols() - existing_cols` columns are generated — under
+     *          the SAME per-experiment base (l_tag = 0) with the global column
+     *          offset, so the grown design lives in one injective seed domain:
+     *          duplicate columns across blocks are impossible by construction,
+     *          and a later full generateInto(k, l_tag = 0) reproduces the
+     *          identical matrix.
      *
      * @param target        Full D map (n × total_cols, pre-sized to new total).
      * @param existing_cols Number of columns already written from prior L.
      * @param experiment_k  Experiment index k.
-     * @param seed_factor   L-loop iteration multiplier for seed mixing.
      */
     void expandInto(Eigen::Ref<Eigen::MatrixXd> target,
                     std::size_t existing_cols,
-                    std::size_t experiment_k,
-                    std::size_t seed_factor) const {
+                    std::size_t experiment_k) const {
 
         const std::size_t total_cols = static_cast<std::size_t>(target.cols());
         if (existing_cols >= total_cols) return;  // nothing to expand
 
         const std::size_t new_cols = total_cols - existing_cols;
 
-        // Derive seed (same logic as expandStored)
-        unsigned int unique_id = dummygen::mix_seed(
-            static_cast<uint32_t>(experiment_k), seed_factor);
-        unsigned int base_seed = deriveSeed(unique_id);
+        // Same base as the initial block; new columns are distinguished by
+        // their global column offset (same derivation as expandStored)
+        const std::uint64_t base_seed = deriveBlockSeed64(experiment_k, 0);
 
         // Generate only the new rightmost columns
         auto new_block = target.rightCols(static_cast<Eigen::Index>(new_cols));
 
         dummygen::generate_dummies(
-            new_block, n_, new_cols, base_seed, distribution_
+            new_block, n_, new_cols, base_seed, distribution_,
+            /*col_offset=*/existing_cols
         );
 
         utils::data_normalizer::centerAndL2NormalizeMatrix(
@@ -276,12 +274,11 @@ public:
     /**
      * @brief Generate DIRECT-strategy dummies directly into an existing matrix.
      *
-     * @details Seeds via `deriveSeed(experiment_id)`, i.e. from the resolved
-     *          base seed. This honours the user-supplied seed (previously the
-     *          PERMUTATION-only `base_seed_perm_`, which is 0 for DIRECT, was
-     *          used) and is stable across repeated calls within one run, so
-     *          every T-loop step re-derives the identical D_k even when
-     *          `seed < 0` (previously each call drew fresh `random_device`
+     * @details Seeds via `deriveBlockSeed64(experiment_id, 0)`, i.e. from the
+     *          resolved base seed with the prefix-stable tag. This honours the
+     *          user-supplied seed and is stable across repeated calls within
+     *          one run, so every T-loop step re-derives the identical D_k even
+     *          when `seed < 0` (previously each call drew fresh `random_device`
      *          entropy, silently changing the dummies mid-calibration).
      *
      * @param target         Matrix to write into (n × num_dummies, pre-sized).
@@ -290,7 +287,7 @@ public:
     void generateDirectInto(Eigen::Ref<Eigen::MatrixXd> target,
                             std::size_t experiment_id) const {
 
-        const unsigned int seed_k = deriveSeed(experiment_id);
+        const std::uint64_t seed_k = deriveBlockSeed64(experiment_id, 0);
 
         dummygen::generate_dummies(
             target, n_,
@@ -338,7 +335,8 @@ public:
             target = base_dummies_perm_;
         } else {
             // Deterministic row permutation directly into target
-            std::mt19937 rng(dummygen::mix_seed(base_seed_perm_, k));
+            // (full 64-bit seed path; see dummygen::make_column_engine)
+            std::mt19937 rng = dummygen::make_column_engine(base_seed_perm_, k);
             applyRowPermutationInto(base_dummies_perm_, target, rng);
         }
     }
@@ -365,20 +363,15 @@ public:
      */
     void generateAndStore(std::size_t K,
                           std::size_t num_dummies,
-                          std::size_t seed_factor = 0) {
+                          std::size_t l_tag = 0) {
 
         stored_dummies_.clear();
         stored_dummies_.reserve(K);
 
         for (std::size_t k = 0; k < K; ++k) {
-            unsigned int unique_id;
-            if (seed_factor == 0) {
-                unique_id = static_cast<unsigned int>(k);
-            } else {
-                unique_id = dummygen::mix_seed(
-                    static_cast<uint32_t>(k), seed_factor);
-            }
-            stored_dummies_.emplace_back(generate(num_dummies, unique_id));
+            Eigen::MatrixXd D(n_, num_dummies);
+            generateInto(D, k, l_tag);
+            stored_dummies_.emplace_back(std::move(D));
         }
     }
 
@@ -388,7 +381,14 @@ public:
      *
      * @details Used by the HCONCAT strategy.  Appends p_new freshly generated
      *          columns to the right of each existing D_k, preserving all
-     *          previously generated columns exactly.
+     *          previously generated columns exactly.  New columns are drawn
+     *          under the SAME per-experiment base (l_tag = 0) with the global
+     *          column offset, so the whole grown D_k lives in one injective
+     *          seed domain: bit-identical columns across expansion blocks are
+     *          impossible by construction (the former per-block 32-bit reseed
+     *          could collide), and a full generateInto(k, l_tag = 0) of the
+     *          final size reproduces the identical matrix (memory-mapped path
+     *          equivalence).
      *
      *          After this call, stored_dummies_[k] has size n × (old_cols + p_new).
      *
@@ -398,12 +398,11 @@ public:
      *          WarmStartManager BEFORE calling this (see
      *          TRexSelector::prepareDummiesForLStep, HCONCAT case).
      *
-     * @param p_new        Number of new dummy columns to append per matrix.
-     * @param seed_factor  L-loop iteration multiplier for seed mixing.
+     * @param p_new  Number of new dummy columns to append per matrix.
      *
      * @throws std::runtime_error if stored_dummies_ is empty.
      */
-    void expandStored(std::size_t p_new, std::size_t seed_factor) {
+    void expandStored(std::size_t p_new) {
 
         if (stored_dummies_.empty()) {
             throw std::runtime_error(
@@ -416,17 +415,12 @@ public:
         for (std::size_t k = 0; k < K; ++k) {
             const std::size_t old_cols = stored_dummies_[k].cols();
 
-            // Derive a unique seed for this (k, L) combination
-            unsigned int unique_id = dummygen::mix_seed(
-                static_cast<uint32_t>(k), seed_factor);
-
-            // Generate the new block
-            Eigen::MatrixXd new_block = generate(p_new, unique_id);
-
-            // Append: [D_k_old | D_k_new]
+            // Append: [D_k_old | D_k_new], then generate the new rightmost
+            // columns in-place under the same base with global column offsets
             stored_dummies_[k].conservativeResize(Eigen::NoChange,
                 static_cast<Eigen::Index>(old_cols + p_new));
-            stored_dummies_[k].rightCols(p_new) = new_block;
+
+            expandInto(stored_dummies_[k], old_cols, k);
         }
     }
 
@@ -474,14 +468,53 @@ public:
      * @brief Store a base dummy matrix for the PERMUTATION strategy.
      *
      * @param base_dummies  The base dummy matrix (n × num_dummies).
-     * @param base_seed     Seed used to generate it (for reproducibility).
+     * @param base_seed     Seed used to generate it (for reproducibility;
+     *                      also the id under which expandBaseDummies() grows
+     *                      the base prefix-stably).
      */
     void storeBaseDummies(Eigen::MatrixXd base_dummies,
-                          unsigned int base_seed)
+                          std::uint64_t base_seed)
     {
         base_dummies_perm_ = std::move(base_dummies);
         base_seed_perm_ = base_seed;
         base_initialized_ = true;
+    }
+
+
+    /**
+     * @brief Expand the stored PERMUTATION base dummies by p_new columns.
+     *
+     * @details Grows base_dummies_perm_ to [base_old | new_cols].  The new
+     *          columns are generated under the SAME base id that produced the
+     *          initial base (deriveBlockSeed64(base_seed_perm_, 0)) with the
+     *          global column offset, so the grown base lives in one injective
+     *          seed domain — duplicate columns between the original base and
+     *          any expansion are impossible by construction (the former
+     *          mix_seed(base, L) per-expansion reseed could collide), and the
+     *          expansion is prefix-stable across L iterations.
+     *
+     *          Row permutations per experiment are applied downstream by
+     *          getPermuted()/permuteInto() and are unaffected.
+     *
+     * @param p_new  Number of new dummy columns to append.
+     *
+     * @throws std::logic_error if no base dummies are stored.
+     */
+    void expandBaseDummies(std::size_t p_new) {
+
+        if (!base_initialized_) {
+            throw std::logic_error(
+                "DummyGenerator::expandBaseDummies: base dummies not initialized");
+        }
+
+        const std::size_t old_cols =
+            static_cast<std::size_t>(base_dummies_perm_.cols());
+
+        base_dummies_perm_.conservativeResize(Eigen::NoChange,
+            static_cast<Eigen::Index>(old_cols + p_new));
+
+        expandInto(base_dummies_perm_, old_cols,
+                   static_cast<std::size_t>(base_seed_perm_));
     }
 
 
@@ -519,7 +552,8 @@ public:
         }
 
         // Experiments k > 0: deterministic row permutation
-        std::mt19937 rng(dummygen::mix_seed(base_seed_perm_, k));
+        // (full 64-bit seed path; see dummygen::make_column_engine)
+        std::mt19937 rng = dummygen::make_column_engine(base_seed_perm_, k);
         return applyRowPermutation(base_dummies_perm_, rng);
     }
 
@@ -560,25 +594,23 @@ private:
     /** @brief Distribution type for dummy generation. */
     dummygen::Distribution distribution_;
 
-    /** @brief Seed for random number generation. */
-    int seed_;
-
     /** @brief Flag to print progress. */
     bool verbose_;
 
     /** @brief Column scaling convention applied to generated dummies. */
     data_normalizer::ScalingMode scaling_mode_;
 
-    /** @brief Base seed resolved once at construction.
+    /** @brief 64-bit base seed resolved once at construction.
      *
-     *  Equals `seed_` when a deterministic seed (>= 0) was requested, and a
-     *  single `std::random_device` draw otherwise. Resolving the base once
-     *  (instead of per call) guarantees that repeated generation requests for
-     *  the same (experiment, seed_factor) pair — e.g. the DIRECT strategy
-     *  re-deriving D_k at every T-loop step — reproduce the identical dummy
-     *  matrix within one selector run, while separate runs still obtain fresh
-     *  entropy. */
-    unsigned int resolved_base_seed_;
+     *  Equals `seed_` when a deterministic seed (>= 0) was requested, and two
+     *  `std::random_device` draws packed into 64 bits otherwise. Resolving the
+     *  base once (instead of per call) guarantees that repeated generation
+     *  requests for the same (experiment, l_tag) pair — e.g. the DIRECT
+     *  strategy re-deriving D_k at every T-loop step — reproduce the identical
+     *  dummy matrix within one selector run, while separate runs still obtain
+     *  fresh entropy. 64-bit width keeps the whole seeding pipeline out of the
+     *  collision-prone 32-bit space (see dummygen::mix_seed64). */
+    std::uint64_t resolved_base_seed_;
 
     // ==========================================================================
     // State — STANDARD/HCONCAT/SKIP
@@ -594,8 +626,8 @@ private:
     /** @brief Base dummy matrix (n × num_dummies). */
     Eigen::MatrixXd base_dummies_perm_;
 
-    /** @brief Seed used to generate base dummies. */
-    unsigned int base_seed_perm_{0};
+    /** @brief Seed used to generate base dummies (id for prefix-stable expansion). */
+    std::uint64_t base_seed_perm_{0};
 
     /** @brief Whether base dummies are initialized. */
     bool base_initialized_{false};
@@ -606,30 +638,50 @@ private:
     // ==========================================================================
 
     /**
-     * @brief Derive a seed for experiment k from the resolved base seed.
+     * @brief Derive the 64-bit block base seed for (experiment k, L-tag).
      *
-     * @details Uses `mix_seed(base, experiment_id)` (MurmurHash3 finalizer) rather
-     *          than the naive linear formula `base + experiment_id`.  Linear seeds
-     *          give consecutive values (s, s+1, …, s+K-1) for a fixed base, which
-     *          means the per-experiment seeds share a structural relationship that
-     *          can produce mildly correlated dummy matrices when K is small.
-     *          Hash-based mixing decorrelates the K seeds regardless of whether the
-     *          base comes from a fixed integer or from `std::random_device`.
+     * @details Packs the experiment id and the L-loop tag into DISJOINT bit
+     *          fields of a single 64-bit index (`l_tag << 32 | k`) and mixes it
+     *          with `mix_seed64`.  Because mix_seed64 is injective in the index
+     *          for a fixed base, two distinct (k, l_tag) pairs can NEVER yield
+     *          the same block base — whole-block duplication between experiments
+     *          or L-iterations is impossible by construction (the former 32-bit
+     *          `mix_seed(k, L)` scheme could collide).
+     *
+     *          Per-column seeds are then `mix_seed64(block_base, col)` inside
+     *          generate_dummies(): injective in the column index for a fixed
+     *          block base, so bit-identical columns within one block (or one
+     *          incrementally grown HCONCAT design, which keeps l_tag = 0 and
+     *          advances the column offset) are likewise impossible.
+     *
+     *          Tag conventions:
+     *            - l_tag = 0:      prefix-stable strategies (HCONCAT, DIRECT,
+     *                              PERMUTATION base). The same (k, col) always
+     *                              reproduces the same column, so re-derivation
+     *                              at any T-/L-step and incremental expansion
+     *                              agree bit-exactly.
+     *            - l_tag = L_iter: fresh-per-iteration strategies (STANDARD;
+     *                              SKIPL uses L_max for equivalence with
+     *                              STANDARD's final iteration).
      *
      *          The base is `resolved_base_seed_`, fixed at construction: the
-     *          same (experiment, seed_factor) request always reproduces the
-     *          same dummies within one selector run (required by the DIRECT
-     *          strategy, which re-derives D_k at every T-loop step). For Monte
-     *          Carlo FDR sweeps the caller should pass `seed = -1` so that every
-     *          selector run draws a fresh hardware-entropy base; a fixed integer
-     *          seed is suitable for exact reproducibility of a single run.
+     *          same request always reproduces the same dummies within one
+     *          selector run. For Monte Carlo FDR sweeps the caller should pass
+     *          `seed = -1` so that every selector run draws a fresh 64-bit
+     *          hardware-entropy base; a fixed integer seed is suitable for
+     *          exact reproducibility of a single run.
      *
      * @param experiment_id  Experiment index k (or other unique identifier).
+     * @param l_tag          L-loop tag (see conventions above).
      *
-     * @return Derived seed for this experiment.
+     * @return 64-bit block base seed.
      */
-    unsigned int deriveSeed(std::size_t experiment_id) const {
-        return dummygen::mix_seed(resolved_base_seed_, experiment_id);
+    std::uint64_t deriveBlockSeed64(std::size_t experiment_id,
+                                    std::size_t l_tag = 0) const {
+        const std::uint64_t packed =
+            (static_cast<std::uint64_t>(l_tag) << 32)
+            | (static_cast<std::uint64_t>(experiment_id) & 0xFFFFFFFFULL);
+        return dummygen::mix_seed64(resolved_base_seed_, packed);
     }
 
 

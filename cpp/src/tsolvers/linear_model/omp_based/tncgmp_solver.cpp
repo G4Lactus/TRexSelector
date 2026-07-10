@@ -52,17 +52,21 @@ TNCGMP_Solver::TNCGMP_Solver(
     ));
 
     // The LineSearch (MP) variant stores one dense beta-path column per step
-    // and may take up to 20 * p_tot steps; warn when a full-path run could
-    // allocate an excessive amount of memory (use T_stop to stop early).
+    // and has a uniquely large step ceiling (20 * p_tot, vs 8 * min(...) for the
+    // OMP-family solvers). The path is allocated incrementally and bounded by
+    // T_stop / early stopping, so the full worst case is virtually never reached.
+    // This is an informational size note for debugging, not a fault: emit it via
+    // logInfo (verbose-only), consistent with the rest of the solver suite where
+    // logWarning is reserved for genuine numerical/structural problems.
     if (variant_ == NCGMPVariant::LineSearch) {
         double worst_case_gib = static_cast<double>(p_tot) *
                                 static_cast<double>(maxSteps_) * 8.0 /
                                 (1024.0 * 1024.0 * 1024.0);
         if (worst_case_gib > 1.0) {
-            logWarning(concatMsg(
+            logInfo(concatMsg(
                 "LineSearch worst-case beta path is ~", worst_case_gib,
                 " GiB (", p_tot, " x ", maxSteps_,
-                " doubles); rely on T_stop early stopping."));
+                " doubles); allocated incrementally, bounded by T_stop early stopping."));
         }
     }
 

@@ -87,6 +87,63 @@ inline std::uint32_t mix_seed(std::uint32_t base, std::size_t index) {
 }
 
 
+/**
+ * @brief 64-bit integer mixer (splitmix64 finalizer).
+ *
+ * @details 64-bit companion of mix_seed(). Combines a (base, index) pair into
+ * a well-mixed 64-bit seed. INJECTIVITY: for a FIXED base, index -> result is
+ * a bijection of the 64-bit space (index + c is injective mod 2^64, XOR with
+ * a constant is bijective, and the splitmix64 finalizer is bijective), so two
+ * distinct indices under the same base can NEVER collide. Across different
+ * bases collisions are probabilistic at the 2^-64 scale — negligible even for
+ * simulation studies with billions of generated columns. This is the reason
+ * dummy generation derives per-column seeds through THIS mixer and not the
+ * 32-bit mix_seed(), whose 2^32 output space produces real-world collisions
+ * (bit-identical dummy columns) at the ~10^4-columns-per-design scale.
+ *
+ * @param base The base identifier (e.g., resolved experiment seed).
+ * @param index The second identifier (e.g., global column index).
+ *
+ * @return std::uint64_t Mixed 64-bit seed.
+ */
+inline std::uint64_t mix_seed64(std::uint64_t base, std::uint64_t index) {
+    // 1. Combine inputs non-linearly (64-bit golden ratio constant)
+    std::uint64_t z = base ^ (index + 0x9e3779b97f4a7c15ULL +
+                      (base << 12) + (base >> 4));
+
+    // 2. Apply splitmix64 finalizer
+    z ^= z >> 30;
+    z *= 0xbf58476d1ce4e5b9ULL;
+    z ^= z >> 27;
+    z *= 0x94d049bb133111ebULL;
+    z ^= z >> 31;
+    return z;
+}
+
+
+/**
+ * @brief Construct a per-column mt19937 engine from a 64-bit (base, column) pair.
+ *
+ * @details Derives the 64-bit column seed via mix_seed64() and feeds BOTH
+ * 32-bit halves into a std::seed_seq, so the full 64 bits of seed entropy
+ * reach the engine state (a plain mt19937(uint32) constructor would truncate
+ * back to the collision-prone 32-bit space).
+ *
+ * @param base_seed 64-bit block base seed.
+ * @param column Global column index within the block's seed domain.
+ *
+ * @return std::mt19937 Freshly seeded engine for this column.
+ */
+inline std::mt19937 make_column_engine(std::uint64_t base_seed, std::uint64_t column) {
+    const std::uint64_t s = mix_seed64(base_seed, column);
+    std::seed_seq seq{
+        static_cast<std::uint32_t>(s & 0xFFFFFFFFu),
+        static_cast<std::uint32_t>(s >> 32)
+    };
+    return std::mt19937(seq);
+}
+
+
 // ============================================
 // Unified Distribution Configuration
 // ============================================
@@ -494,29 +551,42 @@ struct Distribution {
 // ============================================
 
 /**
- * @brief Generate dummy variables using hashed seeding for uniqueness.
+ * @brief Generate dummy variables using hashed 64-bit seeding for uniqueness.
  *
  * @details Avoid the overflow/overlap risk of linear seeding (base + i).
  *
+ * Per-column seeds are derived as mix_seed64(base_seed, col_offset + j):
+ * injective in the column index for a fixed base (see mix_seed64), so columns
+ * generated under the SAME base can never be bit-identical. `col_offset`
+ * exists for callers that grow a design incrementally (HCONCAT/PERMUTATION
+ * expansions): by generating appended blocks under the SAME base with the
+ * global column index, the whole grown matrix stays inside one injective seed
+ * domain — duplicate columns are impossible by construction, and the first
+ * p columns are prefix-stable (identical to a smaller earlier call).
+ *
  * @tparam MatrixType Eigen-compatible matrix type (e.g. Eigen::MatrixXd or Eigen::Map).
  *
- * @param D Reference to the matrix to be filled with dummies.
+ * @param D Reference to the matrix to be filled with dummies (n x p).
  * @param n Number of rows.
- * @param p Number of columns (number of dummies).
- * @param base_seed Base seed for random number generation.
+ * @param p Number of columns to generate (number of dummies in D).
+ * @param base_seed 64-bit base seed for random number generation.
  * @param dist Distribution configuration.
+ * @param col_offset Global column index of D's first column within the
+ *                   base's seed domain (0 for standalone matrices).
  */
 template<typename MatrixType>
 inline void generate_dummies(
     MatrixType& D,
     std::size_t n,
     std::size_t p,
-    unsigned int base_seed,
-    const Distribution& dist = Distribution::Normal()
+    std::uint64_t base_seed,
+    const Distribution& dist = Distribution::Normal(),
+    std::size_t col_offset = 0
 ) {
     // OpenMP Safety:
     // Each column iteration uses a local PRNG.
-    // The seed is mix_seed(base, j), which is deterministic and unique per column.
+    // The seed is mix_seed64(base, col_offset + j): deterministic, and unique
+    // per column WITHIN a base (injective; cross-base collisions are 2^-64).
     // Threads cannot generate duplicates or race on the PRNG state.
 
     // Choose generation method based on distribution type
@@ -526,7 +596,7 @@ inline void generate_dummies(
         case Distribution::Type::Normal: {
             #pragma omp parallel for schedule(static)
             for (std::size_t j = 0; j < p; ++j) {
-                std::mt19937 gen(mix_seed(base_seed, j));
+                std::mt19937 gen = make_column_engine(base_seed, col_offset + j);
                 std::normal_distribution<double> distribution(0.0, 1.0);
                 for (std::size_t i = 0; i < n; ++i) {
                     D(i, j) = distribution(gen);
@@ -541,7 +611,7 @@ inline void generate_dummies(
             double a = dist.uniform_a;
             #pragma omp parallel for schedule(static)
             for (std::size_t j = 0; j < p; ++j) {
-                std::mt19937 gen(mix_seed(base_seed, j));
+                std::mt19937 gen = make_column_engine(base_seed, col_offset + j);
                 std::uniform_real_distribution<double> distribution(-a, a);
                 for (std::size_t i = 0; i < n; ++i) {
                     D(i, j) = distribution(gen);
@@ -555,7 +625,7 @@ inline void generate_dummies(
         case Distribution::Type::Rademacher: {
             #pragma omp parallel for schedule(static)
             for (std::size_t j = 0; j < p; ++j) {
-                std::mt19937 gen(mix_seed(base_seed, j));
+                std::mt19937 gen = make_column_engine(base_seed, col_offset + j);
                 std::bernoulli_distribution distribution(0.5);
                 for (std::size_t i = 0; i < n; ++i) {
                     D(i, j) = distribution(gen) ? 1.0 : -1.0;
@@ -573,7 +643,7 @@ inline void generate_dummies(
 
             #pragma omp parallel for schedule(static)
             for (std::size_t j = 0; j < p; ++j) {
-                std::mt19937 gen(mix_seed(base_seed, j));
+                std::mt19937 gen = make_column_engine(base_seed, col_offset + j);
                 std::student_t_distribution<double> distribution(df);
                 for (std::size_t i = 0; i < n; ++i) {
                     D(i, j) = distribution(gen) * scale;
@@ -589,7 +659,7 @@ inline void generate_dummies(
             double scale = dist.laplace_scale;
             #pragma omp parallel for schedule(static)
             for (std::size_t j = 0; j < p; ++j) {
-                std::mt19937 gen(mix_seed(base_seed, j));
+                std::mt19937 gen = make_column_engine(base_seed, col_offset + j);
                 boost::random::laplace_distribution<double> distribution(location, scale);
                 for (std::size_t i = 0; i < n; ++i) {
                     D(i, j) = distribution(gen);
@@ -609,7 +679,7 @@ inline void generate_dummies(
             double adjusted_location = location - scale * std::numbers::egamma;
             #pragma omp parallel for schedule(static)
             for (std::size_t j = 0; j < p; ++j) {
-                std::mt19937 gen(mix_seed(base_seed, j));
+                std::mt19937 gen = make_column_engine(base_seed, col_offset + j);
                 std::extreme_value_distribution<double> distribution(adjusted_location, scale);
                 for (std::size_t i = 0; i < n; ++i) {
                     D(i, j) = distribution(gen);
@@ -626,7 +696,7 @@ inline void generate_dummies(
             double c = dist.triangle_c;
             #pragma omp parallel for schedule(static)
             for (std::size_t j = 0; j < p; ++j) {
-                std::mt19937 gen(mix_seed(base_seed, j));
+                std::mt19937 gen = make_column_engine(base_seed, col_offset + j);
                 boost::random::triangle_distribution<double> distribution(a, b, c);
                 for (std::size_t i = 0; i < n; ++i) {
                     D(i, j) = distribution(gen);
@@ -650,7 +720,7 @@ inline void generate_dummies(
             // Boost uniform_on_sphere distribution
             #pragma omp parallel for schedule(static)
             for (std::size_t j = 0; j < p; j += static_cast<std::size_t>(dim)) {
-                std::mt19937 gen(mix_seed(base_seed, j));
+                std::mt19937 gen = make_column_engine(base_seed, col_offset + j);
                 boost::random::uniform_on_sphere<double> distribution(dim);
                 for (std::size_t i = 0; i < n; ++i) {
                     // Generate one point on sphere
@@ -672,7 +742,7 @@ inline void generate_dummies(
             double p2 = dist.mammen_param_p2; // Pr for value +(sqrt(5) + 1) / 2
             #pragma omp parallel for schedule(static)
             for (std::size_t j = 0; j < p; ++j) {
-                std::mt19937 gen(mix_seed(base_seed, j));
+                std::mt19937 gen = make_column_engine(base_seed, col_offset + j);
                 std::discrete_distribution<int> distribution({p1, p2});
                 for (std::size_t i = 0; i < n; ++i) {
                     int sample = distribution(gen);
@@ -689,7 +759,7 @@ inline void generate_dummies(
 
             #pragma omp parallel for schedule(static)
             for (std::size_t j = 0; j < p; ++j) {
-                std::mt19937 gen(mix_seed(base_seed, j));
+                std::mt19937 gen = make_column_engine(base_seed, col_offset + j);
 
                 // Calculate even number of non-zeros: k = floor(s * n / 2) (floor -> std::size_t)
                 std::size_t k = 2 * static_cast<std::size_t>(static_cast<double>(n) * s / 2.0);
@@ -728,7 +798,7 @@ inline void generate_dummies(
             double scale = dist.logistic_scale;
             #pragma omp parallel for schedule (static)
             for (std::size_t j = 0; j < p; ++j) {
-                std::mt19937 gen(mix_seed(base_seed, j));
+                std::mt19937 gen = make_column_engine(base_seed, col_offset + j);
                 // Lower bound excludes u = 0, which would map to -infinity
                 std::uniform_real_distribution<double> uniform_dist(
                     std::numeric_limits<double>::min(), 1.0);

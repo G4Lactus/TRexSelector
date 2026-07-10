@@ -375,8 +375,9 @@ protected:
      *  Resolved once in the constructor so that `prepareDummiesForLStep`
      *  observes the same value across every L-iteration regardless of
      *  whether `seed_ >= 0` (deterministic) or `seed_ < 0` (random_device).
+     *  64-bit to stay in the collision-free seeding pipeline (mix_seed64).
      */
-    unsigned int permutation_base_seed_{0};
+    std::uint64_t permutation_base_seed_{0};
 
     // ============================================================
     // Helper Module Members

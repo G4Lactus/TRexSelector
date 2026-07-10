@@ -178,6 +178,13 @@ struct SolverConfig {
     /** @brief Encapsulated solver hyperparameters for t-solvers. */
     SolverHyperparameters hyperparams{};
 
+    /** @brief Deterministic tie-break seed for the solver's internal RNG
+     *  (pruneTiedDummies shuffle). < 0 keeps the solver's default
+     *  std::random_device seeding (nondeterministic). Applied only on fresh
+     *  construction — warm-started / deserialized solvers keep their RNG
+     *  state so the shuffle stream continues instead of restarting. */
+    long long tie_seed = -1;
+
     // --- In-memory warm start ---
 
     /** @brief Retained solver to continue in-memory (nullptr = none).
@@ -316,6 +323,11 @@ Eigen::MatrixXd dispatchSolver(const SolverConfig& cfg) {
     // 3. Fresh construction.
     std::unique_ptr<TSolver> solver = makeSolverForConfig<TSolver>(cfg);
     solver->setTolerance(cfg.hyperparams.tol);
+    if (cfg.tie_seed >= 0) {
+        // Deterministic tie-break shuffles for reproducible selections
+        // (user-seeded runs); < 0 keeps random_device seeding.
+        solver->setTieSeed(static_cast<std::uint32_t>(cfg.tie_seed));
+    }
     solver->executeStep(cfg.T_stop, cfg.early_stop);
     Eigen::MatrixXd pathMatrix = solver->getBetaPath();
     if (!cfg.solver_file.empty()) solver->save(cfg.solver_file);

@@ -202,8 +202,9 @@ TRexSelector::TRexSelector(
     //    L-loop strategy, but resolved unconditionally for simplicity).
     // -----------------------------------------------------
     permutation_base_seed_ = (seed_ >= 0)
-        ? static_cast<unsigned int>(seed_)
-        : std::random_device{}();
+        ? static_cast<std::uint64_t>(seed_)
+        : ((static_cast<std::uint64_t>(std::random_device{}()) << 32)
+           | static_cast<std::uint64_t>(std::random_device{}()));
 
     // Construction succeeded: keep the buffer claim (released on denormalize).
     claim_guard.armed = false;
@@ -437,6 +438,10 @@ er::ExperimentRunnerConfig TRexSelector::buildRunnerConfig(
     cfg.max_outer_threads     = trex_ctrl_.max_outer_threads;
     cfg.max_inner_threads     = trex_ctrl_.max_inner_threads;
     cfg.verbose               = verbose_;
+    // Deterministic tie-break shuffles for user-seeded runs: experiment k
+    // derives mix_seed64(seed_, k) in the runner. seed_ < 0 keeps the
+    // solvers' random_device tie seeding (nondeterministic).
+    cfg.tie_seed_base         = static_cast<long long>(seed_);
     // Coefficient-activeness threshold for the beta paths. This must match the
     // R reference (random_experiments uses eps = .Machine$double.eps), NOT the
     // solver convergence tolerance (solver_params.tol, default 1e-6). Using the
@@ -772,12 +777,12 @@ void TRexSelector::prepareDummiesForLStep(LStepContext& ctx) {
     switch (ctx.strategy) {
         case LLoopStrategy::SKIPL: {
             // One-shot: generate K dummy matrices sized L_max * p.
-            // Use ctx.L_iter (= max_dummy_multiplier) as seed_factor so that
-            // seeding is equivalent to STANDARD run at the same LL level
-            // (mix_seed(k, L) instead of the linear k-only path).
+            // Use ctx.L_iter (= max_dummy_multiplier) as l_tag so that
+            // seeding is equivalent to a STANDARD run at the same LL level
+            // (deriveBlockSeed64(k, L) packs both into disjoint bit fields).
             dummy_gen_.generateAndStore(trex_ctrl_.K,
                                         ctx.num_dummies,
-                                        /*seed_factor=*/ctx.L_iter);
+                                        /*l_tag=*/ctx.L_iter);
             break;
         }
         case LLoopStrategy::STANDARD: {
@@ -793,17 +798,20 @@ void TRexSelector::prepareDummiesForLStep(LStepContext& ctx) {
         }
         case LLoopStrategy::HCONCAT: {
             if (ctx.L_iter == 1) {
-                // Initial dummies: K matrices of size n x p.
+                // Initial dummies: K matrices of size n x p (prefix-stable
+                // l_tag = 0; expansions continue the same seed domain).
                 dummy_gen_.generateAndStore(trex_ctrl_.K,
                                             p_,
-                                            /*seed_factor=*/0);
+                                            /*l_tag=*/0);
                 ctx.existing_on_disk = 0;
             } else {
                 // Append p new columns to each stored matrix:
                 // [D_k_old | D_k_new]. Invalidate BEFORE expandStored: the
                 // resize reallocates the buffers that retained solvers view.
+                // New columns are seeded under the same per-experiment base
+                // with global column offsets — no cross-block collisions.
                 warm_start_mgr_.invalidate();
-                dummy_gen_.expandStored(p_, ctx.L_iter);
+                dummy_gen_.expandStored(p_);
                 ctx.existing_on_disk = (ctx.L_iter - 1) * p_;
             }
             break;
@@ -813,20 +821,11 @@ void TRexSelector::prepareDummiesForLStep(LStepContext& ctx) {
                 Eigen::MatrixXd base = dummy_gen_.generate(p_, permutation_base_seed_);
                 dummy_gen_.storeBaseDummies(std::move(base), permutation_base_seed_);
             } else {
-                // Expand: generate p new columns and append to existing base.
-                const unsigned int expansion_seed =
-                    dummygen::mix_seed(permutation_base_seed_, ctx.L_iter);
-                Eigen::MatrixXd new_cols = dummy_gen_.generate(p_, expansion_seed);
-
-                // getPermuted(0, ...) returns the base as-is.
-                Eigen::MatrixXd expanded =
-                    dummy_gen_.getPermuted(0, ctx.num_dummies - p_);
-                expanded.conservativeResize(
-                    Eigen::NoChange,
-                    static_cast<Eigen::Index>(ctx.num_dummies));
-                expanded.rightCols(p_) = new_cols;
-                dummy_gen_.storeBaseDummies(std::move(expanded),
-                                            permutation_base_seed_);
+                // Expand: append p new columns to the stored base, generated
+                // under the SAME base id with global column offsets — the
+                // grown base stays in one injective seed domain (no duplicate
+                // columns between initial base and expansions by construction).
+                dummy_gen_.expandBaseDummies(p_);
             }
             warm_start_mgr_.invalidate();
             break;
@@ -1020,7 +1019,10 @@ void TRexSelector::runLLoopCalibration_HCONCAT(
 
     LLoopPolicyContext ctx;
     ctx.strategy            = er::ExperimentStrategy::Standard;
-    ctx.seed_factor_uses_LL = true;
+    // HCONCAT is prefix-stable: all blocks live under the l_tag = 0 seed
+    // domain (distinguished by global column offset), so the mmap path's
+    // full regeneration must NOT vary the tag with LL.
+    ctx.seed_factor_uses_LL = false;
     ctx.policy = [this](std::size_t LL,
                         std::size_t num_dummies,
                         std::size_t& existing_on_disk_out) {
@@ -1197,9 +1199,15 @@ void TRexSelector::runTLoop(
         ++T_stop_;
 
         // Per-step body via virtual hook (subclasses may inject deflation).
+        // HCONCAT lives in the prefix-stable l_tag = 0 seed domain; the other
+        // stored strategies re-derive with the final L-loop multiplier.
+        const std::size_t tloop_seed_factor =
+            (trex_ctrl_.lloop_strategy == LLoopStrategy::HCONCAT)
+                ? 0
+                : dummy_multiplier_LL_;
         StepView view = evaluateStep(num_dummies_, T_stop_, /*use_warm_start=*/true,
                                      exp_strategy,
-                                     /*seed_factor=*/dummy_multiplier_LL_,
+                                     /*seed_factor=*/tloop_seed_factor,
                                      /*existing_on_disk=*/0);
         exp_results = view.exp_results;
         FDP_hat     = view.FDP_hat;

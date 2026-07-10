@@ -89,8 +89,10 @@ struct ExperimentRunnerConfig {
     // --- Strategy ---
     ExperimentStrategy strategy = ExperimentStrategy::Standard;
 
-    // --- L-loop seed factor (for deterministic dummy regeneration) ---
-    std::size_t seed_factor = 0;    ///< L-loop iteration multiplier for seed mixing.
+    // --- L-loop seed tag (for deterministic dummy regeneration) ---
+    std::size_t seed_factor = 0;    ///< L-loop tag (l_tag) for block seed derivation.
+                                    ///< 0 for prefix-stable strategies (HCONCAT/
+                                    ///< DIRECT); the L-iteration for STANDARD/SKIPL.
 
     // --- HCONCAT: number of previously written columns already on disk ---
     std::size_t existing_cols_on_disk = 0;  ///< For HCONCAT memmap: columns from prior L.
@@ -98,6 +100,13 @@ struct ExperimentRunnerConfig {
     // --- Solver ---
     sd::SolverTypeForTRex solver_type = sd::SolverTypeForTRex::TLARS;
     sd::SolverHyperparameters solver_params{};
+
+    /** @brief Base for deterministic per-experiment tie-break seeds
+     *  (< 0 = nondeterministic, solvers keep random_device seeding).
+     *  Set from the user's selector seed; experiment k receives
+     *  mix_seed64(tie_seed_base, k) so reproducible runs get reproducible
+     *  tie-break shuffles in pruneTiedDummies. */
+    long long tie_seed_base = -1;
 
     // --- Scaling ---
     /** @brief Internal column-scaling mode applied by each solver.
@@ -540,7 +549,15 @@ private:
             .early_stop = true,
             .use_warm_start = warm_available,
             .solver_file = {},
-            .hyperparams = cfg.solver_params
+            .hyperparams = cfg.solver_params,
+            // Per-experiment deterministic tie-break seed (user-seeded runs);
+            // -1 keeps the solver's random_device default.
+            .tie_seed = (cfg.tie_seed_base >= 0)
+                ? static_cast<long long>(
+                      trex::utils::datageneration::dummygen::mix_seed64(
+                          static_cast<std::uint64_t>(cfg.tie_seed_base), k)
+                      & 0x7FFFFFFFULL)
+                : -1LL
         };
 
         std::unique_ptr<trex::tsolvers::TSolver_Base> retained;
@@ -611,15 +628,18 @@ private:
         switch (cfg.strategy) {
             case ExperimentStrategy::Standard: {
                 if (cfg.existing_cols_on_disk > 0) {
-                    // HCONCAT: expand — only write new rightmost columns
+                    // HCONCAT: expand — only write new rightmost columns.
+                    // Seeded under the same per-experiment base with global
+                    // column offsets (prefix-stable, collision-free).
                     dummy_gen_.expandInto(
                         D_map,
                         cfg.existing_cols_on_disk,
-                        k,
-                        cfg.seed_factor
+                        k
                     );
                 } else {
-                    // Full generation (Standard / SKIP / first HCONCAT iteration)
+                    // Full generation (Standard / SKIP / HCONCAT re-derivation;
+                    // for HCONCAT cfg.seed_factor is 0, which reproduces the
+                    // incrementally expanded matrix bit-exactly)
                     dummy_gen_.generateInto(D_map,
                                             k,
                                             cfg.seed_factor);
