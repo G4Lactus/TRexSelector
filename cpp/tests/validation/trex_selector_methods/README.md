@@ -39,7 +39,7 @@ The R side of the SPCA checks lives beside the C++ probes:
 | ---- | ---- |
 | `demo_trex_spca_02.R` | generator for `rdump/` (X designs, `truth`, `r_lambda2`, `r_pc1`, `r_results*`); run with `RDUMP_DIR=rdump10` to (re)build `rdump10/` |
 | `lambda2_probe.R`, `lambda2_foldmatch.R` | produce the `lambda2_probe_*` / `fm_*` references in `validation_results/` (read by spca_05) |
-| `probe_R_dummy_variance.R`, `r_dummy_variance_probe.R` | dummy-variance sensitivity probes over the baked `rdump10/` / `rdump/` |
+| `probe_R_dummy_variance.R` | dummy-variance sensitivity probe over the baked `rdump10/` |
 | `rdump/`, `rdump10/` | baked R dumps (~12 MB each) that spca_04 / spca_07 read by default |
 
 A former `validation_trex_spca_01_lambda2_probe` was **not migrated**: it relied on
