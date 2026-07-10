@@ -219,10 +219,15 @@ int main(int argc, char** argv)
     omp_set_num_threads(1);  // deterministic, single-threaded for step-by-step diffing
 
     // ----- configuration -----
-    // External R dump (not committed in the library; ~12 MB). Regenerate it with
-    // the R generator in the examples package and pass it via --dir <path>.
+    // R dump baked into the library beside this program (see the co-located
+    // demo_trex_spca_02.R generator); TREX_SPCA_RDUMP_DIR is injected by CMake to
+    // that source folder. Override at runtime with --dir <path>.
+#ifdef TREX_SPCA_RDUMP_DIR
+    std::filesystem::path rdump_dir = TREX_SPCA_RDUMP_DIR;
+#else
     std::filesystem::path rdump_dir =
-        "R/trex_selector_methods/validation/trex_spca/rdump";
+        "trex_selector_methods/trex_spca/rdump";
+#endif
     int    num_trials   = 100;
     double tFDR         = 0.10;
     Eigen::Index M      = 3;        // ordinary PCA rank (PC1 used for the metric)

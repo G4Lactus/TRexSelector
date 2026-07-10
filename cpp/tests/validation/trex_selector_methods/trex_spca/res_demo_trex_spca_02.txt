@@ -1,0 +1,93 @@
+  T-Rex SPCA MC Simulation (8 cores)
+  obtained with new installment of TRexSelector
+========================================================
+
+Running SNR = -10 dB...
+  -> Ord PCA        | TPR: 100.0% | FDR:  95.0% | PEV(M=3):  20.2%
+  -> Oracle PCA     | TPR:  99.6% | FDR:   0.4% | PEV(M=3):  12.3%
+  -> Zou EN SPCA    | TPR:  95.1% | FDR:   4.9% | PEV(M=3):  11.3%
+  -> Oracle SPCA    | TPR:  99.2% | FDR:   0.8% | PEV(M=3):  11.4%
+  -> T-Rex EN Act   | TPR:  99.9% | FDR:  17.5% | PEV(M=3):  12.2%
+  -> T-Rex EN Thr   | TPR: 100.0% | FDR:  17.1% | PEV(M=3):  12.7%
+  -> T-Rex IEN Act  | TPR:  50.8% | FDR:   2.1% | PEV(M=3):   7.1%
+  -> T-Rex IEN Thr  | TPR:  51.3% | FDR:   0.2% | PEV(M=3):   6.3%
+
+Running SNR =  -7 dB...
+  -> Ord PCA        | TPR: 100.0% | FDR:  95.0% | PEV(M=3):  26.2%
+  -> Oracle PCA     | TPR:  99.9% | FDR:   0.1% | PEV(M=3):  19.5%
+  -> Zou EN SPCA    | TPR:  97.1% | FDR:   2.9% | PEV(M=3):  18.4%
+  -> Oracle SPCA    | TPR: 100.0% | FDR:   0.0% | PEV(M=3):  18.7%
+  -> T-Rex EN Act   | TPR: 100.0% | FDR:  10.2% | PEV(M=3):  18.8%
+  -> T-Rex EN Thr   | TPR: 100.0% | FDR:   9.6% | PEV(M=3):  19.3%
+  -> T-Rex IEN Act  | TPR:  54.2% | FDR:   0.6% | PEV(M=3):  11.3%
+  -> T-Rex IEN Thr  | TPR:  54.9% | FDR:   0.2% | PEV(M=3):   9.6%
+
+Running SNR =  -5 dB...
+  -> Ord PCA        | TPR: 100.0% | FDR:  95.0% | PEV(M=3):  32.5%
+  -> Oracle PCA     | TPR:  99.5% | FDR:   0.5% | PEV(M=3):  26.3%
+  -> Zou EN SPCA    | TPR:  96.9% | FDR:   3.1% | PEV(M=3):  24.9%
+  -> Oracle SPCA    | TPR:  99.5% | FDR:   0.5% | PEV(M=3):  25.5%
+  -> T-Rex EN Act   | TPR:  99.5% | FDR:   9.7% | PEV(M=3):  25.4%
+  -> T-Rex EN Thr   | TPR:  99.5% | FDR:  10.0% | PEV(M=3):  26.0%
+  -> T-Rex IEN Act  | TPR:  59.9% | FDR:   1.1% | PEV(M=3):  16.1%
+  -> T-Rex IEN Thr  | TPR:  59.6% | FDR:   0.7% | PEV(M=3):  12.9%
+
+Running SNR =  -3 dB...
+  -> Ord PCA        | TPR: 100.0% | FDR:  95.0% | PEV(M=3):  40.5%
+  -> Oracle PCA     | TPR: 100.0% | FDR:   0.0% | PEV(M=3):  34.9%
+  -> Zou EN SPCA    | TPR:  97.3% | FDR:   2.7% | PEV(M=3):  32.9%
+  -> Oracle SPCA    | TPR:  99.9% | FDR:   0.1% | PEV(M=3):  33.8%
+  -> T-Rex EN Act   | TPR: 100.0% | FDR:   9.1% | PEV(M=3):  33.3%
+  -> T-Rex EN Thr   | TPR: 100.0% | FDR:   9.5% | PEV(M=3):  34.4%
+  -> T-Rex IEN Act  | TPR:  57.2% | FDR:   0.4% | PEV(M=3):  20.7%
+  -> T-Rex IEN Thr  | TPR:  56.4% | FDR:   0.1% | PEV(M=3):  15.2%
+
+Running SNR =   0 dB...
+  -> Ord PCA        | TPR: 100.0% | FDR:  95.0% | PEV(M=3):  54.9%
+  -> Oracle PCA     | TPR: 100.0% | FDR:   0.0% | PEV(M=3):  50.2%
+  -> Zou EN SPCA    | TPR:  98.0% | FDR:   2.0% | PEV(M=3):  47.5%
+  -> Oracle SPCA    | TPR: 100.0% | FDR:   0.0% | PEV(M=3):  49.0%
+  -> T-Rex EN Act   | TPR: 100.0% | FDR:  11.4% | PEV(M=3):  47.3%
+  -> T-Rex EN Thr   | TPR: 100.0% | FDR:  11.0% | PEV(M=3):  49.4%
+  -> T-Rex IEN Act  | TPR:  54.5% | FDR:   1.3% | PEV(M=3):  28.6%
+  -> T-Rex IEN Thr  | TPR:  56.3% | FDR:   0.1% | PEV(M=3):  21.5%
+
+Running SNR =   3 dB...
+  -> Ord PCA        | TPR: 100.0% | FDR:  95.0% | PEV(M=3):  69.8%
+  -> Oracle PCA     | TPR:  99.6% | FDR:   0.4% | PEV(M=3):  66.0%
+  -> Zou EN SPCA    | TPR:  98.6% | FDR:   1.4% | PEV(M=3):  62.9%
+  -> Oracle SPCA    | TPR:  99.7% | FDR:   0.3% | PEV(M=3):  64.3%
+  -> T-Rex EN Act   | TPR: 100.0% | FDR:  12.2% | PEV(M=3):  61.3%
+  -> T-Rex EN Thr   | TPR: 100.0% | FDR:  11.5% | PEV(M=3):  64.9%
+  -> T-Rex IEN Act  | TPR:  53.6% | FDR:   1.1% | PEV(M=3):  36.6%
+  -> T-Rex IEN Thr  | TPR:  53.5% | FDR:   0.1% | PEV(M=3):  24.7%
+
+Running SNR =   5 dB...
+  -> Ord PCA        | TPR: 100.0% | FDR:  95.0% | PEV(M=3):  78.2%
+  -> Oracle PCA     | TPR:  99.8% | FDR:   0.2% | PEV(M=3):  75.0%
+  -> Zou EN SPCA    | TPR:  99.4% | FDR:   0.6% | PEV(M=3):  71.5%
+  -> Oracle SPCA    | TPR:  99.8% | FDR:   0.2% | PEV(M=3):  73.4%
+  -> T-Rex EN Act   | TPR: 100.0% | FDR:  11.9% | PEV(M=3):  68.2%
+  -> T-Rex EN Thr   | TPR: 100.0% | FDR:  11.7% | PEV(M=3):  73.7%
+  -> T-Rex IEN Act  | TPR:  52.4% | FDR:   1.0% | PEV(M=3):  39.5%
+  -> T-Rex IEN Thr  | TPR:  53.2% | FDR:   0.0% | PEV(M=3):  24.8%
+
+Running SNR =   7 dB...
+  -> Ord PCA        | TPR: 100.0% | FDR:  95.0% | PEV(M=3):  84.9%
+  -> Oracle PCA     | TPR: 100.0% | FDR:   0.0% | PEV(M=3):  82.2%
+  -> Zou EN SPCA    | TPR:  99.9% | FDR:   0.1% | PEV(M=3):  78.9%
+  -> Oracle SPCA    | TPR: 100.0% | FDR:   0.0% | PEV(M=3):  80.7%
+  -> T-Rex EN Act   | TPR: 100.0% | FDR:   9.8% | PEV(M=3):  72.1%
+  -> T-Rex EN Thr   | TPR: 100.0% | FDR:   9.8% | PEV(M=3):  80.9%
+  -> T-Rex IEN Act  | TPR:  47.8% | FDR:   1.0% | PEV(M=3):  40.0%
+  -> T-Rex IEN Thr  | TPR:  49.1% | FDR:   0.0% | PEV(M=3):  22.2%
+
+Running SNR =  10 dB...
+  -> Ord PCA        | TPR: 100.0% | FDR:  95.0% | PEV(M=3):  91.7%
+  -> Oracle PCA     | TPR: 100.0% | FDR:   0.0% | PEV(M=3):  89.0%
+  -> Zou EN SPCA    | TPR:  99.9% | FDR:   0.1% | PEV(M=3):  85.9%
+  -> Oracle SPCA    | TPR:  99.9% | FDR:   0.1% | PEV(M=3):  87.3%
+  -> T-Rex EN Act   | TPR: 100.0% | FDR:  10.4% | PEV(M=3):  77.6%
+  -> T-Rex EN Thr   | TPR: 100.0% | FDR:  10.2% | PEV(M=3):  87.8%
+  -> T-Rex IEN Act  | TPR:  41.7% | FDR:   0.2% | PEV(M=3):  38.9%
+  -> T-Rex IEN Thr  | TPR:  42.2% | FDR:   0.0% | PEV(M=3):  20.2%
