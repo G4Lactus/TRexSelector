@@ -95,14 +95,22 @@ inline constexpr bool isGreedySolver(
 
 /**
  * @brief L-loop calibration strategies.
+ *
+ * @details Two orthogonal axes:
+ *  - Dummy source: fresh INDEPENDENT draws per experiment (SKIPL / STANDARD /
+ *    HCONCAT / ONDEMAND) vs one shared base matrix whose rows are permuted per
+ *    experiment (PERMUTATION / PERMUTATION_ONDEMAND).
+ *  - Storage: STORED strategies keep matrices in the DummyGenerator for the
+ *    whole run; ONDEMAND strategies re-derive everything from the seed at each
+ *    step (zero persistent state, prefix-stable via deriveBlockSeed64 l_tag=0).
  */
 enum class LLoopStrategy {
-    SKIPL,                 // Skip L-loop: fixed dummies = max_dummy_multiplier * p.
-    STANDARD,              // Fresh dummies at each L-loop iteration (conservative).
-    HCONCAT,               // Horizontally expand dummy matrices (faster, same result).
-    PERMUTATION,           // Deterministic permutations of base dummy matrix.
-    PERMUTATION_DIRECT,    // Seed-based permutations without base dummy matrix.
-    DIRECT                 // Seed-based dummy generation without base matrix.
+    SKIPL,                 // Stored, one-shot: fixed dummies = max_dummy_multiplier * p.
+    STANDARD,              // Stored, fresh dummies at each L-loop iteration (conservative).
+    HCONCAT,               // Stored, horizontally expand dummy matrices (faster, same result).
+    PERMUTATION,           // Stored base dummy matrix + deterministic row permutations per k.
+    PERMUTATION_ONDEMAND,  // Seed-derived base + row permutations per k; nothing stored.
+    ONDEMAND               // Seed-derived independent dummies per k; nothing stored.
 };
 
 
@@ -895,12 +903,12 @@ protected:
                                          er::ExperimentResults& exp_results);
 
     /**
-     * @brief Run L-loop calibration using the PERMUTATION_DIRECT strategy.
+     * @brief Run L-loop calibration using the PERMUTATION_ONDEMAND strategy.
      *
      * @param FDP_hat Current FDP estimates (updated in-place).
      * @param exp_results Current experiment results (updated in-place).
      */
-    void runLLoopCalibration_Direct(Eigen::VectorXd& FDP_hat, er::ExperimentResults& exp_results);
+    void runLLoopCalibration_OnDemand(Eigen::VectorXd& FDP_hat, er::ExperimentResults& exp_results);
 
 
     // ============================================================

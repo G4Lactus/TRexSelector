@@ -65,9 +65,10 @@ namespace mm = trex::trex_selector_methods::utils::memmap_manager;
 // ===================================================================================
 
 enum class ExperimentStrategy {
-    Standard,      // Pre-generated K dummy matrices (stored in DummyGenerator).
-    Permutation,   // Deterministic row permutations of a base dummy matrix.
-    Direct         // On-the-fly seed-based dummy generation per experiment.
+    Standard,             // Pre-generated K dummy matrices (stored in DummyGenerator).
+    Permutation,          // Row permutations of a STORED base dummy matrix.
+    PermutationOnDemand,  // Row permutations of a seed-derived base; nothing stored.
+    OnDemand              // On-the-fly seed-based independent dummies per experiment.
 };
 
 
@@ -96,6 +97,13 @@ struct ExperimentRunnerConfig {
 
     // --- HCONCAT: number of previously written columns already on disk ---
     std::size_t existing_cols_on_disk = 0;  ///< For HCONCAT memmap: columns from prior L.
+
+    // --- PERMUTATION_ONDEMAND: seed id of the shared base ---
+    /** @brief Base id for the stateless permutation strategy: the base is
+     *  re-derived as generate(num_dummies, permutation_base_id) and the per-k
+     *  permutation engines are keyed mix_seed64(permutation_base_id, k) —
+     *  matching the stored PERMUTATION path for the same id. */
+    std::uint64_t permutation_base_id = 0;
 
     // --- Solver ---
     sd::SolverTypeForTRex solver_type = sd::SolverTypeForTRex::TLARS;
@@ -228,8 +236,11 @@ public:
                 case ExperimentStrategy::Permutation:
                     beta_paths = runPermutation(cfg);
                     break;
-                case ExperimentStrategy::Direct:
-                    beta_paths = runDirect(cfg);
+                case ExperimentStrategy::PermutationOnDemand:
+                    beta_paths = runPermutationOnDemand(cfg);
+                    break;
+                case ExperimentStrategy::OnDemand:
+                    beta_paths = runOnDemand(cfg);
                     break;
             }
         }
@@ -342,13 +353,13 @@ private:
 
 
     /**
-     * @brief DIRECT: Sequential, on-the-fly seed-based dummies.
+     * @brief ONDEMAND: Sequential, on-the-fly seed-based independent dummies.
      *
-     * @param cfg ExperimentRunnerConfig with strategy = DIRECT.
+     * @param cfg ExperimentRunnerConfig with strategy = OnDemand.
      *
      * @return Vector of K beta path matrices (one per experiment).
      */
-    std::vector<Eigen::MatrixXd> runDirect(const ExperimentRunnerConfig& cfg) {
+    std::vector<Eigen::MatrixXd> runOnDemand(const ExperimentRunnerConfig& cfg) {
 
         std::vector<Eigen::MatrixXd> beta_paths(cfg.K);
 
@@ -360,6 +371,48 @@ private:
             beta_paths[k] = runWithTemporaryDummies(
                 k, cfg,
                 [&]() { return dummy_gen_.generateDirect(cfg.num_dummies, k); });
+        }
+
+        return beta_paths;
+    }
+
+
+    /**
+     * @brief PERMUTATION_ONDEMAND: seed-derived base + per-k row permutations.
+     *
+     * @details Statistically identical to PERMUTATION (same base id ⇒ bit-
+     *          identical experiments), but stateless: the base is re-derived
+     *          from cfg.permutation_base_id at every call instead of being
+     *          stored in the DummyGenerator. generate() is prefix-stable under
+     *          l_tag = 0, so re-derivation at any L/T step reproduces exactly
+     *          the base an incremental stored build would hold. One transient
+     *          base materialization per call, then K cheap permutations.
+     *
+     * @param cfg ExperimentRunnerConfig with strategy = PermutationOnDemand.
+     *
+     * @return Vector of K beta path matrices (one per experiment).
+     */
+    std::vector<Eigen::MatrixXd> runPermutationOnDemand(
+        const ExperimentRunnerConfig& cfg) {
+
+        std::vector<Eigen::MatrixXd> beta_paths(cfg.K);
+
+        #ifdef _OPENMP
+        Eigen::setNbThreads(omp_get_max_threads());
+        #endif
+
+        // Transient base for this step only — dropped on return.
+        const Eigen::MatrixXd base = dummy_gen_.generate(
+            cfg.num_dummies,
+            static_cast<std::size_t>(cfg.permutation_base_id));
+
+        for (std::size_t k = 0; k < cfg.K; ++k) {
+            beta_paths[k] = runWithTemporaryDummies(
+                k, cfg,
+                [&]() {
+                    return dummy_gen_.permuteCopy(base, k,
+                                                  cfg.permutation_base_id);
+                });
         }
 
         return beta_paths;
@@ -652,7 +705,19 @@ private:
                 break;
             }
 
-            case ExperimentStrategy::Direct: {
+            case ExperimentStrategy::PermutationOnDemand: {
+                // Stateless: re-derive the base (prefix-stable), permute into
+                // the map. Regenerated per k — the shared-file mmap layout for
+                // permutation strategies is sequential anyway.
+                const Eigen::MatrixXd base = dummy_gen_.generate(
+                    cfg.num_dummies,
+                    static_cast<std::size_t>(cfg.permutation_base_id));
+                dummy_gen_.permuteCopyInto(base, D_map, k,
+                                           cfg.permutation_base_id);
+                break;
+            }
+
+            case ExperimentStrategy::OnDemand: {
                 dummy_gen_.generateDirectInto(D_map, k);
                 break;
             }

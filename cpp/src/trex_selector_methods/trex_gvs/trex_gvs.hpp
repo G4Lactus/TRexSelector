@@ -78,7 +78,7 @@
  *      `STANDARD` and `DIRECT` are equivalent inside GVS (the overridden
  *      `evaluateStep` consumes `D_solver_bufs_` rather than streaming dummies from disk).
  *      `SKIPL` collapses to a single L-iter with LL = max_dummy_multiplier.
- *      `PERMUTATION` and `PERMUTATION_DIRECT` are rejected because row permutation
+ *      `PERMUTATION` and `PERMUTATION_ONDEMAND` are rejected because row permutation
  *      would destroy the per-cluster MVN covariance structure that GVS dummies
  *      are designed to mirror.
  *
@@ -679,7 +679,7 @@ protected:
      *  STANDARD / SKIPL / DIRECT redraw all `LL` cluster-MVN dummy layers
      *  from scratch per L-iteration; HCONCAT appends one fresh layer per
      *  L-iteration. SKIPL is invoked exactly once per `select()` with
-     *  `LL = max_dummy_multiplier`. PERMUTATION and PERMUTATION_DIRECT are
+     *  `LL = max_dummy_multiplier`. PERMUTATION and PERMUTATION_ONDEMAND are
      *  rejected in the constructor; reaching them here triggers a defensive
      *  `std::logic_error`. Also (re)builds `D_solver_bufs_` for the K
      *  experiments and clears `solvers_cache_` so the next `evaluateStep()`

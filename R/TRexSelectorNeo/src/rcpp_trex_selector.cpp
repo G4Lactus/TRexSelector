@@ -64,10 +64,10 @@ TRexControlParameter parse_control_parameter(const Rcpp::List& control) {
             params.lloop_strategy = LLoopStrategy::HCONCAT;
         } else if (strategy == "PERMUTATION") {
             params.lloop_strategy = LLoopStrategy::PERMUTATION;
-        } else if (strategy == "PERMUTATION_DIRECT") {
-            params.lloop_strategy = LLoopStrategy::PERMUTATION_DIRECT;
-        } else if (strategy == "DIRECT") {
-            params.lloop_strategy = LLoopStrategy::DIRECT;
+        } else if (strategy == "PERMUTATION_ONDEMAND") {
+            params.lloop_strategy = LLoopStrategy::PERMUTATION_ONDEMAND;
+        } else if (strategy == "ONDEMAND") {
+            params.lloop_strategy = LLoopStrategy::ONDEMAND;
         } else {
             Rcpp::stop("Unknown LLoopStrategy: " + strategy);
         }

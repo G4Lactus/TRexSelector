@@ -375,7 +375,7 @@ TEST(TRexCoreTest, WarmStart_DirectStrategyContinuationMatchesCold) {
     er::ExperimentRunner runner(X_map, d.y, dummy_gen, warm_mgr, nullptr);
 
     auto cfg = make_runner_cfg(K, static_cast<std::size_t>(p),
-                               er::ExperimentStrategy::Direct);
+                               er::ExperimentStrategy::OnDemand);
 
     runner.run(cfg);           // T = 1, retains solvers + dummy buffers
     cfg.T_stop = 2;

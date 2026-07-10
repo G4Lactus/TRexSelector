@@ -37,6 +37,7 @@ add_trex_test(test_utils_logging test_utils/test_utils_logging.cpp)
 add_trex_test(test_utils_memmap test_utils/test_utils_memmap.cpp)
 add_trex_test(test_utils_dummygen test_utils/test_utils_dummygen.cpp)
 add_trex_test(test_utils_dummy_seeding test_utils/test_utils_dummy_seeding.cpp)
+add_trex_test(test_utils_dummy_scaling test_utils/test_utils_dummy_scaling.cpp)
 add_trex_test(test_utils_noisegen test_utils/test_utils_noisegen.cpp)
 add_trex_test(test_utils_datagen test_utils/test_utils_datagen.cpp)
 
@@ -59,6 +60,7 @@ add_trex_test(test_tsolvers_polymorphic test_tsolvers/test_tsolvers_polymorphic.
 
 # 5. Add tests for TRex Selector Methods
 add_trex_test(test_trex_core test_trex_selector_methods/test_trex_core.cpp)
+add_trex_test(test_trex_lloop_ondemand test_trex_selector_methods/test_trex_lloop_ondemand.cpp)
 add_trex_test(test_trex_da test_trex_selector_methods/test_trex_da.cpp)
 add_trex_test(test_trex_gvs test_trex_selector_methods/test_trex_gvs.cpp)
 add_trex_test(test_trex_screening test_trex_selector_methods/test_trex_screening.cpp)

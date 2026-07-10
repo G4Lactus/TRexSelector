@@ -140,13 +140,13 @@ TRexGVSSelector::TRexGVSSelector(
     //     STANDARD inside GVS because the overridden `evaluateStep`
     //     consumes `D_solver_bufs_` rather than streaming from disk.
     //   * HCONCAT: append one fresh layer per L-iteration.
-    // Rejected: PERMUTATION, PERMUTATION_DIRECT. Row permutations of the
+    // Rejected: PERMUTATION, PERMUTATION_ONDEMAND. Row permutations of the
     // base dummy matrix would destroy the per-cluster MVN covariance
     // structure that the GVS dummies are explicitly designed to mirror.
     if (trex_ctrl_.lloop_strategy == tc::LLoopStrategy::PERMUTATION ||
-        trex_ctrl_.lloop_strategy == tc::LLoopStrategy::PERMUTATION_DIRECT) {
+        trex_ctrl_.lloop_strategy == tc::LLoopStrategy::PERMUTATION_ONDEMAND) {
         throw std::invalid_argument(
-            "TRexGVSSelector: PERMUTATION and PERMUTATION_DIRECT L-loop "
+            "TRexGVSSelector: PERMUTATION and PERMUTATION_ONDEMAND L-loop "
             "strategies are not supported. Row permutation of the base "
             "dummy matrix would destroy the per-cluster MVN covariance "
             "structure that GVS dummies are designed to mirror."
@@ -338,7 +338,8 @@ void TRexGVSSelector::finalizeSetup() {
     gvs_setup_.cluster_sizes.resize(M);
     gvs_setup_.cholesky_lower_list.resize(M);
 
-    // Per-cluster Sigma_m and Cholesky factor L_m on the (already L2-normalized) X_.
+    // Per-cluster Sigma_m and Cholesky factor L_m on X_ (already normalized
+    // per trex_ctrl_.scaling_mode; the estimator below adapts to either mode).
     for (std::size_t m = 0; m < M; ++m) {
 
         const auto& cols = gvs_setup_.clusters_list[m];
@@ -403,17 +404,32 @@ double TRexGVSSelector::computeLambda2() const {
 
     if (trex_gvs_ctrl_.lambda_2 >= 0.0) {
         // Fixed user value (>= 0). lambda_2 == 0 -> degenerate TLASSO (no ridge).
+        // Interpreted in the WORKING column scale (trex_ctrl_.scaling_mode):
+        // under ZSCORE the columns have squared norm (n-1) instead of 1, so a
+        // value calibrated for unit-L2 columns must be multiplied by (n-1) by
+        // the caller if the same effective shrinkage is desired.
         return trex_gvs_ctrl_.lambda_2;
     }
     // lambda_2 < 0: "not supplied" sentinel -> auto-compute below.
 
     // Auto-compute lambda_2 and convert to LARS units:
-    //   lambda_lars = lambda_cv * p / 2
+    //   lambda_lars = lambda_cv * p / 2 * scale_adjust
     //
-    // CV is entered with X centered and L2-normalised (||x_j||_2 = 1) and y centered,
-    // as prepared by the base-class constructor. Each CV method extracts per-fold
-    // copies of (X_train, X_test, y_train, y_test) and re-normalises them for
-    // themselves, so no fold leaks global statistics.
+    // CV is entered with X centered and scaled per trex_ctrl_.scaling_mode and
+    // y centered, as prepared by the base-class constructor. Each CV method
+    // extracts per-fold copies of (X_train, X_test, y_train, y_test) and
+    // re-normalises them to UNIT L2 for itself (so no fold leaks global
+    // statistics and lambda_cv is always on the unit-L2 scale regardless of
+    // the working scaling mode).
+    //
+    // scale_adjust converts the unit-L2-calibrated lambda_cv to the working
+    // column scale: the ridge penalty balances against ||x_j||^2, which is 1
+    // under L2 and (n-1) under ZSCORE (sample-SD scaling). With
+    // lambda_working = (n-1) * lambda_unit the augmented system
+    // [c·X; sqrt(lambda_working)·I]·d2' is a global scalar multiple of the
+    // unit-L2 system [X; sqrt(lambda_unit)·I]·d2 (c = sqrt(n-1)), and LARS
+    // paths are invariant under global column scaling — so the selection is
+    // identical to the L2 run (pinned by the ScalingModeParity GVS tests).
     //
     // Two retained variants (selected by lambda2_method):
     //   * CV_*_SVD (ridge_cv_svd, JacobiSVD): normalises each fold column to unit
@@ -497,7 +513,13 @@ double TRexGVSSelector::computeLambda2() const {
                 "TRexGVSSelector::computeLambda2: unknown LambdaSelectionMethod.");
     }
 
-    return lambda_cv * static_cast<double>(p_) / 2.0;
+    // Working-scale conversion (see the scale_adjust note above).
+    const double scale_adjust =
+        (trex_ctrl_.scaling_mode == dn::ScalingMode::ZSCORE && n_ > 1)
+            ? static_cast<double>(n_ - 1)
+            : 1.0;
+
+    return lambda_cv * static_cast<double>(p_) / 2.0 * scale_adjust;
 
 }
 
@@ -852,14 +874,14 @@ void TRexGVSSelector::prepareDummiesForLStep(LStepContext& ctx)
     switch (trex_ctrl_.lloop_strategy) {
         case tc::LLoopStrategy::STANDARD:
         case tc::LLoopStrategy::SKIPL:
-        case tc::LLoopStrategy::DIRECT:
+        case tc::LLoopStrategy::ONDEMAND:
             redraw_all = true;
             break;
         case tc::LLoopStrategy::HCONCAT:
             redraw_all = false;
             break;
         case tc::LLoopStrategy::PERMUTATION:
-        case tc::LLoopStrategy::PERMUTATION_DIRECT:
+        case tc::LLoopStrategy::PERMUTATION_ONDEMAND:
         default:
             throw std::logic_error(
                 "TRexGVSSelector::prepareDummiesForLStep: unsupported "

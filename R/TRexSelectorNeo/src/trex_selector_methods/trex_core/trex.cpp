@@ -174,8 +174,8 @@ TRexSelector::TRexSelector(
     if (trex_ctrl_.use_memory_mapping) {
         const std::size_t max_dummies = trex_ctrl_.max_dummy_multiplier * p_;
         const bool shared = (trex_ctrl_.lloop_strategy == LLoopStrategy::PERMUTATION
-                          || trex_ctrl_.lloop_strategy == LLoopStrategy::PERMUTATION_DIRECT
-                          || trex_ctrl_.lloop_strategy == LLoopStrategy::DIRECT);
+                          || trex_ctrl_.lloop_strategy == LLoopStrategy::PERMUTATION_ONDEMAND
+                          || trex_ctrl_.lloop_strategy == LLoopStrategy::ONDEMAND);
         memmap_mgr_ = std::make_unique<mm::MemmapManager>(
             n_, max_dummies, trex_ctrl_.K, shared, verbose_);
         memmap_mgr_->initialize();
@@ -442,6 +442,9 @@ er::ExperimentRunnerConfig TRexSelector::buildRunnerConfig(
     // derives mix_seed64(seed_, k) in the runner. seed_ < 0 keeps the
     // solvers' random_device tie seeding (nondeterministic).
     cfg.tie_seed_base         = static_cast<long long>(seed_);
+    // Base id for the stateless permutation strategy (same id as the stored
+    // PERMUTATION path, so both variants produce bit-identical experiments).
+    cfg.permutation_base_id   = permutation_base_seed_;
     // Coefficient-activeness threshold for the beta paths. This must match the
     // R reference (random_experiments uses eps = .Machine$double.eps), NOT the
     // solver convergence tolerance (solver_params.tol, default 1e-6). Using the
@@ -830,8 +833,8 @@ void TRexSelector::prepareDummiesForLStep(LStepContext& ctx) {
             warm_start_mgr_.invalidate();
             break;
         }
-        case LLoopStrategy::DIRECT:
-        case LLoopStrategy::PERMUTATION_DIRECT: {
+        case LLoopStrategy::ONDEMAND:
+        case LLoopStrategy::PERMUTATION_ONDEMAND: {
             // Seed-based, on-the-fly: nothing to pre-generate.
             warm_start_mgr_.invalidate();
             break;
@@ -879,9 +882,9 @@ void TRexSelector::runLLoop(
             runLLoopCalibration_Permutation(FDP_hat, exp_results);
             break;
         }
-        case LLoopStrategy::DIRECT: // Same as PERMUTATION_DIRECT but without base dummy matrix
-        case LLoopStrategy::PERMUTATION_DIRECT: {
-            runLLoopCalibration_Direct(FDP_hat, exp_results);
+        case LLoopStrategy::ONDEMAND:              // independent dummies, seed-derived
+        case LLoopStrategy::PERMUTATION_ONDEMAND: {
+            runLLoopCalibration_OnDemand(FDP_hat, exp_results);
             break;
         }
         default: {
@@ -1084,7 +1087,7 @@ void TRexSelector::runLLoopCalibration_Permutation(
 // L-Loop: DIRECT
 // ===================================================================================
 
-void TRexSelector::runLLoopCalibration_Direct(
+void TRexSelector::runLLoopCalibration_OnDemand(
     Eigen::VectorXd& FDP_hat,
     er::ExperimentResults& exp_results)
 {
@@ -1092,15 +1095,19 @@ void TRexSelector::runLLoopCalibration_Direct(
     dummy_multiplier_LL_ = 1;
     FDP_hat.resize(0);
 
-    // The L-loop dispatcher routes both PERMUTATION_DIRECT and DIRECT to this
-    // method; mirror that disambiguation when forwarding to the hook.
-    const LLoopStrategy hook_strategy =
-        (trex_ctrl_.lloop_strategy == LLoopStrategy::DIRECT)
-            ? LLoopStrategy::DIRECT
-            : LLoopStrategy::PERMUTATION_DIRECT;
+    // The L-loop dispatcher routes both ONDEMAND and PERMUTATION_ONDEMAND to
+    // this method; mirror that disambiguation when forwarding to the hook and
+    // when choosing the runner strategy.
+    const bool independent =
+        (trex_ctrl_.lloop_strategy == LLoopStrategy::ONDEMAND);
+    const LLoopStrategy hook_strategy = independent
+            ? LLoopStrategy::ONDEMAND
+            : LLoopStrategy::PERMUTATION_ONDEMAND;
 
     LLoopPolicyContext ctx;
-    ctx.strategy            = er::ExperimentStrategy::Direct;
+    ctx.strategy            = independent
+            ? er::ExperimentStrategy::OnDemand
+            : er::ExperimentStrategy::PermutationOnDemand;
     ctx.seed_factor_uses_LL = false;
     ctx.policy = [this, hook_strategy](std::size_t LL,
                                        std::size_t num_dummies,
@@ -1118,7 +1125,7 @@ void TRexSelector::runLLoopCalibration_Direct(
 
     if (verbose_) {
         printProgress("L-loop converged: " + std::to_string(num_dummies_)
-                      + " dummies (Direct generation from seeds).");
+                      + " dummies (on-demand generation from seeds).");
     }
 }
 
@@ -1159,9 +1166,11 @@ void TRexSelector::runTLoop(
         case LLoopStrategy::PERMUTATION:
             exp_strategy = er::ExperimentStrategy::Permutation;
             break;
-        case LLoopStrategy::PERMUTATION_DIRECT:
-        case LLoopStrategy::DIRECT:
-            exp_strategy = er::ExperimentStrategy::Direct;
+        case LLoopStrategy::PERMUTATION_ONDEMAND:
+            exp_strategy = er::ExperimentStrategy::PermutationOnDemand;
+            break;
+        case LLoopStrategy::ONDEMAND:
+            exp_strategy = er::ExperimentStrategy::OnDemand;
             break;
         default:
             exp_strategy = er::ExperimentStrategy::Standard;

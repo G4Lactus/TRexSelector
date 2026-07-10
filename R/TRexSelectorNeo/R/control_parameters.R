@@ -38,7 +38,11 @@
 #' @param max_dummy_multiplier Maximum dummy features multiplier (default: 10).
 #' @param use_max_T_stop Whether to bound max T_stop (default: TRUE).
 #' @param opt_threshold Optimization threshold (default: 0.75).
-#' @param lloop_strategy L-loop strategy: "HCONCAT" or "PERMUTATION" (default: "HCONCAT").
+#' @param lloop_strategy L-loop strategy: "SKIPL", "STANDARD", "HCONCAT",
+#'   "PERMUTATION", "PERMUTATION_ONDEMAND", or "ONDEMAND" (default: "HCONCAT").
+#'   The ONDEMAND variants re-derive dummies from the seed at every step
+#'   (nothing stored); "PERMUTATION_ONDEMAND" is the stateless twin of
+#'   "PERMUTATION" and produces identical experiments for the same seed.
 #' @param tol Tolerance for solver algorithms (default: 1e-6).
 #' @param lambda2 Elastic-net L2 penalty (TENET hyperparameter, default: 0.1).
 #' @param rho_afs AFS hyperparameter (default: 0.3).

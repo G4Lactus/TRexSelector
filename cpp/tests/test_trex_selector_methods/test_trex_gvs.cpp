@@ -86,7 +86,7 @@ TEST_F(TRexGVSTest, Validation_ThrowsOnPermutationLLoop) {
     EXPECT_THROW(TRexGVSSelector(X_map, y_map, 0.1, gvs_params),
                  std::invalid_argument);
 
-    gvs_params.trex_ctrl.lloop_strategy = LLoopStrategy::PERMUTATION_DIRECT;
+    gvs_params.trex_ctrl.lloop_strategy = LLoopStrategy::PERMUTATION_ONDEMAND;
     EXPECT_THROW(TRexGVSSelector(X_map, y_map, 0.1, gvs_params),
                  std::invalid_argument);
 }
@@ -402,6 +402,92 @@ TEST_F(TRexGVSTest, EndToEnd_TENETAugMatchesTENET_FixedLambda2) {
         << "TENET and TENETAug diverged at fixed lambda_2 = 0.1.\n"
         << "  TENET     n_selected = " << sel_tenet.sum() << "\n"
         << "  TENETAug  n_selected = " << sel_aug.sum();
+}
+
+
+// ========================================================================================
+// ZSCORE scaling mode (2026-07: GVS made mode-complete)
+// ========================================================================================
+
+namespace {
+
+/** @brief Run one GVS EN selection on shared grouped data with the given
+ *         scaling mode; auto-CV lambda_2 (< 0 sentinel). Copies X/y because
+ *         the selector normalizes X in place. */
+Eigen::VectorXi run_gvs_with_mode(
+    const GroupedData& d,
+    trex::trex_selector_methods::utils::data_normalizer::ScalingMode mode,
+    ENSolverType en_solver,
+    SolverTypeForTRex st,
+    int seed) {
+
+    Eigen::MatrixXd Xc = d.X;
+    Eigen::VectorXd yc = d.y;
+    Eigen::Map<Eigen::MatrixXd> Xm(Xc.data(), Xc.rows(), Xc.cols());
+    Eigen::Map<Eigen::VectorXd> ym(yc.data(), yc.size());
+
+    TRexGVSControlParameter ctrl;
+    ctrl.gvs_type  = GVSType::EN;
+    ctrl.en_solver = en_solver;
+    ctrl.lambda_2  = -1.0;  // auto (ridge CV)
+    ctrl.trex_ctrl.solver_type  = st;
+    ctrl.trex_ctrl.K = 5;
+    ctrl.trex_ctrl.max_dummy_multiplier = 2;
+    ctrl.trex_ctrl.scaling_mode = mode;
+
+    TRexGVSSelector trex(Xm, ym, 0.2, ctrl, seed, false);
+    return trex.select().selected_var;
+}
+
+} // namespace
+
+
+/** @brief GVS end-to-end under ZSCORE: the whole pipeline (X normalization,
+ *         scale-adaptive Sigma, MVN dummies, working-scale lambda_2) must
+ *         recover the planted groups just like the L2 run. */
+TEST_F(TRexGVSTest, EndToEnd_EN_TENET_ZScore) {
+    namespace dnm = trex::trex_selector_methods::utils::data_normalizer;
+    GroupedData d(150, 40, 0.75, 1.0, 7);
+
+    const Eigen::VectorXi sel = run_gvs_with_mode(
+        d, dnm::ScalingMode::ZSCORE,
+        ENSolverType::TENET, SolverTypeForTRex::TENET, 42);
+
+    int hits = 0, false_sel = 0;
+    for (Eigen::Index j = 0; j < sel.size(); ++j) {
+        if (sel(j) == 1) { (j < 6 ? hits : false_sel)++; }
+    }
+    EXPECT_GE(hits, 4) << "ZSCORE GVS failed to recover the planted actives.";
+    EXPECT_LE(false_sel, 4) << "ZSCORE GVS selected too many nulls.";
+}
+
+
+/** @brief Scaling-mode parity: with auto-CV lambda_2 the ZSCORE run must
+ *         select EXACTLY the same variables as the L2 run. lambda_cv is
+ *         computed on the CV's internal unit-L2 scale in both modes; the
+ *         (n-1) working-scale conversion in computeLambda2 makes the ZSCORE
+ *         augmented system a global scalar multiple of the L2 one, and LARS
+ *         paths are invariant under global column scaling. */
+TEST_F(TRexGVSTest, ScalingModeParity_EN_AutoLambda2) {
+    namespace dnm = trex::trex_selector_methods::utils::data_normalizer;
+    GroupedData d(150, 40, 0.75, 1.0, 7);
+
+    const std::pair<ENSolverType, SolverTypeForTRex> variants[] = {
+        {ENSolverType::TENET,     SolverTypeForTRex::TENET},
+        {ENSolverType::TENET_AUG, SolverTypeForTRex::TENET_AUG},
+    };
+    for (const auto& [en_solver, st] : variants) {
+        const Eigen::VectorXi sel_l2 =
+            run_gvs_with_mode(d, dnm::ScalingMode::L2, en_solver, st, 42);
+        const Eigen::VectorXi sel_z =
+            run_gvs_with_mode(d, dnm::ScalingMode::ZSCORE, en_solver, st, 42);
+
+        EXPECT_TRUE((sel_l2.array() == sel_z.array()).all())
+            << "L2 vs ZSCORE selections diverged (solver "
+            << static_cast<int>(st) << ").\n"
+            << "  L2     n_selected = " << sel_l2.sum() << "\n"
+            << "  ZSCORE n_selected = " << sel_z.sum();
+    }
 }
 
 // ========================================================================================

@@ -562,6 +562,60 @@ public:
     bool hasBaseDummies() const noexcept { return base_initialized_; }
 
 
+    // ==========================================================================
+    // Permutation strategy — stateless (ONDEMAND) variants
+    // ==========================================================================
+
+    /**
+     * @brief Row-permute a caller-supplied base matrix for experiment k.
+     *
+     * @details Stateless companion of getPermuted() for the
+     *          PERMUTATION_ONDEMAND strategy: the caller re-derives the base
+     *          from the seed (generate(num_dummies, base_id) is prefix-stable
+     *          under l_tag = 0) and this method applies the SAME deterministic
+     *          per-experiment row permutation as the stored path — engine
+     *          seeded by mix_seed64(base_id, k). With identical base_id the
+     *          stored (PERMUTATION) and stateless (PERMUTATION_ONDEMAND)
+     *          strategies therefore produce bit-identical experiments.
+     *
+     * @param base     Base dummy matrix (n × num_dummies), already normalized.
+     * @param k        Experiment index [0, K); k == 0 returns the base as-is.
+     * @param base_id  Seed id that generated the base (permutation engine key).
+     *
+     * @return Row-permuted copy (n × num_dummies).
+     */
+    Eigen::MatrixXd permuteCopy(const Eigen::MatrixXd& base,
+                                std::size_t k,
+                                std::uint64_t base_id) const {
+        if (k == 0) { return base; }
+        std::mt19937 rng = dummygen::make_column_engine(base_id, k);
+        return applyRowPermutation(base, rng);
+    }
+
+
+    /**
+     * @brief Row-permute a caller-supplied base directly into target (zero-copy).
+     *
+     * @details Memory-mapped variant of permuteCopy(); same permutation keys.
+     *
+     * @param base     Base dummy matrix (n × num_dummies), already normalized.
+     * @param target   Matrix to write into (n × num_dummies, pre-sized).
+     * @param k        Experiment index [0, K); k == 0 copies the base.
+     * @param base_id  Seed id that generated the base (permutation engine key).
+     */
+    void permuteCopyInto(const Eigen::MatrixXd& base,
+                         Eigen::Ref<Eigen::MatrixXd> target,
+                         std::size_t k,
+                         std::uint64_t base_id) const {
+        if (k == 0) {
+            target = base;
+            return;
+        }
+        std::mt19937 rng = dummygen::make_column_engine(base_id, k);
+        applyRowPermutationInto(base, target, rng);
+    }
+
+
     /** @brief Get the base permutation seed. */
     unsigned int baseSeedPerm() const noexcept { return base_seed_perm_; }
 

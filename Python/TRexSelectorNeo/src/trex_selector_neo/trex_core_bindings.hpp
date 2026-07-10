@@ -171,12 +171,12 @@ inline void bind_trex_core(py::module& m_tsm) {
 
     // Bind LLoopStrategy enum
     py::enum_<LLoopStrategy>(m_tsm, "LLoopStrategy", "L-loop strategy controlling how dummy variables are constructed in each experiment.")
-        .value("SKIPL", LLoopStrategy::SKIPL, "Skips L-loop iteration (L=1 only).")
-        .value("STANDARD", LLoopStrategy::STANDARD, "One dummy block per L value, averaged over L.")
-        .value("HCONCAT", LLoopStrategy::HCONCAT, "Horizontal concatenation of all dummy blocks across L values.")
-        .value("PERMUTATION", LLoopStrategy::PERMUTATION, "Dummy variables are column-wise permutations of X.")
-        .value("PERMUTATION_DIRECT", LLoopStrategy::PERMUTATION_DIRECT, "Direct permutation of X columns without cycling.")
-        .value("DIRECT", LLoopStrategy::DIRECT, "Direct dummy generation bypassing L-loop aggregation.")
+        .value("SKIPL", LLoopStrategy::SKIPL, "Stored, one-shot: fixed dummies = max_dummy_multiplier * p.")
+        .value("STANDARD", LLoopStrategy::STANDARD, "Stored; fresh dummies at each L-loop iteration (conservative).")
+        .value("HCONCAT", LLoopStrategy::HCONCAT, "Stored; horizontally expand dummy matrices across L (faster, same result).")
+        .value("PERMUTATION", LLoopStrategy::PERMUTATION, "Stored base dummy matrix + deterministic row permutations per experiment.")
+        .value("PERMUTATION_ONDEMAND", LLoopStrategy::PERMUTATION_ONDEMAND, "Seed-derived base + row permutations per experiment; nothing stored.")
+        .value("ONDEMAND", LLoopStrategy::ONDEMAND, "Seed-derived independent dummies per experiment; nothing stored.")
         .export_values();
 
     // Bind SolverTypeForTRex enum
