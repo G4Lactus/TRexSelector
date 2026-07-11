@@ -9,6 +9,7 @@
 # - Screen T-Rex
 # - Grouped Variable Selection T-Rex
 # - Sparse PCA T-Rex
+# - Virtual-Dummy T-Rex
 #
 # ==================================================================================
 
@@ -84,6 +85,7 @@ target_sources(trex_selector_methods PUBLIC
         ${CMAKE_CURRENT_SOURCE_DIR}/trex_screening/trex_screening.hpp
         ${CMAKE_CURRENT_SOURCE_DIR}/trex_screening/trex_biobank_screening.hpp
         ${CMAKE_CURRENT_SOURCE_DIR}/trex_spca/trex_spca.hpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/trex_vd/trex_vd.hpp
         ${CMAKE_CURRENT_SOURCE_DIR}/trex_utils/trex_data_normalizer.hpp
         ${CMAKE_CURRENT_SOURCE_DIR}/trex_utils/trex_dummy_generator.hpp
         ${CMAKE_CURRENT_SOURCE_DIR}/trex_utils/trex_experiment_runner.hpp
@@ -104,6 +106,7 @@ add_subdirectory(trex_da)
 add_subdirectory(trex_gvs)
 add_subdirectory(trex_screening)
 add_subdirectory(trex_spca)
+add_subdirectory(trex_vd)
 # ==================================================================================
 
 

@@ -28,6 +28,13 @@
 #   - TAFS:      Terminating Adaptive Forward Selection Solver (AFS).
 #
 #
+#   VD (Virtual Dummy) forward selectors (dummies realized on demand):
+#   - VD_LARS:         Virtual Dummy LARS (equiangular direction, gamma-step).
+#   - VD_OMP:          Virtual Dummy OMP (greedy argmax, full OLS refit).
+#   - VD_AFS:          Virtual Dummy Adaptive Forward Stepwise.
+#   - VD_AFS_Logistic: VD-AFS with logistic link (binary response).
+#
+#
 # Organization:
 # -------------
 # src/tsolvers/
@@ -37,6 +44,8 @@
 #     |-- afs_based/
 # |
 # |-- logistic_model/
+# |
+# |-- vd_tsolvers/
 # |
 # |-- poisson_model/
 # |
@@ -127,6 +136,7 @@ target_sources(trex_tsolvers PUBLIC
         ${CMAKE_CURRENT_SOURCE_DIR}/tsolvers.hpp
         ${CMAKE_CURRENT_SOURCE_DIR}/tsolver_base.hpp
         ${CMAKE_CURRENT_SOURCE_DIR}/lm_tsolvers.hpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/vd_tsolvers.hpp
         ${CMAKE_CURRENT_SOURCE_DIR}/solver_utils/solver_preprocessing.hpp
         ${CMAKE_CURRENT_SOURCE_DIR}/linear_model/lars_based.hpp
         ${CMAKE_CURRENT_SOURCE_DIR}/linear_model/lars_based/tlars_solver.hpp
@@ -155,6 +165,7 @@ target_sources(trex_tsolvers PUBLIC
 add_subdirectory(linear_model)
 add_subdirectory(logistic_model)
 add_subdirectory(solver_utils)
+add_subdirectory(vd_tsolvers)
 # Future expansion: ...
 # ==============================================================================
 
