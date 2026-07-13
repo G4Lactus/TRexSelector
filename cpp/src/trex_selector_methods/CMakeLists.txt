@@ -107,6 +107,7 @@ add_subdirectory(trex_gvs)
 add_subdirectory(trex_screening)
 add_subdirectory(trex_spca)
 add_subdirectory(trex_vd)
+add_subdirectory(trex_sd)
 # ==================================================================================
 
 

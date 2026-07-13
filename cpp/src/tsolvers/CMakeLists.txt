@@ -35,6 +35,11 @@
 #   - VD_AFS_Logistic: VD-AFS with logistic link (binary response).
 #
 #
+#   SD (Sparse Dummy) terminating solvers (sparse Rademacher dummies,
+#   inner products replaced by index-set sums):
+#   - SD_TLARS:  T-LARS racing X against an on-demand sparse-dummy pool.
+#
+#
 # Organization:
 # -------------
 # src/tsolvers/
@@ -166,6 +171,7 @@ add_subdirectory(linear_model)
 add_subdirectory(logistic_model)
 add_subdirectory(solver_utils)
 add_subdirectory(vd_tsolvers)
+add_subdirectory(sd_tsolvers)
 # Future expansion: ...
 # ==============================================================================
 
