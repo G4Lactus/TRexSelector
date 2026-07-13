@@ -70,7 +70,7 @@ TEST(TSolverGettersTest, ValidateCoefficientPathExtraction) {
 
     // Check sizes match step execution
     std::size_t steps = solver.getNumSteps();
-    Eigen::MatrixXd beta_path = solver.getBetaPath();
+    Eigen::MatrixXd beta_path = solver.getBetaPathSparse().dense();
 
     // Path columns should correspond to tracked actions/steps + 1
     // (for the zero-initialization step 0)
@@ -107,7 +107,7 @@ TEST(TSolverGettersTest, GetBetaStepOutOfRangeThrows) {
     TLARS_Solver solver(X_map, D_map, y_map, true, true, false);
     solver.executeStep(2, true);
 
-    Eigen::Index n_cols = solver.getBetaPath().cols();
+    Eigen::Index n_cols = solver.getBetaPathSparse().dense().cols();
     EXPECT_NO_THROW(solver.getBeta(static_cast<int>(n_cols) - 1));
     EXPECT_NO_THROW(solver.getBeta(-1));
     EXPECT_THROW(solver.getBeta(static_cast<int>(n_cols)), std::invalid_argument);
@@ -164,7 +164,7 @@ TEST(TSolverGettersTest, GetCpWorksOnDisconnectedSolver) {
 }
 
 
-/** @brief Regression test: TENET getBeta/getBetaPath must de-normalize dummy
+/** @brief Regression test: TENET getBeta/getBetaPathSparse must de-normalize dummy
  *         coefficients with normsd_, exactly like real predictors with normsx_.
  *
  *  Differential setup: solver A runs on raw data with internal normalization;
@@ -219,9 +219,9 @@ TEST(TSolverGettersTest, TENETBetaDeNormalizesDummies) {
     EXPECT_TRUE(betaA.isApprox(expected, 1e-9))
         << "max abs diff: " << (betaA - expected).cwiseAbs().maxCoeff();
 
-    Eigen::MatrixXd pathA = A.getBetaPath();
+    Eigen::MatrixXd pathA = A.getBetaPathSparse().dense();
     EXPECT_TRUE(pathA.col(pathA.cols() - 1).isApprox(expected, 1e-9))
-        << "getBetaPath last column disagrees with getBeta(-1)";
+        << "getBetaPathSparse().dense() last column disagrees with getBeta(-1)";
 }
 
 /** @brief ZSCORE scaling mode must be equivalent to manual z-scoring:

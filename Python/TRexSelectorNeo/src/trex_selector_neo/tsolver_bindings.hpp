@@ -133,10 +133,13 @@ public:
     /**
      * @brief Retrieve the full path history of the Beta coefficients.
      *
+     * @details The solver stores the path sparsely; this densifies it for the
+     * numpy exchange — O((p + num_dummies) * steps) memory at call time.
+     *
      * @return Eigen::MatrixXd where each column represents the Beta coefficient state at a
      *         specific step in the sequential path computation.
      */
-    Eigen::MatrixXd getBetaPath() const { return solver_->getBetaPath(); }
+    Eigen::MatrixXd getBetaPath() const { return solver_->getBetaPathSparse().dense(); }
 
     /**
      * @brief Retrieve the string identifier for the underlying T-Solver class used.

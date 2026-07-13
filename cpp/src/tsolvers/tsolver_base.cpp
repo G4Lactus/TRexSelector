@@ -283,22 +283,6 @@ void TSolver_Base::recordBetaStep() {
 }
 
 
-Eigen::MatrixXd TSolver_Base::densifyBetaPath() const {
-    std::size_t p_tot = p_original_ + num_dummies_;
-    Eigen::MatrixXd M = Eigen::MatrixXd::Zero(
-        static_cast<Eigen::Index>(p_tot),
-        static_cast<Eigen::Index>(betaPathSparse_.size()));
-    for (std::size_t s = 0; s < betaPathSparse_.size(); ++s) {
-        const SparseBetaStep& step = betaPathSparse_[s];
-        for (std::size_t k = 0; k < step.idx.size(); ++k) {
-            M(static_cast<Eigen::Index>(step.idx[k]),
-              static_cast<Eigen::Index>(s)) = step.val[k];
-        }
-    }
-    return M;
-}
-
-
 SparseBetaPath TSolver_Base::makeScaledSparsePath(double pre_divisor) const {
     SparseBetaPath out;
     out.p_total = p_original_ + num_dummies_;
@@ -602,22 +586,6 @@ double TSolver_Base::getIntercept(int step) const {
     if (meansx_.size() > 0) { intercept -= meansx_.dot(beta_orig.head(p_original_)); }
     if (meansd_.size() > 0) { intercept -= meansd_.dot(beta_orig.tail(num_dummies_)); }
     return intercept;
-}
-
-
-Eigen::MatrixXd TSolver_Base::getBetaPath() const {
-    Eigen::MatrixXd beta_orig = densifyBetaPath();
-    if (normalize_) {
-        for (Eigen::Index j = 0; j < beta_orig.cols(); ++j) {
-            if (normsx_.size() > 0) {
-                beta_orig.col(j).head(p_original_).array() /= normsx_.array();
-            }
-            if (normsd_.size() > 0) {
-                beta_orig.col(j).tail(num_dummies_).array() /= normsd_.array();
-            }
-        }
-    }
-    return beta_orig;
 }
 
 

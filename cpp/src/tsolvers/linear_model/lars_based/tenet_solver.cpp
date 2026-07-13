@@ -462,28 +462,10 @@ Eigen::VectorXd TENET_Solver::getBeta(int step) const {
 }
 
 
-Eigen::MatrixXd TENET_Solver::getBetaPath() const {
-    // EN-specific: Divide by d₂ = 1/√(1+λ₂), i.e., multiply by √(1+λ₂)
-    // This matches R enet post-processing: beta.pure <- beta.pure / d2
-    Eigen::MatrixXd beta_orig = densifyBetaPath() / d2_;
-
-    // De-normalize real predictors and dummies with their respective norms
-    if (normalize_) {
-        for (Eigen::Index j = 0; j < beta_orig.cols(); ++j) {
-            if (normsx_.size() > 0) {
-                beta_orig.col(j).head(p_original_).array() /= normsx_.array();
-            }
-            if (normsd_.size() > 0) {
-                beta_orig.col(j).tail(num_dummies_).array() /= normsd_.array();
-            }
-        }
-    }
-    return beta_orig;
-}
-
-
 SparseBetaPath TENET_Solver::getBetaPathSparse() const {
-    // Same scaling chain as getBetaPath(): val / d2 first, then column norms.
+    // EN-specific: Divide by d₂ = 1/√(1+λ₂), i.e., multiply by √(1+λ₂),
+    // then de-normalize by the column norms. This matches R enet
+    // post-processing: beta.pure <- beta.pure / d2
     return makeScaledSparsePath(d2_);
 }
 

@@ -275,7 +275,7 @@ int main(int argc, char** argv)
         {
             lars::TLARS_Solver s(X_map, D_map, y_map, false, false, false);
             s.executeStep(full, /*early_stop=*/false);
-            const auto cmp = compare(s.getBetaPath(), flatten_actions_to_r(s.getActions()),
+            const auto cmp = compare(s.getBetaPathSparse().dense(), flatten_actions_to_r(s.getActions()),
                                      read_csv_matrix(dir / ("r_lar_beta_" + si + ".csv")),
                                      read_actions(dir / ("r_lar_act_" + si + ".csv")), TOL,
                                      rank_cap);
@@ -286,7 +286,7 @@ int main(int argc, char** argv)
         {
             lars::TLASSO_Solver s(X_map, D_map, y_map, false, false, false);
             s.executeStep(full, /*early_stop=*/false);
-            const auto cmp = compare(s.getBetaPath(), flatten_actions_to_r(s.getActions()),
+            const auto cmp = compare(s.getBetaPathSparse().dense(), flatten_actions_to_r(s.getActions()),
                                      read_csv_matrix(dir / ("r_lasso_beta_" + si + ".csv")),
                                      read_actions(dir / ("r_lasso_act_" + si + ".csv")), TOL,
                                      rank_cap);
@@ -296,7 +296,7 @@ int main(int argc, char** argv)
         {
             lars::TENET_Solver s(X_map, D_map, y_map, lambda2, false, false, false);
             s.executeStep(full, /*early_stop=*/false);
-            const auto cmp = compare(s.getBetaPath(), flatten_actions_to_r(s.getActions()),
+            const auto cmp = compare(s.getBetaPathSparse().dense(), flatten_actions_to_r(s.getActions()),
                                      read_csv_matrix(dir / ("r_en_beta_" + si + ".csv")),
                                      read_actions(dir / ("r_en_act_" + si + ".csv")), TOL);
             report(i, "TENET", cmp, TOL, all_pass, worst_tenet);
@@ -306,7 +306,7 @@ int main(int argc, char** argv)
         {
             lars::TENETAug_Solver s(X_map, D_map, y_map, lambda2, false, false, false);
             s.executeStep(full, /*early_stop=*/false);
-            const auto cmp = compare(s.getBetaPath(), flatten_actions_to_r(s.getActions()),
+            const auto cmp = compare(s.getBetaPathSparse().dense(), flatten_actions_to_r(s.getActions()),
                                      read_csv_matrix(dir / ("r_en_beta_" + si + ".csv")),
                                      read_actions(dir / ("r_en_act_" + si + ".csv")), TOL);
             report(i, "TENET_AUG", cmp, TOL, all_pass, worst_aug);
@@ -317,7 +317,7 @@ int main(int argc, char** argv)
             lars::TENETAug_Solver s(X_map, D_map, y_map, lambda2, false, false, false,
                                     ts::ScalingMode::L2, /*use_lars_inner=*/true);
             s.executeStep(full, /*early_stop=*/false);
-            const auto cmp = compare(s.getBetaPath(), flatten_actions_to_r(s.getActions()),
+            const auto cmp = compare(s.getBetaPathSparse().dense(), flatten_actions_to_r(s.getActions()),
                                      read_csv_matrix(dir / ("r_enlar_beta_" + si + ".csv")),
                                      read_actions(dir / ("r_enlar_act_" + si + ".csv")), TOL);
             report(i, "TENET_AUGl", cmp, TOL, all_pass, worst_auglar);

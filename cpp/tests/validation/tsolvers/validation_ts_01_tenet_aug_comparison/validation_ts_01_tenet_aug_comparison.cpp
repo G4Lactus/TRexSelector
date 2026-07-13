@@ -228,9 +228,9 @@ void run_comparison(
     // Each returns a (p + L) × n_steps matrix: columns = steps, rows = predictors.
     // The manual TLASSO path is de-normalised by /d2 (R: lasso_star$beta / d2).
     // ------------------------------------------------------------------
-    const Eigen::MatrixXd path_tenet  = tenet.getBetaPath();
-    const Eigen::MatrixXd path_aug    = tenet_aug.getBetaPath();
-    const Eigen::MatrixXd path_manual = tlasso_aug.getBetaPath() / d2;
+    const Eigen::MatrixXd path_tenet  = tenet.getBetaPathSparse().dense();
+    const Eigen::MatrixXd path_aug    = tenet_aug.getBetaPathSparse().dense();
+    const Eigen::MatrixXd path_manual = tlasso_aug.getBetaPathSparse().dense() / d2;
 
     const Eigen::Index n_steps = std::min({
         path_tenet.cols(), path_aug.cols(), path_manual.cols() });

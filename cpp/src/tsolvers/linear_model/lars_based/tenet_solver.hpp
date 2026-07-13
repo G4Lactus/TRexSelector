@@ -147,14 +147,8 @@ public:
     Eigen::VectorXd getBeta(int step = -1) const override;
 
     /**
-     * @brief Get full EN-corrected coefficient path matrix.
-     * @return Matrix of coefficients (p_total x steps) with EN scaling removed.
-     */
-    Eigen::MatrixXd getBetaPath() const override;
-
-    /**
-     * @brief Get the sparse EN-corrected coefficient path (same values as
-     * getBetaPath(), sparse layout).
+     * @brief Get the sparse EN-corrected coefficient path (EN scaling
+     * removed, sparse layout).
      */
     SparseBetaPath getBetaPathSparse() const override;
 

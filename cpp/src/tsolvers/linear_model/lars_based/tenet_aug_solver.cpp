@@ -241,16 +241,11 @@ double TENETAug_Solver::getIntercept(int step) const {
     return inner_->getIntercept(step);
 }
 
-Eigen::MatrixXd TENETAug_Solver::getBetaPath() const {
+SparseBetaPath TENETAug_Solver::getBetaPathSparse() const {
     // Inner LASSO betas are in the augmented space (scaled by d2).
     // Divide by d2 (= multiply by 1/d2 = sqrt(1+lambda2)) to recover
     // original-scale coefficients, matching Demo_06b_enet_comparison.R:
     //   lasso_star_beta <- lasso_star$beta / d2
-    return inner_->getBetaPath() / d2_;
-}
-
-
-SparseBetaPath TENETAug_Solver::getBetaPathSparse() const {
     SparseBetaPath sp = inner_->getBetaPathSparse();
     for (SparseBetaStep& step : sp.steps) {
         for (double& v : step.val) { v /= d2_; }

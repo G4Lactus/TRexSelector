@@ -280,14 +280,9 @@ double TIENETAug_Solver::getIntercept(int step) const {
     return inner_->getIntercept(step);
 }
 
-Eigen::MatrixXd TIENETAug_Solver::getBetaPath() const {
+SparseBetaPath TIENETAug_Solver::getBetaPathSparse() const {
     // Coefficients on the normalized augmented-column scale (no global
     // rescaling factor exists for the IEN; see the class documentation).
-    return inner_->getBetaPath();
-}
-
-
-SparseBetaPath TIENETAug_Solver::getBetaPathSparse() const {
     return inner_->getBetaPathSparse();
 }
 

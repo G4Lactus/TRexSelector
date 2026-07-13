@@ -91,8 +91,8 @@ struct SparseBetaStep {
 
 
 /**
- * @brief Consumer-facing sparse beta path on the original coefficient scale
- * (same scaling as getBetaPath()); steps[s] corresponds to dense column s.
+ * @brief Consumer-facing sparse beta path on the original coefficient scale;
+ * steps[s] corresponds to dense column s.
  */
 struct SparseBetaPath {
     /** @brief Number of rows of the dense equivalent (p_original + num_dummies). */
@@ -101,7 +101,8 @@ struct SparseBetaPath {
     /** @brief Recorded steps; steps.size() == recorded solver steps + 1. */
     std::vector<SparseBetaStep> steps;
 
-    /** @brief Densify to the (p_total x steps) matrix getBetaPath() returns. */
+    /** @brief Densify to the (p_total x steps) coefficient-path matrix.
+     *  O(p_total * steps) memory — small-scale/test use only. */
     Eigen::MatrixXd dense() const {
         Eigen::MatrixXd M = Eigen::MatrixXd::Zero(
             static_cast<Eigen::Index>(p_total),
@@ -350,15 +351,12 @@ public:
     /** @brief Return the estimated intercept at a given step. */
     virtual double getIntercept(int step = -1) const;
 
-    /** @brief Return the estimated path matrix of regression coefficients.
-     *  @note Densifies the sparse path on demand: O((p + num_dummies) * steps)
-     *  memory. Large-p consumers should prefer getBetaPathSparse(). */
-    virtual Eigen::MatrixXd getBetaPath() const;
-
     /**
-     * @brief Return the sparse coefficient path on the original coefficient
-     * scale (identical values to getBetaPath(), sparse layout). Memory is
-     * O(sum_t |support_t|) — the preferred accessor at scale.
+     * @brief Return the coefficient path on the original coefficient scale
+     * (sparse layout). Memory is O(sum_t |support_t|). Callers that need the
+     * dense (p_total x steps) matrix densify explicitly via
+     * SparseBetaPath::dense() — an O((p + num_dummies) * steps) allocation
+     * that is only appropriate at small scale.
      */
     virtual SparseBetaPath getBetaPathSparse() const;
 
@@ -548,9 +546,6 @@ protected:
      * (e.g. LASSO drops zero coefficients within the current step).
      */
     void recordBetaStep();
-
-    /** @brief Densify the raw (internal-scale) path to (p_total x steps). */
-    Eigen::MatrixXd densifyBetaPath() const;
 
     /**
      * @brief Build the consumer-facing sparse path: values are divided by

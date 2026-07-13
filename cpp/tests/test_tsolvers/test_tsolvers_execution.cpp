@@ -172,7 +172,7 @@ TEST_F(TSolverExecutionTest, NCGMPVariantsMatchMPAndOMP) {
         Eigen::Map<Eigen::VectorXd> y_map(yc.data(), yc.size());
         auto solver = make_solver(X_map, D_map, y_map);
         solver.executeStep(4, true);
-        return solver.getBetaPath();
+        return solver.getBetaPathSparse().dense();
     };
 
     Eigen::MatrixXd mp_path = fit([](auto& Xm, auto& Dm, auto& ym) {
@@ -293,7 +293,7 @@ TEST_F(TSolverExecutionTest, LassoZeroCrossingDropsBehaveConsistently) {
 
     // Every drop must zero the coefficient at its step (beta column k+1).
     // Actions are 1-based signed indices; decode drops with -a - 1.
-    Eigen::MatrixXd path = solver.getBetaPath();
+    Eigen::MatrixXd path = solver.getBetaPathSparse().dense();
     for (std::size_t k = 0; k < actions.size(); ++k) {
         for (int a : actions[k]) {
             if (a < 0) {
