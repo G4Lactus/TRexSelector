@@ -129,7 +129,9 @@ Vec TRexVD::Phi_prime_fun_(
 Vec TRexVD::fdp_hat_(const Vec& V, const Vec& Phi,
                      const Vec& Phi_prime) const {
     const int n_v = (int)V.size(), p = (int)Phi.size();
-    Vec out = Vec::Constant(n_v, std::numeric_limits<double>::quiet_NaN());
+    // Zero-init instead of NaN: every entry is assigned below, and NaN is
+    // unavailable under -ffast-math (Release build).
+    Vec out = Vec::Zero(n_v);
     for (int i = 0; i < n_v; ++i) {
         double v = V(i);
         int R = 0; double num = 0.0;

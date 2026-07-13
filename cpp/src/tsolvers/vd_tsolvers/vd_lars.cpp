@@ -23,17 +23,15 @@ void VD_LARS::init_lars_() {
 double VD_LARS::find_and_add_active_() {
     const double C_real = (p_ > 0) ? corr_.cwiseAbs().maxCoeff() : 0.0;
 
+    // No ±infinity masking here: the Release build uses -ffast-math
+    // (-ffinite-math-only), under which non-finite sentinels are UB.
     double C_vd = 0.0;
     bool any_unrealized = false;
-    if (L_ > 0) {
-        Eigen::ArrayXd abs_vd = vd_corr_.cwiseAbs().array();
-        for (int d = 0; d < L_; ++d) {
-            if (vd_is_realized_[d])
-                abs_vd[d] = -std::numeric_limits<double>::infinity();
-            else
-                any_unrealized = true;
-        }
-        if (any_unrealized) C_vd = abs_vd.maxCoeff();
+    for (int d = 0; d < L_; ++d) {
+        if (vd_is_realized_[d]) continue;
+        any_unrealized = true;
+        const double ac = std::abs(vd_corr_(d));
+        if (ac > C_vd) C_vd = ac;
     }
 
     const double C_rd = (T_realized_ > 0)
@@ -46,7 +44,7 @@ double VD_LARS::find_and_add_active_() {
     if (active_features_.empty() && any_unrealized &&
         C_vd >= C_real - opt_.eps && C_vd >= C_rd - opt_.eps) {
         int best = -1;
-        double bestv = -std::numeric_limits<double>::infinity();
+        double bestv = -1.0;  // |corr| >= 0, finite stand-in for -infinity (fast-math)
         for (int d = 0; d < L_; ++d) if (!vd_is_realized_[d]) {
             double v = std::abs(vd_corr_(d));
             if (v > bestv) { bestv = v; best = d; }
@@ -215,9 +213,13 @@ double VD_LARS::take_step_(double C, double A_active,
         }
     }
 
+    // Finite stand-in for +infinity: the Release build uses -ffast-math
+    // (-ffinite-math-only), under which infinity comparisons are UB.
+    constexpr double GAMMA_NONE = std::numeric_limits<double>::max();
+
     // Entering real features need no index bookkeeping here: they are picked
     // up by find_and_add_active_() at the start of the next iteration.
-    double gamma_real = std::numeric_limits<double>::infinity();
+    double gamma_real = GAMMA_NONE;
     for (int j = 0; j < p_; ++j) {
         if (is_active_[j]) continue;
         double aj = a(j), cj = corr_(j);
@@ -227,7 +229,7 @@ double VD_LARS::take_step_(double C, double A_active,
         if (den2 > tol) { double t = (C + cj) / den2; if (t > tol && t < gamma_real) gamma_real = t; }
     }
 
-    double gamma_vd = std::numeric_limits<double>::infinity();
+    double gamma_vd = GAMMA_NONE;
     int idx_vd = -1;
     for (int d = 0; d < L_; ++d) {
         if (vd_is_realized_[d]) continue;
@@ -237,6 +239,10 @@ double VD_LARS::take_step_(double C, double A_active,
         double den2 = A_active + aj;
         if (den2 > tol) { double t = (C + cj) / den2; if (t > tol && t < gamma_vd) { gamma_vd = t; idx_vd = d; } }
     }
+
+    // No admissible step in either pool ends the path (the original relied on
+    // gamma staying infinite here, which -ffast-math does not permit).
+    if (gamma_real >= GAMMA_NONE && gamma_vd >= GAMMA_NONE) return 0.0;
 
     bool winner_is_vd = (gamma_vd < gamma_real + tol);
     double gamma = winner_is_vd ? gamma_vd : gamma_real;
