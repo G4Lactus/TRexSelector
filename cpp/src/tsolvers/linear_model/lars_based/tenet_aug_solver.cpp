@@ -249,6 +249,15 @@ Eigen::MatrixXd TENETAug_Solver::getBetaPath() const {
     return inner_->getBetaPath() / d2_;
 }
 
+
+SparseBetaPath TENETAug_Solver::getBetaPathSparse() const {
+    SparseBetaPath sp = inner_->getBetaPathSparse();
+    for (SparseBetaStep& step : sp.steps) {
+        for (double& v : step.val) { v /= d2_; }
+    }
+    return sp;
+}
+
 Eigen::VectorXd TENETAug_Solver::getBeta(int step) const {
     return inner_->getBeta(step) / d2_;
 }

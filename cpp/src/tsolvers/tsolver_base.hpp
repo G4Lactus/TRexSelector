@@ -20,6 +20,7 @@
 #include <stdexcept>
 #include <string>
 #include <random>
+#include <unordered_map>
 #include <vector>
 
 // Cereal includes
@@ -73,6 +74,51 @@ private:
 // ===================================================================================
 
 /**
+ * @brief One recorded step of the sparse coefficient path: the coefficient
+ * values on the step's support. Every index not listed is exactly zero.
+ * Indices live in the unified [0, p_original + num_dummies) space.
+ */
+struct SparseBetaStep {
+    /** @brief Global variable indices carrying a coefficient at this step. */
+    std::vector<std::size_t> idx;
+
+    /** @brief Coefficient values aligned with idx. */
+    std::vector<double> val;
+
+    template<class Archive>
+    void serialize(Archive& archive) { archive(idx, val); }
+};
+
+
+/**
+ * @brief Consumer-facing sparse beta path on the original coefficient scale
+ * (same scaling as getBetaPath()); steps[s] corresponds to dense column s.
+ */
+struct SparseBetaPath {
+    /** @brief Number of rows of the dense equivalent (p_original + num_dummies). */
+    std::size_t p_total{0};
+
+    /** @brief Recorded steps; steps.size() == recorded solver steps + 1. */
+    std::vector<SparseBetaStep> steps;
+
+    /** @brief Densify to the (p_total x steps) matrix getBetaPath() returns. */
+    Eigen::MatrixXd dense() const {
+        Eigen::MatrixXd M = Eigen::MatrixXd::Zero(
+            static_cast<Eigen::Index>(p_total),
+            static_cast<Eigen::Index>(steps.size()));
+        for (std::size_t s = 0; s < steps.size(); ++s) {
+            for (std::size_t k = 0; k < steps[s].idx.size(); ++k) {
+                M(static_cast<Eigen::Index>(steps[s].idx[k]),
+                  static_cast<Eigen::Index>(s)) = steps[s].val[k];
+            }
+        }
+        return M;
+    }
+};
+
+// ===================================================================================
+
+/**
  * @brief Abstract base class for all terminating variable selection solvers.
  * Provides unified state management, memory-mapping support, and handles the
  * split design matrix (Original Predictors X + Dummy Predictors D) via a
@@ -109,8 +155,24 @@ protected:
     // ==========================================================================
     // Path and Diagnostics
     // ==========================================================================
-    /** @brief Coefficient path for beta coefficients. */
-    Eigen::MatrixXd betaPath_{};
+    /** @brief Sparse coefficient path: entry s holds support and values of
+     *  dense path column s (recorded steps + 1 entries; entry 0 is the
+     *  all-zero start). Memory is O(sum_t |support_t|) instead of the dense
+     *  O((p + num_dummies) * steps). */
+    std::vector<SparseBetaStep> betaPathSparse_{};
+
+    /** @brief Running sparse coefficient vector at the current path position
+     *  (beta_idx_/beta_val_ aligned; beta_pos_ maps global index -> slot).
+     *  The support may exceed the active set: T-Stagewise NNLS removals
+     *  freeze coefficients of variables that left the active set. */
+    std::vector<std::size_t> beta_idx_{};
+
+    /** @brief Values aligned with beta_idx_. */
+    std::vector<double> beta_val_{};
+
+    /** @brief Lookup: global variable index -> slot in beta_idx_/beta_val_.
+     *  Rebuilt from beta_idx_ after deserialization. */
+    std::unordered_map<std::size_t, std::size_t> beta_pos_{};
 
     /** @brief Residual sum of squares at each step. */
     std::vector<double> RSS_{};
@@ -288,8 +350,17 @@ public:
     /** @brief Return the estimated intercept at a given step. */
     virtual double getIntercept(int step = -1) const;
 
-    /** @brief Return the estimated path matrix of regression coefficients. */
+    /** @brief Return the estimated path matrix of regression coefficients.
+     *  @note Densifies the sparse path on demand: O((p + num_dummies) * steps)
+     *  memory. Large-p consumers should prefer getBetaPathSparse(). */
     virtual Eigen::MatrixXd getBetaPath() const;
+
+    /**
+     * @brief Return the sparse coefficient path on the original coefficient
+     * scale (identical values to getBetaPath(), sparse layout). Memory is
+     * O(sum_t |support_t|) — the preferred accessor at scale.
+     */
+    virtual SparseBetaPath getBetaPathSparse() const;
 
     /** @brief Return the estimated Mallow's Cp values at each step. */
     virtual std::vector<double> getCp() const;
@@ -432,29 +503,62 @@ protected:
     void updateInactiveSet();
 
     // ============================================================================
-    // Beta Path Storage
+    // Beta Path Storage (sparse)
     // ============================================================================
 
     /**
-     * @brief Grow betaPath_ geometrically so appending one column per step is
-     * amortized O(1) instead of a full O(p x steps) copy per step.
-     *
-     * @details New columns are uninitialized; callers must write full columns
-     * indexed by currentStep_ (not by cols(), which may include spare
-     * capacity). Pair with trimBetaPathToRecordedSteps() at the end of
-     * executeStep().
-     *
-     * @param cols_needed Minimum number of columns required.
+     * @brief Reset the sparse path storage and record the all-zero step 0.
+     * Call once at the end of construction (replaces the former dense
+     * dense-path initialization).
      */
-    void ensureBetaPathCapacity(std::size_t cols_needed);
+    void initBetaPathStorage();
+
+    /** @brief Current coefficient of global variable @p j (0.0 if not in support). */
+    double runningBeta(std::size_t j) const;
 
     /**
-     * @brief Shrink betaPath_ back to the recorded path length (RSS_.size())
-     * after execution, restoring the invariant
-     * betaPath_.cols() == recorded steps + 1 for the public accessors and
-     * serialization.
+     * @brief Mutable reference to the coefficient of global variable @p j,
+     * inserting a zero entry if @p j is not yet in the support.
      */
-    void trimBetaPathToRecordedSteps();
+    double& runningBetaRef(std::size_t j);
+
+    /**
+     * @brief Remove @p j from the running support (coefficient becomes exactly
+     * zero). Used by the LASSO-style drop machinery; a re-entering variable
+     * gets a fresh zero entry via runningBetaRef().
+     */
+    void removeRunningBeta(std::size_t j);
+
+    /** @brief Clear the running support (all coefficients exactly zero). */
+    void clearRunningBeta();
+
+    /**
+     * @brief Replace the running coefficients with values over the given
+     * indices (full-refit solvers: OMP/OLS/GP/MP families).
+     *
+     * @param idx Global variable indices (typically actives_).
+     * @param values Coefficients aligned with idx.
+     */
+    void setRunningBeta(const std::vector<std::size_t>& idx,
+                        const Eigen::Ref<const Eigen::VectorXd>& values);
+
+    /**
+     * @brief Snapshot the running coefficients as the next recorded path step.
+     * Call exactly once per recorded step, AFTER all same-step mutations
+     * (e.g. LASSO drops zero coefficients within the current step).
+     */
+    void recordBetaStep();
+
+    /** @brief Densify the raw (internal-scale) path to (p_total x steps). */
+    Eigen::MatrixXd densifyBetaPath() const;
+
+    /**
+     * @brief Build the consumer-facing sparse path: values are divided by
+     * @p pre_divisor first (1.0 for unpenalized solvers, d2 for the EN
+     * family — same order as the dense accessors) and then de-normalized by
+     * the column norms when normalize_ is set.
+     */
+    SparseBetaPath makeScaledSparsePath(double pre_divisor) const;
 
     // ============================================================================
     // Correlation Utilities
@@ -713,8 +817,10 @@ protected:
             // Step tracking
             CEREAL_NVP(currentStep_), CEREAL_NVP(maxSteps_),
 
-            // Solution path
-            CEREAL_NVP(betaPath_), CEREAL_NVP(actions_),
+            // Solution path (sparse; beta_pos_ is rebuilt below)
+            CEREAL_NVP(betaPathSparse_),
+            CEREAL_NVP(beta_idx_), CEREAL_NVP(beta_val_),
+            CEREAL_NVP(actions_),
             CEREAL_NVP(RSS_), CEREAL_NVP(R2_), CEREAL_NVP(DoF_),
 
             // Active set
@@ -748,6 +854,14 @@ protected:
         scaling_mode_ = static_cast<ScalingMode>(scaling_mode);
         std::istringstream rng_in(rng_state);
         rng_in >> rng_;
+
+        // Rebuild the support lookup from the (de)serialized beta_idx_
+        // (no-op round-trip on save).
+        beta_pos_.clear();
+        beta_pos_.reserve(beta_idx_.size());
+        for (std::size_t s = 0; s < beta_idx_.size(); ++s) {
+            beta_pos_[beta_idx_[s]] = s;
+        }
     }
 };
 

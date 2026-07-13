@@ -1,0 +1,5 @@
+CompileFlags:
+  # Drops the macOS-specific OpenMP flag from the background linter
+  # so it stops complaining about 'libomp', but keeps OpenMP support.
+  # Covers sources outside cpp/ (e.g. demos/); cpp/.clangd handles cpp/.
+  Remove: [-fopenmp=libomp]

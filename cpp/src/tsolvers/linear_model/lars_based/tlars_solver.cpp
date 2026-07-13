@@ -74,8 +74,7 @@ TLARS_Solver::TLARS_Solver(
 
     // 3. Initialize shared path state variables
     r_ = y_;
-    betaPath_.resize(static_cast<Eigen::Index>(p_total), 1);
-    betaPath_.col(0).setZero();
+    initBetaPathStorage();
 
     double rss = y_.dot(y_);
     RSS_.emplace_back(rss);
@@ -155,6 +154,7 @@ void TLARS_Solver::executeStep(std::size_t T_stop, bool early_stop) {
         // STEP 4: Updates paths and residuals
         // ========================================================
         updateBetaPath(w_A, gamma);
+        recordBetaStep();
         r_ -= gamma * u;
 
         // ========================================================
@@ -172,9 +172,6 @@ void TLARS_Solver::executeStep(std::size_t T_stop, bool early_stop) {
         updateCorrelations(gamma, a);
         updateInactiveSet();
     }
-
-    // Drop any spare beta-path capacity now that execution stopped
-    trimBetaPathToRecordedSteps();
 }
 
 // ============================================================================
@@ -242,15 +239,11 @@ std::vector<int> TLARS_Solver::updateActiveSet (const std::vector<std::size_t>& 
 
 
 void TLARS_Solver::updateBetaPath(const Eigen::Ref<const Eigen::VectorXd>& w_A, double gamma) {
-    // Index by currentStep_, not cols(): betaPath_ may hold spare capacity
-    // (geometric growth); the path is trimmed at the end of executeStep().
-    Eigen::VectorXd beta_new = betaPath_.col(static_cast<Eigen::Index>(currentStep_ - 1));
+    // Advance the running sparse coefficients in place; the caller records
+    // the step snapshot (after any same-step LASSO drops) via recordBetaStep().
     for (std::size_t k = 0; k < actives_.size(); ++k) {
-        beta_new(static_cast<Eigen::Index>(actives_[k])) += gamma *
-            w_A(static_cast<Eigen::Index>(k));
+        runningBetaRef(actives_[k]) += gamma * w_A(static_cast<Eigen::Index>(k));
     }
-    ensureBetaPathCapacity(currentStep_ + 1);
-    betaPath_.col(static_cast<Eigen::Index>(currentStep_)) = beta_new;
 }
 
 
@@ -347,12 +340,12 @@ double TLARS_Solver::computeGammaSignChange(
     std::vector<bool>& drops,
     const Eigen::Ref<const Eigen::VectorXd>& w_A) const
 {
-    // Extract current beta values for active variables
+    // Extract current beta values for active variables (the running sparse
+    // coefficients still hold the previous step here — updateBetaPath() has
+    // not run yet for this step).
     Eigen::VectorXd beta_curr(static_cast<Eigen::Index>(actives_.size()));
     for (std::size_t i = 0; i < actives_.size(); ++i) {
-        beta_curr(static_cast<Eigen::Index>(i)) =
-            betaPath_(static_cast<Eigen::Index>(actives_[i]),
-                      static_cast<Eigen::Index>(currentStep_ - 1));
+        beta_curr(static_cast<Eigen::Index>(i)) = runningBeta(actives_[i]);
     }
 
     // Zero crossing: z = -beta / w (step size where beta + gamma * w = 0)
@@ -393,9 +386,10 @@ void TLARS_Solver::processLassoDrops(std::vector<bool>& drops) {
         }
 
         // Downdate Cholesky factor and zero the coefficient at this step
+        // (the drop happens before the caller's recordBetaStep(), so the
+        // recorded snapshot omits the dropped variable).
         R_ = downdateR(R_, i, eps_);
-        betaPath_(static_cast<Eigen::Index>(dropped_var),
-                  static_cast<Eigen::Index>(currentStep_)) = 0.0;
+        removeRunningBeta(dropped_var);
 
         // Record negative action (removal) and re-add to inactives_ (cycling)
         actions_.back().push_back(actionDrop(dropped_var));

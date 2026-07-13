@@ -276,6 +276,9 @@ public:
      */
     Eigen::MatrixXd getBetaPath() const override;
 
+    /** @brief Sparse counterpart of getBetaPath() (inner path, unscaled). */
+    SparseBetaPath getBetaPathSparse() const override;
+
     /**
      * @brief Return coefficients at a given step (normalized augmented scale).
      * @param step Step index (-1 = last step).

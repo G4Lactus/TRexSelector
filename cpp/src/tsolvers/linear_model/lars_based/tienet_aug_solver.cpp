@@ -286,6 +286,11 @@ Eigen::MatrixXd TIENETAug_Solver::getBetaPath() const {
     return inner_->getBetaPath();
 }
 
+
+SparseBetaPath TIENETAug_Solver::getBetaPathSparse() const {
+    return inner_->getBetaPathSparse();
+}
+
 Eigen::VectorXd TIENETAug_Solver::getBeta(int step) const {
     return inner_->getBeta(step);
 }

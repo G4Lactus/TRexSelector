@@ -31,6 +31,7 @@
 // ===================================================================================
 
 // std includes
+#include <algorithm>
 #include <cstddef>
 #include <memory>
 #include <string>
@@ -222,7 +223,7 @@ public:
         }
 
         // Dispatch to strategy-specific runner
-        std::vector<Eigen::MatrixXd> beta_paths;
+        std::vector<sd::SparseBetaPath> beta_paths;
 
         if (cfg.use_memory_mapping && memmap_mgr_ != nullptr) {
             // Memory-mapped path
@@ -282,9 +283,9 @@ private:
      *
      * @param cfg ExperimentRunnerConfig with strategy = STANDARD/HCONCAT/SKIP.
      *
-     * @return Vector of K beta path matrices (one per experiment).
+     * @return Vector of K sparse beta paths (one per experiment).
      */
-    std::vector<Eigen::MatrixXd> runStandard(const ExperimentRunnerConfig& cfg) {
+    std::vector<sd::SparseBetaPath> runStandard(const ExperimentRunnerConfig& cfg) {
 
         // Validate that K dummies are stored
         if (!dummy_gen_.hasStored(cfg.K)) {
@@ -294,7 +295,7 @@ private:
             );
         }
 
-        std::vector<Eigen::MatrixXd> beta_paths(cfg.K);
+        std::vector<sd::SparseBetaPath> beta_paths(cfg.K);
 
         const bool do_parallel = (cfg.max_outer_threads > 1);
 
@@ -331,11 +332,11 @@ private:
      *
      * @param cfg ExperimentRunnerConfig with strategy = PERMUTATION.
      *
-     * @return Vector of K beta path matrices (one per experiment).
+     * @return Vector of K sparse beta paths (one per experiment).
      */
-    std::vector<Eigen::MatrixXd> runPermutation(const ExperimentRunnerConfig& cfg) {
+    std::vector<sd::SparseBetaPath> runPermutation(const ExperimentRunnerConfig& cfg) {
 
-        std::vector<Eigen::MatrixXd> beta_paths(cfg.K);
+        std::vector<sd::SparseBetaPath> beta_paths(cfg.K);
 
         // Sequential — permutation reuses one buffer
         #ifdef _OPENMP
@@ -357,11 +358,11 @@ private:
      *
      * @param cfg ExperimentRunnerConfig with strategy = OnDemand.
      *
-     * @return Vector of K beta path matrices (one per experiment).
+     * @return Vector of K sparse beta paths (one per experiment).
      */
-    std::vector<Eigen::MatrixXd> runOnDemand(const ExperimentRunnerConfig& cfg) {
+    std::vector<sd::SparseBetaPath> runOnDemand(const ExperimentRunnerConfig& cfg) {
 
-        std::vector<Eigen::MatrixXd> beta_paths(cfg.K);
+        std::vector<sd::SparseBetaPath> beta_paths(cfg.K);
 
         #ifdef _OPENMP
         Eigen::setNbThreads(omp_get_max_threads());
@@ -390,12 +391,12 @@ private:
      *
      * @param cfg ExperimentRunnerConfig with strategy = PermutationOnDemand.
      *
-     * @return Vector of K beta path matrices (one per experiment).
+     * @return Vector of K sparse beta paths (one per experiment).
      */
-    std::vector<Eigen::MatrixXd> runPermutationOnDemand(
+    std::vector<sd::SparseBetaPath> runPermutationOnDemand(
         const ExperimentRunnerConfig& cfg) {
 
-        std::vector<Eigen::MatrixXd> beta_paths(cfg.K);
+        std::vector<sd::SparseBetaPath> beta_paths(cfg.K);
 
         #ifdef _OPENMP
         Eigen::setNbThreads(omp_get_max_threads());
@@ -437,12 +438,12 @@ private:
      * @param cfg          Runner configuration.
      * @param make_dummies Callable producing the dummy matrix for slot k.
      *
-     * @return Beta path matrix from the solver.
+     * @return Sparse beta path from the solver.
      */
     template <typename MakeDummiesFn>
-    Eigen::MatrixXd runWithTemporaryDummies(std::size_t k,
-                                            const ExperimentRunnerConfig& cfg,
-                                            MakeDummiesFn&& make_dummies) {
+    sd::SparseBetaPath runWithTemporaryDummies(std::size_t k,
+                                               const ExperimentRunnerConfig& cfg,
+                                               MakeDummiesFn&& make_dummies) {
 
         const bool in_memory =
             warm_start_mgr_.mode() == wsm::WarmStartMode::IN_MEMORY;
@@ -454,7 +455,7 @@ private:
         }
 
         Eigen::MatrixXd D_k = make_dummies();
-        Eigen::MatrixXd path = runSingleExperiment(k, D_k, cfg);
+        sd::SparseBetaPath path = runSingleExperiment(k, D_k, cfg);
 
         // dispatchForExperiment retained a fresh solver iff hasSolver(k) now
         // holds; co-retain D_k's buffer so the solver's view stays valid.
@@ -478,16 +479,16 @@ private:
      *
      * @param cfg ExperimentRunnerConfig with use_memory_mapping = true.
      *
-     * @return Vector of K beta path matrices (one per experiment).
+     * @return Vector of K sparse beta paths (one per experiment).
      */
-    std::vector<Eigen::MatrixXd> runMemoryMapped(const ExperimentRunnerConfig& cfg) {
+    std::vector<sd::SparseBetaPath> runMemoryMapped(const ExperimentRunnerConfig& cfg) {
 
         if (!memmap_mgr_->isInitialized()) {
             throw std::runtime_error(
                 "ExperimentRunner: MemmapManager not initialized");
         }
 
-        std::vector<Eigen::MatrixXd> beta_paths(cfg.K);
+        std::vector<sd::SparseBetaPath> beta_paths(cfg.K);
 
         // Determine if we can parallelize (only for non-shared files)
         const bool shared = (memmap_mgr_->numFiles() == 1);
@@ -540,9 +541,9 @@ private:
      * @param D_k Dummy matrix for this experiment (n × num_dummies).
      * @param cfg Runner configuration.
      *
-     * @return Beta path matrix.
+     * @return Sparse beta path.
      */
-    Eigen::MatrixXd runSingleExperiment(
+    sd::SparseBetaPath runSingleExperiment(
         std::size_t k,
         const Eigen::MatrixXd& D_k,
         const ExperimentRunnerConfig& cfg) {
@@ -578,9 +579,9 @@ private:
      * @param y Map of the response vector (n).
      * @param cfg Runner configuration.
      *
-     * @return Beta path matrix from the solver.
+     * @return Sparse beta path from the solver.
      */
-    Eigen::MatrixXd dispatchForExperiment(
+    sd::SparseBetaPath dispatchForExperiment(
         std::size_t k,
         Eigen::Map<Eigen::MatrixXd>& X,
         Eigen::Map<Eigen::MatrixXd>& D,
@@ -626,7 +627,7 @@ private:
             }
         }
 
-        Eigen::MatrixXd path = dispatchByType(cfg.solver_type, solver_cfg);
+        sd::SparseBetaPath path = dispatchByType(cfg.solver_type, solver_cfg);
 
         // Register the produced warm-start state (per-slot writes; safe for
         // distinct k inside the OpenMP loops — vectors are pre-allocated).
@@ -731,21 +732,23 @@ private:
     // ==========================================================================
 
     /**
-     * @brief Compute phi_T_mat from K beta paths.
+     * @brief Compute phi_T_mat from K sparse beta paths.
      *
      * @details For each experiment k and each T from 1...T_stop:
      *          Find the first step where exactly T dummies are active,
      *          then count which original predictors (j < p) have nonzero
      *          coefficients at that step.
      *          Accumulate as relative frequency (divide by K).
+     *          Only the per-step supports are touched — no dense
+     *          (p + num_dummies) x steps scan.
      *
-     * @param beta_paths Vector of K beta path matrices from the solvers.
+     * @param beta_paths Vector of K sparse beta paths from the solvers.
      * @param cfg Runner configuration (for p, T_stop, eps).
      *
      * @return ExperimentResults with phi_T_mat (p × T_stop) and Phi.
      */
     ExperimentResults aggregateResults(
-        const std::vector<Eigen::MatrixXd>& beta_paths,
+        const std::vector<sd::SparseBetaPath>& beta_paths,
         const ExperimentRunnerConfig& cfg
     ) const {
 
@@ -759,23 +762,19 @@ private:
 
         for (std::size_t k = 0; k < cfg.K; ++k) {
             const auto& bp = beta_paths[k];
-            const auto num_steps = static_cast<std::size_t>(bp.cols());
+            const std::size_t num_steps = bp.steps.size();
             if (num_steps == 0) { continue; }
 
-            // Count dummies included at each step
-            Eigen::VectorXi dummy_count = Eigen::VectorXi::Zero(
-                static_cast<Eigen::Index>(num_steps)
-            );
-
+            // Count dummies included at each step (support scan only; the
+            // eps filter matches the former dense |coefficient| threshold)
+            std::vector<int> dummy_count(num_steps, 0);
             for (std::size_t step = 0; step < num_steps; ++step) {
-                int count = 0;
-                for (std::size_t d = p; d < p + cfg.num_dummies; ++d) {
-                    if (std::abs(bp(static_cast<Eigen::Index>(d),
-                                       static_cast<Eigen::Index>(step))) > cfg.eps) {
-                        ++count;
+                const auto& st = bp.steps[step];
+                for (std::size_t e = 0; e < st.idx.size(); ++e) {
+                    if (st.idx[e] >= p && std::abs(st.val[e]) > cfg.eps) {
+                        ++dummy_count[step];
                     }
                 }
-                dummy_count(static_cast<Eigen::Index>(step)) = count;
             }
 
             // For each T from 1 to T_stop
@@ -793,8 +792,7 @@ private:
                 std::size_t step_idx = num_steps - 1;
                 bool found = false;
                 for (std::size_t s = 0; s < num_steps; ++s) {
-                    if (static_cast<std::size_t>(dummy_count(
-                        static_cast<Eigen::Index>(s))) >= t) {
+                    if (static_cast<std::size_t>(dummy_count[s]) >= t) {
                         step_idx = s;
                         found = true;
                         break;
@@ -802,16 +800,15 @@ private:
                 }
 
                 if (!found &&
-                    dummy_count(static_cast<Eigen::Index>(num_steps - 1)) <
-                    static_cast<int>(t)) {
+                    dummy_count[num_steps - 1] < static_cast<int>(t)) {
                     continue;
                 }
 
                 // Count original predictors with nonzero coefficients
-                for (std::size_t j = 0; j < p; ++j) {
-                    if (std::abs(bp(static_cast<Eigen::Index>(j),
-                                    static_cast<Eigen::Index>(step_idx))) > cfg.eps) {
-                        phi_T_mat(static_cast<Eigen::Index>(j),
+                const auto& st = bp.steps[step_idx];
+                for (std::size_t e = 0; e < st.idx.size(); ++e) {
+                    if (st.idx[e] < p && std::abs(st.val[e]) > cfg.eps) {
+                        phi_T_mat(static_cast<Eigen::Index>(st.idx[e]),
                                   static_cast<Eigen::Index>(t - 1)) +=
                                   (1.0 / static_cast<double>(cfg.K));
                     }
@@ -831,19 +828,22 @@ private:
 
             for (std::size_t k = 0; k < cfg.K; ++k) {
                 const auto& bp = beta_paths[k];
-                if (bp.cols() == 0) { continue; }
-                const Eigen::Index last =
-                    static_cast<Eigen::Index>(bp.cols()) - 1;
+                if (bp.steps.empty()) { continue; }
+                const auto& last = bp.steps.back();
 
-                for (Eigen::Index j = 0; j < static_cast<Eigen::Index>(p); ++j) {
-                    b_sums(j) += bp(j, last);
-                }
-                for (std::size_t d = p; d < p + cfg.num_dummies; ++d) {
-                    const double v = bp(static_cast<Eigen::Index>(d), last);
-                    if (std::abs(v) > cfg.eps) {
-                        d_betas.push_back(v);
+                // Dummy betas in ascending index order (matching the former
+                // dense row scan) — collect, sort by index, then append.
+                std::vector<std::pair<std::size_t, double>> d_pairs;
+                for (std::size_t e = 0; e < last.idx.size(); ++e) {
+                    if (last.idx[e] < p) {
+                        b_sums(static_cast<Eigen::Index>(last.idx[e])) +=
+                            last.val[e];
+                    } else if (std::abs(last.val[e]) > cfg.eps) {
+                        d_pairs.emplace_back(last.idx[e], last.val[e]);
                     }
                 }
+                std::sort(d_pairs.begin(), d_pairs.end());
+                for (const auto& [idx, v] : d_pairs) { d_betas.push_back(v); }
             }
 
             results.beta_sums   = std::move(b_sums);

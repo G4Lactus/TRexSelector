@@ -606,7 +606,7 @@ void TRexGVSSelector::assembleDummyBlock(std::size_t k,
 // ===================================================================================
 
 Eigen::MatrixXd TRexGVSSelector::extractPhiContribFromPath(
-    const Eigen::MatrixXd& beta_path,
+    const tsolvers::SparseBetaPath& beta_path,
     std::size_t            p,
     std::size_t            num_dummies,
     std::size_t            T_stop,
@@ -615,41 +615,50 @@ Eigen::MatrixXd TRexGVSSelector::extractPhiContribFromPath(
 {
     const auto p_idx = static_cast<Eigen::Index>(p);
     const auto T_idx = static_cast<Eigen::Index>(T_stop);
-    const auto L     = static_cast<Eigen::Index>(num_dummies);
-    const auto n_steps      = beta_path.cols();
+    const std::size_t n_steps = beta_path.steps.size();
 
     Eigen::MatrixXd contrib = Eigen::MatrixXd::Zero(p_idx, T_idx);
 
-    if (L == 0 || n_steps == 0) return contrib;
+    if (num_dummies == 0 || n_steps == 0) return contrib;
 
-    // For each t in [1, T_stop], find the FIRST column c where exactly t
-    // dummy variables (rows [p, p+L)) are non-zero.  At that step, every
-    // active original-feature row (rows [0, p)) gets a +1 contribution.
+    // Active-dummy count per step from the sparse supports (same eps
+    // threshold as the former dense row scan).
+    std::vector<std::size_t> dummy_count(n_steps, 0);
+    for (std::size_t s = 0; s < n_steps; ++s) {
+        const auto& st = beta_path.steps[s];
+        for (std::size_t e = 0; e < st.idx.size(); ++e) {
+            if (st.idx[e] >= p && std::abs(st.val[e]) > eps) {
+                ++dummy_count[s];
+            }
+        }
+    }
+
+    // For each t in [1, T_stop], find the FIRST step where exactly t dummy
+    // variables are non-zero.  At that step, every active original feature
+    // gets a +1 contribution.
     for (std::size_t t = 1; t <= T_stop; ++t) {
 
-        Eigen::Index found_col = -1;
-        for (Eigen::Index c = 0; c < n_steps; ++c) {
-            const Eigen::Index n_active_dummies = (beta_path.block(
-                p_idx, c,
-                L, 1).array().abs() > eps).count();
-
-            if (n_active_dummies == static_cast<Eigen::Index>(t)) {
-                found_col = c;
+        std::size_t found_col = n_steps;
+        for (std::size_t s = 0; s < n_steps; ++s) {
+            if (dummy_count[s] == t) {
+                found_col = s;
                 break;
             }
         }
 
-        if (found_col < 0) {
+        if (found_col == n_steps) {
             if (verbose) {
                 // Path never reached t active dummies; row stays 0.
             }
             continue;
         }
 
-        // Add indicator of active original features at that column.
-        for (Eigen::Index j = 0; j < p_idx; ++j) {
-            if (std::abs(beta_path(j, found_col)) > eps) {
-                contrib(j, static_cast<Eigen::Index>(t - 1)) += 1.0;
+        // Add indicator of active original features at that step.
+        const auto& st = beta_path.steps[found_col];
+        for (std::size_t e = 0; e < st.idx.size(); ++e) {
+            if (st.idx[e] < p && std::abs(st.val[e]) > eps) {
+                contrib(static_cast<Eigen::Index>(st.idx[e]),
+                        static_cast<Eigen::Index>(t - 1)) += 1.0;
             }
         }
     }
@@ -713,12 +722,12 @@ TRexGVSSelector::ExpAgg TRexGVSSelector::runKExperiments(
         #pragma omp for schedule(dynamic)
         for (std::size_t k = 0; k < K; ++k) {
 
-            Eigen::MatrixXd beta_path;
+            tsolvers::SparseBetaPath beta_path;
 
             if (use_warm_start && solvers_cache_[k] != nullptr) {
                 // -- Warm-start branch: solver already bound to *D_solver_maps_[k]. --
                 solvers_cache_[k]->executeStep(T_stop, /*early_stop=*/true);
-                beta_path = solvers_cache_[k]->getBetaPath();
+                beta_path = solvers_cache_[k]->getBetaPathSparse();
 
             } else {
                 // -- Fresh construction branch:
@@ -784,7 +793,7 @@ TRexGVSSelector::ExpAgg TRexGVSSelector::runKExperiments(
                 }
 
                 solver->executeStep(T_stop, /*early_stop=*/true);
-                beta_path = solver->getBetaPath();
+                beta_path = solver->getBetaPathSparse();
                 solvers_cache_[k] = std::move(solver);
             }
 

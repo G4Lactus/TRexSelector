@@ -153,6 +153,12 @@ public:
     Eigen::MatrixXd getBetaPath() const override;
 
     /**
+     * @brief Get the sparse EN-corrected coefficient path (same values as
+     * getBetaPath(), sparse layout).
+     */
+    SparseBetaPath getBetaPathSparse() const override;
+
+    /**
      * @brief Get elastic net mixing parameter alpha = lambda1 / (lambda1 + lambda2).
      * @return Mixing parameter in [0, 1], or 1.0 if no regularization.
      */

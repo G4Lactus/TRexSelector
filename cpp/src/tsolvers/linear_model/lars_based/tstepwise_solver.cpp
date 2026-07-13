@@ -89,6 +89,7 @@ void TSTEPWISE_Solver::executeStep(std::size_t T_stop, bool early_stop) {
         // STEP 5: Update beta coefficients and residuals
         // ========================================================
         updateBetaPath(w_A, gamma);
+        recordBetaStep();
         r_ -= gamma * u;
 
         // ========================================================
@@ -111,9 +112,6 @@ void TSTEPWISE_Solver::executeStep(std::size_t T_stop, bool early_stop) {
         zeroAllSigns();
         recomputeCorrelations();
     }
-
-    // Drop any spare beta-path capacity now that execution stopped
-    trimBetaPathToRecordedSteps();
 }
 
 
