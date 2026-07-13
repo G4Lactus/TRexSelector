@@ -153,6 +153,28 @@ public:
     }
 
     /**
+     * @brief Flush experiment k's D region to disk and drop its residency.
+     *
+     * @details Written dummy pages of a read-write mapping stay dirty in the
+     * process footprint until the pager cleans them; with K per-experiment
+     * files this accumulates K full D matrices of resident memory per
+     * selector run (e.g. ~75 GiB at n=5000, p=100000, K=20 — enough for a
+     * jetsam kill). Calling this after an experiment's solver has finished
+     * bounds the resident dummy memory to roughly one experiment's D. The
+     * mapping stays valid; later T-steps refault the data from disk.
+     *
+     * @param k Index of the experiment (maps to file 0 if shared).
+     */
+    void releaseResidency(std::size_t k) {
+        std::size_t idx = shared_ ? 0 : k;
+        if (idx >= D_memmaps_.size() || !D_memmaps_[idx]) {
+            throw std::runtime_error(
+                "MemmapManager: Invalid map index or uninitialized matrix.");
+        }
+        D_memmaps_[idx]->releaseResidency();
+    }
+
+    /**
      * @brief Release all memory-mapped files and remove the temporary directory.
      *
      * @throws std::runtime_error on filesystem errors.

@@ -551,6 +551,13 @@ private:
                 // Build SolverConfig, dispatch, and reduce the path
                 summaries[k] = summarizePath(
                     dispatchForExperiment(k, X_, D_map, y_map, cfg), cfg);
+
+                // Flush this experiment's dirty dummy pages to the backing
+                // file and drop their residency — otherwise the K written D
+                // regions stay resident for the whole selector run (K * n *
+                // num_dummies * 8 B; a jetsam kill at large scale). Later
+                // T-steps refault the data from disk.
+                memmap_mgr_->releaseResidency(k);
             }
         }
 
@@ -710,6 +717,11 @@ private:
                            const ExperimentRunnerConfig& cfg,
                            Eigen::Map<Eigen::MatrixXd>& D_map
     ) {
+
+        // Everything already on disk (T-loop steps after the L-loop wrote
+        // the full width): dummy generation is deterministic per (k, L), so
+        // rewriting would re-dirty the whole region for identical content.
+        if (cfg.existing_cols_on_disk >= cfg.num_dummies) { return; }
 
         switch (cfg.strategy) {
             case ExperimentStrategy::Standard: {
