@@ -1,7 +1,7 @@
 # T-REX SELECTOR
 
-**FDR-controlled variable selection in high-dimensional regression and classification. A
-C++20 library with R and Python bindings.**
+**FDR-controlled variable selection in high-dimensional regression and classification.
+A C++20 library with R and Python bindings.**
 
 ---
 
@@ -38,14 +38,14 @@ experiments, a voting threshold is derived that provably bounds the FDR.
 | `TRexBiobankScreeningSelector` | High-throughput genomic / biobank screening               |
 | `TRexSPCA`                     | FDR-controlled sparse principal component analysis        |
 
-All variants are implemented once in the C++ core and exposed identically in R and Python.
-
 ---
 
 ## Repository Layout
 
-This repository hosts the C++ core and both language packages. Each component has its own
-README with installation instructions, examples, and developer documentation:
+This repository hosts the C++ core and R and Python language packages.
+Results are identical across languages for the same seeds and parameters.
+Each component has its own README with installation instructions, examples, and developer
+documentation:
 
 * **C++ core library** — [`cpp/`](cpp/), documented in [cpp/README.md](cpp/README.md):
   building the library and tests, and reaching it from your own C++ project via
@@ -57,9 +57,6 @@ README with installation instructions, examples, and developer documentation:
 * **R package** — [`R/TRexSelectorNeo/`](R/TRexSelectorNeo/), documented in
   [R/TRexSelectorNeo/README.md](R/TRexSelectorNeo/README.md): installation, quick start, and
   vignette.
-
-Both language packages bind the same C++ backend — results are identical across languages
-for the same seeds and parameters.
 
 ---
 
