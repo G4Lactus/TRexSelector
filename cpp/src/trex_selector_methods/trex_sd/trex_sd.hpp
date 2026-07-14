@@ -55,6 +55,14 @@
 namespace trex::trex_selector_methods::trex_sd {
 
 // ---------- Enums ----------
+// Dummy law of the inner solvers.
+//
+// WARNING: Pair and PairGeometric (the k = 1 law) are research/validation
+// devices, NOT valid selectors at scale — at p = 10^4 both catastrophically
+// violate FDR control (empirical FDR up to 0.73 / 0.54 at target 0.2): the
+// pair null's top quantiles are rare atoms, so dummies are under-represented
+// among the extremes and FDP-hat grossly underestimates. Use General (with
+// auto-calibrated k) for anything beyond moderate p/n; see trex_sd.md §8.
 enum class SDSolverType : uint8_t { General = 0, Pair = 1, PairGeometric = 2 };
 
 // Selection algorithm of the inner solvers (mirrors trex_vd::SolverType):

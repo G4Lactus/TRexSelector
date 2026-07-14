@@ -180,9 +180,14 @@ the first dummy can win.
 3.3–3.5σ regardless of tails; perfect Gaussian dummies die equally. Rule:
 **L must scale with p.** T-Rex does not fix L a priori: the L-loop raises
 L_max = p, 2p, …, typically up to 10p, and stops the first time the FDP
-estimate at dummy count T = 1 exceeds the target. The SD milestone growth
-(`bound = m·p`, m incrementing while the reals dominate) is the in-solver
-ONDEMAND analogue of that loop; L_max should be given the same headroom
+estimate at dummy count T = 1 exceeds the target. Inside a solver run the
+bound is **L_max itself, fixed for the whole run** — every step races the
+full budget (generation still stops at the first beater, so the on-demand
+economy is preserved). The earlier milestone ladder (`bound = m·p`, m
+incrementing while the reals dominate) under-supplied dummies at early
+steps and was removed as anti-conservative — FDP-hat underestimation
+whenever the L-loop accepted L > p; see the historical note in
+trex_sd.md §3/§8. L_max should be given the L-loop's headroom
 (≥ p, growing toward ~10p), not a constant.
 
 **Barrier 2 — the k=1 tail ceiling.** The pair null is bounded by

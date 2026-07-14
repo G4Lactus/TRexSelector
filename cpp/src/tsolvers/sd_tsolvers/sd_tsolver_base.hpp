@@ -211,6 +211,9 @@ public:
 
     // Full sparse path: entry t holds the coefficients of the first
     // |actives(t)| active variables (global indices in getActives()).
+    // NOTE: not consumed by TRexSD (which reads the live active set per
+    // T-step) — kept for standalone use: coefficient-path plots and
+    // diagnostics of a single solver run.
     const std::vector<std::vector<double>>& getBetaPathCompact() const {
         return betaPathCompact_;
     }
