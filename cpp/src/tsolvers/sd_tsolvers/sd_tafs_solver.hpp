@@ -28,28 +28,21 @@
  */
 // ===================================================================================
 
-#include "sd_tsolver_base.hpp"
-#include "sd_calibration.hpp"
+#include "sd_general_base.hpp"
 
 namespace trex::tsolvers::linear_model::afs_based {
 
-class SD_TAFS_Solver : public SDTSolver_Base {
+class SD_TAFS_Solver : public SDGeneralSolver_Base {
 private:
     // Real-feature candidate state: 0 = inactive, 1 = active (re-selectable),
     // 2 = banned (collinear append failure; never scanned again).
     enum : uint8_t { kInactive = 0, kActive = 1, kBanned = 2 };
 
-    std::size_t L_max_;
-    double eps_{1e-12};
     double rho_{0.3};
     Eigen::VectorXd Xty_active_;
     Eigen::VectorXd mu_;
     std::vector<uint8_t> real_state_;
     std::vector<VirtualDummy> active_dummy_recs_; // index sets of active dummies
-    uint64_t virtual_seed_counter_{0};            // Tracks global dummy index j
-
-    // Set when the ctor ran auto-calibration (rho_d == 0).
-    std::optional<sd_calibration::Result> auto_calibration_{};
 
     struct Candidate {
         double abs_corr{0.0};
@@ -57,9 +50,6 @@ private:
         bool is_new{true};   // false: re-selected active feature (blend only)
     };
 
-    VirtualDummy generateVirtualDummy(uint64_t seed);
-    void refreshPoolCorrelations();
-    void expandPool(double c_ref);
     Candidate findBestNonPool() const;
 
     bool appendToActiveSet(std::size_t winning_j);
@@ -82,12 +72,6 @@ public:
     void executeStep(std::size_t T_stop = 0, bool early_stop = true) override;
 
     double getRho() const { return rho_; }
-    std::size_t getNumGeneratedDummies() const { return virtual_seed_counter_; }
-    std::size_t getPoolSize() const { return pool_Q_.size(); }
-    std::size_t getLMax() const { return L_max_; }
-    const std::optional<sd_calibration::Result>& getAutoCalibration() const {
-        return auto_calibration_;
-    }
 };
 
 } // namespace trex::tsolvers::linear_model::afs_based

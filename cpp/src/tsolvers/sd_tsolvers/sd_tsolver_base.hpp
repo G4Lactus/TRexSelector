@@ -7,9 +7,18 @@
 /**
  * @file sd_tsolver_base.hpp
  *
- * @brief Base class header for SD-TLARS. The class strips away the dummy matrix,
- * managing only the original features X and the materialized cache for winning dummies.
+ * @brief Shared core of the SD (sparse-dummy) solver family: data views,
+ * dummy sparsity/scaling contract, active-set state, the Cholesky append
+ * shared by every solver, and the diagnostics accessors.
  *
+ * @details Family layering (mirrors the classic tsolvers organization):
+ *
+ *   SDTSolver_Base            — this class: everything both families share.
+ *   SDGeneralSolver_Base      — general-k solvers (SD_TLARS/TOMP/TAFS):
+ *                               explicit virtual-dummy pool, winner
+ *                               materialization, auto-calibration.
+ *   SD2PairSolver_Base        — pair (k = 1) twins (SD2_*): dot-free pair
+ *                               arithmetic, OnDemand/Geometric policies.
  */
 // ===================================================================================
 
@@ -19,33 +28,9 @@
 #include <cstdint>
 #include <random>
 #include <stdexcept>
-#include <unordered_map>
 #include <optional>
-#include <string>
 
 namespace trex::tsolvers {
-
-/**
- * @brief Dummy-generation policy for the pair (k = 1) solver family
- *        (SD2_TLARS / SD2_TOMP / SD2_TAFS).
- *
- * @details OnDemand mirrors the general-k solvers: an explicit pool of
- *          sampled pairs, expanded one draw at a time until a dummy beats
- *          the best real feature. Geometric exploits the exact 2-sparse
- *          null: the fraction pi of beating pairs is computed from the
- *          sorted residual (two-pointer, O(n log n)), the number of draws
- *          until the first success is sampled as Geometric(pi), and the
- *          winner is drawn uniformly from the beating set. Failures are
- *          never instantiated — only the virtual pool size is tracked.
- *          Standing failures are treated as exchangeable fresh draws
- *          against the current residual (their historical conditioning is
- *          ignored), which is the approximation the policy comparison
- *          quantifies.
- */
-enum class SD2GenPolicy : uint8_t {
-    OnDemand  = 0,
-    Geometric = 1
-};
 
 class SDTSolver_Base {
 protected:
@@ -64,20 +49,7 @@ protected:
     std::size_t T_stop_limit_{0};
     std::size_t effective_n_{0};
     bool intercept_{true};
-
-    // --- Virtual Dummy Mechanics ---
-    struct VirtualDummy {
-        uint64_t seed;
-        std::vector<int> P_indices;
-        std::vector<int> M_indices;
-        double current_correlation{0.0};
-        double current_a{0.0};  // <d, u> of the last step (for c -= gamma*a)
-    };
-
-    std::vector<VirtualDummy> pool_Q_;
-    Eigen::MatrixXd D_materialized_;
-    std::unordered_map<std::size_t, Eigen::Index> active_dummy_map_;
-    Eigen::Index current_materialized_cols_{0};
+    double eps_{1e-12};
 
     std::mt19937_64 dummy_rng_;
 
@@ -101,17 +73,6 @@ protected:
     std::vector<double> RSS_;
     std::vector<double> R2_;
     std::vector<double> lambda_;
-
-    // ==========================================================================
-    // Unified Inline Accessor (Zero Virtual Overhead)
-    // ==========================================================================
-    inline Eigen::Ref<const Eigen::VectorXd> getColumn(std::size_t j) const {
-        if (j < p_original_) {
-            return X_->col(static_cast<Eigen::Index>(j));
-        } else {
-            return D_materialized_.col(active_dummy_map_.at(j));
-        }
-    }
 
     // ==========================================================================
     // Sparsity Configuration (callable after construction for rho_d = auto)
@@ -141,13 +102,51 @@ protected:
     }
 
     // ==========================================================================
-    // Materialization Logic
+    // Shared numerics
     // ==========================================================================
-    void materializeDummy(const VirtualDummy& dummy, std::size_t global_j) {
-        auto col_view = D_materialized_.col(current_materialized_cols_);
-        for (int idx : dummy.P_indices) col_view(idx) =  dummy_scale_;
-        for (int idx : dummy.M_indices) col_view(idx) = -dummy_scale_;
-        active_dummy_map_[global_j] = current_materialized_cols_++;
+    /**
+     * @brief Append one column to the active set's Cholesky factor R_
+     * (upper triangular, R^T R = X_A^T X_A) from its precomputed Gram data.
+     *
+     * @param xtx        Squared L2 norm of the entering column.
+     * @param cross_prod Inner products of the entering column with the
+     *                   current active columns (length = actives_.size()).
+     *
+     * @return false on collinear failure (R_ untouched), true on success
+     *         (R_ grown by one row/column).
+     */
+    bool tryAppendCholesky(double xtx,
+                           const Eigen::Ref<const Eigen::VectorXd>& cross_prod) {
+        const std::size_t m = actives_.size();
+
+        if (m == 0) {
+            R_ = Eigen::MatrixXd::Constant(1, 1, std::sqrt(xtx));
+            return true;
+        }
+
+        Eigen::VectorXd r_vec =
+            R_.transpose().triangularView<Eigen::Lower>().solve(cross_prod);
+        double rpp_sq = xtx - r_vec.dot(r_vec);
+
+        if (rpp_sq < eps_ * xtx) return false; // Collinear failure
+
+        const auto mi = static_cast<Eigen::Index>(m);
+        Eigen::MatrixXd newR = Eigen::MatrixXd::Zero(mi + 1, mi + 1);
+        newR.topLeftCorner(mi, mi) = R_;
+        newR.block(0, mi, mi, 1) = r_vec;
+        newR(mi, mi) = std::sqrt(rpp_sq);
+        R_ = newR;
+        return true;
+    }
+
+    /** @brief Max |correlation| over the inactive original features (the bar
+     *  fresh dummies must beat in the LARS/OMP races). */
+    double inactivesMaxAbsCorr() const {
+        double c_X_max = 0.0;
+        for (std::size_t j : inactives_) {
+            c_X_max = std::max(c_X_max, std::abs(correlations_(j)));
+        }
+        return c_X_max;
     }
 
 public:
@@ -170,7 +169,6 @@ public:
         // configureSparsity() itself (e.g. after auto-calibration).
         if (rho_d_ != 0.0) configureSparsity(rho_d_);
 
-        D_materialized_ = Eigen::MatrixXd::Zero(X.rows(), T_stop_limit_);
         if (seed == 0) dummy_rng_.seed(std::random_device{}());
         else           dummy_rng_.seed(seed);
     }

@@ -2,7 +2,6 @@
 // sd_tafs_solver.cpp
 // ===================================================================================
 #include "sd_tafs_solver.hpp"
-#include <numeric>
 #include <algorithm>
 #include <cmath>
 
@@ -11,25 +10,12 @@ namespace trex::tsolvers::linear_model::afs_based {
 SD_TAFS_Solver::SD_TAFS_Solver(Eigen::Map<Eigen::MatrixXd>& X, Eigen::Map<Eigen::VectorXd>& y,
                                double rho_d, std::size_t L_max, std::size_t T_stop, bool intercept,
                                uint64_t seed, double rho)
-    : SDTSolver_Base(X, y, rho_d, T_stop, intercept, seed), L_max_(L_max) {
+    : SDGeneralSolver_Base(X, y, rho_d, L_max, T_stop, intercept, seed) {
 
     if (rho <= 0.0 || rho > 1.0) {
         throw std::invalid_argument("SD_TAFS_Solver: rho must be in (0, 1].");
     }
     rho_ = rho;
-
-    // rho_d == 0: auto-calibrate the dummy sparsity (and, when L_max == 0,
-    // the budget) from the data. Explicit rho_d with L_max == 0 gets the
-    // default budget 2p without running the calibration.
-    if (rho_d == 0.0) {
-        sd_calibration::Options copt;
-        if (L_max_ != 0) copt.L = L_max_;
-        auto_calibration_ = sd_calibration::calibrate(*X_, y_, copt);
-        configureSparsity(auto_calibration_->rho_d);
-        if (L_max_ == 0) L_max_ = auto_calibration_->L;
-    } else if (L_max_ == 0) {
-        L_max_ = 2 * p_original_;
-    }
 
     r_ = y_;
     mu_ = Eigen::VectorXd::Zero(y_.size());
@@ -39,69 +25,6 @@ SD_TAFS_Solver::SD_TAFS_Solver(Eigen::Map<Eigen::MatrixXd>& X, Eigen::Map<Eigen:
                 std::min(p_original_, effective_n_);
     correlations_ = X_->transpose() * r_;
     real_state_.assign(p_original_, kInactive);
-    pool_Q_.reserve(p_original_ * 2);
-}
-
-SDTSolver_Base::VirtualDummy SD_TAFS_Solver::generateVirtualDummy(uint64_t seed) {
-    VirtualDummy dummy;
-    dummy.seed = seed;
-    dummy.P_indices.reserve(k_sparse_);
-    dummy.M_indices.reserve(k_sparse_);
-
-    std::vector<int> candidates(y_.size());
-    std::iota(candidates.begin(), candidates.end(), 0);
-
-    // Partial Fisher-Yates shuffle (identical draw pattern to SD_TLARS, so
-    // both solvers race the same dummy stream for the same seed).
-    for(std::size_t i = 0; i < 2 * k_sparse_; ++i) {
-        std::uniform_int_distribution<std::size_t> dist(i, candidates.size() - 1);
-        std::swap(candidates[i], candidates[dist(dummy_rng_)]);
-    }
-
-    dummy.P_indices.assign(candidates.begin(), candidates.begin() + k_sparse_);
-    dummy.M_indices.assign(candidates.begin() + k_sparse_, candidates.begin() + 2 * k_sparse_);
-    return dummy;
-}
-
-// Pool correlations are recomputed from the residual after every blend
-// (exact, no drift): c_j = d^T r is an O(k) index-set sum per dummy.
-void SD_TAFS_Solver::refreshPoolCorrelations() {
-    #pragma omp parallel for
-    for (std::size_t i = 0; i < pool_Q_.size(); ++i) {
-        double c = 0.0;
-        for (int idx : pool_Q_[i].P_indices) c += r_(idx);
-        for (int idx : pool_Q_[i].M_indices) c -= r_(idx);
-        pool_Q_[i].current_correlation = c * dummy_scale_;
-    }
-}
-
-// c_ref is the best non-pool candidate (reals and active dummies): fresh
-// dummies must beat it to win, so generation stops at the first beater.
-void SD_TAFS_Solver::expandPool(double c_ref) {
-    double c_Q_max = 0.0;
-    for (const auto& dummy : pool_Q_) {
-        c_Q_max = std::max(c_Q_max, std::abs(dummy.current_correlation));
-    }
-
-    // Fixed-L race semantics: generation stops at the first beater, and the
-    // only cap is the total budget L_max — every step therefore races against
-    // (effectively) all L dummies, exactly like the classic pre-filled dummy
-    // matrix. (The earlier milestone ladder min(m*p, L_max) under-supplied
-    // dummies in early steps relative to the L the FDP estimator assumes,
-    // which was anti-conservative whenever L > p.)
-    while (c_Q_max <= c_ref && virtual_seed_counter_ < L_max_) {
-        uint64_t next_j = dummy_start_idx_ + virtual_seed_counter_++;
-        VirtualDummy new_dummy = generateVirtualDummy(next_j);
-
-        double c_new = 0.0;
-        for (int idx : new_dummy.P_indices) c_new += r_(idx);
-        for (int idx : new_dummy.M_indices) c_new -= r_(idx);
-        c_new *= dummy_scale_;
-        new_dummy.current_correlation = c_new;
-
-        c_Q_max = std::max(c_Q_max, std::abs(c_new));
-        pool_Q_.push_back(std::move(new_dummy));
-    }
 }
 
 SD_TAFS_Solver::Candidate SD_TAFS_Solver::findBestNonPool() const {
@@ -129,6 +52,8 @@ void SD_TAFS_Solver::executeStep(std::size_t T_stop, bool early_stop) {
     while (currentStep_ < maxSteps_ && actives_.size() < effective_n_ &&
           (!early_stop || count_active_dummies_ < T_stop)) {
 
+        // c_ref is the best non-pool candidate (reals and active dummies):
+        // fresh dummies must beat it to win.
         Candidate best = findBestNonPool();
         expandPool(best.abs_corr);
 
@@ -144,22 +69,15 @@ void SD_TAFS_Solver::executeStep(std::size_t T_stop, bool early_stop) {
         if (Cmax < 100 * eps_) break;
 
         if (pool_wins) {
-            // Dummy cache exhausted (executeStep called beyond the ctor's
-            // T_stop capacity): cannot admit further dummies.
-            if (current_materialized_cols_ == D_materialized_.cols()) break;
+            if (dummyCacheFull()) break;
 
-            VirtualDummy d = pool_Q_[pool_idx];
-            materializeDummy(d, d.seed);
-            pool_Q_.erase(pool_Q_.begin() + static_cast<std::ptrdiff_t>(pool_idx));
-            count_active_dummies_++;
+            const std::size_t winning_j = pool_Q_[pool_idx].seed;
+            VirtualDummy d = admitPoolWinner(winning_j);
 
-            if (!appendToActiveSet(d.seed)) {
+            if (!appendToActiveSet(winning_j)) {
                 // Collinear with the active set (e.g. a duplicate sparse
                 // dummy): discard the candidate permanently and continue.
-                active_dummy_map_.erase(d.seed);
-                --current_materialized_cols_;
-                D_materialized_.col(current_materialized_cols_).setZero();
-                --count_active_dummies_;
+                rollbackDummyAdmission(winning_j);
                 continue;
             }
             active_dummy_recs_.push_back(std::move(d));
@@ -184,33 +102,13 @@ void SD_TAFS_Solver::executeStep(std::size_t T_stop, bool early_stop) {
 // ==========================================================================
 
 bool SD_TAFS_Solver::appendToActiveSet(std::size_t winning_j) {
-    const std::size_t m = actives_.size();
-    const auto xnew = getColumn(winning_j);
-    const double xtx = xnew.dot(xnew);
+    const auto m = static_cast<Eigen::Index>(actives_.size());
 
-    if (m == 0) {
-        R_ = Eigen::MatrixXd::Constant(1, 1, std::sqrt(xtx));
-    } else {
-        Eigen::VectorXd cross_prod(m);
-        for (std::size_t k = 0; k < m; ++k) {
-            cross_prod(k) = xnew.dot(getColumn(actives_[k]));
-        }
+    double xty = 0.0;
+    if (!appendActiveColumn(winning_j, &xty)) return false; // Collinear failure
 
-        Eigen::VectorXd r_vec = R_.transpose().triangularView<Eigen::Lower>().solve(cross_prod);
-        double rpp_sq = xtx - r_vec.dot(r_vec);
-
-        if (rpp_sq < eps_ * xtx) return false; // Collinear failure
-
-        Eigen::MatrixXd newR = Eigen::MatrixXd::Zero(m + 1, m + 1);
-        newR.topLeftCorner(m, m) = R_;
-        newR.block(0, m, m, 1) = r_vec;
-        newR(m, m) = std::sqrt(rpp_sq);
-        R_ = newR;
-    }
-
-    actives_.push_back(winning_j);
-    Xty_active_.conservativeResize(static_cast<Eigen::Index>(m) + 1);
-    Xty_active_(static_cast<Eigen::Index>(m)) = xnew.dot(y_);
+    Xty_active_.conservativeResize(m + 1);
+    Xty_active_(m) = xty;
     return true;
 }
 
