@@ -51,28 +51,11 @@ TNCGMP_Solver::TNCGMP_Solver(
             "  Max steps: ", maxSteps_, "\n"
     ));
 
-    // The LineSearch (MP) variant stores one dense beta-path column per step
-    // and has a uniquely large step ceiling (20 * p_tot, vs 8 * min(...) for the
-    // OMP-family solvers). The path is allocated incrementally and bounded by
-    // T_stop / early stopping, so the full worst case is virtually never reached.
-    // This is an informational size note for debugging, not a fault: emit it via
-    // logInfo (verbose-only), consistent with the rest of the solver suite where
-    // logWarning is reserved for genuine numerical/structural problems.
-    if (variant_ == NCGMPVariant::LineSearch) {
-        double worst_case_gib = static_cast<double>(p_tot) *
-                                static_cast<double>(maxSteps_) * 8.0 /
-                                (1024.0 * 1024.0 * 1024.0);
-        if (worst_case_gib > 1.0) {
-            logInfo(concatMsg(
-                "LineSearch worst-case beta path is ~", worst_case_gib,
-                " GiB (", p_tot, " x ", maxSteps_,
-                " doubles); allocated incrementally, bounded by T_stop early stopping."));
-        }
-    }
-
+    // Path storage is sparse (per-step support only), so even the LineSearch
+    // variant's large step ceiling (20 * p_tot) no longer implies a dense
+    // p_tot x steps allocation.
     r_ = y_;
-    betaPath_.resize(static_cast<Eigen::Index>(p_tot), 1);
-    betaPath_.col(0).setZero();
+    initBetaPathStorage();
 
     double rss = y_.dot(y_);
     RSS_.emplace_back(rss);
@@ -125,12 +108,9 @@ void TNCGMP_Solver::executeStep(std::size_t T_stop, bool early_stop) {
 
             currentStep_++;
 
-            // Expand beta path
-            ensureBetaPathCapacity(currentStep_ + 1);
-            betaPath_.col(static_cast<Eigen::Index>(currentStep_)) =
-                betaPath_.col(static_cast<Eigen::Index>(currentStep_ - 1));
-            betaPath_.col(static_cast<Eigen::Index>(currentStep_))(
-                static_cast<Eigen::Index>(j_new)) += gamma;
+            // Advance the single touched coefficient and record the step
+            runningBetaRef(j_new) += gamma;
+            recordBetaStep();
 
             r_ -= gamma * getColumn(j_new);
 
@@ -182,9 +162,6 @@ void TNCGMP_Solver::executeStep(std::size_t T_stop, bool early_stop) {
 
         updateCorrelations();
     }
-
-    // Drop any spare beta-path capacity now that execution stopped
-    trimBetaPathToRecordedSteps();
 }
 
 // ==================================================================================
@@ -221,21 +198,13 @@ void TNCGMP_Solver::updateBetaPathAndResiduals() {
     Eigen::VectorXd u = backsolveT(R_, b);
     Eigen::VectorXd beta_A = backsolve(R_, u);
 
-    Eigen::Index p_tot = static_cast<Eigen::Index>(p_original_ + num_dummies_);
-    Eigen::VectorXd beta_hat = Eigen::VectorXd::Zero(p_tot);
-
-    for (std::size_t i = 0; i < k; ++i) {
-        beta_hat(static_cast<Eigen::Index>(actives_[i])) =
-            beta_A(static_cast<Eigen::Index>(i));
-    }
-
-    ensureBetaPathCapacity(currentStep_ + 1);
-    betaPath_.col(static_cast<Eigen::Index>(currentStep_)) = beta_hat;
+    // Full OLS refit: the step's support IS the active set.
+    setRunningBeta(actives_, beta_A);
+    recordBetaStep();
 
     r_ = y_;
     for (std::size_t i = 0; i < k; ++i) {
-        std::size_t j = actives_[i];
-        r_ -= getColumn(j) * beta_hat(static_cast<Eigen::Index>(j));
+        r_ -= getColumn(actives_[i]) * beta_A(static_cast<Eigen::Index>(i));
     }
 }
 

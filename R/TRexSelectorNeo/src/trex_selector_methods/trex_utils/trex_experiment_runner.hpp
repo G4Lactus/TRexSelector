@@ -31,6 +31,7 @@
 // ===================================================================================
 
 // std includes
+#include <algorithm>
 #include <cstddef>
 #include <memory>
 #include <string>
@@ -148,6 +149,30 @@ struct ExperimentRunnerConfig {
 // ExperimentResults: output of a run() invocation
 // ===================================================================================
 
+/**
+ * @brief Streaming reduction of one experiment's beta path: everything the
+ * aggregation consumes, extracted as soon as the solver finishes so the
+ * O(steps^2) path itself can be freed. Peak path memory is therefore one
+ * path per concurrently running experiment instead of all K.
+ */
+struct ExperimentSummary {
+
+    /** @brief selected[t-1] = original-variable indices (< p) active at the
+     *  first step where >= t dummies are included; empty when the path
+     *  terminated before reaching t dummies (zero contribution — the
+     *  conservative choice, see summarizePath()). */
+    std::vector<std::vector<std::size_t>> selected;
+
+    /** @brief Last-step original-variable coefficients (index, value), only
+     *  filled when ExperimentRunnerConfig::collect_screen_betas is true. */
+    std::vector<std::pair<std::size_t, double>> last_orig_betas;
+
+    /** @brief Last-step non-zero dummy coefficients (index, value), sorted
+     *  by index; only filled when collect_screen_betas is true. */
+    std::vector<std::pair<std::size_t, double>> last_dummy_betas;
+};
+
+
 /** @brief Aggregated results from K random experiments. */
 struct ExperimentResults {
 
@@ -221,32 +246,34 @@ public:
             warm_start_mgr_.initializeTempDirectory();
         }
 
-        // Dispatch to strategy-specific runner
-        std::vector<Eigen::MatrixXd> beta_paths;
+        // Dispatch to strategy-specific runner. Each experiment's beta path
+        // is reduced to an ExperimentSummary as soon as its solver finishes
+        // (streaming aggregation) — the runners never hold K full paths.
+        std::vector<ExperimentSummary> summaries;
 
         if (cfg.use_memory_mapping && memmap_mgr_ != nullptr) {
             // Memory-mapped path
-            beta_paths = runMemoryMapped(cfg);
+            summaries = runMemoryMapped(cfg);
         } else {
             // In-memory path
             switch (cfg.strategy) {
                 case ExperimentStrategy::Standard:
-                    beta_paths = runStandard(cfg);
+                    summaries = runStandard(cfg);
                     break;
                 case ExperimentStrategy::Permutation:
-                    beta_paths = runPermutation(cfg);
+                    summaries = runPermutation(cfg);
                     break;
                 case ExperimentStrategy::PermutationOnDemand:
-                    beta_paths = runPermutationOnDemand(cfg);
+                    summaries = runPermutationOnDemand(cfg);
                     break;
                 case ExperimentStrategy::OnDemand:
-                    beta_paths = runOnDemand(cfg);
+                    summaries = runOnDemand(cfg);
                     break;
             }
         }
 
-        // Aggregate results
-        return aggregateResults(beta_paths, cfg);
+        // Merge the per-experiment summaries (k-order, deterministic)
+        return aggregateResults(summaries, cfg);
     }
 
 
@@ -282,9 +309,11 @@ private:
      *
      * @param cfg ExperimentRunnerConfig with strategy = STANDARD/HCONCAT/SKIP.
      *
-     * @return Vector of K beta path matrices (one per experiment).
+     * @return Vector of K experiment summaries (one per experiment; each
+     *         beta path is reduced and freed inside its loop iteration, so
+     *         at most max_outer_threads paths are alive at once).
      */
-    std::vector<Eigen::MatrixXd> runStandard(const ExperimentRunnerConfig& cfg) {
+    std::vector<ExperimentSummary> runStandard(const ExperimentRunnerConfig& cfg) {
 
         // Validate that K dummies are stored
         if (!dummy_gen_.hasStored(cfg.K)) {
@@ -294,7 +323,7 @@ private:
             );
         }
 
-        std::vector<Eigen::MatrixXd> beta_paths(cfg.K);
+        std::vector<ExperimentSummary> summaries(cfg.K);
 
         const bool do_parallel = (cfg.max_outer_threads > 1);
 
@@ -313,8 +342,9 @@ private:
 
             #pragma omp for schedule(dynamic)
             for (std::size_t k = 0; k < cfg.K; ++k) {
-                beta_paths[k] = runSingleExperiment(
-                    k, dummy_gen_.getStored(k), cfg);
+                summaries[k] = summarizePath(
+                    runSingleExperiment(k, dummy_gen_.getStored(k), cfg),
+                    cfg);
             }
         }
 
@@ -322,7 +352,7 @@ private:
         omp_set_max_active_levels(old_max_levels);
         #endif
 
-        return beta_paths;
+        return summaries;
     }
 
 
@@ -331,11 +361,11 @@ private:
      *
      * @param cfg ExperimentRunnerConfig with strategy = PERMUTATION.
      *
-     * @return Vector of K beta path matrices (one per experiment).
+     * @return Vector of K experiment summaries (one per experiment).
      */
-    std::vector<Eigen::MatrixXd> runPermutation(const ExperimentRunnerConfig& cfg) {
+    std::vector<ExperimentSummary> runPermutation(const ExperimentRunnerConfig& cfg) {
 
-        std::vector<Eigen::MatrixXd> beta_paths(cfg.K);
+        std::vector<ExperimentSummary> summaries(cfg.K);
 
         // Sequential — permutation reuses one buffer
         #ifdef _OPENMP
@@ -343,12 +373,12 @@ private:
         #endif
 
         for (std::size_t k = 0; k < cfg.K; ++k) {
-            beta_paths[k] = runWithTemporaryDummies(
+            summaries[k] = runWithTemporaryDummies(
                 k, cfg,
                 [&]() { return dummy_gen_.getPermuted(k, cfg.num_dummies); });
         }
 
-        return beta_paths;
+        return summaries;
     }
 
 
@@ -357,23 +387,23 @@ private:
      *
      * @param cfg ExperimentRunnerConfig with strategy = OnDemand.
      *
-     * @return Vector of K beta path matrices (one per experiment).
+     * @return Vector of K experiment summaries (one per experiment).
      */
-    std::vector<Eigen::MatrixXd> runOnDemand(const ExperimentRunnerConfig& cfg) {
+    std::vector<ExperimentSummary> runOnDemand(const ExperimentRunnerConfig& cfg) {
 
-        std::vector<Eigen::MatrixXd> beta_paths(cfg.K);
+        std::vector<ExperimentSummary> summaries(cfg.K);
 
         #ifdef _OPENMP
         Eigen::setNbThreads(omp_get_max_threads());
         #endif
 
         for (std::size_t k = 0; k < cfg.K; ++k) {
-            beta_paths[k] = runWithTemporaryDummies(
+            summaries[k] = runWithTemporaryDummies(
                 k, cfg,
                 [&]() { return dummy_gen_.generateDirect(cfg.num_dummies, k); });
         }
 
-        return beta_paths;
+        return summaries;
     }
 
 
@@ -390,12 +420,12 @@ private:
      *
      * @param cfg ExperimentRunnerConfig with strategy = PermutationOnDemand.
      *
-     * @return Vector of K beta path matrices (one per experiment).
+     * @return Vector of K experiment summaries (one per experiment).
      */
-    std::vector<Eigen::MatrixXd> runPermutationOnDemand(
+    std::vector<ExperimentSummary> runPermutationOnDemand(
         const ExperimentRunnerConfig& cfg) {
 
-        std::vector<Eigen::MatrixXd> beta_paths(cfg.K);
+        std::vector<ExperimentSummary> summaries(cfg.K);
 
         #ifdef _OPENMP
         Eigen::setNbThreads(omp_get_max_threads());
@@ -407,7 +437,7 @@ private:
             static_cast<std::size_t>(cfg.permutation_base_id));
 
         for (std::size_t k = 0; k < cfg.K; ++k) {
-            beta_paths[k] = runWithTemporaryDummies(
+            summaries[k] = runWithTemporaryDummies(
                 k, cfg,
                 [&]() {
                     return dummy_gen_.permuteCopy(base, k,
@@ -415,7 +445,7 @@ private:
                 });
         }
 
-        return beta_paths;
+        return summaries;
     }
 
 
@@ -437,12 +467,13 @@ private:
      * @param cfg          Runner configuration.
      * @param make_dummies Callable producing the dummy matrix for slot k.
      *
-     * @return Beta path matrix from the solver.
+     * @return Experiment summary (the solver's beta path is reduced and
+     *         freed before returning).
      */
     template <typename MakeDummiesFn>
-    Eigen::MatrixXd runWithTemporaryDummies(std::size_t k,
-                                            const ExperimentRunnerConfig& cfg,
-                                            MakeDummiesFn&& make_dummies) {
+    ExperimentSummary runWithTemporaryDummies(std::size_t k,
+                                              const ExperimentRunnerConfig& cfg,
+                                              MakeDummiesFn&& make_dummies) {
 
         const bool in_memory =
             warm_start_mgr_.mode() == wsm::WarmStartMode::IN_MEMORY;
@@ -450,11 +481,12 @@ private:
         if (cfg.use_warm_start && in_memory && warm_start_mgr_.hasSolver(k)) {
             // Warm continuation — cfg.D is unused on this path.
             Eigen::MatrixXd D_unused(0, 0);
-            return runSingleExperiment(k, D_unused, cfg);
+            return summarizePath(runSingleExperiment(k, D_unused, cfg), cfg);
         }
 
         Eigen::MatrixXd D_k = make_dummies();
-        Eigen::MatrixXd path = runSingleExperiment(k, D_k, cfg);
+        ExperimentSummary summary =
+            summarizePath(runSingleExperiment(k, D_k, cfg), cfg);
 
         // dispatchForExperiment retained a fresh solver iff hasSolver(k) now
         // holds; co-retain D_k's buffer so the solver's view stays valid.
@@ -462,7 +494,7 @@ private:
             warm_start_mgr_.retainDummies(k, std::move(D_k));
         }
 
-        return path;
+        return summary;
     }
 
 
@@ -478,16 +510,16 @@ private:
      *
      * @param cfg ExperimentRunnerConfig with use_memory_mapping = true.
      *
-     * @return Vector of K beta path matrices (one per experiment).
+     * @return Vector of K experiment summaries (one per experiment).
      */
-    std::vector<Eigen::MatrixXd> runMemoryMapped(const ExperimentRunnerConfig& cfg) {
+    std::vector<ExperimentSummary> runMemoryMapped(const ExperimentRunnerConfig& cfg) {
 
         if (!memmap_mgr_->isInitialized()) {
             throw std::runtime_error(
                 "ExperimentRunner: MemmapManager not initialized");
         }
 
-        std::vector<Eigen::MatrixXd> beta_paths(cfg.K);
+        std::vector<ExperimentSummary> summaries(cfg.K);
 
         // Determine if we can parallelize (only for non-shared files)
         const bool shared = (memmap_mgr_->numFiles() == 1);
@@ -516,8 +548,16 @@ private:
                 // Create y map
                 Eigen::Map<Eigen::VectorXd> y_map(y_.data(), y_.size());
 
-                // Build SolverConfig and dispatch
-                beta_paths[k] = dispatchForExperiment(k, X_, D_map, y_map, cfg);
+                // Build SolverConfig, dispatch, and reduce the path
+                summaries[k] = summarizePath(
+                    dispatchForExperiment(k, X_, D_map, y_map, cfg), cfg);
+
+                // Flush this experiment's dirty dummy pages to the backing
+                // file and drop their residency — otherwise the K written D
+                // regions stay resident for the whole selector run (K * n *
+                // num_dummies * 8 B; a jetsam kill at large scale). Later
+                // T-steps refault the data from disk.
+                memmap_mgr_->releaseResidency(k);
             }
         }
 
@@ -525,7 +565,7 @@ private:
         if (do_parallel) omp_set_max_active_levels(old_max_levels);
         #endif
 
-        return beta_paths;
+        return summaries;
     }
 
 
@@ -540,9 +580,9 @@ private:
      * @param D_k Dummy matrix for this experiment (n × num_dummies).
      * @param cfg Runner configuration.
      *
-     * @return Beta path matrix.
+     * @return Sparse beta path.
      */
-    Eigen::MatrixXd runSingleExperiment(
+    sd::SparseBetaPath runSingleExperiment(
         std::size_t k,
         const Eigen::MatrixXd& D_k,
         const ExperimentRunnerConfig& cfg) {
@@ -578,9 +618,9 @@ private:
      * @param y Map of the response vector (n).
      * @param cfg Runner configuration.
      *
-     * @return Beta path matrix from the solver.
+     * @return Sparse beta path from the solver.
      */
-    Eigen::MatrixXd dispatchForExperiment(
+    sd::SparseBetaPath dispatchForExperiment(
         std::size_t k,
         Eigen::Map<Eigen::MatrixXd>& X,
         Eigen::Map<Eigen::MatrixXd>& D,
@@ -626,7 +666,7 @@ private:
             }
         }
 
-        Eigen::MatrixXd path = dispatchByType(cfg.solver_type, solver_cfg);
+        sd::SparseBetaPath path = dispatchByType(cfg.solver_type, solver_cfg);
 
         // Register the produced warm-start state (per-slot writes; safe for
         // distinct k inside the OpenMP loops — vectors are pre-allocated).
@@ -678,6 +718,11 @@ private:
                            Eigen::Map<Eigen::MatrixXd>& D_map
     ) {
 
+        // Everything already on disk (T-loop steps after the L-loop wrote
+        // the full width): dummy generation is deterministic per (k, L), so
+        // rewriting would re-dirty the whole region for identical content.
+        if (cfg.existing_cols_on_disk >= cfg.num_dummies) { return; }
+
         switch (cfg.strategy) {
             case ExperimentStrategy::Standard: {
                 if (cfg.existing_cols_on_disk > 0) {
@@ -727,30 +772,122 @@ private:
 
 
     // ==========================================================================
-    // Result aggregation
+    // Result aggregation (streaming)
     // ==========================================================================
 
     /**
-     * @brief Compute phi_T_mat from K beta paths.
+     * @brief Reduce one experiment's sparse beta path to the data the
+     * aggregation consumes — called as soon as the solver finishes so the
+     * O(steps^2) path is freed inside the experiment loop.
      *
-     * @details For each experiment k and each T from 1...T_stop:
-     *          Find the first step where exactly T dummies are active,
-     *          then count which original predictors (j < p) have nonzero
-     *          coefficients at that step.
-     *          Accumulate as relative frequency (divide by K).
+     * @details For each T from 1...T_stop: find the first step where at
+     *          least T dummies are active and record which original
+     *          predictors (j < p) have nonzero coefficients at that step.
+     *          When cfg.collect_screen_betas is set, the last step's
+     *          coefficients are captured as well (Screen-TRex).
      *
-     * @param beta_paths Vector of K beta path matrices from the solvers.
+     * @param bp Sparse beta path from the solver (consumed by value).
      * @param cfg Runner configuration (for p, T_stop, eps).
+     *
+     * @return ExperimentSummary for deterministic k-order merging.
+     */
+    ExperimentSummary summarizePath(sd::SparseBetaPath bp,
+                                    const ExperimentRunnerConfig& cfg) const {
+
+        const std::size_t p = cfg.p;
+        const std::size_t T_stop = cfg.T_stop;
+
+        ExperimentSummary summary;
+        summary.selected.resize(T_stop);
+
+        const std::size_t num_steps = bp.steps.size();
+        if (num_steps == 0) { return summary; }
+
+        // Count dummies included at each step (support scan only; the
+        // eps filter matches the former dense |coefficient| threshold)
+        std::vector<int> dummy_count(num_steps, 0);
+        for (std::size_t step = 0; step < num_steps; ++step) {
+            const auto& st = bp.steps[step];
+            for (std::size_t e = 0; e < st.idx.size(); ++e) {
+                if (st.idx[e] >= p && std::abs(st.val[e]) > cfg.eps) {
+                    ++dummy_count[step];
+                }
+            }
+        }
+
+        // For each T from 1 to T_stop
+        for (std::size_t t = 1; t <= T_stop; ++t) {
+            // Note: R uses strict equality (== t), we use >= t for
+            // robustness (greedy solvers can admit several dummies in one
+            // step, skipping the exact count).
+            //
+            // Deliberate difference to R when NO step reaches t dummies
+            // (solver terminated early): R falls back to the LAST path
+            // column with a warning, inflating Phi with whatever was
+            // active at termination; we skip the experiment for this t
+            // (empty selection = zero contribution), which biases Phi
+            // downward and is the conservative choice.
+            std::size_t step_idx = 0;
+            bool found = false;
+            for (std::size_t s = 0; s < num_steps; ++s) {
+                if (static_cast<std::size_t>(dummy_count[s]) >= t) {
+                    step_idx = s;
+                    found = true;
+                    break;
+                }
+            }
+            if (!found) { continue; }
+
+            // Record original predictors with nonzero coefficients
+            const auto& st = bp.steps[step_idx];
+            for (std::size_t e = 0; e < st.idx.size(); ++e) {
+                if (st.idx[e] < p && std::abs(st.val[e]) > cfg.eps) {
+                    summary.selected[t - 1].push_back(st.idx[e]);
+                }
+            }
+        }
+
+        // --- Optional Screen-TRex beta collection (last path step) ---
+        if (cfg.collect_screen_betas) {
+            const auto& last = bp.steps.back();
+            for (std::size_t e = 0; e < last.idx.size(); ++e) {
+                if (last.idx[e] < p) {
+                    summary.last_orig_betas.emplace_back(last.idx[e],
+                                                         last.val[e]);
+                } else if (std::abs(last.val[e]) > cfg.eps) {
+                    summary.last_dummy_betas.emplace_back(last.idx[e],
+                                                          last.val[e]);
+                }
+            }
+            // Ascending index order (matching the former dense row scan)
+            std::sort(summary.last_dummy_betas.begin(),
+                      summary.last_dummy_betas.end());
+        }
+
+        return summary;
+    }
+
+
+    /**
+     * @brief Merge the K experiment summaries into the final results.
+     *
+     * @details Accumulation runs in k-order with the same floating-point
+     *          addition order as the former all-paths aggregation, so the
+     *          results are bit-identical to the non-streaming version.
+     *
+     * @param summaries Vector of K experiment summaries.
+     * @param cfg Runner configuration (for p, T_stop, K).
      *
      * @return ExperimentResults with phi_T_mat (p × T_stop) and Phi.
      */
     ExperimentResults aggregateResults(
-        const std::vector<Eigen::MatrixXd>& beta_paths,
+        const std::vector<ExperimentSummary>& summaries,
         const ExperimentRunnerConfig& cfg
     ) const {
 
         const std::size_t p = cfg.p;
         const std::size_t T_stop = cfg.T_stop;
+        const double inv_K = 1.0 / static_cast<double>(cfg.K);
 
         Eigen::MatrixXd phi_T_mat = Eigen::MatrixXd::Zero(
             static_cast<Eigen::Index>(p),
@@ -758,63 +895,11 @@ private:
         );
 
         for (std::size_t k = 0; k < cfg.K; ++k) {
-            const auto& bp = beta_paths[k];
-            const auto num_steps = static_cast<std::size_t>(bp.cols());
-            if (num_steps == 0) { continue; }
-
-            // Count dummies included at each step
-            Eigen::VectorXi dummy_count = Eigen::VectorXi::Zero(
-                static_cast<Eigen::Index>(num_steps)
-            );
-
-            for (std::size_t step = 0; step < num_steps; ++step) {
-                int count = 0;
-                for (std::size_t d = p; d < p + cfg.num_dummies; ++d) {
-                    if (std::abs(bp(static_cast<Eigen::Index>(d),
-                                       static_cast<Eigen::Index>(step))) > cfg.eps) {
-                        ++count;
-                    }
-                }
-                dummy_count(static_cast<Eigen::Index>(step)) = count;
-            }
-
-            // For each T from 1 to T_stop
-            for (std::size_t t = 1; t <= T_stop; ++t) {
-                // Note: R uses strict equality (== t), we use >= t for
-                // robustness (greedy solvers can admit several dummies in one
-                // step, skipping the exact count).
-                //
-                // Deliberate difference to R when NO step reaches t dummies
-                // (solver terminated early): R falls back to the LAST path
-                // column with a warning, inflating Phi with whatever was
-                // active at termination; we skip the experiment for this t
-                // (zero contribution), which biases Phi downward and is the
-                // conservative choice.
-                std::size_t step_idx = num_steps - 1;
-                bool found = false;
-                for (std::size_t s = 0; s < num_steps; ++s) {
-                    if (static_cast<std::size_t>(dummy_count(
-                        static_cast<Eigen::Index>(s))) >= t) {
-                        step_idx = s;
-                        found = true;
-                        break;
-                    }
-                }
-
-                if (!found &&
-                    dummy_count(static_cast<Eigen::Index>(num_steps - 1)) <
-                    static_cast<int>(t)) {
-                    continue;
-                }
-
-                // Count original predictors with nonzero coefficients
-                for (std::size_t j = 0; j < p; ++j) {
-                    if (std::abs(bp(static_cast<Eigen::Index>(j),
-                                    static_cast<Eigen::Index>(step_idx))) > cfg.eps) {
-                        phi_T_mat(static_cast<Eigen::Index>(j),
-                                  static_cast<Eigen::Index>(t - 1)) +=
-                                  (1.0 / static_cast<double>(cfg.K));
-                    }
+            const ExperimentSummary& summary = summaries[k];
+            for (std::size_t t = 0; t < summary.selected.size(); ++t) {
+                for (std::size_t j : summary.selected[t]) {
+                    phi_T_mat(static_cast<Eigen::Index>(j),
+                              static_cast<Eigen::Index>(t)) += inv_K;
                 }
             }
         }
@@ -830,19 +915,11 @@ private:
             std::vector<double> d_betas;
 
             for (std::size_t k = 0; k < cfg.K; ++k) {
-                const auto& bp = beta_paths[k];
-                if (bp.cols() == 0) { continue; }
-                const Eigen::Index last =
-                    static_cast<Eigen::Index>(bp.cols()) - 1;
-
-                for (Eigen::Index j = 0; j < static_cast<Eigen::Index>(p); ++j) {
-                    b_sums(j) += bp(j, last);
+                for (const auto& [idx, v] : summaries[k].last_orig_betas) {
+                    b_sums(static_cast<Eigen::Index>(idx)) += v;
                 }
-                for (std::size_t d = p; d < p + cfg.num_dummies; ++d) {
-                    const double v = bp(static_cast<Eigen::Index>(d), last);
-                    if (std::abs(v) > cfg.eps) {
-                        d_betas.push_back(v);
-                    }
+                for (const auto& [idx, v] : summaries[k].last_dummy_betas) {
+                    d_betas.push_back(v);
                 }
             }
 

@@ -34,7 +34,8 @@
  *  delegated to the inner TLASSO_Solver via the normalize / intercept flags.
  *
  *  Coefficient recovery:
- *    getBetaPath() returns  inner_->getBetaPath() / d2  = beta * sqrt(1+lambda2)
+ *    getBetaPathSparse() returns the inner path with values / d2
+ *    = beta * sqrt(1+lambda2)
  */
 // ============================================================================
 
@@ -70,7 +71,8 @@ namespace trex::tsolvers::linear_model::lars_based {
  * trex_GVS() reference implementation.
  *
  * Public interface: pass X, D, y, lambda2 and call executeStep() /
- * getBetaPath().  In-memory warm-starting is supported via the inner solver.
+ * getBetaPathSparse().  In-memory warm-starting is supported via the inner
+ * solver.
  */
 class TENETAug_Solver : public TSolver_Base {
 
@@ -267,15 +269,13 @@ public:
     // ========================================================================
 
     /**
-     * @brief Return the coefficient path matrix scaled back to original units.
+     * @brief Return the sparse coefficient path scaled back to original units.
      *
      * The inner LASSO runs in the augmented space where each column is scaled
      * by d₂ = 1/sqrt(1+λ).  Dividing by d₂ (i.e. multiplying by sqrt(1+λ))
      * recovers coefficients in the same scale as the original predictors.
-     *
-     * @return Matrix (p + L) × steps, original-scale coefficients.
      */
-    Eigen::MatrixXd getBetaPath() const override;
+    SparseBetaPath getBetaPathSparse() const override;
 
     /**
      * @brief Return coefficients at a given step in original units.

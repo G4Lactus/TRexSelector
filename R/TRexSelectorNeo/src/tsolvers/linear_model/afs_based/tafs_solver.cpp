@@ -59,8 +59,7 @@ TAFS_Solver::TAFS_Solver(
     ));
 
     r_ = y_;
-    betaPath_.resize(static_cast<Eigen::Index>(p_tot), 1);
-    betaPath_.col(0).setZero();
+    initBetaPathStorage();
 
     double rss = y_.dot(y_);
     RSS_.emplace_back(rss);
@@ -148,28 +147,25 @@ void TAFS_Solver::executeStep(std::size_t T_stop, bool early_stop) {
         Eigen::VectorXd u = backsolveT(R_, b);
         Eigen::VectorXd nu = backsolve(R_, u); // OLS coefficients
 
-        Eigen::Index p_tot = static_cast<Eigen::Index>(p_original_ + num_dummies_);
-        Eigen::VectorXd beta_hat = Eigen::VectorXd::Zero(p_tot);
-        for (std::size_t i = 0; i < k; ++i) {
-            beta_hat(static_cast<Eigen::Index>(actives_[i])) =
-                nu(static_cast<Eigen::Index>(i));
-        }
-
 
         // 4. Blending / Shrinkage
         // -----------------------------------
-        ensureBetaPathCapacity(currentStep_ + 1);
-
-        Eigen::VectorXd beta_prev = betaPath_.col(static_cast<Eigen::Index>(currentStep_ - 1));
-        Eigen::VectorXd beta_blended = (1.0 - rho_) * beta_prev + rho_ * beta_hat;
-        betaPath_.col(static_cast<Eigen::Index>(currentStep_)) = beta_blended;
+        // beta <- (1 - rho) * beta + rho * beta_hat on the sparse running
+        // coefficients. actives_ is append-only, so support(beta) is always
+        // a subset of the active set: decaying the stored entries and adding
+        // rho * nu over the actives is the complete blend.
+        for (double& v : beta_val_) { v *= (1.0 - rho_); }
+        for (std::size_t i = 0; i < k; ++i) {
+            runningBetaRef(actives_[i]) += rho_ * nu(static_cast<Eigen::Index>(i));
+        }
+        recordBetaStep();
 
 
         // 5. Update Residuals
         // -----------------------------------
         r_ = y_;
         for (std::size_t j : actives_) {
-            r_ -= getColumn(j) * beta_blended(static_cast<Eigen::Index>(j));
+            r_ -= getColumn(j) * runningBeta(j);
         }
 
 
@@ -187,9 +183,6 @@ void TAFS_Solver::executeStep(std::size_t T_stop, bool early_stop) {
         updateInactiveSet();
         updateCorrelations();
     }
-
-    // Drop any spare beta-path capacity now that execution stopped
-    trimBetaPathToRecordedSteps();
 }
 
 // ==================================================================================

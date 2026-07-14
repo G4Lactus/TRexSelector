@@ -114,6 +114,23 @@ void MemoryMappedMatrix<Scalar>::initialize() {
 
 
 template<typename Scalar>
+void MemoryMappedMatrix<Scalar>::releaseResidency() {
+    if (!mapped_region_ || !mapped_region_->get_address()) return;
+
+    // Synchronous flush (async = false): all pages are clean afterwards, so
+    // the eviction below cannot lose data.
+    if (mode_ == AccessMode::ReadWrite) {
+        mapped_region_->flush(0, mapped_region_->get_size(), /*async=*/false);
+    }
+
+#if !defined(_WIN32) && !defined(_WIN64)
+    madvise(mapped_region_->get_address(), mapped_region_->get_size(),
+            MADV_DONTNEED);
+#endif
+}
+
+
+template<typename Scalar>
 void MemoryMappedMatrix<Scalar>::applyAccessHints() {
     if (!mapped_region_ || !mapped_region_->get_address()) return;
 

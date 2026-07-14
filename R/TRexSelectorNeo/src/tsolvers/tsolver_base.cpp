@@ -211,24 +211,103 @@ void TSolver_Base::updateInactiveSet() {
 }
 
 // ============================================================================
-// Beta Path Storage
+// Beta Path Storage (sparse)
 // ============================================================================
 
-void TSolver_Base::ensureBetaPathCapacity(std::size_t cols_needed) {
-    std::size_t cols = static_cast<std::size_t>(betaPath_.cols());
-    if (cols >= cols_needed) { return; }
-
-    std::size_t new_cols = std::max(cols_needed, 2 * cols);
-    betaPath_.conservativeResize(Eigen::NoChange,
-                                 static_cast<Eigen::Index>(new_cols));
+void TSolver_Base::initBetaPathStorage() {
+    clearRunningBeta();
+    betaPathSparse_.clear();
+    betaPathSparse_.emplace_back();  // all-zero step 0
 }
 
 
-void TSolver_Base::trimBetaPathToRecordedSteps() {
-    Eigen::Index recorded = static_cast<Eigen::Index>(RSS_.size());
-    if (recorded > 0 && betaPath_.cols() > recorded) {
-        betaPath_.conservativeResize(Eigen::NoChange, recorded);
+double TSolver_Base::runningBeta(std::size_t j) const {
+    auto it = beta_pos_.find(j);
+    return (it == beta_pos_.end()) ? 0.0 : beta_val_[it->second];
+}
+
+
+double& TSolver_Base::runningBetaRef(std::size_t j) {
+    auto it = beta_pos_.find(j);
+    if (it != beta_pos_.end()) { return beta_val_[it->second]; }
+
+    beta_pos_[j] = beta_idx_.size();
+    beta_idx_.push_back(j);
+    beta_val_.push_back(0.0);
+    return beta_val_.back();
+}
+
+
+void TSolver_Base::removeRunningBeta(std::size_t j) {
+    auto it = beta_pos_.find(j);
+    if (it == beta_pos_.end()) { return; }
+
+    // Swap-remove; fix the lookup of the entry moved into the freed slot.
+    std::size_t slot = it->second;
+    std::size_t last = beta_idx_.size() - 1;
+    if (slot != last) {
+        beta_idx_[slot] = beta_idx_[last];
+        beta_val_[slot] = beta_val_[last];
+        beta_pos_[beta_idx_[slot]] = slot;
     }
+    beta_idx_.pop_back();
+    beta_val_.pop_back();
+    beta_pos_.erase(it);
+}
+
+
+void TSolver_Base::clearRunningBeta() {
+    beta_idx_.clear();
+    beta_val_.clear();
+    beta_pos_.clear();
+}
+
+
+void TSolver_Base::setRunningBeta(const std::vector<std::size_t>& idx,
+                                  const Eigen::Ref<const Eigen::VectorXd>& values) {
+    clearRunningBeta();
+    beta_idx_ = idx;
+    beta_val_.assign(values.data(), values.data() + values.size());
+    beta_pos_.reserve(idx.size());
+    for (std::size_t s = 0; s < idx.size(); ++s) {
+        beta_pos_[idx[s]] = s;
+    }
+}
+
+
+void TSolver_Base::recordBetaStep() {
+    SparseBetaStep step;
+    step.idx = beta_idx_;
+    step.val = beta_val_;
+    betaPathSparse_.push_back(std::move(step));
+}
+
+
+SparseBetaPath TSolver_Base::makeScaledSparsePath(double pre_divisor) const {
+    SparseBetaPath out;
+    out.p_total = p_original_ + num_dummies_;
+    out.steps = betaPathSparse_;
+
+    for (SparseBetaStep& step : out.steps) {
+        for (std::size_t k = 0; k < step.idx.size(); ++k) {
+            // Same operation order as the dense accessors: penalty rescale
+            // first (x / 1.0 is bit-exact for the unpenalized case), then
+            // de-normalization by the column norm.
+            double v = step.val[k] / pre_divisor;
+            if (normalize_) {
+                std::size_t j = step.idx[k];
+                if (j < p_original_) {
+                    if (normsx_.size() > 0) {
+                        v /= normsx_(static_cast<Eigen::Index>(j));
+                    }
+                } else if (normsd_.size() > 0) {
+                    v /= normsd_(static_cast<Eigen::Index>(j - p_original_));
+                }
+            }
+            step.val[k] = v;
+        }
+    }
+    return out;
 }
 
 
@@ -471,20 +550,26 @@ void TSolver_Base::pruneTiedDummies(std::vector<std::size_t>& new_vars,
 // ============================================================================
 
 Eigen::VectorXd TSolver_Base::getBeta(int step) const {
-    if (betaPath_.cols() == 0) {
+    if (betaPathSparse_.empty()) {
         throw std::runtime_error(
             concatMsg(solverTypeToString(), "::getBeta: No path available.")
         );
     }
-    std::size_t use_step = (step < 0) ? betaPath_.cols() - 1 : static_cast<std::size_t>(step);
-    if (use_step >= static_cast<std::size_t>(betaPath_.cols())) {
+    std::size_t use_step = (step < 0) ? betaPathSparse_.size() - 1
+                                      : static_cast<std::size_t>(step);
+    if (use_step >= betaPathSparse_.size()) {
         throw std::invalid_argument(
             concatMsg(solverTypeToString(), "::getBeta: step ", step,
-                      " out of range [0, ", betaPath_.cols() - 1, "].")
+                      " out of range [0, ", betaPathSparse_.size() - 1, "].")
         );
     }
 
-    Eigen::VectorXd coef = betaPath_.col(static_cast<Eigen::Index>(use_step));
+    Eigen::VectorXd coef = Eigen::VectorXd::Zero(
+        static_cast<Eigen::Index>(p_original_ + num_dummies_));
+    const SparseBetaStep& s = betaPathSparse_[use_step];
+    for (std::size_t k = 0; k < s.idx.size(); ++k) {
+        coef(static_cast<Eigen::Index>(s.idx[k])) = s.val[k];
+    }
     if (normalize_) {
         if (normsx_.size() > 0) coef.head(p_original_).array() /= normsx_.array();
         if (normsd_.size() > 0) coef.tail(num_dummies_).array() /= normsd_.array();
@@ -504,19 +589,8 @@ double TSolver_Base::getIntercept(int step) const {
 }
 
 
-Eigen::MatrixXd TSolver_Base::getBetaPath() const {
-    Eigen::MatrixXd beta_orig = betaPath_;
-    if (normalize_) {
-        for (Eigen::Index j = 0; j < beta_orig.cols(); ++j) {
-            if (normsx_.size() > 0) {
-                beta_orig.col(j).head(p_original_).array() /= normsx_.array();
-            }
-            if (normsd_.size() > 0) {
-                beta_orig.col(j).tail(num_dummies_).array() /= normsd_.array();
-            }
-        }
-    }
-    return beta_orig;
+SparseBetaPath TSolver_Base::getBetaPathSparse() const {
+    return makeScaledSparsePath(1.0);
 }
 
 
@@ -526,7 +600,7 @@ std::vector<double> TSolver_Base::getCp() const {
 
     // Derive n from serialized state so Cp is available on disconnected solvers
     std::size_t n = effective_n_ + (intercept_ ? 1 : 0);
-    double resvar = std::numeric_limits<double>::quiet_NaN();
+    double resvar = fpc::quiet_nan();
 
     for (int i = static_cast<int>(RSS_.size()) - 1; i >= 0; --i) {
         if (DoF_[i] < n && RSS_[i] > 0) {
@@ -536,12 +610,12 @@ std::vector<double> TSolver_Base::getCp() const {
     }
 
     if (!fpc::isfinite(resvar)) return std::vector<double>(
-        RSS_.size(), std::numeric_limits<double>::quiet_NaN());
+        RSS_.size(), fpc::quiet_nan());
 
     for (std::size_t k = 0; k < RSS_.size(); ++k) {
         cp_out.push_back((DoF_[k] < n && resvar > 0) ?
             (RSS_[k] / resvar - static_cast<double>(n) + 2.0 * static_cast<double>(DoF_[k])) :
-            std::numeric_limits<double>::quiet_NaN());
+            fpc::quiet_nan());
     }
     return cp_out;
 }
@@ -557,7 +631,7 @@ std::vector<double> TSolver_Base::getCp(double sigma_hat_sq) const {
     for (std::size_t k = 0; k < RSS_.size(); ++k) {
         cp_out.push_back((DoF_[k] < n && valid) ? (RSS_[k] / sigma_hat_sq -
             static_cast<double>(n) + 2.0 * static_cast<double>(DoF_[k])) :
-            std::numeric_limits<double>::quiet_NaN());
+            fpc::quiet_nan());
     }
     return cp_out;
 }
@@ -611,15 +685,8 @@ void TSolver_Base::validateConnected() const {
             concatMsg(solverTypeToString(), " is not connected to dummy matrix. Call reconnect().")
         );
     }
-
-    std::size_t p_tot = p_original_ + num_dummies_;
-    if (betaPath_.rows() > 0 && static_cast<std::size_t>(betaPath_.rows()) != p_tot) {
-        throw std::runtime_error(
-            concatMsg(
-                solverTypeToString(), ": Combined X and D columns do not match betaPath rows."
-            )
-        );
-    }
+    // The sparse path stores global indices bounded by construction; the
+    // former dense-path row check has no equivalent invariant to validate.
 }
 
 

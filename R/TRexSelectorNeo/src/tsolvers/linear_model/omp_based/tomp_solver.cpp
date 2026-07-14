@@ -57,8 +57,7 @@ TOMP_Solver::TOMP_Solver(
 
     // 3. Initialize State
     r_ = y_;
-    betaPath_.resize(static_cast<Eigen::Index>(p_tot), 1);
-    betaPath_.col(0).setZero();
+    initBetaPathStorage();
 
     double rss = y_.dot(y_);
     RSS_.emplace_back(rss);
@@ -127,9 +126,6 @@ void TOMP_Solver::executeStep(std::size_t T_stop, bool early_stop) {
         updateInactiveSet();
         updateCorrelations();
     }
-
-    // Drop any spare beta-path capacity now that execution stopped
-    trimBetaPathToRecordedSteps();
 }
 
 // ==================================================================================
@@ -182,28 +178,19 @@ void TOMP_Solver::updateBetaPath() {
     Eigen::VectorXd u = backsolveT(R_, b);
     Eigen::VectorXd beta_A = backsolve(R_, u);
 
-    Eigen::Index p_tot = static_cast<Eigen::Index>(p_original_ + num_dummies_);
-    Eigen::VectorXd beta_hat = Eigen::VectorXd::Zero(p_tot);
-
-    #pragma omp parallel for schedule(static) if(k > 100)
-    for (std::size_t i = 0; i < k; ++i) {
-        beta_hat(static_cast<Eigen::Index>(actives_[i])) =
-            beta_A(static_cast<Eigen::Index>(i));
-    }
-
-    ensureBetaPathCapacity(currentStep_ + 1);
-    betaPath_.col(static_cast<Eigen::Index>(currentStep_)) = beta_hat;
+    // Full OLS refit: the step's support IS the active set.
+    setRunningBeta(actives_, beta_A);
+    recordBetaStep();
 }
 
 
 void TOMP_Solver::updateResiduals() {
     r_ = y_;
-    Eigen::VectorXd beta = betaPath_.col(static_cast<Eigen::Index>(currentStep_));
     std::size_t k = actives_.size();
 
     for (std::size_t i = 0; i < k; ++i) {
         std::size_t j = actives_[i];
-        r_ -= getColumn(j) * beta(static_cast<Eigen::Index>(j));
+        r_ -= getColumn(j) * runningBeta(j);
     }
 }
 

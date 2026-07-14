@@ -120,6 +120,19 @@ public:
     /** @brief Read-only element access — Eigen-like interface */
     Scalar operator()(std::size_t row, std::size_t col) const;
 
+    /**
+     * @brief Flush dirty pages to the backing file and drop their residency.
+     *
+     * @details Written pages of a read-write file mapping stay dirty in the
+     * process footprint until the pager cleans them; a large mapping that is
+     * written once and then only read keeps gigabytes resident (macOS
+     * phys_footprint) and can drive the process into a jetsam kill. This
+     * synchronously writes all dirty pages to the backing file and then
+     * advises the kernel to evict the region. The mapping stays valid — the
+     * next access refaults the data from disk.
+     */
+    void releaseResidency();
+
 
 private:
     // =================================================

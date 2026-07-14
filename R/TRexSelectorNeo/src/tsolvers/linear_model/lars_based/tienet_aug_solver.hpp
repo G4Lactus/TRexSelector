@@ -265,16 +265,14 @@ public:
     // ========================================================================
 
     /**
-     * @brief Return the coefficient path matrix.
+     * @brief Return the sparse coefficient path (inner path, unscaled).
      *
      * Coefficients live on the scale of the internally normalized augmented
      * columns (no global rescaling factor exists for the IEN, unlike the
      * Zou-Hastie d2 of TENETAug). The T-Rex framework consumes only the
      * active/inactive pattern, which is scale-invariant.
-     *
-     * @return Matrix (p + L) x steps.
      */
-    Eigen::MatrixXd getBetaPath() const override;
+    SparseBetaPath getBetaPathSparse() const override;
 
     /**
      * @brief Return coefficients at a given step (normalized augmented scale).

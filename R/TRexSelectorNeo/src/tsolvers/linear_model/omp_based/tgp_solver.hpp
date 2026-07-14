@@ -310,7 +310,7 @@ protected:
     void updateResiduals() override;
 
     /**
-     * @brief Update betaPath_ by copying active_coefficients_ to appropriate positions.
+     * @brief Record the sparse path step from active_coefficients_ over actives_.
      *
      * @note GP override: avoids Cholesky solve, directly uses active_coefficients_.
      */
