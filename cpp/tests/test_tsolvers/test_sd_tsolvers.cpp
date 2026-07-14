@@ -29,13 +29,8 @@
 // Eigen includes
 #include <Eigen/Dense>
 
-// SD solver includes
-#include <tsolvers/sd_tsolvers/sd_tlars_solver.hpp>
-#include <tsolvers/sd_tsolvers/sd2_tlars_solver.hpp>
-#include <tsolvers/sd_tsolvers/sd_tomp_solver.hpp>
-#include <tsolvers/sd_tsolvers/sd2_tomp_solver.hpp>
-#include <tsolvers/sd_tsolvers/sd_tafs_solver.hpp>
-#include <tsolvers/sd_tsolvers/sd2_tafs_solver.hpp>
+// SD solver includes (umbrella)
+#include <tsolvers/sd_tsolvers/sd_tsolvers.hpp>
 
 // TRexSD include
 #include <trex_selector_methods/trex_sd/trex_sd.hpp>

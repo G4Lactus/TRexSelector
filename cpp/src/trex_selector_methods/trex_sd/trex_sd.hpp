@@ -41,14 +41,8 @@
 // OpenMP compatibility layer
 #include <utils/openmp/utils_openmp.hpp>
 
-// SD solver includes
-#include <tsolvers/sd_tsolvers/sd_tlars_solver.hpp>
-#include <tsolvers/sd_tsolvers/sd2_tlars_solver.hpp>
-#include <tsolvers/sd_tsolvers/sd_tomp_solver.hpp>
-#include <tsolvers/sd_tsolvers/sd2_tomp_solver.hpp>
-#include <tsolvers/sd_tsolvers/sd_tafs_solver.hpp>
-#include <tsolvers/sd_tsolvers/sd2_tafs_solver.hpp>
-#include <tsolvers/sd_tsolvers/sd_calibration.hpp>
+// SD solver includes (umbrella: bases, all six solvers, calibration)
+#include <tsolvers/sd_tsolvers/sd_tsolvers.hpp>
 
 // ===================================================================================
 
