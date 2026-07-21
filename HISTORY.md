@@ -4,6 +4,27 @@
 
 ????-??-??
 
+### 2026-07-17
+
+#### TLARS "No valid gamma" warning classified and demoted
+
+- Investigated the frequent `No valid gamma found, using fallback` warnings seen in the
+  trex_da demos. Instrumentation on the exact demo DGPs/seeds showed **100 % of observed
+  events are the benign path-exhaustion case**: on small designs
+  (p + num_dummies <= n - 1, e.g. demo 04's p=25 cells) the T-loop drives the LARS path
+  until every real + dummy variable is active, and `computeStepSize()` then runs with an
+  empty inactive set — the terminal LS step `Cmax / A_A` is the correct step. A Gaussian
+  control reproduced the events at the same rate as the heavy-tailed DGP (173 vs. 166 per
+  40 trials), and the events vanish exactly at the exhaustion boundary — not heavy tails,
+  not collinearity, not the demo RNG (seeds are `base + mc`, fresh mt19937 per trial).
+  Demo 05 (p_total=500) emits none; its earlier attribution was console interleaving.
+- `computeStepSize()` now logs the empty-inactive-set case verbose-only
+  (`logInfo("Inactive set empty; taking terminal LS step.")`) and keeps a `logWarning`
+  (with candidate count) only for the never-observed all-candidates-filtered case.
+  Fallback step unchanged. Suite 291/291; R mirror synced. Details in
+  `TRex_Research/documentation/CTRexSelector_Open_Tasks.md` §7 (CTLARS should gain the
+  same classified logging when synced — it is currently silent in both cases).
+
 ### 2026-07-15
 
 #### Exchangeable tie-breaking for greedy solvers (DA FDR fix)
