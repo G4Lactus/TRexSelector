@@ -47,6 +47,17 @@
 #' @param lambda2 Elastic-net L2 penalty (TENET hyperparameter, default: 0.1).
 #' @param rho_afs AFS hyperparameter (default: 0.3).
 #' @param ncgmp_variant NCGMP variant: 0 = line_search, 1 = fully_corrective (default: 0).
+#' @param exch_tie_alpha Exchangeable-tie band width for greedy solvers
+#'   (TOMP/TAFS), in units of the pairwise ranking-noise sd. When > 0,
+#'   statistically indistinguishable top candidates within highly correlated
+#'   clusters are picked uniformly at random per step, restoring the
+#'   within-experiment occurrence spread that the dependency-aware (DA)
+#'   deflation's FDR control relies on. Recommended for greedy solvers under
+#'   trex+DA: 0.25. \code{0} (default) turns the feature off (exact legacy
+#'   behavior; ignored by path solvers).
+#' @param exch_tie_floor Minimum absolute correlation for exchangeable-tie
+#'   candidates, in (0, 1) (default: 0.5). Ignored unless
+#'   \code{exch_tie_alpha > 0}.
 #' @param dummy_distribution Dummy variable distribution, created with
 #'   \code{\link{trex_dummy_distribution}} (default: standard Normal).
 #'
@@ -73,6 +84,8 @@ trex_control <- function(solver = "TLARS",
                          lambda2 = 0.1,
                          rho_afs = 0.3,
                          ncgmp_variant = 0,
+                         exch_tie_alpha = 0,
+                         exch_tie_floor = 0.5,
                          dummy_distribution = trex_dummy_distribution()) {
 
   if (max_dummy_multiplier < 1) {
@@ -110,6 +123,8 @@ trex_control <- function(solver = "TLARS",
     lambda2                 = lambda2,
     rho_afs                 = rho_afs,
     ncgmp_variant           = ncgmp_variant,
+    exch_tie_alpha          = exch_tie_alpha,
+    exch_tie_floor          = exch_tie_floor,
     dummy_distribution      = dummy_distribution
   )
 }

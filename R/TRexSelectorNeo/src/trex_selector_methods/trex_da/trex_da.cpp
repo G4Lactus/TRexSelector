@@ -371,10 +371,10 @@ void TRexDASelector::setupDA() {
 // member is a genuine shadow; inside a large user group nearly every variable
 // has SOME member with an almost identical Phi, so delta -> 2 uniformly and
 // the shadow/active ranking is left invariant (see
-// Prior_Groups_Deflation_Mismatch_DA_TRex.md). Sub-clustering within each
-// group restores the deflation's operating assumptions: HAC on the
-// correlation distance runs per group (merges across group boundaries are
-// structurally impossible), and the rho grid spans from whole-group
+// Prior_Groups_Deflation_Mismatch_DA_TRex.md).
+// Sub-clustering within each group restores the deflation's operating assumptions:
+// HAC on the correlation distance runs per group (merges across group boundaries
+// are structurally impossible), and the rho grid spans from whole-group
 // neighbourhoods (coarsest cut) down to the conservative rho = 1 singleton
 // anchor, exactly like DA-BT.
 
@@ -468,8 +468,10 @@ void TRexDASelector::setupDA_PriorGroups() {
             const auto& members = constraint_groups[g];
             const auto m = static_cast<Eigen::Index>(members.size());
             if (m < 2) { continue; }
-            const auto labels = hac::DendrogramUtils::cut_tree_by_height(
-                merges[g], m, cut_height);
+            const auto labels =
+                hac::DendrogramUtils::cut_tree_by_height(
+                    merges[g], m, cut_height
+                );
             const auto clusters =
                 hac::DendrogramUtils::group_indices_by_label(labels);
             for (const auto& cluster : clusters) {

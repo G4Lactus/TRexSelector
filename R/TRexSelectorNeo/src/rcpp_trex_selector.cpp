@@ -129,6 +129,12 @@ TRexControlParameter parse_control_parameter(const Rcpp::List& control) {
     if (control.containsElementNamed("tol")) {
         params.solver_params.tol = control["tol"];
     }
+    if (control.containsElementNamed("exch_tie_alpha")) {
+        params.solver_params.exch_tie_alpha = control["exch_tie_alpha"];
+    }
+    if (control.containsElementNamed("exch_tie_floor")) {
+        params.solver_params.exch_tie_floor = control["exch_tie_floor"];
+    }
 
     // Dummy variable distribution
     if (control.containsElementNamed("dummy_distribution")) {

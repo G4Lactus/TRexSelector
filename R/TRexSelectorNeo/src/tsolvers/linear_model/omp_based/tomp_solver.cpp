@@ -97,6 +97,7 @@ void TOMP_Solver::executeStep(std::size_t T_stop, bool early_stop) {
             break;
         }
         pruneTiedDummies(new_vars, T_stop, early_stop);
+        applyExchangeableTieBreak(new_vars);
 
         // ========================================================
         // STEP 2: Active set update

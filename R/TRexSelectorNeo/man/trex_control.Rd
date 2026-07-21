@@ -21,6 +21,8 @@ trex_control(
   lambda2 = 0.1,
   rho_afs = 0.3,
   ncgmp_variant = 0,
+  exch_tie_alpha = 0,
+  exch_tie_floor = 0.5,
   dummy_distribution = trex_dummy_distribution()
 )
 }
@@ -49,7 +51,11 @@ auto-detection: FALSE for non-greedy solvers (TLARS, TLASSO, TENET), TRUE for al
 
 \item{opt_threshold}{Optimization threshold (default: 0.75).}
 
-\item{lloop_strategy}{L-loop strategy: "HCONCAT" or "PERMUTATION" (default: "HCONCAT").}
+\item{lloop_strategy}{L-loop strategy: "SKIPL", "STANDARD", "HCONCAT",
+"PERMUTATION", "PERMUTATION_ONDEMAND", or "ONDEMAND" (default: "HCONCAT").
+The ONDEMAND variants re-derive dummies from the seed at every step
+(nothing stored); "PERMUTATION_ONDEMAND" is the stateless twin of
+"PERMUTATION" and produces identical experiments for the same seed.}
 
 \item{tol}{Tolerance for solver algorithms (default: 1e-6).}
 
@@ -58,6 +64,19 @@ auto-detection: FALSE for non-greedy solvers (TLARS, TLASSO, TENET), TRUE for al
 \item{rho_afs}{AFS hyperparameter (default: 0.3).}
 
 \item{ncgmp_variant}{NCGMP variant: 0 = line_search, 1 = fully_corrective (default: 0).}
+
+\item{exch_tie_alpha}{Exchangeable-tie band width for greedy solvers
+(TOMP/TAFS), in units of the pairwise ranking-noise sd. When > 0,
+statistically indistinguishable top candidates within highly correlated
+clusters are picked uniformly at random per step, restoring the
+within-experiment occurrence spread that the dependency-aware (DA)
+deflation's FDR control relies on. Recommended for greedy solvers under
+trex+DA: 0.25. \code{0} (default) turns the feature off (exact legacy
+behavior; ignored by path solvers).}
+
+\item{exch_tie_floor}{Minimum absolute correlation for exchangeable-tie
+candidates, in (0, 1) (default: 0.5). Ignored unless
+\code{exch_tie_alpha > 0}.}
 
 \item{dummy_distribution}{Dummy variable distribution, created with
 \code{\link{trex_dummy_distribution}} (default: standard Normal).}

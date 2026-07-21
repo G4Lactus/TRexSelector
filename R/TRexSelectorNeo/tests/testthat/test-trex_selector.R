@@ -163,3 +163,34 @@ test_that("TRexSelector multiple solver methods return 1-based indices consisten
     expect_equal(sort(idx), which(sv), label = paste(method, "consistency"))
   }
 })
+
+
+test_that("exchangeable tie-breaking is plumbed through for greedy solvers", {
+  # Control defaults: feature off, floor 0.5.
+  ctrl <- trex_control()
+  expect_equal(ctrl$exch_tie_alpha, 0)
+  expect_equal(ctrl$exch_tie_floor, 0.5)
+
+  # A correlated cluster so the exchangeable tie set is non-trivial.
+  n <- 100
+  p <- 12
+  set.seed(42)
+  base <- rnorm(n)
+  X <- matrix(rnorm(n * p), n, p)
+  for (j in 1:4) X[, j] <- base + 0.3 * rnorm(n)
+  y <- base * 3.0 + rnorm(n)
+
+  for (method in c("TOMP", "TAFS")) {
+    sel <- TRexSelector$new(
+      X, y, tFDR = 0.2, verbose = FALSE,
+      control = trex_control(K = 5, solver = method,
+                             exch_tie_alpha = 0.25, exch_tie_floor = 0.5)
+    )
+    sel$select()
+    idx <- sel$selected_indices
+    if (length(idx) > 0) {
+      expect_true(all(idx >= 1L & idx <= p),
+                  label = paste(method, "tie-broken run in [1,p]"))
+    }
+  }
+})

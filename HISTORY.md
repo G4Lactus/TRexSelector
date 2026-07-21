@@ -6,6 +6,16 @@
 
 ### 2026-07-21
 
+#### R package refreshed: vendored core synced, exchangeable tie-break exposed
+
+- The vendored C++ core is byte-identical with `cpp/src` again (tie-break
+  additions in `tsolver_base`, the solver dispatcher, TOMP/TAFS, plus the
+  cosmetic trex_da drift). `trex_control()` gains `exch_tie_alpha` (default 0)
+  and `exch_tie_floor` (default 0.5), parsed into `SolverHyperparameters` by
+  the Rcpp layer; man pages regenerated via roxygen. New testthat coverage:
+  control defaults and tie-broken TOMP/TAFS selection runs on a correlated
+  cluster design. Full testthat suite green.
+
 #### Python package refreshed for the exchangeable tie-break API
 
 - `SolverHyperparameters` now exposes `exch_tie_alpha` / `exch_tie_floor`, and the
