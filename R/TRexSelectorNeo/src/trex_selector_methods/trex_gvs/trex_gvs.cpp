@@ -278,16 +278,16 @@ std::vector<hac::MergeStep> TRexGVSSelector::runClustering() const {
     switch (trex_gvs_ctrl_.hc_linkage) {
         case hac::LinkageMethod::Single:
             return hac::AgglomerativeClustering::cluster<
-                MapType, CorrDist, hac::LinkageMethod::Single>(*X_);
+                MapType, CorrDist, hac::LinkageMethod::Single>(*X_, /*use_mmap=*/false, verbose_);
         case hac::LinkageMethod::Complete:
             return hac::AgglomerativeClustering::cluster<
-                MapType, CorrDist, hac::LinkageMethod::Complete>(*X_);
+                MapType, CorrDist, hac::LinkageMethod::Complete>(*X_, /*use_mmap=*/false, verbose_);
         case hac::LinkageMethod::Average:
             return hac::AgglomerativeClustering::cluster<
-                MapType, CorrDist, hac::LinkageMethod::Average>(*X_);
+                MapType, CorrDist, hac::LinkageMethod::Average>(*X_, /*use_mmap=*/false, verbose_);
         case hac::LinkageMethod::WPGMA:
             return hac::AgglomerativeClustering::cluster<
-                MapType, CorrDist, hac::LinkageMethod::WPGMA>(*X_);
+                MapType, CorrDist, hac::LinkageMethod::WPGMA>(*X_, /*use_mmap=*/false, verbose_);
         default:
             throw std::invalid_argument(
                 "TRexGVSSelector: unsupported linkage method.");

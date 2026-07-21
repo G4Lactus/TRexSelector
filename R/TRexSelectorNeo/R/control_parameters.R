@@ -131,24 +131,25 @@ trex_control <- function(solver = "TLARS",
 #'   "WPGMA", "Ward" (default: "Single").
 #' @param hc_grid_length Number of grid points for BT/NN calibration. \code{0}
 #'   (default) lets the core auto-select \code{min(20, p)}.
-#' @param prior_groups Optional prior-groups hierarchy: a list of \code{L} integer
-#'   vectors, each of length \code{p}, giving group labels per variable from fine
-#'   to coarse. When supplied (non-\code{NULL}, non-empty), the prior-groups
-#'   dependency-aware path is used and \code{da_method} is ignored. Labels within
-#'   a level are matched by equality; variables sharing a label are group-mates.
-#'   (default: \code{NULL}).
-#' @param rho_grid_labels Optional numeric vector of semantic labels for each
-#'   prior-group level (e.g. correlation thresholds); must have the same length
-#'   as \code{prior_groups}. \code{NULL} (default) uses \code{1, 2, ..., L}.
-#'   Ignored unless \code{prior_groups} is supplied.
+#' @param prior_groups Optional prior grouping constraints: a list of integer
+#'   vectors, each of length \code{p}, giving non-negative group labels per
+#'   variable. When supplied (non-\code{NULL}, non-empty), the prior-groups
+#'   dependency-aware path is used and \code{da_method} is ignored: the finest
+#'   common refinement of all supplied levels acts as a hard merge constraint,
+#'   hierarchical clustering (\code{hc_linkage}, correlation distance) runs
+#'   within each constraint group, and the calibration rho grid (length
+#'   \code{hc_grid_length}) is built from the pooled within-group dendrogram
+#'   heights plus the conservative rho = 1 singleton anchor. The deflation
+#'   therefore acts on tight data-driven neighbourhoods inside the known
+#'   groups, never on the raw groups themselves. (default: \code{NULL}).
 #'
 #' @return A named list for use in TRexDASelector.
 #'
 #' @examples
 #' trex_da_control()
 #' trex_da_control(da_method = "BT", hc_linkage = "Average")
-#' # Prior-groups path (two-level hierarchy over p = 4 variables):
-#' trex_da_control(prior_groups = list(c(1, 1, 2, 2), c(1, 1, 1, 1)))
+#' # Prior-groups path (constraints over p = 4 variables):
+#' trex_da_control(prior_groups = list(c(1, 1, 2, 2)))
 #'
 #' @export
 trex_da_control <- function(da_method = "BT",
@@ -156,16 +157,14 @@ trex_da_control <- function(da_method = "BT",
                             rho_thr_DA = 0.02,
                             hc_linkage = "Single",
                             hc_grid_length = 0,
-                            prior_groups = NULL,
-                            rho_grid_labels = NULL) {
+                            prior_groups = NULL) {
   list(
     da_method       = da_method,
     cor_coef        = cor_coef,
     rho_thr_DA      = rho_thr_DA,
     hc_linkage      = hc_linkage,
     hc_grid_length  = hc_grid_length,
-    prior_groups    = prior_groups,
-    rho_grid_labels = rho_grid_labels
+    prior_groups    = prior_groups
   )
 }
 

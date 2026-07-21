@@ -25,6 +25,34 @@
   `TRex_Research/documentation/CTRexSelector_Open_Tasks.md` §7 (CTLARS should gain the
   same classified logging when synced — it is currently silent in both cases).
 
+#### PRIOR_GROUPS redefined: constrained sub-clustering (deflation-mismatch fix)
+
+- `setupDA_PriorGroups()` no longer uses the user-supplied groups as deflation
+  neighbourhoods. The nearest-partner penalty `delta = 2 - min|Phi_j - Phi_k|`
+  (Definition 1 of the T-Rex+DA paper) assumes tight neighbourhoods in which
+  the closest-Phi member is a genuine shadow; inside a large prior group nearly
+  every variable has SOME member with an almost identical Phi, so delta -> 2
+  uniformly and the shadow/active ranking is left invariant (the FDR-plateau /
+  TPR-cap signature documented in
+  `TRex_Research/documentation/Prior_Groups_Deflation_Mismatch_DA_TRex.md`).
+- New semantics: the prior groups are hard merge CONSTRAINTS on the dependency
+  structure. The finest common refinement of all supplied `prior_groups` levels
+  partitions the variables; HAC (`hc_linkage`, correlation distance) runs
+  within each constraint group (merges across boundaries are structurally
+  impossible); the rho grid (length `hc_grid_length`) is subsampled from the
+  pooled within-group dendrogram heights and terminated by the conservative
+  rho = 1 singleton anchor (the paper's Psi = 1/2 empty-group penalty). The
+  BT-style 3D calibration then operates on tight data-driven neighbourhoods
+  INSIDE the known groups — the coarsest grid point recovers at most the whole
+  prior group, the finest is provably conservative.
+- `rho_grid_labels` removed from `TRexDAControlParameter`, the R
+  `trex_da_control()`, and the Python bindings — the grid is now data-driven.
+  `prior_groups` labels must be non-negative (validated). Linkage validation
+  now covers PRIOR_GROUPS as well as BT.
+- New guard tests in `cpp/tests/test_trex_selector_methods/test_trex_da.cpp`:
+  boundary containment + rho = 1 anchor, finest-common-refinement semantics,
+  full select() smoke run, negative-label rejection.
+
 ### 2026-07-15
 
 #### Exchangeable tie-breaking for greedy solvers (DA FDR fix)

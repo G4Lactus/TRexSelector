@@ -49,10 +49,12 @@ TRexDAControlParameter parse_da_parameter(const Rcpp::List& control) {
         else Rcpp::stop("Unknown LinkageMethod: " + linkage);
     }
 
-    // Prior-groups hierarchy: a list of L integer vectors, each of length p.
-    // When supplied, the core routes through setupDA_PriorGroups() and the
-    // da_method field is ignored. Labels are matched by equality, so the 1-based
-    // labels natural to R need no adjustment.
+    // Prior-groups constraints: a list of integer label vectors, each of
+    // length p. When supplied, the core routes through setupDA_PriorGroups(),
+    // the da_method field is ignored, and hierarchical sub-clustering runs
+    // within the finest common refinement of the supplied levels. Labels are
+    // matched by equality (and must be non-negative), so the 1-based labels
+    // natural to R need no adjustment.
     if (control.containsElementNamed("prior_groups") &&
         !Rf_isNull(control["prior_groups"])) {
         Rcpp::List levels = control["prior_groups"];
@@ -66,12 +68,6 @@ TRexDAControlParameter parse_da_parameter(const Rcpp::List& control) {
             }
             params.prior_groups.push_back(std::move(level_labels));
         }
-    }
-
-    if (control.containsElementNamed("rho_grid_labels") &&
-        !Rf_isNull(control["rho_grid_labels"])) {
-        Rcpp::NumericVector labels = control["rho_grid_labels"];
-        params.rho_grid_labels.assign(labels.begin(), labels.end());
     }
 
     return params;

@@ -12,6 +12,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstddef>
+#include <map>
 #include <stdexcept>
 #include <string>
 #include <utility>
@@ -74,11 +75,13 @@ void TRexDASelector::validateDAParameters() const {
                     std::to_string(p_) +
                     ". Got: " + std::to_string(level.size()));
             }
-        }
-        if (!trex_da_ctrl_.rho_grid_labels.empty() &&
-            trex_da_ctrl_.rho_grid_labels.size() != trex_da_ctrl_.prior_groups.size()) {
-            throw std::invalid_argument(
-                "rho_grid_labels must have the same length as prior_groups.");
+            for (const auto label : level) {
+                if (label < 0) {
+                    throw std::invalid_argument(
+                        "prior_groups labels must be non-negative. Got: " +
+                        std::to_string(label));
+                }
+            }
         }
     }
 
@@ -88,15 +91,17 @@ void TRexDASelector::validateDAParameters() const {
             std::to_string(trex_da_ctrl_.rho_thr_DA));
     }
 
-    // Check linkage method is one of the supported ones
-    if (trex_da_ctrl_.method == DAMethod::BT) {
+    // Check linkage method is one of the supported ones (BT and PRIOR_GROUPS
+    // both run hierarchical clustering with this linkage).
+    if (trex_da_ctrl_.method == DAMethod::BT ||
+        trex_da_ctrl_.method == DAMethod::PRIOR_GROUPS) {
         auto lm = trex_da_ctrl_.hc_linkage;
         if (lm != hac::LinkageMethod::Single &&
             lm != hac::LinkageMethod::Complete &&
             lm != hac::LinkageMethod::Average &&
             lm != hac::LinkageMethod::WPGMA) {
             throw std::invalid_argument(
-                "Unsupported linkage method for DA-BT. "
+                "Unsupported linkage method for DA-BT / DA-PRIOR_GROUPS. "
                 "Supported: Single, Complete, Average, WPGMA.");
         }
     }
@@ -357,54 +362,141 @@ void TRexDASelector::setupDA() {
 
 
 // ===================================================================================
-// DA Setup 1: Prior Groups
+// DA Setup 1: Prior Groups (constrained sub-clustering)
 // ===================================================================================
+//
+// The prior groups are merge CONSTRAINTS on the dependency structure, not
+// deflation neighbourhoods. The nearest-partner penalty Psi (Definition 1 of
+// the T-Rex+DA paper) assumes tight neighbourhoods in which the closest-Phi
+// member is a genuine shadow; inside a large user group nearly every variable
+// has SOME member with an almost identical Phi, so delta -> 2 uniformly and
+// the shadow/active ranking is left invariant (see
+// Prior_Groups_Deflation_Mismatch_DA_TRex.md). Sub-clustering within each
+// group restores the deflation's operating assumptions: HAC on the
+// correlation distance runs per group (merges across group boundaries are
+// structurally impossible), and the rho grid spans from whole-group
+// neighbourhoods (coarsest cut) down to the conservative rho = 1 singleton
+// anchor, exactly like DA-BT.
 
 void TRexDASelector::setupDA_PriorGroups() {
-    const auto& groups = trex_da_ctrl_.prior_groups;
-    const std::size_t rho_grid_len = groups.size();
     const auto p = static_cast<Eigen::Index>(p_);
+    const std::size_t grid_len = trex_da_ctrl_.hc_grid_length;
+    const auto& levels = trex_da_ctrl_.prior_groups;
+
+    // 1. Constraint partition: finest common refinement of all levels. Two
+    //    variables share a constraint group iff they share a label on EVERY
+    //    level; composite keys are mapped to consecutive ids.
+    std::vector<Eigen::Index> constraint(static_cast<std::size_t>(p));
+    {
+        std::map<std::vector<Eigen::Index>, Eigen::Index> ids;
+        std::vector<Eigen::Index> key(levels.size());
+        for (Eigen::Index j = 0; j < p; ++j) {
+            for (std::size_t l = 0; l < levels.size(); ++l) {
+                key[l] = levels[l][static_cast<std::size_t>(j)];
+            }
+            const auto it = ids.try_emplace(
+                key, static_cast<Eigen::Index>(ids.size())).first;
+            constraint[static_cast<std::size_t>(j)] = it->second;
+        }
+    }
+    const auto constraint_groups =
+        hac::DendrogramUtils::group_indices_by_label(constraint);
+    const std::size_t num_groups = constraint_groups.size();
+
+    // 2. Constrained HAC: one dendrogram per constraint group; pool the merge
+    //    heights for the global rho grid.
+    std::vector<std::vector<hac::MergeStep>> merges(num_groups);
+    std::vector<double> pooled_heights;
+    pooled_heights.reserve(static_cast<std::size_t>(p));
+    for (std::size_t g = 0; g < num_groups; ++g) {
+        if (constraint_groups[g].size() < 2) { continue; }
+        merges[g] = clusterColumns(constraint_groups[g]);
+        for (const auto& m : merges[g]) {
+            pooled_heights.push_back(m.distance);
+        }
+    }
+    std::sort(pooled_heights.begin(), pooled_heights.end());
+
+    // 3. Global rho grid from the pooled heights (ascending correlation
+    //    levels), terminated by the rho = 1 singleton anchor where all
+    //    neighbourhoods are empty and the paper's conservative Psi = 1/2
+    //    penalty applies everywhere.
+    std::vector<double> rho_grid_full;
+    rho_grid_full.reserve(pooled_heights.size() + 1);
+    for (auto it = pooled_heights.rbegin(); it != pooled_heights.rend(); ++it) {
+        rho_grid_full.push_back(1.0 - *it);
+    }
+    rho_grid_full.push_back(1.0);
+
+    da_setup_.rho_grid.resize(static_cast<Eigen::Index>(grid_len));
+    if (grid_len == 1 || rho_grid_full.size() == 1) {
+        da_setup_.rho_grid.setConstant(rho_grid_full.back());
+    } else {
+        for (std::size_t i = 0; i < grid_len; ++i) {
+            double frac = static_cast<double>(i)
+                        * static_cast<double>(rho_grid_full.size() - 1)
+                        / static_cast<double>(grid_len - 1);
+            std::size_t idx = static_cast<std::size_t>(std::round(frac));
+            if (idx >= rho_grid_full.size()) { idx = rho_grid_full.size() - 1; }
+            da_setup_.rho_grid(static_cast<Eigen::Index>(i)) = rho_grid_full[idx];
+        }
+    }
 
     da_setup_.use_BT_style = true;
-    da_setup_.rho_grid_len = rho_grid_len;
+    da_setup_.rho_grid_len = grid_len;
     // R (1-indexed): round(0.75 * L) -> element L*0.75.
     // C++ (0-indexed): subtract 1 to match.
     {
         std::size_t raw = static_cast<std::size_t>(
-            std::round(0.75 * static_cast<double>(rho_grid_len)));
+            std::round(0.75 * static_cast<double>(grid_len)));
         da_setup_.opt_point_BT = (raw > 0) ? raw - 1 : 0;
     }
-    // Clamp to valid range
-    if (da_setup_.opt_point_BT >= rho_grid_len) {
-        da_setup_.opt_point_BT = rho_grid_len - 1;
+    if (da_setup_.opt_point_BT >= grid_len) {
+        da_setup_.opt_point_BT = grid_len - 1;
     }
     da_setup_.cor_coef = trex_da_ctrl_.cor_coef;
     da_setup_.kap = 0;
 
-    // Build rho_grid
-    if (!trex_da_ctrl_.rho_grid_labels.empty()) {
-        da_setup_.rho_grid.resize(static_cast<Eigen::Index>(rho_grid_len));
-        for (std::size_t i = 0; i < rho_grid_len; ++i) {
-            da_setup_.rho_grid(static_cast<Eigen::Index>(i)) = trex_da_ctrl_.rho_grid_labels[i];
-        }
-    } else {
-        da_setup_.rho_grid = Eigen::VectorXd::LinSpaced(
-            static_cast<Eigen::Index>(rho_grid_len), 1.0,
-            static_cast<double>(rho_grid_len));
-    }
-
-    // Build gr_j_list
-    da_setup_.gr_j_list.resize(p_);
-    for (Eigen::Index j = 0; j < p; ++j) {
-        da_setup_.gr_j_list[j].resize(rho_grid_len);
-        for (std::size_t r = 0; r < rho_grid_len; ++r) {
-            Eigen::Index label_j = groups[r][static_cast<std::size_t>(j)];
-            for (Eigen::Index k = 0; k < p; ++k) {
-                if (k != j && groups[r][static_cast<std::size_t>(k)] == label_j) {
-                    da_setup_.gr_j_list[j][r].push_back(k);
+    // 4. Per-rho neighbourhoods: cut each group's dendrogram at 1 - rho and
+    //    record the resulting tight clusters (local -> global indices).
+    da_setup_.gr_j_list.assign(
+        p_, std::vector<std::vector<Eigen::Index>>(grid_len));
+    for (std::size_t r = 0; r < grid_len; ++r) {
+        const double cut_height =
+            1.0 - da_setup_.rho_grid(static_cast<Eigen::Index>(r));
+        for (std::size_t g = 0; g < num_groups; ++g) {
+            const auto& members = constraint_groups[g];
+            const auto m = static_cast<Eigen::Index>(members.size());
+            if (m < 2) { continue; }
+            const auto labels = hac::DendrogramUtils::cut_tree_by_height(
+                merges[g], m, cut_height);
+            const auto clusters =
+                hac::DendrogramUtils::group_indices_by_label(labels);
+            for (const auto& cluster : clusters) {
+                if (cluster.size() < 2) { continue; }
+                for (const auto local_j : cluster) {
+                    auto& mates = da_setup_.gr_j_list
+                        [static_cast<std::size_t>(
+                            members[static_cast<std::size_t>(local_j)])][r];
+                    for (const auto local_k : cluster) {
+                        if (local_k != local_j) {
+                            mates.push_back(
+                                members[static_cast<std::size_t>(local_k)]);
+                        }
+                    }
                 }
             }
         }
+    }
+
+    if (verbose_) {
+        printProgress(
+            "DA-PRIOR_GROUPS: constrained sub-clustering complete. " +
+            std::to_string(num_groups) + " constraint groups, grid length = " +
+            std::to_string(grid_len) + ", rho_grid in [" +
+            std::to_string(da_setup_.rho_grid(0)) + ", " +
+            std::to_string(da_setup_.rho_grid(
+                static_cast<Eigen::Index>(grid_len - 1))) + "]");
     }
 }
 
@@ -756,6 +848,47 @@ std::vector<hac::MergeStep> TRexDASelector::runClustering() const {
 
         default:
             throw std::invalid_argument("Unsupported linkage method for DA-BT.");
+    }
+}
+
+
+std::vector<hac::MergeStep> TRexDASelector::clusterColumns(
+    const std::vector<Eigen::Index>& cols) const
+{
+    // Materialise the column subset; the correlation distance is invariant to
+    // the base normaliser's per-column scaling, so a plain copy suffices.
+    Eigen::MatrixXd sub(X_->rows(), static_cast<Eigen::Index>(cols.size()));
+    for (std::size_t c = 0; c < cols.size(); ++c) {
+        sub.col(static_cast<Eigen::Index>(c)) = X_->col(cols[c]);
+    }
+
+    using CorrDist =
+        hac::DistancePolicy<Eigen::MatrixXd, hac::DistanceMetric::Correlation>;
+
+    switch (trex_da_ctrl_.hc_linkage) {
+        case hac::LinkageMethod::Single:
+            return hac::AgglomerativeClustering::cluster<
+                Eigen::MatrixXd, CorrDist, hac::LinkageMethod::Single>(
+                    sub, false, false);
+
+        case hac::LinkageMethod::Complete:
+            return hac::AgglomerativeClustering::cluster<
+                Eigen::MatrixXd, CorrDist, hac::LinkageMethod::Complete>(
+                    sub, false, false);
+
+        case hac::LinkageMethod::Average:
+            return hac::AgglomerativeClustering::cluster<
+                Eigen::MatrixXd, CorrDist, hac::LinkageMethod::Average>(
+                    sub, false, false);
+
+        case hac::LinkageMethod::WPGMA:
+            return hac::AgglomerativeClustering::cluster<
+                Eigen::MatrixXd, CorrDist, hac::LinkageMethod::WPGMA>(
+                    sub, false, false);
+
+        default:
+            throw std::invalid_argument(
+                "Unsupported linkage method for DA-PRIOR_GROUPS.");
     }
 }
 

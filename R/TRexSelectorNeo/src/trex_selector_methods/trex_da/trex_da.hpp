@@ -143,15 +143,21 @@ struct TRexDAControlParameter {
      */
     std::size_t hc_grid_length = 0;
 
-    /** @brief Prior group labels: L vectors of length p, one per hierarchy level (fine to coarse).
-     *  When non-empty, the method field is ignored and full 3D calibration is used.
+    /** @brief Prior grouping constraints: one or more label vectors of length p
+     *  (non-negative labels). When non-empty, the method field is ignored and
+     *  the finest common refinement of all supplied levels becomes a hard
+     *  merge CONSTRAINT on the dependency structure: hierarchical clustering
+     *  (hc_linkage, correlation distance) is run WITHIN each constraint group,
+     *  the rho grid is built from the pooled within-group dendrogram heights
+     *  (subsampled to hc_grid_length, capped by the conservative rho = 1
+     *  singleton anchor), and the BT-style 3D calibration selects the
+     *  operating point. The nearest-partner deflation therefore always acts
+     *  on tight data-driven neighbourhoods INSIDE the known groups — the
+     *  groups themselves are never used directly as deflation neighbourhoods
+     *  (that degenerates for group sizes > 2; see
+     *  Prior_Groups_Deflation_Mismatch_DA_TRex.md).
      */
     std::vector<std::vector<Eigen::Index>> prior_groups;
-
-    /** @brief Optional semantic labels for each prior-group level (e.g. correlation thresholds).
-     *  Must have the same length as prior_groups. Defaults to 0, 1, 2, ... .
-     */
-    std::vector<double> rho_grid_labels;
 
     /** @brief Candidate-cell policy for BT-style selection (default: FeasibleOnly).
      *  FeasibleOnly restricts selection to FDP-feasible cells (FDR-controlling);
@@ -472,7 +478,14 @@ protected:
      */
     void setupDA();
 
-    /** @brief DA-Setup 1: prior group labels supplied by the user. */
+    /** @brief DA-Setup 1: constrained sub-clustering within user-supplied
+     *  prior groups. The finest common refinement of all prior_groups levels
+     *  constrains the dendrogram (no merges across group boundaries); HAC
+     *  runs per group, the rho grid is pooled from the within-group merge
+     *  heights (plus the rho = 1 singleton anchor), and gr_j_list holds the
+     *  per-rho tight neighbourhoods obtained by cutting each group's
+     *  dendrogram — never the raw prior groups themselves.
+     */
     void setupDA_PriorGroups();
 
     /** @brief DA-Setup 2: dendrogram-based clustering on |cor(X)|. */
@@ -577,6 +590,18 @@ protected:
      * @return Sorted merge matrix (p-1 merge steps).
      */
     std::vector<hac::MergeStep> runClustering() const;
+
+    /**
+     * @brief Run hierarchical clustering on a column subset of X with the
+     *  configured linkage method (correlation distance).
+     *
+     * @param cols Global column indices forming the subset (size m >= 2).
+     *
+     * @return Sorted merge matrix (m-1 merge steps) over LOCAL indices
+     *  0..m-1 in the order of @p cols.
+     */
+    std::vector<hac::MergeStep> clusterColumns(
+        const std::vector<Eigen::Index>& cols) const;
 
 // -----------------------------------------------------------------------
 }; /* End of class TRexDASelector */

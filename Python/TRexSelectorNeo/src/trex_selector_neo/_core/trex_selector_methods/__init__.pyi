@@ -1251,18 +1251,10 @@ class TRexDAControlParameter:
     @property
     def prior_groups(self) -> list[list[int]]:
         """
-        Prior groupings provided to the selector.
+        Prior grouping constraints (label vectors of length p); sub-clustering runs within their finest common refinement.
         """
     @prior_groups.setter
     def prior_groups(self, arg0: collections.abc.Sequence[collections.abc.Sequence[typing.SupportsInt | typing.SupportsIndex]]) -> None:
-        ...
-    @property
-    def rho_grid_labels(self) -> list[float]:
-        """
-        Labels for the correlation grid.
-        """
-    @rho_grid_labels.setter
-    def rho_grid_labels(self, arg0: collections.abc.Sequence[typing.SupportsFloat | typing.SupportsIndex]) -> None:
         ...
     @property
     def rho_thr_DA(self) -> float:
