@@ -4,6 +4,40 @@
 
 ????-??-??
 
+### 2026-07-15
+
+#### Exchangeable tie-breaking for greedy solvers (DA FDR fix)
+
+- New solver hyperparameters `exch_tie_alpha` (default 0 = off) and
+  `exch_tie_floor` (default 0.5) in `SolverHyperparameters`, consumed by
+  TOMP/TAFS via `TSolver_Base::applyExchangeableTieBreak()`. When alpha > 0
+  and the step's top candidate is a real predictor, inactive real predictors
+  with |corr| >= floor to the top candidate whose correlation gap lies within
+  `alpha * ||x_j* -/+ x_k|| * ||r|| / sqrt(n)` are treated as statistically
+  exchangeable, and ONE member is picked uniformly at random per step (via
+  the existing tie-break RNG, so `setTieSeed()` keeps runs reproducible).
+  Dummy picks are never randomized — dummy budget and early stopping are
+  unchanged.
+- Motivation: greedy solvers are winner-take-all — within a T-Rex random
+  experiment the in-sample winner of a highly correlated cluster is a
+  deterministic function of (X, y) (dummies never perturb the real-variable
+  ranking), so occurrence mass concentrates on one cluster member and the
+  DA deflation `delta = 2 - min|Phi_j - Phi_k|` degenerates to the identity:
+  collinear shadows that beat their active in-sample survive as false
+  positives (DA-AR1 FDR ~ intrinsic shadow-win rate, e.g. ~34% per cluster at
+  rho = 0.9, SNR = 2, n = 300 — above tFDR = 0.2). Randomizing statistically
+  indistinguishable picks restores the within-trial occurrence spread across
+  exchangeable cluster members that the DA FDR control relies on (LARS-type
+  solvers produce this spread through their path geometry and are unaffected).
+- Validated on the demo_trex_da_01 AR(1) cells (rho = 0.9, gap = 100 and
+  Random support): alpha = 0.25 restores FDR < tFDR for TOMP/TAFS while
+  retaining more power than TLARS; the safe regimes (rho <= 0.7) are
+  essentially unchanged. Recommended: `exch_tie_alpha = 0.25` for greedy
+  solvers under trex+DA.
+- The dispatcher re-applies the parameters on all three solver lifecycle
+  paths (fresh, serialized warm start, in-memory warm start), mirroring
+  `setTolerance`; the fields are intentionally not serialized.
+
 ### 2026-07-08
 
 #### R <-> Python binding parity
