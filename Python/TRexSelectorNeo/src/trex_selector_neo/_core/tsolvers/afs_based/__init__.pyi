@@ -116,6 +116,10 @@ class TAFS_Solver:
         """
         Serialize calculation state directly to disk utilizing Cereal.
         """
+    def setExchangeableTie(self, alpha: typing.SupportsFloat | typing.SupportsIndex, floor: typing.SupportsFloat | typing.SupportsIndex = 0.5) -> None:
+        """
+        Configure exchangeability-calibrated stochastic tie-breaking for greedy candidate selection (TOMP/TAFS); alpha <= 0 turns it off.
+        """
     def setTieSeed(self, seed: typing.SupportsInt | typing.SupportsIndex) -> None:
         """
         Set the random seed for reproducible tie-breaking among dummy candidates.

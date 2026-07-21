@@ -341,3 +341,13 @@ class TestSolverHyperparameters:
         assert hp.rho_afs == pytest.approx(0.5)
         assert hp.ncgmp_variant == 1
         assert hp.tol == pytest.approx(1e-6)
+
+    def test_exchangeable_tie_fields(self):
+        hp = SolverHyperparameters()
+        # Defaults: off, floor 0.5.
+        assert hp.exch_tie_alpha == pytest.approx(0.0)
+        assert hp.exch_tie_floor == pytest.approx(0.5)
+        hp.exch_tie_alpha = 0.25
+        hp.exch_tie_floor = 0.7
+        assert hp.exch_tie_alpha == pytest.approx(0.25)
+        assert hp.exch_tie_floor == pytest.approx(0.7)

@@ -136,3 +136,45 @@ def test_convert_to_memory_mapped(tmp_path, data):
     filepath = os.path.join(tmp_path, "x.bin")
     convert_to_memory_mapped(X, filepath)
     assert os.path.getsize(filepath) == X.shape[0] * X.shape[1] * 8
+
+
+# ---------------------------------------------------------------------------
+# setExchangeableTie (greedy solvers)
+# ---------------------------------------------------------------------------
+
+def _clustered_data(seed=3):
+    """Design with a tight correlated cluster so the tie set is non-trivial."""
+    rng = np.random.default_rng(seed)
+    n, p = 80, 8
+    base = rng.standard_normal(n)
+    X = np.empty((n, p))
+    for j in range(4):  # cluster: rho ~ 0.95
+        X[:, j] = base + 0.3 * rng.standard_normal(n)
+    X[:, 4:] = rng.standard_normal((n, p - 4))
+    D = rng.standard_normal((n, p))
+    y = base * 3.0 + rng.standard_normal(n) * 0.5
+    return (np.asfortranarray(X), np.asfortranarray(D),
+            np.asfortranarray(y))
+
+
+@pytest.mark.parametrize("make_solver", [
+    lambda X, D, y: __import__("trex_selector_neo").tsolvers.omp_based.TOMP_Solver(X, D, y),
+    lambda X, D, y: __import__("trex_selector_neo").tsolvers.afs_based.TAFS_Solver(X, D, y, 1.0),
+])
+def test_set_exchangeable_tie_reproducible(make_solver):
+    X, D, y = _clustered_data()
+
+    def run(alpha, seed):
+        s = make_solver(X.copy(order="F"), D.copy(order="F"), y.copy(order="F"))
+        s.setExchangeableTie(alpha, 0.5)
+        s.setTieSeed(seed)
+        s.executeStep(0, True)
+        return [a for step in s.getActions() for a in step]
+
+    # Same seed + same alpha => identical path (RNG-driven but reproducible).
+    assert run(0.25, 123) == run(0.25, 123)
+    # alpha <= 0 is a no-op: matches a run that never enables the feature.
+    s_ref = make_solver(X.copy(order="F"), D.copy(order="F"), y.copy(order="F"))
+    s_ref.executeStep(0, True)
+    ref = [a for step in s_ref.getActions() for a in step]
+    assert run(0.0, 123) == ref

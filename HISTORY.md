@@ -4,6 +4,18 @@
 
 ????-??-??
 
+### 2026-07-21
+
+#### Python package refreshed for the exchangeable tie-break API
+
+- `SolverHyperparameters` now exposes `exch_tie_alpha` / `exch_tie_floor`, and the
+  solver wrappers (TOMP/TAFS/TLARS families) gain `setExchangeableTie(alpha, floor=0.5)`;
+  type stubs updated accordingly (the PRIOR_GROUPS binding changes shipped with the
+  core rewrite). New tests: hyperparameter defaults/assignment, reproducible
+  tie-broken paths + alpha = 0 no-op on TOMP/TAFS, data-driven rho grid
+  (ascending, rho = 1 anchor) and negative-label rejection on the prior-groups
+  DA path. Suite 453/453.
+
 ### 2026-07-17
 
 #### TLARS "No valid gamma" warning classified and demoted

@@ -212,6 +212,11 @@ public:
     /** @brief Set the random seed for reproducible tie-breaking among dummies. */
     void setTieSeed(uint32_t seed) { solver_->setTieSeed(seed); }
 
+    /** @brief Configure exchangeability-calibrated stochastic tie-breaking (greedy solvers). */
+    void setExchangeableTie(double alpha, double floor) {
+        solver_->setExchangeableTie(alpha, floor);
+    }
+
     /** @brief Get all recorded warnings (dropped columns, collinear rejections, ...). */
     const std::vector<std::string>& getWarnings() const { return solver_->getWarnings(); }
 
@@ -371,6 +376,10 @@ py::class_<PySolverWrapper<Solver>>& add_standard_tsolver_methods(
              "Set the numerical tolerance used for internal numeric comparisons.")
         .def("setTieSeed", &PySolverWrapper<Solver>::setTieSeed, py::arg("seed"),
              "Set the random seed for reproducible tie-breaking among dummy candidates.")
+        .def("setExchangeableTie", &PySolverWrapper<Solver>::setExchangeableTie,
+             py::arg("alpha"), py::arg("floor") = 0.5,
+             "Configure exchangeability-calibrated stochastic tie-breaking for greedy "
+             "candidate selection (TOMP/TAFS); alpha <= 0 turns it off.")
         .def("getWarnings", &PySolverWrapper<Solver>::getWarnings,
              "Get all recorded warnings (dropped columns, collinear rejections, ...).")
         .def("clearWarnings", &PySolverWrapper<Solver>::clearWarnings,

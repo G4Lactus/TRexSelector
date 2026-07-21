@@ -948,6 +948,22 @@ class SolverHyperparameters:
     def __init__(self) -> None:
         ...
     @property
+    def exch_tie_alpha(self) -> float:
+        """
+        Exchangeable-tie band width for greedy solvers (TOMP/TAFS) in pairwise ranking-noise sd units; 0 = off. Recommended under trex+DA: 0.25.
+        """
+    @exch_tie_alpha.setter
+    def exch_tie_alpha(self, arg0: typing.SupportsFloat | typing.SupportsIndex) -> None:
+        ...
+    @property
+    def exch_tie_floor(self) -> float:
+        """
+        Minimum |correlation| for exchangeable-tie candidates in (0, 1); ignored unless exch_tie_alpha > 0.
+        """
+    @exch_tie_floor.setter
+    def exch_tie_floor(self, arg0: typing.SupportsFloat | typing.SupportsIndex) -> None:
+        ...
+    @property
     def lambda2(self) -> float:
         """
         L2 penalty for ENET-type solvers.
