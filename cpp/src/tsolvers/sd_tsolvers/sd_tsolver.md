@@ -328,8 +328,8 @@ corruption that debug Eigen catches.
 ## 9. Demos
 
 The demo programs live outside the repository in the SD-TRex research
-folder (`Research Topics/Sparse Rademacher Dummies (SD-TRex)/Demos`), a
-standalone CMake project that consumes this repo via `add_subdirectory`.
+folder (`Research Topics/Sparse Rademacher Dummies (SD-TRex)/Demos/cpp`),
+a standalone CMake project that consumes this repo via `add_subdirectory`.
 
 - `demo_sd_tlars.cpp` — Demo 1: early stopping + contract
   equivalence (unit-L2 vs z-score; identical paths, exact λ ratio).
