@@ -325,6 +325,41 @@ public:
      */
     void setTieSeed(uint32_t seed) { rng_.seed(seed); }
 
+    /**
+     * @brief Configure exchangeability-calibrated stochastic tie-breaking for
+     *        greedy candidate selection (TOMP/TAFS).
+     *
+     * @details When alpha > 0 and the step's top candidate j* is a real
+     * predictor, the inactive real predictors k with |corr(x_j*, x_k)| >=
+     * floor whose correlation-with-residual gap to the maximum lies within
+     * alpha * ||x_j* -/+ x_k|| * ||r|| / sqrt(n) (the noise scale of the
+     * pairwise ranking) are treated as statistically exchangeable with j*,
+     * and ONE member of that set is picked uniformly at random (tie-break
+     * RNG). Dummy picks are never randomized, so the dummy budget /
+     * early-stop semantics are unchanged.
+     *
+     * Purpose: greedy solvers are winner-take-all — within a T-Rex random
+     * experiment the in-sample winner of a highly correlated cluster is a
+     * deterministic function of (X, y), so occurrence mass concentrates on
+     * one cluster member and the dependency-aware (DA) deflation
+     * delta = 2 - min|Phi_j - Phi_k| degenerates to the identity (no
+     * suppression of collinear shadows). Randomizing statistically
+     * indistinguishable picks restores the within-trial occurrence spread
+     * across exchangeable cluster members that the DA FDR control relies on
+     * (LARS-type solvers produce this spread via their path geometry).
+     * Recommended alpha for greedy solvers under trex+DA: 0.25.
+     * Default 0 = off (exact legacy behavior).
+     *
+     * @param alpha Band width in units of the pairwise noise sd (<= 0: off).
+     * @param floor Minimum |correlation| for exchangeability candidates,
+     *              clamped to [0, 1) (default 0.5).
+     */
+    void setExchangeableTie(double alpha, double floor = 0.5) {
+        exch_tie_alpha_ = (alpha > 0.0) ? alpha : 0.0;
+        exch_tie_floor_ = std::min(std::max(floor, 0.0),
+                                   1.0 - std::numeric_limits<double>::epsilon());
+    }
+
     /** @brief Get the current random engine state (for serialization and reporting). */
     const std::mt19937& getRNG() const noexcept { return rng_; }
 
@@ -692,6 +727,31 @@ protected:
     void pruneTiedDummies(std::vector<std::size_t>& new_vars,
                           std::size_t T_stop,
                           bool early_stop);
+
+    /** @brief Exchangeable-tie band width in pairwise-noise sd units
+     *  (0 = off; see setExchangeableTie()). Not serialized: the dispatcher
+     *  re-applies it from SolverHyperparameters on every lifecycle path. */
+    double exch_tie_alpha_{0.0};
+
+    /** @brief Minimum |correlation| for exchangeable-tie candidates. */
+    double exch_tie_floor_{0.5};
+
+    /**
+     * @brief Replace the step's additions with one random member of the
+     *        exchangeable tie set (greedy solvers; see setExchangeableTie()).
+     *
+     * @details No-op when exch_tie_alpha_ <= 0, when new_vars is empty, or
+     * when the top candidate is a dummy. Otherwise, if at least one inactive
+     * real predictor is exchangeable with the top candidate (correlation >=
+     * exch_tie_floor_ and gap within the noise band), new_vars is replaced
+     * by a single uniformly drawn member of the tie set. Uses rng_, so
+     * user-seeded runs remain reproducible via setTieSeed().
+     *
+     * Call AFTER pruneTiedDummies() and BEFORE the active-set update.
+     *
+     * @param new_vars Step additions proposed by findTiedMaxCorrelations().
+     */
+    void applyExchangeableTieBreak(std::vector<std::size_t>& new_vars);
 
     // ==========================================================================
     // Logging utilities

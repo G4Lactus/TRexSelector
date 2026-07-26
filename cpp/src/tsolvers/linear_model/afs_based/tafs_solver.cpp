@@ -93,6 +93,7 @@ void TAFS_Solver::executeStep(std::size_t T_stop, bool early_stop) {
             break;
         }
         pruneTiedDummies(new_vars, T_stop, early_stop);
+        applyExchangeableTieBreak(new_vars);
 
         currentStep_++;
         std::vector<int> actions_this_step;

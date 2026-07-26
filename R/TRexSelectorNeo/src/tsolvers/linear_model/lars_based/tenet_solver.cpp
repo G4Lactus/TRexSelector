@@ -189,12 +189,11 @@ void TENET_Solver::executeStep(std::size_t T_stop, bool early_stop) {
         RSS_.push_back(rss);
         R2_.push_back(1.0 - rss / RSS_[0]);
 
-        // Compute L1 norm for active coefficients
-        // Index by currentStep_: betaPath_ may hold spare capacity
-        const Eigen::VectorXd& beta_current = betaPath_.col(static_cast<Eigen::Index>(currentStep_));
+        // Compute L1 norm for active coefficients (running sparse state holds
+        // this step's values; drops below zero their entries afterwards)
         l1norm_ = 0.0;
         for (std::size_t j : actives_) {
-            l1norm_ += std::abs(beta_current[static_cast<Eigen::Index>(j)]);
+            l1norm_ += std::abs(runningBeta(j));
         }
         l1norm_ /= d2_;
 
@@ -203,6 +202,9 @@ void TENET_Solver::executeStep(std::size_t T_stop, bool early_stop) {
         // ========================================================
         updateCorrelationsENET();
         processLassoDrops(drops);
+        // Record after the drops so this step's snapshot has the dropped
+        // coefficients at exactly zero (absent from the support).
+        recordBetaStep();
 
         // T-ENET: Record dummy count and DoF after all adds/removes
         updateDummyTracking();
@@ -213,9 +215,6 @@ void TENET_Solver::executeStep(std::size_t T_stop, bool early_stop) {
         // ========================================================
         updateInactiveSet();
     }
-
-    // Drop any spare beta-path capacity now that execution stopped
-    trimBetaPathToRecordedSteps();
 }
 
 
@@ -399,7 +398,7 @@ std::vector<double> TENET_Solver::getCp() const {
     double p_total = static_cast<double>(p_original_ + num_dummies_);
 
     if (!fpc::isfinite(rss_final) || rss_final <= 0) {
-        cp_out.assign(RSS_.size(), std::numeric_limits<double>::quiet_NaN());
+        cp_out.assign(RSS_.size(), fpc::quiet_nan());
         return cp_out;
     }
 
@@ -408,7 +407,7 @@ std::vector<double> TENET_Solver::getCp() const {
     // where p_total = p + num_dummies) Cp is undefined — return NaN instead
     // of garbage from a negative variance estimate.
     if (static_cast<double>(n) - p_total - 1.0 <= 0.0) {
-        cp_out.assign(RSS_.size(), std::numeric_limits<double>::quiet_NaN());
+        cp_out.assign(RSS_.size(), fpc::quiet_nan());
         return cp_out;
     }
 
@@ -423,7 +422,7 @@ std::vector<double> TENET_Solver::getCp() const {
                           - static_cast<double>(n) + 2.0 * dof;
             cp_out.push_back(cp_val);
         } else {
-            cp_out.push_back(std::numeric_limits<double>::quiet_NaN());
+            cp_out.push_back(fpc::quiet_nan());
         }
     }
 
@@ -435,17 +434,24 @@ std::vector<double> TENET_Solver::getCp() const {
 // ============================================================================
 
 Eigen::VectorXd TENET_Solver::getBeta(int step) const {
-    if (betaPath_.cols() == 0) throw std::runtime_error("No path available.");
-    std::size_t use_step = (step < 0) ? betaPath_.cols() - 1 : static_cast<std::size_t>(step);
-    if (use_step >= static_cast<std::size_t>(betaPath_.cols())) {
+    if (betaPathSparse_.empty()) throw std::runtime_error("No path available.");
+    std::size_t use_step = (step < 0) ? betaPathSparse_.size() - 1
+                                      : static_cast<std::size_t>(step);
+    if (use_step >= betaPathSparse_.size()) {
         throw std::invalid_argument(
             concatMsg(solverTypeToString(), "::getBeta: step ", step,
-                      " out of range [0, ", betaPath_.cols() - 1, "].")
+                      " out of range [0, ", betaPathSparse_.size() - 1, "].")
         );
     }
 
     // Recover naive elastic net coefficients (beta_pure = beta_aug / d2)
-    Eigen::VectorXd coef = betaPath_.col(static_cast<Eigen::Index>(use_step)) / d2_;
+    Eigen::VectorXd coef = Eigen::VectorXd::Zero(
+        static_cast<Eigen::Index>(p_original_ + num_dummies_));
+    const SparseBetaStep& s = betaPathSparse_[use_step];
+    for (std::size_t k = 0; k < s.idx.size(); ++k) {
+        coef(static_cast<Eigen::Index>(s.idx[k])) = s.val[k];
+    }
+    coef /= d2_;
 
     // De-normalize real predictors and dummies with their respective norms
     if (normalize_) {
@@ -456,23 +462,11 @@ Eigen::VectorXd TENET_Solver::getBeta(int step) const {
 }
 
 
-Eigen::MatrixXd TENET_Solver::getBetaPath() const {
-    // EN-specific: Divide by d₂ = 1/√(1+λ₂), i.e., multiply by √(1+λ₂)
-    // This matches R enet post-processing: beta.pure <- beta.pure / d2
-    Eigen::MatrixXd beta_orig = betaPath_ / d2_;
-
-    // De-normalize real predictors and dummies with their respective norms
-    if (normalize_) {
-        for (Eigen::Index j = 0; j < beta_orig.cols(); ++j) {
-            if (normsx_.size() > 0) {
-                beta_orig.col(j).head(p_original_).array() /= normsx_.array();
-            }
-            if (normsd_.size() > 0) {
-                beta_orig.col(j).tail(num_dummies_).array() /= normsd_.array();
-            }
-        }
-    }
-    return beta_orig;
+SparseBetaPath TENET_Solver::getBetaPathSparse() const {
+    // EN-specific: Divide by d₂ = 1/√(1+λ₂), i.e., multiply by √(1+λ₂),
+    // then de-normalize by the column norms. This matches R enet
+    // post-processing: beta.pure <- beta.pure / d2
+    return makeScaledSparsePath(d2_);
 }
 
 

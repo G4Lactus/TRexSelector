@@ -114,9 +114,6 @@ void TGP_Solver::executeStep(std::size_t T_stop, bool early_stop) {
 
         updateCorrelations();
     }
-
-    // Drop any spare beta-path capacity now that execution stopped
-    trimBetaPathToRecordedSteps();
 }
 
 
@@ -199,19 +196,10 @@ void TGP_Solver::updateResiduals() {
 
 
 void TGP_Solver::updateBetaPath() {
-    Eigen::Index p_tot = static_cast<Eigen::Index>(p_original_ + num_dummies_);
-
-    ensureBetaPathCapacity(currentStep_ + 1);
-
-    Eigen::VectorXd beta_hat = Eigen::VectorXd::Zero(p_tot);
-
-    std::size_t k = actives_.size();
-    #pragma omp parallel for schedule(static) if (k > 100)
-    for (std::size_t i = 0; i < k; ++i) {
-        beta_hat[static_cast<Eigen::Index>(actives_[i])] =
-            active_coefficients_[static_cast<Eigen::Index>(i)];
-    }
-    betaPath_.col(static_cast<Eigen::Index>(currentStep_)) = beta_hat;
+    // active_coefficients_ is already the sparse coefficient vector over
+    // actives_ — snapshot it directly.
+    setRunningBeta(actives_, active_coefficients_);
+    recordBetaStep();
 }
 
 

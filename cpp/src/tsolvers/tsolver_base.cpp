@@ -545,6 +545,49 @@ void TSolver_Base::pruneTiedDummies(std::vector<std::size_t>& new_vars,
 }
 
 
+void TSolver_Base::applyExchangeableTieBreak(std::vector<std::size_t>& new_vars) {
+    if (exch_tie_alpha_ <= 0.0 || new_vars.empty()) { return; }
+
+    // Top candidate among the step's proposed additions.
+    std::size_t jstar = new_vars[0];
+    double cmax = std::abs(correlations_(static_cast<Eigen::Index>(jstar)));
+    for (std::size_t j : new_vars) {
+        const double a = std::abs(correlations_(static_cast<Eigen::Index>(j)));
+        if (a > cmax) { cmax = a; jstar = j; }
+    }
+    if (jstar >= dummy_start_idx_) { return; }  // dummy pick stays deterministic
+
+    // Pairwise ranking-noise scale: the gap c_j* - c_k = (x_j* - x_k)^T r has
+    // sd ~ ||x_j* -/+ x_k|| * ||r|| / sqrt(n) under exchangeability. The
+    // sign-matched distance nj2 + nk2 - 2|dot| also covers anti-correlated
+    // pairs (the |c| ranking is sign-blind).
+    const Eigen::VectorXd xj = getColumn(jstar);
+    const double nj2 = xj.squaredNorm();
+    const double sig = r_.norm() /
+        std::sqrt(static_cast<double>(std::max<Eigen::Index>(r_.size(), 1)));
+
+    std::vector<std::size_t> tie_set{jstar};
+    for (std::size_t k : inactives_) {
+        if (k == jstar || k >= dummy_start_idx_) { continue; }
+        const auto xk = getColumn(k);
+        const double nk2   = xk.squaredNorm();
+        const double dot   = xj.dot(xk);
+        const double denom = std::sqrt(nj2 * nk2);
+        if (denom <= eps_) { continue; }
+        if (std::abs(dot) / denom < exch_tie_floor_) { continue; }
+        const double band = exch_tie_alpha_ * sig *
+            std::sqrt(std::max(0.0, nj2 + nk2 - 2.0 * std::abs(dot)));
+        const double gap =
+            cmax - std::abs(correlations_(static_cast<Eigen::Index>(k)));
+        if (gap <= band) { tie_set.push_back(k); }
+    }
+    if (tie_set.size() <= 1) { return; }
+
+    std::uniform_int_distribution<std::size_t> pick(0, tie_set.size() - 1);
+    new_vars.assign(1, tie_set[pick(rng_)]);
+}
+
+
 // ============================================================================
 // Getters and Diagnostics
 // ============================================================================

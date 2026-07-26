@@ -4,6 +4,111 @@
 
 ????-??-??
 
+### 2026-07-21
+
+#### R package refreshed: vendored core synced, exchangeable tie-break exposed
+
+- The vendored C++ core is byte-identical with `cpp/src` again (tie-break
+  additions in `tsolver_base`, the solver dispatcher, TOMP/TAFS, plus the
+  cosmetic trex_da drift). `trex_control()` gains `exch_tie_alpha` (default 0)
+  and `exch_tie_floor` (default 0.5), parsed into `SolverHyperparameters` by
+  the Rcpp layer; man pages regenerated via roxygen. New testthat coverage:
+  control defaults and tie-broken TOMP/TAFS selection runs on a correlated
+  cluster design. Full testthat suite green.
+
+#### Python package refreshed for the exchangeable tie-break API
+
+- `SolverHyperparameters` now exposes `exch_tie_alpha` / `exch_tie_floor`, and the
+  solver wrappers (TOMP/TAFS/TLARS families) gain `setExchangeableTie(alpha, floor=0.5)`;
+  type stubs updated accordingly (the PRIOR_GROUPS binding changes shipped with the
+  core rewrite). New tests: hyperparameter defaults/assignment, reproducible
+  tie-broken paths + alpha = 0 no-op on TOMP/TAFS, data-driven rho grid
+  (ascending, rho = 1 anchor) and negative-label rejection on the prior-groups
+  DA path. Suite 453/453.
+
+### 2026-07-17
+
+#### TLARS "No valid gamma" warning classified and demoted
+
+- Investigated the frequent `No valid gamma found, using fallback` warnings seen in the
+  trex_da demos. Instrumentation on the exact demo DGPs/seeds showed **100 % of observed
+  events are the benign path-exhaustion case**: on small designs
+  (p + num_dummies <= n - 1, e.g. demo 04's p=25 cells) the T-loop drives the LARS path
+  until every real + dummy variable is active, and `computeStepSize()` then runs with an
+  empty inactive set — the terminal LS step `Cmax / A_A` is the correct step. A Gaussian
+  control reproduced the events at the same rate as the heavy-tailed DGP (173 vs. 166 per
+  40 trials), and the events vanish exactly at the exhaustion boundary — not heavy tails,
+  not collinearity, not the demo RNG (seeds are `base + mc`, fresh mt19937 per trial).
+  Demo 05 (p_total=500) emits none; its earlier attribution was console interleaving.
+- `computeStepSize()` now logs the empty-inactive-set case verbose-only
+  (`logInfo("Inactive set empty; taking terminal LS step.")`) and keeps a `logWarning`
+  (with candidate count) only for the never-observed all-candidates-filtered case.
+  Fallback step unchanged. Suite 291/291; R mirror synced. Details in
+  `TRex_Research/documentation/CTRexSelector_Open_Tasks.md` §7 (CTLARS should gain the
+  same classified logging when synced — it is currently silent in both cases).
+
+#### PRIOR_GROUPS redefined: constrained sub-clustering (deflation-mismatch fix)
+
+- `setupDA_PriorGroups()` no longer uses the user-supplied groups as deflation
+  neighbourhoods. The nearest-partner penalty `delta = 2 - min|Phi_j - Phi_k|`
+  (Definition 1 of the T-Rex+DA paper) assumes tight neighbourhoods in which
+  the closest-Phi member is a genuine shadow; inside a large prior group nearly
+  every variable has SOME member with an almost identical Phi, so delta -> 2
+  uniformly and the shadow/active ranking is left invariant (the FDR-plateau /
+  TPR-cap signature documented in
+  `TRex_Research/documentation/Prior_Groups_Deflation_Mismatch_DA_TRex.md`).
+- New semantics: the prior groups are hard merge CONSTRAINTS on the dependency
+  structure. The finest common refinement of all supplied `prior_groups` levels
+  partitions the variables; HAC (`hc_linkage`, correlation distance) runs
+  within each constraint group (merges across boundaries are structurally
+  impossible); the rho grid (length `hc_grid_length`) is subsampled from the
+  pooled within-group dendrogram heights and terminated by the conservative
+  rho = 1 singleton anchor (the paper's Psi = 1/2 empty-group penalty). The
+  BT-style 3D calibration then operates on tight data-driven neighbourhoods
+  INSIDE the known groups — the coarsest grid point recovers at most the whole
+  prior group, the finest is provably conservative.
+- `rho_grid_labels` removed from `TRexDAControlParameter`, the R
+  `trex_da_control()`, and the Python bindings — the grid is now data-driven.
+  `prior_groups` labels must be non-negative (validated). Linkage validation
+  now covers PRIOR_GROUPS as well as BT.
+- New guard tests in `cpp/tests/test_trex_selector_methods/test_trex_da.cpp`:
+  boundary containment + rho = 1 anchor, finest-common-refinement semantics,
+  full select() smoke run, negative-label rejection.
+
+### 2026-07-15
+
+#### Exchangeable tie-breaking for greedy solvers (DA FDR fix)
+
+- New solver hyperparameters `exch_tie_alpha` (default 0 = off) and
+  `exch_tie_floor` (default 0.5) in `SolverHyperparameters`, consumed by
+  TOMP/TAFS via `TSolver_Base::applyExchangeableTieBreak()`. When alpha > 0
+  and the step's top candidate is a real predictor, inactive real predictors
+  with |corr| >= floor to the top candidate whose correlation gap lies within
+  `alpha * ||x_j* -/+ x_k|| * ||r|| / sqrt(n)` are treated as statistically
+  exchangeable, and ONE member is picked uniformly at random per step (via
+  the existing tie-break RNG, so `setTieSeed()` keeps runs reproducible).
+  Dummy picks are never randomized — dummy budget and early stopping are
+  unchanged.
+- Motivation: greedy solvers are winner-take-all — within a T-Rex random
+  experiment the in-sample winner of a highly correlated cluster is a
+  deterministic function of (X, y) (dummies never perturb the real-variable
+  ranking), so occurrence mass concentrates on one cluster member and the
+  DA deflation `delta = 2 - min|Phi_j - Phi_k|` degenerates to the identity:
+  collinear shadows that beat their active in-sample survive as false
+  positives (DA-AR1 FDR ~ intrinsic shadow-win rate, e.g. ~34% per cluster at
+  rho = 0.9, SNR = 2, n = 300 — above tFDR = 0.2). Randomizing statistically
+  indistinguishable picks restores the within-trial occurrence spread across
+  exchangeable cluster members that the DA FDR control relies on (LARS-type
+  solvers produce this spread through their path geometry and are unaffected).
+- Validated on the demo_trex_da_01 AR(1) cells (rho = 0.9, gap = 100 and
+  Random support): alpha = 0.25 restores FDR < tFDR for TOMP/TAFS while
+  retaining more power than TLARS; the safe regimes (rho <= 0.7) are
+  essentially unchanged. Recommended: `exch_tie_alpha = 0.25` for greedy
+  solvers under trex+DA.
+- The dispatcher re-applies the parameters on all three solver lifecycle
+  paths (fresh, serialized warm start, in-memory warm start), mirroring
+  `setTolerance`; the fields are intentionally not serialized.
+
 ### 2026-07-08
 
 #### R <-> Python binding parity

@@ -70,6 +70,28 @@ namespace detail {
     return (detail::to_bits(x) & 0x7FF0'0000'0000'0000u) != 0x7FF0'0000'0000'0000u;
 }
 
+/**
+ * @brief Produce a quiet NaN that survives -ffast-math code generation.
+ *
+ * @details Under -ffinite-math-only, a compile-time-known NaN constant is
+ * poison at floating-point boundaries: recent Clang replaces it with an
+ * arbitrary value (observed: pointer bits) when it is materialized for a
+ * call such as std::vector::assign — so
+ * std::numeric_limits<double>::quiet_NaN() cannot be used as a sentinel in
+ * Release builds. Routing the bit pattern through a volatile integer keeps
+ * the value opaque to the optimizer: it reaches memory as a plain 64-bit
+ * store and arrives bit-exact. Pair with fp_classify::isnan for detection —
+ * std::isnan is constant-folded to false under -ffinite-math-only.
+ */
+[[nodiscard]] inline double quiet_nan() noexcept {
+    // volatile: the load cannot be constant-folded back into a NaN literal.
+    static const volatile std::uint64_t bits = 0x7FF8'0000'0000'0000u;
+    std::uint64_t b = bits;
+    double d;
+    std::memcpy(&d, &b, sizeof(d));
+    return d;
+}
+
 /** @brief True if every element of @p v is finite. Safe under -ffast-math. */
 inline bool allFinite(const Eigen::VectorXd& v) {
     for (Eigen::Index i = 0; i < v.size(); ++i) {

@@ -105,6 +105,9 @@ void TLASSO_Solver::executeStep(std::size_t T_stop, bool early_stop) {
         // STEP 9: T-LASSO drops and update inactives internally
         // ========================================================
         processLassoDrops(drops);
+        // Record after the drops so this step's snapshot has the dropped
+        // coefficients at exactly zero (absent from the support).
+        recordBetaStep();
 
         // ========================================================
         // STEP 10: Update diagnostics and tracking
@@ -121,9 +124,6 @@ void TLASSO_Solver::executeStep(std::size_t T_stop, bool early_stop) {
         // ========================================================
         updateInactiveSet();
     }
-
-    // Drop any spare beta-path capacity now that execution stopped
-    trimBetaPathToRecordedSteps();
 }
 
 

@@ -147,10 +147,10 @@ public:
     Eigen::VectorXd getBeta(int step = -1) const override;
 
     /**
-     * @brief Get full EN-corrected coefficient path matrix.
-     * @return Matrix of coefficients (p_total x steps) with EN scaling removed.
+     * @brief Get the sparse EN-corrected coefficient path (EN scaling
+     * removed, sparse layout).
      */
-    Eigen::MatrixXd getBetaPath() const override;
+    SparseBetaPath getBetaPathSparse() const override;
 
     /**
      * @brief Get elastic net mixing parameter alpha = lambda1 / (lambda1 + lambda2).

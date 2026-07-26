@@ -372,11 +372,13 @@ TEST(TRexDATest, DataIntegrity_XRestoredOnDestruction) {
 
 namespace {
 
-/** @brief Probe exposing the protected correlation estimators for testing. */
+/** @brief Probe exposing protected internals (estimators, DA setup) for testing. */
 class TRexDASelectorProbe : public TRexDASelector {
 public:
     using TRexDASelector::TRexDASelector;
     using TRexDASelector::estimateAR1Correlation;
+    using TRexDASelector::setupDA;
+    using TRexDASelector::da_setup_;
 };
 
 } // namespace
@@ -421,6 +423,205 @@ TEST(TRexDATest, Estimation_AR1YuleWalkerRecoversKnownRho) {
     EXPECT_NEAR(est, rho, 0.05)
         << "Yule-Walker AR(1) estimate drifted from the true coefficient.";
 }
+
+// ========================================================================================
+// Prior groups — constrained sub-clustering
+// ========================================================================================
+
+namespace {
+
+/** @brief Group-factor design: within-group correlated columns, independent
+ *  across groups. Column j of group g is a * f_g + b * noise.
+ */
+Eigen::MatrixXd make_group_factor_X(Eigen::Index n,
+                                    Eigen::Index p,
+                                    Eigen::Index group_size,
+                                    double rho_within,
+                                    unsigned seed)
+{
+    std::mt19937 rng(seed);
+    std::normal_distribution<double> N01(0.0, 1.0);
+    const double a = std::sqrt(rho_within);
+    const double b = std::sqrt(1.0 - rho_within);
+
+    Eigen::MatrixXd X(n, p);
+    for (Eigen::Index i = 0; i < n; ++i) {
+        double factor = 0.0;
+        for (Eigen::Index j = 0; j < p; ++j) {
+            if (j % group_size == 0) { factor = N01(rng); }
+            X(i, j) = a * factor + b * N01(rng);
+        }
+    }
+    return X;
+}
+
+} // namespace
+
+
+/** @brief PRIOR_GROUPS builds a BT-style structure by sub-clustering WITHIN
+ *  the prior groups: the rho grid ends at the conservative rho = 1 singleton
+ *  anchor, no neighbourhood ever crosses a prior-group boundary, and the
+ *  coarsest grid point recovers (at most) the whole prior group.
+ */
+TEST(TRexDATest, Method_PriorGroups_ConstrainedSubclusteringStructure) {
+    const Eigen::Index n = 100, p = 40, group_size = 8;
+
+    Eigen::MatrixXd X = make_group_factor_X(n, p, group_size, 0.5, 7);
+    Eigen::VectorXd y = Eigen::VectorXd::Random(n);
+
+    Eigen::Map<Eigen::MatrixXd> X_map(X.data(), X.rows(), X.cols());
+    Eigen::Map<Eigen::VectorXd> y_map(y.data(), y.size());
+
+    TRexDAControlParameter da_ctrl;
+    da_ctrl.prior_groups.resize(1);
+    for (Eigen::Index j = 0; j < p; ++j) {
+        da_ctrl.prior_groups[0].push_back(j / group_size);
+    }
+
+    TRexDASelectorProbe trex(X_map, y_map, 0.1, da_ctrl, 42, false);
+    trex.setupDA();
+
+    const auto& setup = trex.da_setup_;
+    ASSERT_TRUE(setup.use_BT_style);
+
+    // Default grid length min(20, p) = 20; grid ascending with rho = 1 anchor.
+    const auto grid_len = static_cast<Eigen::Index>(setup.rho_grid_len);
+    ASSERT_EQ(grid_len, 20);
+    ASSERT_EQ(setup.rho_grid.size(), grid_len);
+    for (Eigen::Index r = 1; r < grid_len; ++r) {
+        EXPECT_LE(setup.rho_grid(r - 1), setup.rho_grid(r));
+    }
+    EXPECT_DOUBLE_EQ(setup.rho_grid(grid_len - 1), 1.0);
+
+    bool any_nonempty = false;
+    for (Eigen::Index j = 0; j < p; ++j) {
+        for (Eigen::Index r = 0; r < grid_len; ++r) {
+            const auto& mates =
+                setup.gr_j_list[static_cast<std::size_t>(j)]
+                               [static_cast<std::size_t>(r)];
+            if (!mates.empty()) { any_nonempty = true; }
+            // Hard constraint: mates never leave the prior group.
+            for (const auto k : mates) {
+                EXPECT_EQ(k / group_size, j / group_size)
+                    << "Neighbourhood crossed a prior-group boundary.";
+                EXPECT_NE(k, j);
+            }
+            // Tightness: never more mates than the prior group offers.
+            EXPECT_LE(mates.size(),
+                      static_cast<std::size_t>(group_size - 1));
+        }
+        // rho = 1 anchor: all neighbourhoods empty (paper's conservative
+        // Psi = 1/2 penalty applies to every variable).
+        EXPECT_TRUE(setup.gr_j_list[static_cast<std::size_t>(j)]
+                                   [static_cast<std::size_t>(grid_len - 1)]
+                        .empty());
+    }
+    EXPECT_TRUE(any_nonempty)
+        << "Sub-clustering produced no neighbourhoods at any grid point.";
+}
+
+
+/** @brief The constraint partition is the finest common refinement of ALL
+ *  supplied levels: with level 0 = groups of 4 and level 1 = parity, the
+ *  effective constraint groups have size 2.
+ */
+TEST(TRexDATest, Method_PriorGroups_FinestCommonRefinement) {
+    const Eigen::Index n = 60, p = 16;
+
+    Eigen::MatrixXd X = make_group_factor_X(n, p, 4, 0.6, 11);
+    Eigen::VectorXd y = Eigen::VectorXd::Random(n);
+
+    Eigen::Map<Eigen::MatrixXd> X_map(X.data(), X.rows(), X.cols());
+    Eigen::Map<Eigen::VectorXd> y_map(y.data(), y.size());
+
+    TRexDAControlParameter da_ctrl;
+    da_ctrl.prior_groups.resize(2);
+    for (Eigen::Index j = 0; j < p; ++j) {
+        da_ctrl.prior_groups[0].push_back(j / 4);  // groups of 4
+        da_ctrl.prior_groups[1].push_back(j % 2);  // parity split
+    }
+
+    TRexDASelectorProbe trex(X_map, y_map, 0.1, da_ctrl, 42, false);
+    trex.setupDA();
+
+    const auto& setup = trex.da_setup_;
+    for (Eigen::Index j = 0; j < p; ++j) {
+        for (std::size_t r = 0; r < setup.rho_grid_len; ++r) {
+            const auto& mates =
+                setup.gr_j_list[static_cast<std::size_t>(j)][r];
+            // Refinement group = {j, j xor 2} within each block of 4: the
+            // only admissible mate shares the block AND the parity.
+            EXPECT_LE(mates.size(), 1u);
+            for (const auto k : mates) {
+                EXPECT_EQ(k / 4, j / 4);
+                EXPECT_EQ(k % 2, j % 2);
+            }
+        }
+    }
+}
+
+
+/** @brief Full select() run under PRIOR_GROUPS: valid binary indicator and a
+ *  data-driven rho grid (not the legacy one-point-per-level grid).
+ */
+TEST(TRexDATest, Method_PriorGroups_Select) {
+    const Eigen::Index n = 150, p = 50, group_size = 5;
+
+    Eigen::MatrixXd X = make_group_factor_X(n, p, group_size, 0.5, 3);
+    // Signal on the first column of three distinct groups.
+    Eigen::VectorXd beta = Eigen::VectorXd::Zero(p);
+    beta(0) = 5.0; beta(5) = -3.0; beta(10) = 2.0;
+    std::mt19937 rng(99);
+    std::normal_distribution<double> N01(0.0, 1.0);
+    Eigen::VectorXd y = X * beta;
+    for (Eigen::Index i = 0; i < n; ++i) { y(i) += N01(rng); }
+
+    Eigen::Map<Eigen::MatrixXd> X_map(X.data(), X.rows(), X.cols());
+    Eigen::Map<Eigen::VectorXd> y_map(y.data(), y.size());
+
+    TRexControlParameter trex_ctrl;
+    trex_ctrl.K = 3;
+    trex_ctrl.max_dummy_multiplier = 2;
+
+    TRexDAControlParameter da_ctrl;
+    da_ctrl.trex_ctrl = trex_ctrl;
+    da_ctrl.prior_groups.resize(1);
+    for (Eigen::Index j = 0; j < p; ++j) {
+        da_ctrl.prior_groups[0].push_back(j / group_size);
+    }
+
+    TRexDASelector trex(X_map, y_map, 0.1, da_ctrl, 42, false);
+    trex.select();
+
+    const auto& da_result = trex.getDAResult();
+    EXPECT_EQ(da_result.method, DAMethod::PRIOR_GROUPS);
+    ASSERT_EQ(da_result.selected_var.size(), p);
+    EXPECT_GE(da_result.selected_var.minCoeff(), 0);
+    EXPECT_LE(da_result.selected_var.maxCoeff(), 1);
+
+    // Data-driven rho grid: hc_grid_length points ending at the rho = 1
+    // anchor — NOT the legacy grid with one point per prior-group level.
+    ASSERT_EQ(da_result.rho_grid.size(), 20);
+    EXPECT_DOUBLE_EQ(da_result.rho_grid(da_result.rho_grid.size() - 1), 1.0);
+}
+
+
+/** @brief Negative prior-group labels are rejected. */
+TEST(TRexDATest, Method_PriorGroups_NegativeLabelThrows) {
+    Eigen::MatrixXd X = Eigen::MatrixXd::Random(20, 10);
+    Eigen::VectorXd y = Eigen::VectorXd::Random(20);
+
+    Eigen::Map<Eigen::MatrixXd> X_map(X.data(), X.rows(), X.cols());
+    Eigen::Map<Eigen::VectorXd> y_map(y.data(), y.size());
+
+    TRexDAControlParameter da_ctrl;
+    da_ctrl.prior_groups = {{0, 0, 1, 1, 2, 2, 3, 3, -1, 4}};
+
+    EXPECT_THROW({
+        TRexDASelector selector(X_map, y_map, 0.1, da_ctrl);
+    }, std::invalid_argument);
+}
+
 
 // ========================================================================================
 } /* End of namespace trex::test::trex_selector_methods::trex_da */

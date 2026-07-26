@@ -6,7 +6,7 @@ import collections.abc
 import numpy
 import numpy.typing
 import typing
-__all__: list[str] = ['AR1', 'ActiveSet', 'BT', 'BTSelectionMode', 'BiobankScreenTRexControl', 'BiobankScreenTRexResult', 'CV_1SE_CCD', 'CV_1SE_SVD', 'CV_MIN_CCD', 'CV_MIN_SVD', 'DAMethod', 'DASelectionResult', 'DIRECT', 'DummyDistribution', 'EN', 'ENSolverType', 'EQUI', 'FeasibleOnly', 'GVSSelectionResult', 'GVSType', 'HCONCAT', 'IEN', 'L2', 'LLoopStrategy', 'LambdaSelectionMethod', 'NN', 'PERMUTATION', 'PERMUTATION_DIRECT', 'PRIOR_GROUPS', 'RFaithful', 'SKIPL', 'SPCAMode', 'STANDARD', 'ScalingMode', 'ScreenTRexControlParameter', 'ScreenTRexMethod', 'ScreenTRexSelectionResult', 'SelectionResult', 'SolverHyperparameters', 'SolverTypeForTRex', 'TACGP', 'TAFS', 'TENET', 'TENET_AUG', 'TGP', 'TIENET_AUG', 'TLARS', 'TLASSO', 'TMP', 'TNCGMP', 'TOMP', 'TOOLS', 'TREX', 'TREX_DA_AR1', 'TREX_DA_BLOCK_EQUI', 'TREX_DA_EQUI', 'TRexBiobankScreeningSelector', 'TRexControlParameter', 'TRexDAControlParameter', 'TRexDASelector', 'TRexGVSControlParameter', 'TRexGVSSelector', 'TRexSPCAControlParameter', 'TRexSPCAResult', 'TRexSPCASelector', 'TRexScreeningSelector', 'TRexSelector', 'TSTAGEWISE', 'TSTEPWISE', 'Thresholded', 'ZSCORE']
+__all__: list[str] = ['AR1', 'ActiveSet', 'BT', 'BTSelectionMode', 'BiobankScreenTRexControl', 'BiobankScreenTRexResult', 'CV_1SE_CCD', 'CV_1SE_SVD', 'CV_MIN_CCD', 'CV_MIN_SVD', 'DAMethod', 'DASelectionResult', 'DummyDistribution', 'EN', 'ENSolverType', 'EQUI', 'FeasibleOnly', 'GVSSelectionResult', 'GVSType', 'HCONCAT', 'IEN', 'L2', 'LLoopStrategy', 'LambdaSelectionMethod', 'NN', 'ONDEMAND', 'PERMUTATION', 'PERMUTATION_ONDEMAND', 'PRIOR_GROUPS', 'RFaithful', 'SKIPL', 'SPCAMode', 'STANDARD', 'ScalingMode', 'ScreenTRexControlParameter', 'ScreenTRexMethod', 'ScreenTRexSelectionResult', 'SelectionResult', 'SolverHyperparameters', 'SolverTypeForTRex', 'TACGP', 'TAFS', 'TENET', 'TENET_AUG', 'TGP', 'TIENET_AUG', 'TLARS', 'TLASSO', 'TMP', 'TNCGMP', 'TOMP', 'TOOLS', 'TREX', 'TREX_DA_AR1', 'TREX_DA_BLOCK_EQUI', 'TREX_DA_EQUI', 'TRexBiobankScreeningSelector', 'TRexControlParameter', 'TRexDAControlParameter', 'TRexDASelector', 'TRexGVSControlParameter', 'TRexGVSSelector', 'TRexSPCAControlParameter', 'TRexSPCAResult', 'TRexSPCASelector', 'TRexScreeningSelector', 'TRexSelector', 'TSTAGEWISE', 'TSTEPWISE', 'Thresholded', 'ZSCORE']
 class BTSelectionMode:
     """
     Cell-selection policy for the BT (binary-tree) DA method.
@@ -572,25 +572,25 @@ class LLoopStrategy:
     
     Members:
     
-      SKIPL : Skips L-loop iteration (L=1 only).
-    
-      STANDARD : One dummy block per L value, averaged over L.
-    
-      HCONCAT : Horizontal concatenation of all dummy blocks across L values.
-    
-      PERMUTATION : Dummy variables are column-wise permutations of X.
-    
-      PERMUTATION_DIRECT : Direct permutation of X columns without cycling.
-    
-      DIRECT : Direct dummy generation bypassing L-loop aggregation.
+      SKIPL : Stored, one-shot: fixed dummies = max_dummy_multiplier * p.
+
+      STANDARD : Stored; fresh dummies at each L-loop iteration (conservative).
+
+      HCONCAT : Stored; horizontally expand dummy matrices across L (faster, same result).
+
+      PERMUTATION : Stored base dummy matrix + deterministic row permutations per experiment.
+
+      PERMUTATION_ONDEMAND : Seed-derived base + row permutations per experiment; nothing stored.
+
+      ONDEMAND : Seed-derived independent dummies per experiment; nothing stored.
     """
-    DIRECT: typing.ClassVar[LLoopStrategy]  # value = <LLoopStrategy.DIRECT: 5>
     HCONCAT: typing.ClassVar[LLoopStrategy]  # value = <LLoopStrategy.HCONCAT: 2>
+    ONDEMAND: typing.ClassVar[LLoopStrategy]  # value = <LLoopStrategy.ONDEMAND: 5>
     PERMUTATION: typing.ClassVar[LLoopStrategy]  # value = <LLoopStrategy.PERMUTATION: 3>
-    PERMUTATION_DIRECT: typing.ClassVar[LLoopStrategy]  # value = <LLoopStrategy.PERMUTATION_DIRECT: 4>
+    PERMUTATION_ONDEMAND: typing.ClassVar[LLoopStrategy]  # value = <LLoopStrategy.PERMUTATION_ONDEMAND: 4>
     SKIPL: typing.ClassVar[LLoopStrategy]  # value = <LLoopStrategy.SKIPL: 0>
     STANDARD: typing.ClassVar[LLoopStrategy]  # value = <LLoopStrategy.STANDARD: 1>
-    __members__: typing.ClassVar[dict[str, LLoopStrategy]]  # value = {'SKIPL': <LLoopStrategy.SKIPL: 0>, 'STANDARD': <LLoopStrategy.STANDARD: 1>, 'HCONCAT': <LLoopStrategy.HCONCAT: 2>, 'PERMUTATION': <LLoopStrategy.PERMUTATION: 3>, 'PERMUTATION_DIRECT': <LLoopStrategy.PERMUTATION_DIRECT: 4>, 'DIRECT': <LLoopStrategy.DIRECT: 5>}
+    __members__: typing.ClassVar[dict[str, LLoopStrategy]]  # value = {'SKIPL': <LLoopStrategy.SKIPL: 0>, 'STANDARD': <LLoopStrategy.STANDARD: 1>, 'HCONCAT': <LLoopStrategy.HCONCAT: 2>, 'PERMUTATION': <LLoopStrategy.PERMUTATION: 3>, 'PERMUTATION_ONDEMAND': <LLoopStrategy.PERMUTATION_ONDEMAND: 4>, 'ONDEMAND': <LLoopStrategy.ONDEMAND: 5>}
     def __eq__(self, other: typing.Any) -> bool:
         ...
     def __getstate__(self) -> int:
@@ -948,6 +948,22 @@ class SolverHyperparameters:
     def __init__(self) -> None:
         ...
     @property
+    def exch_tie_alpha(self) -> float:
+        """
+        Exchangeable-tie band width for greedy solvers (TOMP/TAFS) in pairwise ranking-noise sd units; 0 = off. Recommended under trex+DA: 0.25.
+        """
+    @exch_tie_alpha.setter
+    def exch_tie_alpha(self, arg0: typing.SupportsFloat | typing.SupportsIndex) -> None:
+        ...
+    @property
+    def exch_tie_floor(self) -> float:
+        """
+        Minimum |correlation| for exchangeable-tie candidates in (0, 1); ignored unless exch_tie_alpha > 0.
+        """
+    @exch_tie_floor.setter
+    def exch_tie_floor(self, arg0: typing.SupportsFloat | typing.SupportsIndex) -> None:
+        ...
+    @property
     def lambda2(self) -> float:
         """
         L2 penalty for ENET-type solvers.
@@ -1251,18 +1267,10 @@ class TRexDAControlParameter:
     @property
     def prior_groups(self) -> list[list[int]]:
         """
-        Prior groupings provided to the selector.
+        Prior grouping constraints (label vectors of length p); sub-clustering runs within their finest common refinement.
         """
     @prior_groups.setter
     def prior_groups(self, arg0: collections.abc.Sequence[collections.abc.Sequence[typing.SupportsInt | typing.SupportsIndex]]) -> None:
-        ...
-    @property
-    def rho_grid_labels(self) -> list[float]:
-        """
-        Labels for the correlation grid.
-        """
-    @rho_grid_labels.setter
-    def rho_grid_labels(self, arg0: collections.abc.Sequence[typing.SupportsFloat | typing.SupportsIndex]) -> None:
         ...
     @property
     def rho_thr_DA(self) -> float:
@@ -1621,7 +1629,6 @@ CV_1SE_CCD: LambdaSelectionMethod  # value = <LambdaSelectionMethod.CV_1SE_CCD: 
 CV_1SE_SVD: LambdaSelectionMethod  # value = <LambdaSelectionMethod.CV_1SE_SVD: 0>
 CV_MIN_CCD: LambdaSelectionMethod  # value = <LambdaSelectionMethod.CV_MIN_CCD: 3>
 CV_MIN_SVD: LambdaSelectionMethod  # value = <LambdaSelectionMethod.CV_MIN_SVD: 1>
-DIRECT: LLoopStrategy  # value = <LLoopStrategy.DIRECT: 5>
 EN: GVSType  # value = <GVSType.EN: 0>
 EQUI: DAMethod  # value = <DAMethod.EQUI: 1>
 FeasibleOnly: BTSelectionMode  # value = <BTSelectionMode.FeasibleOnly: 0>
@@ -1629,8 +1636,9 @@ HCONCAT: LLoopStrategy  # value = <LLoopStrategy.HCONCAT: 2>
 IEN: GVSType  # value = <GVSType.IEN: 1>
 L2: ScalingMode  # value = <ScalingMode.L2: 0>
 NN: DAMethod  # value = <DAMethod.NN: 3>
+ONDEMAND: LLoopStrategy  # value = <LLoopStrategy.ONDEMAND: 5>
 PERMUTATION: LLoopStrategy  # value = <LLoopStrategy.PERMUTATION: 3>
-PERMUTATION_DIRECT: LLoopStrategy  # value = <LLoopStrategy.PERMUTATION_DIRECT: 4>
+PERMUTATION_ONDEMAND: LLoopStrategy  # value = <LLoopStrategy.PERMUTATION_ONDEMAND: 4>
 PRIOR_GROUPS: DAMethod  # value = <DAMethod.PRIOR_GROUPS: 4>
 RFaithful: BTSelectionMode  # value = <BTSelectionMode.RFaithful: 1>
 SKIPL: LLoopStrategy  # value = <LLoopStrategy.SKIPL: 0>

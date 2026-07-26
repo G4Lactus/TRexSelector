@@ -89,17 +89,18 @@ test_that("TRexDASelector supports the prior-groups DA path", {
   X <- matrix(rnorm(n * p), n, p)
   y <- X[, 1] * 5 + X[, 2] * -4 + X[, 3] * 3 + rnorm(n)
 
-  # Two-level prior hierarchy (fine -> coarse) over p = 8 variables.
-  # When prior_groups is supplied, da_method is ignored and the core routes
-  # through setupDA_PriorGroups() (previously unreachable from R).
+  # Two-level prior constraints over p = 8 variables. When prior_groups is
+  # supplied, da_method is ignored and the core routes through
+  # setupDA_PriorGroups(): hierarchical sub-clustering runs within the finest
+  # common refinement of the levels (here the size-2 fine groups) and the rho
+  # grid is built from the pooled within-group dendrogram heights.
   fine   <- c(1, 1, 2, 2, 3, 3, 4, 4)
   coarse <- c(1, 1, 1, 1, 2, 2, 2, 2)
 
   selector <- TRexDASelector$new(
     X, y, tFDR = 0.2, verbose = FALSE,
     da_control = trex_da_control(
-      prior_groups    = list(fine, coarse),
-      rho_grid_labels = c(0.3, 0.7)
+      prior_groups = list(fine, coarse)
     ),
     control = trex_control(K = 5)
   )
@@ -109,28 +110,31 @@ test_that("TRexDASelector supports the prior-groups DA path", {
     expect_true(all(selector$selected_indices >= 1 &
                     selector$selected_indices <= p))
   }
-  # rho_grid carries the two supplied labels (BT-style 3D calibration).
-  expect_equal(sort(selector$rho_grid), c(0.3, 0.7))
+  # Data-driven rho grid: hc_grid_length points (default min(20, p) = 8),
+  # ascending and terminated by the conservative rho = 1 singleton anchor.
+  expect_equal(length(selector$rho_grid), p)
+  expect_equal(selector$rho_grid, sort(selector$rho_grid))
+  expect_equal(selector$rho_grid[length(selector$rho_grid)], 1.0)
 })
 
 
-test_that("prior_groups defaults rho_grid to 1..L when rho_grid_labels omitted", {
+test_that("prior_groups rejects negative labels", {
   set.seed(7)
   n <- 60
   p <- 6
   X <- matrix(rnorm(n * p), n, p)
   y <- X[, 1] * 4 + X[, 2] * -3 + rnorm(n)
 
-  selector <- TRexDASelector$new(
-    X, y, tFDR = 0.2, verbose = FALSE,
-    da_control = trex_da_control(
-      prior_groups = list(c(1, 1, 2, 2, 3, 3), c(1, 1, 1, 2, 2, 2))
+  expect_error(
+    TRexDASelector$new(
+      X, y, tFDR = 0.2, verbose = FALSE,
+      da_control = trex_da_control(
+        prior_groups = list(c(1, 1, 2, 2, -3, 3))
+      ),
+      control = trex_control(K = 5)
     ),
-    control = trex_control(K = 5)
+    "non-negative"
   )
-  expect_no_error(selector$select())
-  # Default labels are 1, 2, ..., L.
-  expect_equal(sort(selector$rho_grid), c(1, 2))
 })
 
 

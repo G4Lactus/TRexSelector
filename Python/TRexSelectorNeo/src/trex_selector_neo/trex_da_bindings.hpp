@@ -106,8 +106,7 @@ inline void bind_trex_da(py::module& m) {
         .def_readwrite("hc_linkage", &TRexDAControlParameter::hc_linkage, "Hierarchical clustering linkage method.")
         .def_readwrite("hc_grid_length", &TRexDAControlParameter::hc_grid_length, "Grid length for hierarchical clustering.")
         .def_readwrite("bt_selection_mode", &TRexDAControlParameter::bt_selection_mode, "Cell-selection policy for the BT method (FeasibleOnly or RFaithful).")
-        .def_readwrite("prior_groups", &TRexDAControlParameter::prior_groups, "Prior groupings provided to the selector.")
-        .def_readwrite("rho_grid_labels", &TRexDAControlParameter::rho_grid_labels, "Labels for the correlation grid.")
+        .def_readwrite("prior_groups", &TRexDAControlParameter::prior_groups, "Prior grouping constraints (label vectors of length p); sub-clustering runs within their finest common refinement.")
         .def_readwrite("trex_ctrl", &TRexDAControlParameter::trex_ctrl, "Nested base T-Rex algorithmic control parameters (overridden by the separate trex_control argument to TRexDASelector).");
 
     py::class_<TRexDASelector::DASelectionResult, TRexSelector::SelectionResult>(m, "DASelectionResult", "Extended SelectionResult holding specific DA outputs.")

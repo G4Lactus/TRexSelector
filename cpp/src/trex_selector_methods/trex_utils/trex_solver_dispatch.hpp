@@ -116,6 +116,17 @@ struct SolverHyperparameters {
     int ncgmp_variant = 0;  //
     /** @brief Numerical tolerance for solver steps. */
     double tol = 1e-6;      //
+    /** @brief Exchangeable-tie band width for greedy solvers (TOMP/TAFS), in
+     * units of the pairwise ranking-noise sd. When > 0, statistically
+     * indistinguishable top candidates within highly correlated clusters are
+     * picked uniformly at random per step, restoring the within-experiment
+     * occurrence spread that the DA deflation's FDR control relies on.
+     * Recommended for greedy solvers under trex+DA: 0.25.
+     * 0 = off (exact legacy behavior; ignored by path solvers). */
+    double exch_tie_alpha = 0.0;
+    /** @brief Minimum |correlation| for exchangeable-tie candidates in
+     * (0, 1) (ignored unless exch_tie_alpha > 0). */
+    double exch_tie_floor = 0.5;
 };
 
 
@@ -313,6 +324,8 @@ SparseBetaPath dispatchSolver(const SolverConfig& cfg) {
     //    returns the full accumulated path.
     if (cfg.warm_solver != nullptr) {
         cfg.warm_solver->setTolerance(cfg.hyperparams.tol);
+        cfg.warm_solver->setExchangeableTie(cfg.hyperparams.exch_tie_alpha,
+                                            cfg.hyperparams.exch_tie_floor);
         cfg.warm_solver->executeStep(cfg.T_stop, cfg.early_stop);
         return cfg.warm_solver->getBetaPathSparse();
     }
@@ -321,6 +334,8 @@ SparseBetaPath dispatchSolver(const SolverConfig& cfg) {
     if (cfg.use_warm_start && !cfg.solver_file.empty()) {
         TSolver solver = TSolver::load(cfg.solver_file, cfg.X, cfg.D);
         solver.setTolerance(cfg.hyperparams.tol);
+        solver.setExchangeableTie(cfg.hyperparams.exch_tie_alpha,
+                                  cfg.hyperparams.exch_tie_floor);
         solver.executeStep(cfg.T_stop, cfg.early_stop);
         SparseBetaPath path = solver.getBetaPathSparse();
         solver.save(cfg.solver_file);
@@ -330,6 +345,8 @@ SparseBetaPath dispatchSolver(const SolverConfig& cfg) {
     // 3. Fresh construction.
     std::unique_ptr<TSolver> solver = makeSolverForConfig<TSolver>(cfg);
     solver->setTolerance(cfg.hyperparams.tol);
+    solver->setExchangeableTie(cfg.hyperparams.exch_tie_alpha,
+                               cfg.hyperparams.exch_tie_floor);
     if (cfg.tie_seed >= 0) {
         // Deterministic tie-break shuffles for reproducible selections
         // (user-seeded runs); < 0 keeps random_device seeding.

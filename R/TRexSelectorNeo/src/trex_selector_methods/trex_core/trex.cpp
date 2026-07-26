@@ -777,15 +777,26 @@ void TRexSelector::prepareDummiesForLStep(LStepContext& ctx) {
     // solver state for this iteration.
     ctx.existing_on_disk = 0;
 
+    // In memory-mapped mode the runner writes the dummies straight into the
+    // mmap regions by seeded regeneration (generateInto / expandInto) — the
+    // in-RAM copies below would never be read, yet cost K * n * num_dummies
+    // doubles of heap (~75 GiB at n=5000, p=100000, K=20: a jetsam kill).
+    // Skip the stores; only bookkeeping (invalidation, existing_on_disk)
+    // remains. PERMUTATION is the exception: permuteInto reads the single
+    // stored base matrix.
+    const bool mmap_mode = trex_ctrl_.use_memory_mapping;
+
     switch (ctx.strategy) {
         case LLoopStrategy::SKIPL: {
             // One-shot: generate K dummy matrices sized L_max * p.
             // Use ctx.L_iter (= max_dummy_multiplier) as l_tag so that
             // seeding is equivalent to a STANDARD run at the same LL level
             // (deriveBlockSeed64(k, L) packs both into disjoint bit fields).
-            dummy_gen_.generateAndStore(trex_ctrl_.K,
-                                        ctx.num_dummies,
-                                        /*l_tag=*/ctx.L_iter);
+            if (!mmap_mode) {
+                dummy_gen_.generateAndStore(trex_ctrl_.K,
+                                            ctx.num_dummies,
+                                            /*l_tag=*/ctx.L_iter);
+            }
             break;
         }
         case LLoopStrategy::STANDARD: {
@@ -794,18 +805,22 @@ void TRexSelector::prepareDummiesForLStep(LStepContext& ctx) {
             // them, and dropping the solvers first guarantees no dangling
             // view exists even transiently.
             warm_start_mgr_.invalidate();
-            dummy_gen_.generateAndStore(trex_ctrl_.K,
-                                        ctx.num_dummies,
-                                        ctx.L_iter);
+            if (!mmap_mode) {
+                dummy_gen_.generateAndStore(trex_ctrl_.K,
+                                            ctx.num_dummies,
+                                            ctx.L_iter);
+            }
             break;
         }
         case LLoopStrategy::HCONCAT: {
             if (ctx.L_iter == 1) {
                 // Initial dummies: K matrices of size n x p (prefix-stable
                 // l_tag = 0; expansions continue the same seed domain).
-                dummy_gen_.generateAndStore(trex_ctrl_.K,
-                                            p_,
-                                            /*l_tag=*/0);
+                if (!mmap_mode) {
+                    dummy_gen_.generateAndStore(trex_ctrl_.K,
+                                                p_,
+                                                /*l_tag=*/0);
+                }
                 ctx.existing_on_disk = 0;
             } else {
                 // Append p new columns to each stored matrix:
@@ -814,7 +829,9 @@ void TRexSelector::prepareDummiesForLStep(LStepContext& ctx) {
                 // New columns are seeded under the same per-experiment base
                 // with global column offsets — no cross-block collisions.
                 warm_start_mgr_.invalidate();
-                dummy_gen_.expandStored(p_);
+                if (!mmap_mode) {
+                    dummy_gen_.expandStored(p_);
+                }
                 ctx.existing_on_disk = (ctx.L_iter - 1) * p_;
             }
             break;
@@ -1210,6 +1227,11 @@ void TRexSelector::runTLoop(
         // Per-step body via virtual hook (subclasses may inject deflation).
         // HCONCAT lives in the prefix-stable l_tag = 0 seed domain; the other
         // stored strategies re-derive with the final L-loop multiplier.
+        // existing_on_disk = num_dummies_: the L-loop's accepted iteration
+        // already wrote the full dummy width to the memory-mapped files, and
+        // generation is deterministic per (k, L) — the memory-mapped runner
+        // therefore skips the per-T-step rewrite of identical content
+        // (ignored by the in-memory strategies).
         const std::size_t tloop_seed_factor =
             (trex_ctrl_.lloop_strategy == LLoopStrategy::HCONCAT)
                 ? 0
@@ -1217,7 +1239,7 @@ void TRexSelector::runTLoop(
         StepView view = evaluateStep(num_dummies_, T_stop_, /*use_warm_start=*/true,
                                      exp_strategy,
                                      /*seed_factor=*/tloop_seed_factor,
-                                     /*existing_on_disk=*/0);
+                                     /*existing_on_disk=*/num_dummies_);
         exp_results = view.exp_results;
         FDP_hat     = view.FDP_hat;
 

@@ -51,6 +51,13 @@ namespace trex::trex_selector_methods::utils::solver_dispatch {
 
 // ===================================================================================
 
+/** @brief Sparse beta path handed from the solvers to the T-Rex aggregation
+ *  (per-step support + values; O(sum_t |support_t|) memory instead of the
+ *  former dense (p + num_dummies) x steps matrix). */
+using SparseBetaPath = trex::tsolvers::SparseBetaPath;
+
+// ===================================================================================
+
 
 // ===================================================================================
 // Solver type enum for TRex dispatch
@@ -109,6 +116,17 @@ struct SolverHyperparameters {
     int ncgmp_variant = 0;  //
     /** @brief Numerical tolerance for solver steps. */
     double tol = 1e-6;      //
+    /** @brief Exchangeable-tie band width for greedy solvers (TOMP/TAFS), in
+     * units of the pairwise ranking-noise sd. When > 0, statistically
+     * indistinguishable top candidates within highly correlated clusters are
+     * picked uniformly at random per step, restoring the within-experiment
+     * occurrence spread that the DA deflation's FDR control relies on.
+     * Recommended for greedy solvers under trex+DA: 0.25.
+     * 0 = off (exact legacy behavior; ignored by path solvers). */
+    double exch_tie_alpha = 0.0;
+    /** @brief Minimum |correlation| for exchangeable-tie candidates in
+     * (0, 1) (ignored unless exch_tie_alpha > 0). */
+    double exch_tie_floor = 0.5;
 };
 
 
@@ -296,43 +314,49 @@ std::unique_ptr<TSolver> makeSolverForConfig(const SolverConfig& cfg) {
  *
  * @param cfg Populated SolverConfig with data references and execution flags.
  *
- * @return Beta path matrix (n_features + n_dummies) × n_steps).
+ * @return Sparse beta path ((p + num_dummies)-space support per step).
  */
 template <typename TSolver>
-Eigen::MatrixXd dispatchSolver(const SolverConfig& cfg) {
+SparseBetaPath dispatchSolver(const SolverConfig& cfg) {
 
     // 1. In-memory warm start: resume the retained solver. executeStep()
-    //    continues the existing path up to the new T_stop; getBetaPath()
+    //    continues the existing path up to the new T_stop; getBetaPathSparse()
     //    returns the full accumulated path.
     if (cfg.warm_solver != nullptr) {
         cfg.warm_solver->setTolerance(cfg.hyperparams.tol);
+        cfg.warm_solver->setExchangeableTie(cfg.hyperparams.exch_tie_alpha,
+                                            cfg.hyperparams.exch_tie_floor);
         cfg.warm_solver->executeStep(cfg.T_stop, cfg.early_stop);
-        return cfg.warm_solver->getBetaPath();
+        return cfg.warm_solver->getBetaPathSparse();
     }
 
     // 2. Serialized warm start: restore from disk, continue, re-save.
     if (cfg.use_warm_start && !cfg.solver_file.empty()) {
         TSolver solver = TSolver::load(cfg.solver_file, cfg.X, cfg.D);
         solver.setTolerance(cfg.hyperparams.tol);
+        solver.setExchangeableTie(cfg.hyperparams.exch_tie_alpha,
+                                  cfg.hyperparams.exch_tie_floor);
         solver.executeStep(cfg.T_stop, cfg.early_stop);
-        Eigen::MatrixXd pathMatrix = solver.getBetaPath();
+        SparseBetaPath path = solver.getBetaPathSparse();
         solver.save(cfg.solver_file);
-        return pathMatrix;
+        return path;
     }
 
     // 3. Fresh construction.
     std::unique_ptr<TSolver> solver = makeSolverForConfig<TSolver>(cfg);
     solver->setTolerance(cfg.hyperparams.tol);
+    solver->setExchangeableTie(cfg.hyperparams.exch_tie_alpha,
+                               cfg.hyperparams.exch_tie_floor);
     if (cfg.tie_seed >= 0) {
         // Deterministic tie-break shuffles for reproducible selections
         // (user-seeded runs); < 0 keeps random_device seeding.
         solver->setTieSeed(static_cast<std::uint32_t>(cfg.tie_seed));
     }
     solver->executeStep(cfg.T_stop, cfg.early_stop);
-    Eigen::MatrixXd pathMatrix = solver->getBetaPath();
+    SparseBetaPath path = solver->getBetaPathSparse();
     if (!cfg.solver_file.empty()) solver->save(cfg.solver_file);
     if (cfg.retain_sink != nullptr) *cfg.retain_sink = std::move(solver);
-    return pathMatrix;
+    return path;
 }
 
 
@@ -346,11 +370,11 @@ Eigen::MatrixXd dispatchSolver(const SolverConfig& cfg) {
  * @param solver_type  Runtime enum value identifying the desired solver.
  * @param cfg          Populated SolverConfig with data references and execution flags.
  *
- * @return Beta path matrix ((p + num_dummies) × n_steps).
+ * @return Sparse beta path ((p + num_dummies)-space support per step).
  *
  * @throws std::invalid_argument if solver_type is not a recognized enumerator.
  */
-inline Eigen::MatrixXd dispatchByType(SolverTypeForTRex solver_type, const SolverConfig& cfg) {
+inline SparseBetaPath dispatchByType(SolverTypeForTRex solver_type, const SolverConfig& cfg) {
     switch (solver_type) {
 
         // LARS family

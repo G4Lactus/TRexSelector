@@ -90,8 +90,8 @@ void TSTAGEWISE_Solver::executeStep(std::size_t T_stop, bool early_stop) {
             // The NNLS removals are already recorded in this step's actions;
             // conclude the step consistently as an empty model: zero
             // coefficients, residual = y, and diagnostics for this step.
-            ensureBetaPathCapacity(currentStep_ + 1);
-            betaPath_.col(static_cast<Eigen::Index>(currentStep_)).setZero();
+            clearRunningBeta();
+            recordBetaStep();
             r_ = y_;
             RSS_.push_back(r_.dot(r_));
             R2_.push_back(0.0);
@@ -117,7 +117,10 @@ void TSTAGEWISE_Solver::executeStep(std::size_t T_stop, bool early_stop) {
         // ========================================================
         // Step 6: Update Beta Path and Residuals
         // ========================================================
+        // NNLS removals (Step 3) leave their coefficients frozen in the
+        // running support — only the active directions advance.
         updateBetaPath(w_A, gamma);
+        recordBetaStep();
         r_ -= gamma * u;
 
         // ========================================================
@@ -135,9 +138,6 @@ void TSTAGEWISE_Solver::executeStep(std::size_t T_stop, bool early_stop) {
         updateDummyTracking();
         DoF_.push_back(actives_.size() + (intercept_ ? 1 : 0));
     }
-
-    // Drop any spare beta-path capacity now that execution stopped
-    trimBetaPathToRecordedSteps();
 }
 
 // ============================================================================

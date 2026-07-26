@@ -120,15 +120,32 @@ def test_da_method_bt_r_array(signal_data):
 
 
 def test_da_prior_groups(signal_data):
-    """PRIOR_GROUPS method accepts group assignment list."""
+    """PRIOR_GROUPS runs constrained sub-clustering within the given groups."""
     X, y, n, p = signal_data
     ctrl = trex_selector_neo.TRexControlParameter()
     ctrl.K = 3
     da_ctrl = trex_selector_neo.TRexDAControlParameter()
     da_ctrl.method = trex_selector_neo.DAMethod.PRIOR_GROUPS
     # p=20 predictors; assign them to 4 groups
-    da_ctrl.prior_groups = [[i % 4 for i in range(p)]]  # one hierarchy level, 4 groups
+    da_ctrl.prior_groups = [[i % 4 for i in range(p)]]  # one constraint level, 4 groups
     sel = trex_selector_neo.TRexDASelector(X, y, da_control=da_ctrl,
                                         trex_control=ctrl, verbose=False)
     res = sel.select()
     assert res is not None
+    # Data-driven rho grid: hc_grid_length points (default min(20, p) = 20),
+    # ascending and terminated by the conservative rho = 1 singleton anchor.
+    rho_grid = np.asarray(res.rho_grid).ravel()
+    assert rho_grid.size == min(20, p)
+    assert np.all(np.diff(rho_grid) >= 0)
+    assert rho_grid[-1] == pytest.approx(1.0)
+
+
+def test_da_prior_groups_rejects_negative_labels(signal_data):
+    """Negative prior-group labels are rejected at validation."""
+    X, y, n, p = signal_data
+    da_ctrl = trex_selector_neo.TRexDAControlParameter()
+    da_ctrl.method = trex_selector_neo.DAMethod.PRIOR_GROUPS
+    da_ctrl.prior_groups = [[-1] + [i % 4 for i in range(p - 1)]]
+    with pytest.raises(ValueError, match="non-negative"):
+        trex_selector_neo.TRexDASelector(X, y, da_control=da_ctrl,
+                                         verbose=False).select()

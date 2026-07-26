@@ -639,7 +639,7 @@ protected:
     /**
      * @brief Extract phi_T contribution for one experiment from a beta path.
      *
-     * @param beta_path    ((p + L) x n_steps) full LARS path.
+     * @param beta_path    Sparse (p + L)-space path (per-step support/values).
      * @param p            Number of original features.
      * @param num_dummies  L = number of dummy columns.
      * @param T_stop       Stopping threshold.
@@ -650,7 +650,7 @@ protected:
      * @return (p x T_stop) binary contribution matrix (0 or 1, NOT divided by K).
      */
     static Eigen::MatrixXd extractPhiContribFromPath(
-        const Eigen::MatrixXd& beta_path,
+        const tsolvers::SparseBetaPath& beta_path,
         std::size_t            p,
         std::size_t            num_dummies,
         std::size_t            T_stop,

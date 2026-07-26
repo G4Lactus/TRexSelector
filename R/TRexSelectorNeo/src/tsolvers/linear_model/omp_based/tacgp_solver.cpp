@@ -128,9 +128,6 @@ void TACGP_Solver::executeStep(std::size_t T_stop, bool early_stop) {
 
         updateCorrelations();
     }
-
-    // Drop any spare beta-path capacity now that execution stopped
-    trimBetaPathToRecordedSteps();
 }
 
 

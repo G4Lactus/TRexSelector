@@ -20,9 +20,15 @@ function(add_trex_test TEST_NAME)
             trex::trex_selector_methods
     )
     target_compile_features(${TEST_NAME} PRIVATE cxx_std_20)
-    # Default DISCOVERY_TIMEOUT of 5s is flaky under saturated parallel builds
-    # and on slow CI runners
-    gtest_discover_tests(${TEST_NAME} DISCOVERY_TIMEOUT 30)
+    # PRE_TEST: run test discovery serially at ctest time instead of as a
+    # POST_BUILD step. During a saturated parallel build the post-build
+    # discovery process can get starved/killed on slow CI runners, which
+    # current CMake surfaces as a JSON parse error in ParseTestList.cmake
+    # (empty --gtest_output=json result; seen on the macos-26 runner even
+    # with DISCOVERY_TIMEOUT 30).
+    gtest_discover_tests(${TEST_NAME}
+        DISCOVERY_TIMEOUT 30
+        DISCOVERY_MODE PRE_TEST)
 endfunction()
 
 # 1. Add the Sanity Test Executable

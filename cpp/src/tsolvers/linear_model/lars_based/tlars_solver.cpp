@@ -323,7 +323,20 @@ std::pair<double, Eigen::VectorXd> TLARS_Solver::computeStepSize(
     }
 
     if (gamma == std::numeric_limits<double>::max()) {
-        logWarning("No valid gamma found, using fallback.");
+        if (num_inactives == 0) {
+            // Path exhausted: every variable (reals + dummies) is active, so
+            // there is no next competitor and the equiangular step
+            // degenerates to the terminal least-squares projection step
+            // gamma = Cmax / A_A. Expected on small designs
+            // (p + num_dummies <= n - 1) driven to deep T_stop — not an
+            // anomaly, hence verbose-only.
+            logInfo("Inactive set empty; taking terminal LS step.");
+        } else {
+            // Candidates existed but every step-size root was filtered
+            // (<= eps or non-finite): genuine numerical degeneracy.
+            logWarning("No valid gamma among " + std::to_string(num_inactives)
+                       + " inactive candidates; using fallback step.");
+        }
         return {Cmax / A_A_, a};
     }
 

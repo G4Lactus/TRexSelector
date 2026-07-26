@@ -259,7 +259,7 @@ protected:
     void subtractAtom(std::size_t col_idx);
 
     /**
-    * @brief Update betaPath_ by copying active_coefficients_ to appropriate positions.
+    * @brief Record the sparse path step from active_coefficients_ over actives_.
     */
     void updateBetaPath() override;
 

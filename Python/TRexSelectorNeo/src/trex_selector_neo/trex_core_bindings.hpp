@@ -203,7 +203,9 @@ inline void bind_trex_core(py::module& m_tsm) {
         .def_readwrite("lambda2",       &sd::SolverHyperparameters::lambda2,       "L2 penalty for ENET-type solvers.")
         .def_readwrite("rho_afs",       &sd::SolverHyperparameters::rho_afs,       "Shrinkage step size for AFS solver in (0, 1].")
         .def_readwrite("ncgmp_variant", &sd::SolverHyperparameters::ncgmp_variant, "NCGMP variant: 0 = LineSearch, 1 = FullyCorrective.")
-        .def_readwrite("tol",           &sd::SolverHyperparameters::tol,           "Numerical tolerance for solver steps.");
+        .def_readwrite("tol",           &sd::SolverHyperparameters::tol,           "Numerical tolerance for solver steps.")
+        .def_readwrite("exch_tie_alpha", &sd::SolverHyperparameters::exch_tie_alpha, "Exchangeable-tie band width for greedy solvers (TOMP/TAFS) in pairwise ranking-noise sd units; 0 = off. Recommended under trex+DA: 0.25.")
+        .def_readwrite("exch_tie_floor", &sd::SolverHyperparameters::exch_tie_floor, "Minimum |correlation| for exchangeable-tie candidates in (0, 1); ignored unless exch_tie_alpha > 0.");
 
     // Bind DummyDistribution (wraps C++ dummygen::Distribution)
     py::class_<dg::Distribution> dummy_dist(m_tsm, "DummyDistribution",
