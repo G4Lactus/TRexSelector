@@ -327,18 +327,22 @@ corruption that debug Eigen catches.
 
 ## 9. Demos
 
-- `demos/cpp/demo_sd_tlars.cpp` — Demo 1: early stopping + contract
+The demo programs live outside the repository in the SD-TRex research
+folder (`Research Topics/Sparse Rademacher Dummies (SD-TRex)/Demos`), a
+standalone CMake project that consumes this repo via `add_subdirectory`.
+
+- `demo_sd_tlars.cpp` — Demo 1: early stopping + contract
   equivalence (unit-L2 vs z-score; identical paths, exact λ ratio).
-- `demos/cpp/demo_sd2_tlars.cpp` — Demo 2:
+- `demo_sd2_tlars.cpp` — Demo 2:
   - A (n=300, p=10³): SD vs SD2 path identity + policy comparison,
   - B (n=2000, p=500): timing vs classic explicit-D TLARS,
   - C (n=300, p=10⁶): live calibration, calibrated race (T=1: 7 TP, 0 FP),
     and the k=1 boundary exhibit at the same L = 2·10⁶.
 
-- `demos/cpp/demo_trex_sd.cpp` — Demo 3: the K-experiment TRexSD selector at
+- `demo_trex_sd.cpp` — Demo 3: the K-experiment TRexSD selector at
   the detection boundary (n=300, p=10⁵), single-path baseline vs calibrated
   (v*, T*) selection at tFDR ∈ {0.1, 0.2}; ≈ 11 s per target.
-- `demos/cpp/sim_trex_sd_mc.cpp` — Monte Carlo study
+- `sim_trex_sd_mc.cpp` (retired; see git history) — Monte Carlo study
   (`sim_trex_sd_mc [signal|null] [trials] [rho_d]`): FDR/power over
   independent trials; results in Section 6.
 

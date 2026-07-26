@@ -542,9 +542,9 @@ The method is not finished. Ordered by expected value:
 | `tsolvers/sd_tsolvers/sd2_tafs_solver.{hpp,cpp}` | pair SD2-TAFS (dot-free, both policies) |
 | `tsolvers/sd_tsolvers/sd_calibration.hpp` | pre-run auto-$k$ / auto-$L$ (bars, ceilings, $m_k(L)$) |
 | `trex_selector_methods/trex_sd/trex_sd.{hpp,cpp}` | TRexSD selector ($K$ experiments, $\Phi/\Phi'$, FDP, $(T,v)$, L-loop; law × algo factory) |
-| `demos/cpp/demo_sd_tlars.cpp` | contract equivalence (unit-L2 vs z-score) |
-| `demos/cpp/demo_sd2_tlars.cpp` | arithmetic + policies + calibrated $p{=}10^6$ scenario |
-| `demos/cpp/demo_sd_omp_afs.cpp` | greedy solvers: algorithm comparison, pair twins, auto-calibrated large $p$ |
-| `demos/cpp/demo_trex_sd.cpp` | selector at the detection boundary + L-loop |
-| `demos/cpp/demo_trex_sd_mc_variable_support.cpp` | **the** clean MC simulation (random support per trial, classic demo_trex_03 pattern, directly comparable with non-SD tables) |
-| `demos/cpp/sim_trex_sd_mc.cpp` | legacy grid studies (default: LARS vs OMP vs AFS; named modes: signal / null / snr = law × algorithm cross product) |
+| `demo_sd_tlars.cpp` (research Demos folder) | contract equivalence (unit-L2 vs z-score) |
+| `demo_sd2_tlars.cpp` (research Demos folder) | arithmetic + policies + calibrated $p{=}10^6$ scenario |
+| `demo_sd_omp_afs.cpp` (research Demos folder) | greedy solvers: algorithm comparison, pair twins, auto-calibrated large $p$ |
+| `demo_trex_sd.cpp` (research Demos folder) | selector at the detection boundary + L-loop |
+| `demo_trex_sd_mc_variable_support.cpp` (research Demos folder) | **the** clean MC simulation (random support per trial, classic demo_trex_03 pattern, directly comparable with non-SD tables) |
+| `sim_trex_sd_mc.cpp` (retired; see git history) | legacy grid studies (default: LARS vs OMP vs AFS; named modes: signal / null / snr = law × algorithm cross product) |

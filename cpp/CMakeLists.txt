@@ -257,15 +257,9 @@ install(CODE [[
 include(CTest)
 enable_testing()
 option(TREX_BUILD_TESTS "Build C++ test executables" ON)
-option(TREX_BUILD_DEMOS "Build C++ demo executables (repo-root demos/cpp)" ON)
 add_subdirectory(src)
 if (TREX_BUILD_TESTS)
     add_subdirectory(tests)
-endif()
-if (TREX_BUILD_DEMOS)
-    # Demo sources live outside cpp/ at the repository root, so an explicit
-    # binary directory is required.
-    add_subdirectory(${PROJECT_SOURCE_DIR}/../demos/cpp ${CMAKE_BINARY_DIR}/demos)
 endif()
 
 
