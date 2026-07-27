@@ -143,11 +143,16 @@ target_sources(trex_tsolvers PUBLIC
         ${CMAKE_CURRENT_SOURCE_DIR}/lm_tsolvers.hpp
         ${CMAKE_CURRENT_SOURCE_DIR}/vd_tsolvers.hpp
         ${CMAKE_CURRENT_SOURCE_DIR}/solver_utils/solver_preprocessing.hpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/linear_model/cd_based.hpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/linear_model/cd_based/tccd_solver.hpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/linear_model/cd_based/tcenet_solver.hpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/linear_model/cd_based/tcienet_solver.hpp
         ${CMAKE_CURRENT_SOURCE_DIR}/linear_model/lars_based.hpp
         ${CMAKE_CURRENT_SOURCE_DIR}/linear_model/lars_based/tlars_solver.hpp
         ${CMAKE_CURRENT_SOURCE_DIR}/linear_model/lars_based/tlasso_solver.hpp
         ${CMAKE_CURRENT_SOURCE_DIR}/linear_model/lars_based/tenet_solver.hpp
         ${CMAKE_CURRENT_SOURCE_DIR}/linear_model/lars_based/tienet_solver.hpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/linear_model/lars_based/tienet_aug_solver.hpp
         ${CMAKE_CURRENT_SOURCE_DIR}/linear_model/lars_based/tstagewise_solver.hpp
         ${CMAKE_CURRENT_SOURCE_DIR}/linear_model/lars_based/tstepwise_solver.hpp
         ${CMAKE_CURRENT_SOURCE_DIR}/linear_model/omp_based.hpp

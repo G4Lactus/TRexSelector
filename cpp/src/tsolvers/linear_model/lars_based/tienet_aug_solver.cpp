@@ -62,11 +62,14 @@ Eigen::MatrixXd TIENETAug_Solver::buildGroupBlock(
 
 // ----------------------------------------------------------------------------
 
-void TIENETAug_Solver::centerAndScaleColumns(Eigen::MatrixXd& A, double eps,
-                                             ScalingMode scaling_mode)
+void TIENETAug_Solver::centerAndScaleColumns(Eigen::MatrixXd& A,
+                                             double eps,
+                                             ScalingMode scaling_mode,
+                                             bool center,
+                                             bool scale)
 {
     const Eigen::Index n_rows = A.rows();
-    if (n_rows == 0) { return; }
+    if (n_rows == 0 || (!center && !scale)) { return; }
 
     // z-score divides by the sample SD = ||x_c|| / sqrt(rows - 1); fall back
     // to plain L2 if rows < 2. Mirrors the shared data-normalizer convention.
@@ -76,7 +79,8 @@ void TIENETAug_Solver::centerAndScaleColumns(Eigen::MatrixXd& A, double eps,
             : 1.0;
 
     for (Eigen::Index j = 0; j < A.cols(); ++j) {
-        A.col(j).array() -= A.col(j).mean();
+        if (center) { A.col(j).array() -= A.col(j).mean(); }
+        if (!scale) { continue; }
         double scale_j = A.col(j).norm() / sd_factor;
         // Degenerate (near-constant) column: keep scale 1.0 instead of
         // throwing, consistent with centerAndL2NormalizeX / -Matrix.
@@ -96,7 +100,9 @@ void TIENETAug_Solver::buildMaps() {
         y_aug_owned_.data(), y_aug_owned_.size());
 }
 
-void TIENETAug_Solver::buildInnerSolver(bool normalize, bool intercept, bool verbose,
+void TIENETAug_Solver::buildInnerSolver(bool normalize,
+                                        bool intercept,
+                                        bool verbose,
                                         ScalingMode scaling_mode) {
     if (use_lars_inner_) {
         // Pure-LARS inner solver: never drops variables (matches R type="lar").
@@ -211,16 +217,41 @@ TIENETAug_Solver::TIENETAug_Solver(
 
         const Eigen::MatrixXd B = buildGroupBlock(groups_, M_, lambda2_);
 
+        // Standardize the DATA blocks FIRST (family convention: X is
+        // L2-normalized once, D likewise, y centered — honoring the caller's
+        // normalize/intercept flags and ScalingMode), THEN append the
+        // group-ridge rows. The augmented columns are NOT re-normalized:
+        // rescaling them divides data and penalty rows by
+        // sqrt(||x_j||^2 + lambda2/p_m), i.e. a per-column reweighting of
+        // lambda1 (a different problem than the IEN Lagrangian; the effect
+        // grows with heterogeneous group sizes and, from raw-scale inputs,
+        // silently shrinks the effective lambda2 by the data-column norms).
+        // Likewise the B rows are never centered (centering turns their
+        // structural zeros into -mean entries, weakly coupling all groups)
+        // and the appended zero responses stay exactly zero.
+        //
+        // NOTE (R parity): this intentionally deviates from lm_dummy.R,
+        // which rescales the augmented system (`X_Dummy <- scale(X_Dummy)`)
+        // and thereby solves the perturbed problem described above. The
+        // pre-augmentation convention makes this wrapper exactly equivalent
+        // to the native TIENET_Solver path.
+        Eigen::MatrixXd X_data = X;
+        Eigen::MatrixXd D_data = D;
+        Eigen::VectorXd y_data = y;
+        centerAndScaleColumns(X_data, eps_, scaling_mode, intercept, normalize);
+        centerAndScaleColumns(D_data, eps_, scaling_mode, intercept, normalize);
+        if (intercept) { y_data.array() -= y_data.mean(); }
+
         // X_aug = [ X ; B ]  ((n + M) x p). No global 1/sqrt(1+lambda2)
-        // factor for the IEN (Theorem 1; R lm_dummy.R: the sqrt(l2) and
-        // 1/sqrt(l2) factors cancel on the data block).
+        // factor for the IEN (Theorem 1; the sqrt(l2) and 1/sqrt(l2)
+        // factors cancel on the data block).
         X_aug_owned_.resize(n + M_idx, p_idx);
-        X_aug_owned_.topRows(n)        = X;
+        X_aug_owned_.topRows(n)        = X_data;
         X_aug_owned_.bottomRows(M_idx) = B;
 
         // D_aug = [ D ; B tiled per layer ]  ((n + M) x L).
         D_aug_owned_.resize(n + M_idx, L_idx);
-        D_aug_owned_.topRows(n) = D;
+        D_aug_owned_.topRows(n) = D_data;
         for (std::size_t li = 0; li < w; ++li) {
             D_aug_owned_.block(n, static_cast<Eigen::Index>(li) * p_idx,
                                M_idx, p_idx) = B;
@@ -228,16 +259,8 @@ TIENETAug_Solver::TIENETAug_Solver(
 
         // y_aug = [ y ; 0_M ].
         y_aug_owned_.resize(n + M_idx);
-        y_aug_owned_.head(n) = y;
+        y_aug_owned_.head(n) = y_data;
         y_aug_owned_.tail(M_idx).setZero();
-
-        // R-faithful post-augmentation preprocessing (lm_dummy.R:
-        // `X_Dummy <- scale(X_Dummy); y <- y - mean(y)`): center + rescale the
-        // augmented columns, center the augmented response, then run the
-        // inner solver on the system AS PREPROCESSED.
-        centerAndScaleColumns(X_aug_owned_, eps_, scaling_mode);
-        centerAndScaleColumns(D_aug_owned_, eps_, scaling_mode);
-        y_aug_owned_.array() -= y_aug_owned_.mean();
 
         inner_normalize = false;
         inner_intercept = false;
@@ -326,5 +349,5 @@ TIENETAug_Solver TIENETAug_Solver::load(
 }
 
 // ============================================================================
-} // namespace trex::tsolvers::linear_model::lars_based
+} // End of namespace trex::tsolvers::linear_model::lars_based
 // ============================================================================
