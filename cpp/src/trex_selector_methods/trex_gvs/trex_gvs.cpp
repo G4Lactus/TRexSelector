@@ -29,11 +29,15 @@
 // GVS header
 #include <trex_selector_methods/trex_gvs/trex_gvs.hpp>
 
-// Ridge lambda-selection (header-only): two retained k-fold CV variants.
-//   SVD  -> ridge_cv_svd           (JacobiSVD direct ridge)
-//   CCD  -> enet_cv_ccd            (glmnet-faithful coordinate descent, alpha=0)
+// Ridge lambda-selection (header-only): four retained k-fold CV variants.
+//   SVD      -> ridge_cv_svd    (JacobiSVD direct ridge)
+//   CCD      -> enet_cv_ccd     (glmnet-faithful coordinate descent, alpha=0)
+//   IEN_CCD  -> ienet_cv_ccd    (IEN geometry, lambda1 profiled out)
+//   TIK_SVD  -> tikhonov_cv_svd (IEN geometry, analytic lambda1 = 0 backbone)
 #include <ml_methods/model_selection/ridge_cv_svd.hpp>
 #include <ml_methods/model_selection/enet_cv_ccd.hpp>
+#include <ml_methods/model_selection/ienet_cv_ccd.hpp>
+#include <ml_methods/model_selection/tikhonov_cv_svd.hpp>
 
 // Data normalization helpers
 #include <trex_selector_methods/trex_utils/trex_data_normalizer.hpp>
@@ -44,7 +48,10 @@
 // Concrete solver types (for direct in-memory warm-start)
 #include <tsolvers/linear_model/lars_based/tenet_solver.hpp>
 #include <tsolvers/linear_model/lars_based/tenet_aug_solver.hpp>
+#include <tsolvers/linear_model/lars_based/tienet_solver.hpp>
 #include <tsolvers/linear_model/lars_based/tienet_aug_solver.hpp>
+#include <tsolvers/linear_model/cd_based/tcenet_solver.hpp>
+#include <tsolvers/linear_model/cd_based/tcienet_solver.hpp>
 #include <tsolvers/linear_model/lars_based/tlars_solver.hpp>
 #include <tsolvers/linear_model/lars_based/tlasso_solver.hpp>
 
@@ -60,18 +67,48 @@ namespace trex::trex_selector_methods::trex_gvs {
 // Local namespace aliases
 namespace dn   = trex::trex_selector_methods::utils::data_normalizer;
 namespace lars = trex::tsolvers::linear_model::lars_based;
+namespace ccd  = trex::tsolvers::linear_model::cd_based;
 namespace mm   = trex::trex_selector_methods::utils::memmap_manager;
 
-// Static helper: return a copy of `p` with `use_memory_mapping` forced to
-// false, so the base ctor does not pre-allocate `memmap_mgr_` (which would
-// use the base row count `n_` instead of the GVS effective row count
-// `n_eff_ = n_ + M` required for IEN).
-// GVS re-allocates the manager in `onSelectBegin()` once `n_eff_` is known.
-static tc::TRexControlParameter stripMmapForBase(
-    const tc::TRexControlParameter& p)
+// Static helper: prepare the nested base control parameters before they are
+// frozen into the base class.
+//
+//   1. `use_memory_mapping` is forced to false, so the base ctor does not
+//      pre-allocate `memmap_mgr_` (which would use the base row count `n_`
+//      instead of the GVS effective row count `n_eff_ = n_ + M` required for
+//      IEN). GVS re-allocates the manager in `onSelectBegin()` once `n_eff_`
+//      is known.
+//   2. For `gvs_type == EN`, `solver_type` is DERIVED from `en_solver`
+//      (the single EN-solver knob). The pre-derivation value may only be
+//      the neutral default (TENET) or already consistent; an explicitly
+//      conflicting EN-family value throws so a legacy `solver_type = TCENET`
+//      / `TENET_AUG` request is never silently downgraded. Non-EN-family
+//      values are left for the constructor's IEN/EN family check to reject
+//      with the appropriate message.
+static tc::TRexControlParameter prepareBaseCtrl(
+    const TRexGVSControlParameter& g)
 {
-    tc::TRexControlParameter q = p;
+    tc::TRexControlParameter q = g.trex_ctrl;
     q.use_memory_mapping = false;
+
+    if (g.gvs_type == GVSType::EN) {
+        const sd::SolverTypeForTRex derived = toSolverType(g.en_solver);
+        const bool en_family =
+            q.solver_type == sd::SolverTypeForTRex::TENET ||
+            q.solver_type == sd::SolverTypeForTRex::TENET_AUG ||
+            q.solver_type == sd::SolverTypeForTRex::TCENET;
+        if (en_family &&
+            q.solver_type != sd::SolverTypeForTRex::TENET &&  // neutral default
+            q.solver_type != derived) {
+            throw std::invalid_argument(
+                "TRexGVSSelector: gvs_type = EN selects its solver via "
+                "en_solver (TENET / TENET_AUG / TCENET); trex_ctrl.solver_type "
+                "is derived from it. Set en_solver instead of solver_type."
+            );
+        }
+        if (en_family) q.solver_type = derived;
+        // Non-EN-family values fall through to the constructor's check.
+    }
     return q;
 }
 
@@ -89,7 +126,7 @@ TRexGVSSelector::TRexGVSSelector(
     bool                         verbose
 ) :
     tc::TRexSelector(X, y, tFDR,
-                     stripMmapForBase(trex_gvs_ctrl.trex_ctrl),
+                     prepareBaseCtrl(trex_gvs_ctrl),
                      seed, verbose),
     trex_gvs_ctrl_(std::move(trex_gvs_ctrl)),
     gvs_use_mmap_(trex_gvs_ctrl_.trex_ctrl.use_memory_mapping)
@@ -105,21 +142,33 @@ TRexGVSSelector::TRexGVSSelector(
     }
     // ---- Solver-type compatibility checks ---------------------------------
     if (trex_gvs_ctrl_.gvs_type == GVSType::EN) {
-        // EN picks its concrete solver from en_solver (TENET / TENET_AUG), so
-        // the base solver_type must name a member of that TENET family.
+        // EN: prepareBaseCtrl() already derived the frozen trex_ctrl_
+        // .solver_type from en_solver (throwing on an explicit conflict).
+        // What remains to reject here is a non-EN-family solver_type that
+        // the derivation deliberately left untouched (e.g. TLARS, TOMP).
         if (trex_ctrl_.solver_type != sd::SolverTypeForTRex::TENET &&
-            trex_ctrl_.solver_type != sd::SolverTypeForTRex::TENET_AUG) {
+            trex_ctrl_.solver_type != sd::SolverTypeForTRex::TENET_AUG &&
+            trex_ctrl_.solver_type != sd::SolverTypeForTRex::TCENET) {
             throw std::invalid_argument(
-                "TRexGVSSelector: gvs_type = EN requires solver_type = TENET or "
-                "TENET_AUG (matching en_solver)."
+                "TRexGVSSelector: gvs_type = EN drives the ENET solver "
+                "family only; select the variant via en_solver "
+                "(TENET / TENET_AUG / TCENET) and leave solver_type at its "
+                "default."
             );
         }
     } else { // IEN
-        if (trex_ctrl_.solver_type != sd::SolverTypeForTRex::TIENET_AUG) {
+        // IEN drives its concrete solver from solver_type directly:
+        // TIENET (native pathwise LARS-IEN), TIENET_AUG (group penalty
+        // absorbed into the row-augmented system built by TIENETAug_Solver),
+        // or TCIENET (pathwise CCD with the O(1) group-sum penalty hooks).
+        // All three solve the same IEN problem family.
+        if (trex_ctrl_.solver_type != sd::SolverTypeForTRex::TIENET &&
+            trex_ctrl_.solver_type != sd::SolverTypeForTRex::TIENET_AUG &&
+            trex_ctrl_.solver_type != sd::SolverTypeForTRex::TCIENET) {
             throw std::invalid_argument(
                 "TRexGVSSelector: gvs_type = IEN requires solver_type = "
-                "TIENET_AUG (the group penalty is absorbed into the "
-                "row-augmented system built by TIENETAug_Solver)."
+                "TIENET (native pathwise), TIENET_AUG (row-augmented), or "
+                "TCIENET (CCD)."
             );
         }
     }
@@ -127,16 +176,16 @@ TRexGVSSelector::TRexGVSSelector(
     // ---- Memory mapping --------------------------------------------------
     // The user-requested flag is captured in the member-initializer list as
     // `gvs_use_mmap_` (read from the *original* parameter copy). The flag
-    // passed to the base ctor was stripped via stripMmapForBase() so the
+    // passed to the base ctor was stripped via prepareBaseCtrl() so the
     // base does not pre-allocate `memmap_mgr_` at the wrong row count.
     // GVS re-allocates the manager in `onSelectBegin()` once `n_eff_` is
     // known.
 
     // ---- L-loop strategy gate ---------------------------------------------
-    // Supported: STANDARD, HCONCAT, SKIPL, DIRECT.
-    //   * STANDARD / SKIPL / DIRECT: redraw all `LL` layers from scratch per
-    //     L-iteration. SKIPL collapses to a single iteration with
-    //     `LL = max_dummy_multiplier`. DIRECT is functionally identical to
+    // Supported: STANDARD, HCONCAT, SKIPL, ONDEMAND.
+    //   * STANDARD / SKIPL / ONDEMAND: redraw all `LL` layers from scratch
+    //     per L-iteration. SKIPL collapses to a single iteration with
+    //     `LL = max_dummy_multiplier`. ONDEMAND is functionally identical to
     //     STANDARD inside GVS because the overridden `evaluateStep`
     //     consumes `D_solver_bufs_` rather than streaming from disk.
     //   * HCONCAT: append one fresh layer per L-iteration.
@@ -459,6 +508,82 @@ double TRexGVSSelector::computeLambda2() const {
     // smaller fixed lambda_2 (see the EndToEnd_IEN test for a worked example).
     namespace ms = trex::ml_methods::model_selection;
 
+    // ---- IEN-geometry tuners (solver scale; NO p/2 conversion) -------------
+    // Both consume the group structure (gvs_setup_ is populated before this
+    // call) and return lambda_2 on the unit-L2 solver scale — directly
+    // consumable by TIENET / TIENET_AUG / TCIENET; only the ZSCORE
+    // working-scale factor (n-1) applies (X_ columns then have squared norm
+    // n-1 instead of 1).
+    const bool ien_method =
+        (trex_gvs_ctrl_.lambda2_method == LambdaSelectionMethod::CV_1SE_IEN_CCD ||
+         trex_gvs_ctrl_.lambda2_method == LambdaSelectionMethod::CV_MIN_IEN_CCD ||
+         trex_gvs_ctrl_.lambda2_method == LambdaSelectionMethod::CV_1SE_TIK_SVD ||
+         trex_gvs_ctrl_.lambda2_method == LambdaSelectionMethod::CV_MIN_TIK_SVD);
+    if (ien_method) {
+        if (trex_gvs_ctrl_.gvs_type != GVSType::IEN) {
+            throw std::invalid_argument(
+                "TRexGVSSelector::computeLambda2: the IEN-geometry lambda_2 "
+                "methods (CV_*_IEN_CCD / CV_*_TIK_SVD) require gvs_type = IEN "
+                "(they consume the group structure).");
+        }
+
+        const double scale_adjust_ien =
+            (trex_ctrl_.scaling_mode == dn::ScalingMode::ZSCORE && n_ > 1)
+                ? static_cast<double>(n_ - 1)
+                : 1.0;
+
+        switch (trex_gvs_ctrl_.lambda2_method) {
+            case LambdaSelectionMethod::CV_1SE_IEN_CCD:
+            case LambdaSelectionMethod::CV_MIN_IEN_CCD: {
+                // 2D (lambda_2 x lambda_1) CV with lambda_1 profiled out;
+                // well-posed in any p/n regime. The lambda_2 grid size and
+                // the lambda_1 path length use the class defaults (25 x 100)
+                // rather than cv_n_lambda — the scan is a 2D surface, not a
+                // 1D analytic grid.
+                ms::ienet_cv_ccd cv;
+                cv.fit(*X_, y_, gvs_setup_.groups_vec,
+                       trex_gvs_ctrl_.cv_n_folds,
+                       /*n_lambda2=*/25,
+                       /*lambda2_ratio=*/1e4,
+                       /*n_lambda1=*/100,
+                       /*lambda1_min_ratio=*/-1.0,
+                       resolved_cv_seed_);
+                const double l2 =
+                    (trex_gvs_ctrl_.lambda2_method ==
+                     LambdaSelectionMethod::CV_MIN_IEN_CCD)
+                        ? cv.cv_min() : cv.cv_1se();
+                return l2 * scale_adjust_ien;
+            }
+            case LambdaSelectionMethod::CV_1SE_TIK_SVD:
+            case LambdaSelectionMethod::CV_MIN_TIK_SVD: {
+                // Analytic lambda_1 = 0 backbone; exact for n > p, but
+                // structurally uninformative once the unpenalized contrast
+                // block can interpolate the training folds (p - M >=
+                // n_train): any pick there is floor-driven, so refuse.
+                ms::tikhonov_cv_svd cv;
+                cv.fit(*X_, y_, gvs_setup_.groups_vec,
+                       trex_gvs_ctrl_.cv_n_folds,
+                       trex_gvs_ctrl_.cv_n_lambda,
+                       /*lambda_ratio=*/1e4,
+                       resolved_cv_seed_);
+                if (cv.contrast_interpolates()) {
+                    throw std::invalid_argument(
+                        "TRexGVSSelector::computeLambda2: CV_*_TIK_SVD is "
+                        "structurally uninformative on this design "
+                        "(p - M >= n_train: the unpenalized contrast block "
+                        "interpolates the training folds and the CV curve is "
+                        "floor-driven). Use CV_*_IEN_CCD instead.");
+                }
+                const double l2 =
+                    (trex_gvs_ctrl_.lambda2_method ==
+                     LambdaSelectionMethod::CV_MIN_TIK_SVD)
+                        ? cv.cv_min() : cv.cv_1se();
+                return l2 * scale_adjust_ien;
+            }
+            default: break;  // unreachable
+        }
+    }
+
     double lambda_cv = 0.0;
     switch (trex_gvs_ctrl_.lambda2_method) {
         // == SVD-based CV (ridge_cv_svd, JacobiSVD direct ridge) =====================
@@ -680,6 +805,14 @@ TRexGVSSelector::ExpAgg TRexGVSSelector::runKExperiments(
     const auto p_idx     = static_cast<Eigen::Index>(p_);
     const auto T_idx     = static_cast<Eigen::Index>(T_stop);
     const bool ien                           = (trex_gvs_ctrl_.gvs_type == GVSType::IEN);
+    const bool ien_native = ien &&
+        (trex_ctrl_.solver_type == sd::SolverTypeForTRex::TIENET);
+    const bool ien_ccd = ien &&
+        (trex_ctrl_.solver_type == sd::SolverTypeForTRex::TCIENET);
+    // EN variants branch on en_solver, the single EN axis (the frozen
+    // trex_ctrl_.solver_type was derived from it in prepareBaseCtrl()).
+    const bool en_ccd    = (trex_gvs_ctrl_.gvs_type == GVSType::EN &&
+                            trex_gvs_ctrl_.en_solver == ENSolverType::TCENET);
     const bool en_aug    = (trex_gvs_ctrl_.gvs_type == GVSType::EN &&
                             trex_gvs_ctrl_.en_solver == ENSolverType::TENET_AUG);
 
@@ -737,25 +870,91 @@ TRexGVSSelector::ExpAgg TRexGVSSelector::runKExperiments(
                 //    the augmented solvers build and own their augmented
                 //    systems internally.
                 std::unique_ptr<tsolvers::TSolver_Base> solver;
-                if (ien) {
-                    // IEN: group-informed row augmentation inside
-                    // TIENETAug_Solver. D_k is RAW (the solver applies the
-                    // R-faithful post-augmentation column scaling itself);
-                    // normalize/intercept=true only govern the degenerate
-                    // lambda2 == 0 collapse, where the raw dummies must be
-                    // normalized by the inner solver.
+                if (ien_native) {
+                    // IEN native: pathwise LARS-IEN (no augmented copies).
+                    // X is the shared base-normalized map, D_k was CENTERED
+                    // ONLY in prepareDummiesForLStep (realized dummy norms
+                    // kept, FIX 2026-07-08 convention), y is centered, so
+                    // the solver runs AS CONSTRUCTED with
+                    // normalize/intercept=false (in-place normalization of
+                    // the shared X across the parallel K loop is forbidden).
+                    // The group penalty is absorbed into the Gram /
+                    // correlation updates via lambda2 / p_m.
+                    solver = std::make_unique<lars::TIENET_Solver>(
+                        *X_solver_map_,
+                        *D_solver_maps_[k],
+                        *y_solver_map_,
+                        lambda2_,
+                        gvs_setup_.groups_vec,
+                        /*normalize=*/false,
+                        /*intercept=*/false,
+                        /*verbose=*/false,
+                        solver_scaling
+                    );
+                } else if (ien_ccd) {
+                    // IEN CCD: exact fixed-lambda1 IEN minimizers per dummy
+                    // crossing (O(1) group-sum penalty hooks). Same data
+                    // convention as the native pathwise TIENET: shared
+                    // pre-normalized X, center-only D_k, centered y —
+                    // normalize/intercept=false.
+                    auto ccd_solver = std::make_unique<ccd::TCIENET_Solver>(
+                        *X_solver_map_,
+                        *D_solver_maps_[k],
+                        *y_solver_map_,
+                        lambda2_,
+                        gvs_setup_.groups_vec,
+                        /*normalize=*/false,
+                        /*intercept=*/false,
+                        /*verbose=*/false,
+                        solver_scaling
+                    );
+                    // Shared CD knobs (default cd_lambda_rel_tol = 1e-5:
+                    // tight crossing localization keeps the recorded
+                    // supports aligned with the LARS-path variants).
+                    sd::applyCdKnobs(*ccd_solver, trex_ctrl_.solver_params);
+                    solver = std::move(ccd_solver);
+                } else if (ien) {
+                    // IEN aug: group-informed row augmentation inside
+                    // TIENETAug_Solver. D_k is RAW; with normalize=false,
+                    // intercept=true the wrapper CENTERS its OWNED copies of
+                    // the data blocks (no per-column rescaling — the
+                    // realized dummy norms are part of the null, FIX
+                    // 2026-07-08 convention; centering is a no-op on the
+                    // already-normalized X) BEFORE appending the group-ridge
+                    // rows. The same flags govern the degenerate
+                    // lambda2 == 0 collapse (inner solver centers, does not
+                    // rescale).
                     solver = std::make_unique<lars::TIENETAug_Solver>(
                         *X_solver_map_,
                         *D_solver_maps_[k],
                         *y_solver_map_,
                         lambda2_,
                         gvs_setup_.groups_vec,
-                        /*normalize=*/true,
+                        /*normalize=*/false,
                         /*intercept=*/true,
                         /*verbose=*/false,
                         solver_scaling,
                         trex_gvs_ctrl_.tenet_aug_use_lars
                     );
+                } else if (en_ccd) {
+                    // EN CCD: exact fixed-lambda1 elastic-net minimizers per
+                    // dummy crossing (K = I; dummies get the same unit ridge,
+                    // preserving exchangeability). Same data convention as
+                    // plain TENET: pre-normalized X, center-only D_k,
+                    // centered y — normalize/intercept=false.
+                    auto ccd_solver = std::make_unique<ccd::TCENET_Solver>(
+                        *X_solver_map_,
+                        *D_solver_maps_[k],
+                        *y_solver_map_,
+                        lambda2_,
+                        /*normalize=*/false,
+                        /*intercept=*/false,
+                        /*verbose=*/false,
+                        solver_scaling
+                    );
+                    // Shared CD knobs (see the TCIENET branch).
+                    sd::applyCdKnobs(*ccd_solver, trex_ctrl_.solver_params);
+                    solver = std::move(ccd_solver);
                 } else if (en_aug) {
                     // EN-aug: Zou-Hastie augmentation inside TENETAug_Solver,
                     // run AS CONSTRUCTED (inner normalize=false for
@@ -798,8 +997,17 @@ TRexGVSSelector::ExpAgg TRexGVSSelector::runKExperiments(
             }
 
             // Per-experiment phi_T contribution (independent slots).
+            // Activeness threshold: machine epsilon, NOT eps_ (= solver tol).
+            // Same rationale as the base runner (trex.cpp buildRunnerConfig
+            // cfg.eps): a tol-sized threshold delays the "T-th dummy entered"
+            // milestone and, for solvers reporting RAW minimizers (the CCD
+            // family, no Zou-Hastie rescaling), erases coefficients of scale
+            // ~1/(1+lambda2) once lambda2 approaches 1/tol — punctured dummy
+            // counts then zero whole phi columns (the demo_02 TCENET
+            // collapse at the CV-chosen lambda2 ~ 1e6).
             phi_T_per_k[k] = extractPhiContribFromPath(
-                beta_path, p_, num_dummies, T_stop, eps_, verbose_);
+                beta_path, p_, num_dummies, T_stop,
+                std::numeric_limits<double>::epsilon(), verbose_);
         }
     }
 
@@ -856,8 +1064,8 @@ TRexGVSSelector::StepView TRexGVSSelector::evaluateStep(
 
 // ===================================================================================
 // L-loop hook: cluster-aware dummy generation.
-// Strategies handled: STANDARD, HCONCAT, SKIPL, DIRECT.
-//   - STANDARD / SKIPL / DIRECT : redraw all LL layers from scratch.
+// Strategies handled: STANDARD, HCONCAT, SKIPL, ONDEMAND.
+//   - STANDARD / SKIPL / ONDEMAND : redraw all LL layers from scratch.
 //   - HCONCAT                   : append one fresh layer per L-iteration.
 // ===================================================================================
 
@@ -867,6 +1075,11 @@ void TRexGVSSelector::prepareDummiesForLStep(LStepContext& ctx)
     const std::size_t LL    = ctx.L_iter;
 
     const bool ien = (trex_gvs_ctrl_.gvs_type == GVSType::IEN);
+    // Native-convention IEN solvers (pathwise LARS-IEN and CCD-IEN) consume
+    // the center-only D_k directly; only the TIENETAug wrapper takes it raw.
+    const bool ien_native = ien &&
+        (trex_ctrl_.solver_type == sd::SolverTypeForTRex::TIENET ||
+         trex_ctrl_.solver_type == sd::SolverTypeForTRex::TCIENET);
 
     // Fresh dummy data invalidates the cached solvers. Clear them BEFORE the
     // dummy buffers they view are reassigned below, so no dangling view
@@ -945,11 +1158,16 @@ void TRexGVSSelector::prepareDummiesForLStep(LStepContext& ctx)
     }
 
     // ---- (Re)build solver-side D buffers ----------------------------------
-    // EN variants (TENET, TENETAug): the dummy columns are centered + rescaled
-    // with the same convention as X_ (TENET consumes them as-is; TENETAug's
-    // d1/d2 algebra requires unit-scale inputs to keep the augmented columns
-    // unit-scale). IEN: the block stays RAW — TIENETAug applies the R-faithful
-    // post-augmentation column scaling to [D; B] itself.
+    // ALL variants keep the realized dummy column norms (FIX 2026-07-08
+    // below — the chi fluctuation of the MVN draw is part of the dummy null
+    // distribution; erasing it made dummies systematically less competitive
+    // and inflated the realized FDR). EN variants and IEN native (TIENET):
+    // the dummy columns are CENTERED ONLY here (the native solver runs with
+    // normalize/intercept=false on the shared pre-normalized X and must not
+    // touch its data). IEN aug (TIENETAug): the block stays RAW — the
+    // wrapper centers its owned copies itself (normalize=false,
+    // intercept=true) before appending the group-ridge rows, yielding the
+    // identical center-only convention.
     if (gvs_use_mmap_) {
         // Memory-mapped path: write directly into the per-K mmap buffers
         // pre-allocated in onSelectBegin() (n rows each).
@@ -964,7 +1182,7 @@ void TRexGVSSelector::prepareDummiesForLStep(LStepContext& ctx)
                     "mmap buffer row count does not match n.");
             }
             assembleDummyBlock(k, dmap);
-            if (!ien) {
+            if (!ien || ien_native) {
             // FIX (2026-07-08): dummies enter the solver AS DRAWN (centered
             // only, NO per-column norm equalization). The cluster-MVN draw
             // already carries the correct population scale (Sigma_m computed
@@ -976,6 +1194,9 @@ void TRexGVSSelector::prepareDummiesForLStep(LStepContext& ctx)
             // lambda_2): PC1 FDR inflated from ~0.10 (CRAN R reference, which
             // keeps the fluctuation) to ~0.13. Center-only matches the R
             // pipeline (dummies are centered by the augmented scale() there).
+            // Applies to the EN variants AND the native-convention IEN
+            // solvers (TIENET / TCIENET); only the TIENETAug wrapper takes
+            // the block raw and reaches the same state via its own centering.
                 dmap.rowwise() -= dmap.colwise().mean();
             }
             // Bind the long-lived Map for runKExperiments. The owning
@@ -991,18 +1212,9 @@ void TRexGVSSelector::prepareDummiesForLStep(LStepContext& ctx)
         D_solver_maps_.resize(K);
         for (std::size_t k = 0; k < K; ++k) {
             assembleDummyBlock(k, D_solver_bufs_[k]);
-            if (!ien) {
-            // FIX (2026-07-08): dummies enter the solver AS DRAWN (centered
-            // only, NO per-column norm equalization). The cluster-MVN draw
-            // already carries the correct population scale (Sigma_m computed
-            // on the normalized X_); its random realized column norms are an
-            // essential part of the dummy null distribution. Exactly
-            // unit-normalizing each dummy column erased that fluctuation and
-            // made dummies systematically less competitive in the EN path --
-            // measured on the trex_spca rdump10 head-to-head (identical X and
-            // lambda_2): PC1 FDR inflated from ~0.10 (CRAN R reference, which
-            // keeps the fluctuation) to ~0.13. Center-only matches the R
-            // pipeline (dummies are centered by the augmented scale() there).
+            if (!ien || ien_native) {
+                // Center-only, AS-DRAWN norms (FIX 2026-07-08) — see the
+                // memory-mapped branch above for the full rationale.
                 D_solver_bufs_[k].rowwise() -=
                     D_solver_bufs_[k].colwise().mean();
             }

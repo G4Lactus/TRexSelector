@@ -120,15 +120,15 @@ TRexSPCAResult TRexSPCA::select() {
 
         tg::TRexGVSControlParameter gvs_ctrl = spca_ctrl_.gvs_ctrl;
 
-        // EN + TENETAug: always override (IEN is not used by TRexSPCA).
-        // GVSType::EN + en_solver routes to TENET_Solver / TENETAug_Solver in
-        // TRexGVSSelector. The solver variant is user-selectable via
-        // spca_ctrl_.en_solver (both are equivalent for lambda2 > 0).
-        gvs_ctrl.gvs_type            = tg::GVSType::EN;
-        gvs_ctrl.en_solver           = spca_ctrl_.en_solver;
-        gvs_ctrl.trex_ctrl.solver_type = (spca_ctrl_.en_solver == tg::ENSolverType::TENET_AUG)
-            ? sd::SolverTypeForTRex::TENET_AUG
-            : sd::SolverTypeForTRex::TENET;
+        // EN is always forced (IEN is not used by TRexSPCA). The solver
+        // variant is user-selectable via spca_ctrl_.en_solver
+        // (TENET / TENET_AUG / TCENET — all equivalent for lambda2 > 0);
+        // solver_type is set to the matching enumerator so a conflicting
+        // value in the forwarded gvs_ctrl can never reach GVS's derivation
+        // check.
+        gvs_ctrl.gvs_type              = tg::GVSType::EN;
+        gvs_ctrl.en_solver             = spca_ctrl_.en_solver;
+        gvs_ctrl.trex_ctrl.solver_type = tg::toSolverType(spca_ctrl_.en_solver);
 
         std::vector<Eigen::Index> active_set;
         {

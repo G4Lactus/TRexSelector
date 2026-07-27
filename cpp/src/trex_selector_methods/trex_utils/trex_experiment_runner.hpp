@@ -133,6 +133,12 @@ struct ExperimentRunnerConfig {
     int max_outer_threads = 1;
     int max_inner_threads = 1;
 
+    // --- General-Tikhonov penalty (TCIENET sparse-K dispatch) ---
+    /** @brief Non-owning pointer to the Tikhonov matrix K (nullptr = none).
+     *  Set by TRexTikhonovSelector::buildRunnerConfig(); forwarded verbatim
+     *  into SolverConfig::tikhonov_K. Must outlive the run() call. */
+    const Eigen::SparseMatrix<double>* tikhonov_K = nullptr;
+
     // --- Diagnostics ---
     bool verbose = false;
     double eps = std::numeric_limits<double>::epsilon();
@@ -650,7 +656,8 @@ private:
                       trex::utils::datageneration::dummygen::mix_seed64(
                           static_cast<std::uint64_t>(cfg.tie_seed_base), k)
                       & 0x7FFFFFFFULL)
-                : -1LL
+                : -1LL,
+            .tikhonov_K = cfg.tikhonov_K
         };
 
         std::unique_ptr<trex::tsolvers::TSolver_Base> retained;
