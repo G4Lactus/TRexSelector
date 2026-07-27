@@ -30,6 +30,7 @@ using namespace trex::trex_selector_methods::trex_screening;
 using namespace trex::trex_selector_methods::trex_core;
 using namespace trex::utils::datageneration::datagen;
 namespace dn = trex::trex_selector_methods::utils::data_normalizer;
+namespace sd = trex::trex_selector_methods::utils::solver_dispatch;
 
 // ========================================================================================
 
@@ -88,6 +89,29 @@ TEST_F(TRexScreeningTest, Execution_OrdinaryScreenTRexDoesNotThrow) {
         // num_dummies is locked to p
         EXPECT_EQ(result.num_dummies, 20);
     });
+}
+
+
+/** @brief Screening with the CD solvers (TCCD / TCENET): T is fixed at 1
+ *  and no warm start engages, so this exercises the plain fresh-construction
+ *  dispatch of the CD family under the screening loop. */
+TEST_F(TRexScreeningTest, Execution_CdFamilyDoesNotThrow) {
+    for (auto solver : {sd::SolverTypeForTRex::TCCD,
+                        sd::SolverTypeForTRex::TCENET}) {
+        ScreenTRexControlParameter screen_params;
+        screen_params.trex_method = ScreenTRexMethod::TREX;
+        screen_params.use_bootstrap_CI = false;
+        screen_params.trex_ctrl.K = 5;
+        screen_params.trex_ctrl.lloop_strategy = LLoopStrategy::STANDARD;
+        screen_params.trex_ctrl.solver_type = solver;
+
+        EXPECT_NO_THROW({
+            ScreenTRexSelector selector(X_map, y_map, screen_params);
+            auto result = selector.select();
+            EXPECT_EQ(result.T_stop, 1);
+            EXPECT_EQ(result.num_dummies, 20);
+        });
+    }
 }
 
 

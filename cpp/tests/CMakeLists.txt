@@ -63,6 +63,7 @@ add_trex_test(test_tsolvers_getters test_tsolvers/test_tsolvers_getters.cpp)
 add_trex_test(test_tsolvers_serialization test_tsolvers/test_tsolvers_serialization.cpp)
 add_trex_test(test_tsolvers_mmap test_tsolvers/test_tsolvers_mmap.cpp)
 add_trex_test(test_tsolvers_polymorphic test_tsolvers/test_tsolvers_polymorphic.cpp)
+add_trex_test(test_tsolvers_cd test_tsolvers/test_tsolvers_cd.cpp)
 add_trex_test(test_sd_tsolvers test_tsolvers/test_sd_tsolvers.cpp)
 
 # 5. Add tests for TRex Selector Methods
@@ -73,6 +74,7 @@ add_trex_test(test_trex_gvs test_trex_selector_methods/test_trex_gvs.cpp)
 add_trex_test(test_trex_screening test_trex_selector_methods/test_trex_screening.cpp)
 add_trex_test(test_trex_biobank_screening test_trex_selector_methods/test_trex_biobank_screening.cpp)
 add_trex_test(test_trex_spca test_trex_selector_methods/test_trex_spca.cpp)
+add_trex_test(test_trex_tikhonov test_trex_selector_methods/test_trex_tikhonov.cpp)
 add_trex_test(test_trex_vd test_trex_selector_methods/test_trex_vd.cpp)
 
 # 6. Opt-in cross-language validations. NOT registered with CTest and excluded

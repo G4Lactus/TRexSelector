@@ -59,7 +59,7 @@ TEST_F(TRexGVSTest, Validation_ThrowsOnSolverMismatch) {
     EXPECT_THROW(TRexGVSSelector(X_map, y_map, 0.1, gvs_params),
                  std::invalid_argument);
 
-    // IEN requires TIENET_AUG. Giving it TENET should throw.
+    // IEN requires TIENET or TIENET_AUG. Giving it TENET should throw.
     gvs_params.gvs_type = GVSType::IEN;
     gvs_params.trex_ctrl.solver_type = SolverTypeForTRex::TENET;
     EXPECT_THROW(TRexGVSSelector(X_map, y_map, 0.1, gvs_params),
@@ -73,6 +73,57 @@ TEST_F(TRexGVSTest, Validation_ThrowsOnSolverMismatch) {
     // IEN + TIENET_AUG constructs.
     gvs_params.trex_ctrl.solver_type = SolverTypeForTRex::TIENET_AUG;
     EXPECT_NO_THROW(TRexGVSSelector(X_map, y_map, 0.1, gvs_params));
+
+    // IEN + TIENET (native pathwise) constructs.
+    gvs_params.trex_ctrl.solver_type = SolverTypeForTRex::TIENET;
+    EXPECT_NO_THROW(TRexGVSSelector(X_map, y_map, 0.1, gvs_params));
+}
+
+
+/** @brief EN selects its solver via en_solver alone; solver_type is derived.
+ *  The legacy pattern (EN-family solver_type conflicting with en_solver)
+ *  must throw instead of being silently downgraded. */
+TEST_F(TRexGVSTest, Validation_EnSolverIsTheSingleENAxis) {
+
+    // en_solver alone selects each variant (solver_type left at default).
+    for (auto en : {ENSolverType::TENET, ENSolverType::TENET_AUG,
+                    ENSolverType::TCENET}) {
+        TRexGVSControlParameter ctrl;
+        ctrl.gvs_type  = GVSType::EN;
+        ctrl.en_solver = en;
+        EXPECT_NO_THROW(TRexGVSSelector(X_map, y_map, 0.1, ctrl));
+    }
+
+    // Consistent explicit solver_type is tolerated.
+    {
+        TRexGVSControlParameter ctrl;
+        ctrl.gvs_type  = GVSType::EN;
+        ctrl.en_solver = ENSolverType::TCENET;
+        ctrl.trex_ctrl.solver_type = SolverTypeForTRex::TCENET;
+        EXPECT_NO_THROW(TRexGVSSelector(X_map, y_map, 0.1, ctrl));
+    }
+
+    // Legacy conflict: solver_type = TCENET with en_solver = TENET throws
+    // (pre-rework this silently selected the CCD variant via solver_type).
+    {
+        TRexGVSControlParameter ctrl;
+        ctrl.gvs_type  = GVSType::EN;
+        ctrl.en_solver = ENSolverType::TENET;
+        ctrl.trex_ctrl.solver_type = SolverTypeForTRex::TCENET;
+        EXPECT_THROW(TRexGVSSelector(X_map, y_map, 0.1, ctrl),
+                     std::invalid_argument);
+    }
+
+    // Conflict in the other direction: solver_type = TENET_AUG with
+    // en_solver = TCENET throws as well.
+    {
+        TRexGVSControlParameter ctrl;
+        ctrl.gvs_type  = GVSType::EN;
+        ctrl.en_solver = ENSolverType::TCENET;
+        ctrl.trex_ctrl.solver_type = SolverTypeForTRex::TENET_AUG;
+        EXPECT_THROW(TRexGVSSelector(X_map, y_map, 0.1, ctrl),
+                     std::invalid_argument);
+    }
 }
 
 
@@ -245,7 +296,9 @@ void run_gvs_select_e2e(GVSType gvs_type,
                         ENSolverType en_solver,
                         SolverTypeForTRex solver_type,
                         bool use_lars_inner = false,
-                        double fixed_lambda2 = -1.0) {
+                        double fixed_lambda2 = -1.0,
+                        LambdaSelectionMethod lambda2_method =
+                            LambdaSelectionMethod::CV_1SE_CCD) {
     const Eigen::Index n = 150, p = 40;
     GroupedData d(n, p, 0.75, 1.0, 7);
     Eigen::Map<Eigen::MatrixXd> X_map(d.X.data(), d.X.rows(), d.X.cols());
@@ -255,7 +308,8 @@ void run_gvs_select_e2e(GVSType gvs_type,
     ctrl.gvs_type  = gvs_type;
     ctrl.en_solver = en_solver;
     ctrl.tenet_aug_use_lars = use_lars_inner;
-    ctrl.lambda_2 = fixed_lambda2;   // < 0 -> auto (ridge CV)
+    ctrl.lambda_2 = fixed_lambda2;   // < 0 -> auto (CV via lambda2_method)
+    ctrl.lambda2_method = lambda2_method;
     ctrl.trex_ctrl.solver_type = solver_type;
     ctrl.trex_ctrl.K = 5;
     ctrl.trex_ctrl.max_dummy_multiplier = 2;
@@ -326,6 +380,159 @@ TEST_F(TRexGVSTest, EndToEnd_IEN_TIENETAug) {
     run_gvs_select_e2e(GVSType::IEN, ENSolverType::TENET,
                        SolverTypeForTRex::TIENET_AUG,
                        /*use_lars_inner=*/false, /*fixed_lambda2=*/1.0);
+}
+
+/** @brief IEN with the native pathwise TIENET solver recovers the planted
+ *  groups (same lambda_2 pinning rationale as the TIENETAug test above). */
+TEST_F(TRexGVSTest, EndToEnd_IEN_TIENET) {
+    run_gvs_select_e2e(GVSType::IEN, ENSolverType::TENET,
+                       SolverTypeForTRex::TIENET,
+                       /*use_lars_inner=*/false, /*fixed_lambda2=*/1.0);
+}
+
+/** @brief EN with the CCD solver (TCENET) recovers the planted groups
+ *  (selected via en_solver, the single EN axis). */
+TEST_F(TRexGVSTest, EndToEnd_EN_TCENET) {
+    run_gvs_select_e2e(GVSType::EN, ENSolverType::TCENET,
+                       SolverTypeForTRex::TENET);
+}
+
+/** @brief IEN with the CCD solver (TCIENET) recovers the planted groups
+ *  (same lambda_2 pinning rationale as the other IEN tests). */
+TEST_F(TRexGVSTest, EndToEnd_IEN_TCIENET) {
+    run_gvs_select_e2e(GVSType::IEN, ENSolverType::TENET,
+                       SolverTypeForTRex::TCIENET,
+                       /*use_lars_inner=*/false, /*fixed_lambda2=*/1.0);
+}
+
+
+/** @brief THE auto-lambda_2 milestone: with the IEN-geometry profiled CV
+ *  (ienet_cv_ccd, 1SE) the IEN track recovers the planted groups WITHOUT a
+ *  hand-pinned lambda_2 — the EN-shaped ridge CV chose ~26 on this design
+ *  and collapsed the selection (see EndToEnd_IEN_TIENETAug's rationale). */
+TEST_F(TRexGVSTest, EndToEnd_IEN_AutoLambda2_IenCcd) {
+    run_gvs_select_e2e(GVSType::IEN, ENSolverType::TENET,
+                       SolverTypeForTRex::TIENET,
+                       /*use_lars_inner=*/false, /*fixed_lambda2=*/-1.0,
+                       LambdaSelectionMethod::CV_1SE_IEN_CCD);
+}
+
+/** @brief Auto-lambda_2 via the analytic Tikhonov backbone (n > p here, so
+ *  the contrast block cannot interpolate and the curve is informative). */
+TEST_F(TRexGVSTest, EndToEnd_IEN_AutoLambda2_TikSvd) {
+    run_gvs_select_e2e(GVSType::IEN, ENSolverType::TENET,
+                       SolverTypeForTRex::TIENET,
+                       /*use_lars_inner=*/false, /*fixed_lambda2=*/-1.0,
+                       LambdaSelectionMethod::CV_1SE_TIK_SVD);
+}
+
+
+/** @brief The IEN-geometry lambda_2 methods require gvs_type = IEN (they
+ *  consume the group structure); EN must reject them at select() time. */
+TEST_F(TRexGVSTest, Validation_ThrowsOnIenLambdaMethodForEN) {
+    GroupedData d(150, 40, 0.75, 1.0, 7);
+    Eigen::Map<Eigen::MatrixXd> Xm(d.X.data(), d.X.rows(), d.X.cols());
+    Eigen::Map<Eigen::VectorXd> ym(d.y.data(), d.y.size());
+
+    TRexGVSControlParameter ctrl;
+    ctrl.gvs_type = GVSType::EN;
+    ctrl.lambda2_method = LambdaSelectionMethod::CV_1SE_IEN_CCD;
+    ctrl.trex_ctrl.solver_type = SolverTypeForTRex::TENET;
+    ctrl.trex_ctrl.K = 3;
+    ctrl.trex_ctrl.max_dummy_multiplier = 2;
+
+    TRexGVSSelector trex(Xm, ym, 0.2, ctrl, 42, false);
+    EXPECT_THROW(trex.select(), std::invalid_argument);
+}
+
+
+/** @brief The CCD IEN solver and the native pathwise LARS-IEN solve the same
+ *  problem; with identical seeds and dummies the crossing supports — and
+ *  hence the selections — must coincide. */
+TEST_F(TRexGVSTest, EndToEnd_TCIENETMatchesTIENET) {
+    const Eigen::Index n = 150, p = 40;
+
+    auto run_variant = [&](SolverTypeForTRex st) {
+        GroupedData d(n, p, 0.75, 1.0, 7);
+        Eigen::Map<Eigen::MatrixXd> Xm(d.X.data(), d.X.rows(), d.X.cols());
+        Eigen::Map<Eigen::VectorXd> ym(d.y.data(), d.y.size());
+        TRexGVSControlParameter ctrl;
+        ctrl.gvs_type  = GVSType::IEN;
+        ctrl.lambda_2  = 1.0;                    // FIXED, > 0
+        ctrl.trex_ctrl.solver_type = st;
+        ctrl.trex_ctrl.K = 5;
+        ctrl.trex_ctrl.max_dummy_multiplier = 2;
+        TRexGVSSelector trex(Xm, ym, 0.2, ctrl, 42, false);
+        return trex.select().selected_var;
+    };
+
+    const Eigen::VectorXi sel_ccd  = run_variant(SolverTypeForTRex::TCIENET);
+    const Eigen::VectorXi sel_lars = run_variant(SolverTypeForTRex::TIENET);
+
+    EXPECT_TRUE((sel_ccd.array() == sel_lars.array()).all())
+        << "TCIENET and TIENET selected different variable sets.\n"
+        << "  TCIENET n_selected = " << sel_ccd.sum() << "\n"
+        << "  TIENET  n_selected = " << sel_lars.sum();
+}
+
+
+/** @brief The CCD EN solver and the Gram-based pathwise TENET solve the same
+ *  problem; with identical seeds, dummies, and a fixed lambda_2 the
+ *  selections must coincide. */
+TEST_F(TRexGVSTest, EndToEnd_TCENETMatchesTENET) {
+    const Eigen::Index n = 150, p = 40;
+
+    auto run_variant = [&](ENSolverType en_solver) {
+        GroupedData d(n, p, 0.75, 1.0, 7);
+        Eigen::Map<Eigen::MatrixXd> Xm(d.X.data(), d.X.rows(), d.X.cols());
+        Eigen::Map<Eigen::VectorXd> ym(d.y.data(), d.y.size());
+        TRexGVSControlParameter ctrl;
+        ctrl.gvs_type  = GVSType::EN;
+        ctrl.en_solver = en_solver;              // single EN axis
+        ctrl.lambda_2  = 1.0;                    // FIXED, > 0
+        ctrl.trex_ctrl.K = 5;
+        ctrl.trex_ctrl.max_dummy_multiplier = 2;
+        TRexGVSSelector trex(Xm, ym, 0.2, ctrl, 42, false);
+        return trex.select().selected_var;
+    };
+
+    const Eigen::VectorXi sel_ccd  = run_variant(ENSolverType::TCENET);
+    const Eigen::VectorXi sel_lars = run_variant(ENSolverType::TENET);
+
+    EXPECT_TRUE((sel_ccd.array() == sel_lars.array()).all())
+        << "TCENET and TENET selected different variable sets.\n"
+        << "  TCENET n_selected = " << sel_ccd.sum() << "\n"
+        << "  TENET  n_selected = " << sel_lars.sum();
+}
+
+
+/** @brief The native pathwise TIENET and the row-augmented TIENETAug are
+ *  mathematically equivalent; with identical seeds and dummies the two IEN
+ *  sub-variants must select the same variables. */
+TEST_F(TRexGVSTest, EndToEnd_TIENETMatchesTIENETAug) {
+    const Eigen::Index n = 150, p = 40;
+
+    auto run_variant = [&](SolverTypeForTRex st) {
+        GroupedData d(n, p, 0.75, 1.0, 7);
+        Eigen::Map<Eigen::MatrixXd> Xm(d.X.data(), d.X.rows(), d.X.cols());
+        Eigen::Map<Eigen::VectorXd> ym(d.y.data(), d.y.size());
+        TRexGVSControlParameter ctrl;
+        ctrl.gvs_type  = GVSType::IEN;
+        ctrl.lambda_2  = 1.0;                    // FIXED, > 0
+        ctrl.trex_ctrl.solver_type = st;
+        ctrl.trex_ctrl.K = 5;
+        ctrl.trex_ctrl.max_dummy_multiplier = 2;
+        TRexGVSSelector trex(Xm, ym, 0.2, ctrl, 42, false);
+        return trex.select().selected_var;
+    };
+
+    const Eigen::VectorXi sel_native = run_variant(SolverTypeForTRex::TIENET);
+    const Eigen::VectorXi sel_aug    = run_variant(SolverTypeForTRex::TIENET_AUG);
+
+    EXPECT_TRUE((sel_native.array() == sel_aug.array()).all())
+        << "TIENET and TIENETAug selected different variable sets.\n"
+        << "  TIENET    n_selected = " << sel_native.sum() << "\n"
+        << "  TIENETAug n_selected = " << sel_aug.sum();
 }
 
 
@@ -484,6 +691,52 @@ TEST_F(TRexGVSTest, ScalingModeParity_EN_AutoLambda2) {
 
         EXPECT_TRUE((sel_l2.array() == sel_z.array()).all())
             << "L2 vs ZSCORE selections diverged (solver "
+            << static_cast<int>(st) << ").\n"
+            << "  L2     n_selected = " << sel_l2.sum() << "\n"
+            << "  ZSCORE n_selected = " << sel_z.sum();
+    }
+}
+
+
+/** @brief IEN scaling-mode parity at FIXED lambda_2. A fixed lambda_2 is
+ *         interpreted in working-scale units, so L2 with lambda_2 and ZSCORE
+ *         with (n-1) * lambda_2 describe the same group-augmented geometry
+ *         up to one global column-scale factor sqrt(n-1) (the MVN dummies
+ *         scale along automatically: Sigma_m is estimated on the normalized
+ *         X, and the same seed reproduces the same standard-normal draws).
+ *         LARS paths are invariant under global column scaling, so the
+ *         selections must be identical — for BOTH IEN solver variants. */
+TEST_F(TRexGVSTest, ScalingModeParity_IEN_FixedLambda2) {
+    namespace dnm = trex::trex_selector_methods::utils::data_normalizer;
+    const Eigen::Index n = 150, p = 40;
+    const double lambda2_l2 = 1.0;
+
+    auto run_ien = [&](dnm::ScalingMode mode, double lambda2,
+                       SolverTypeForTRex st) {
+        GroupedData d(n, p, 0.75, 1.0, 7);
+        Eigen::Map<Eigen::MatrixXd> Xm(d.X.data(), d.X.rows(), d.X.cols());
+        Eigen::Map<Eigen::VectorXd> ym(d.y.data(), d.y.size());
+        TRexGVSControlParameter ctrl;
+        ctrl.gvs_type = GVSType::IEN;
+        ctrl.lambda_2 = lambda2;                 // FIXED, working-scale units
+        ctrl.trex_ctrl.solver_type = st;
+        ctrl.trex_ctrl.K = 5;
+        ctrl.trex_ctrl.max_dummy_multiplier = 2;
+        ctrl.trex_ctrl.scaling_mode = mode;
+        TRexGVSSelector trex(Xm, ym, 0.2, ctrl, 42, false);
+        return trex.select().selected_var;
+    };
+
+    for (SolverTypeForTRex st : {SolverTypeForTRex::TIENET,
+                                 SolverTypeForTRex::TIENET_AUG}) {
+        const Eigen::VectorXi sel_l2 =
+            run_ien(dnm::ScalingMode::L2, lambda2_l2, st);
+        const Eigen::VectorXi sel_z =
+            run_ien(dnm::ScalingMode::ZSCORE,
+                    static_cast<double>(n - 1) * lambda2_l2, st);
+
+        EXPECT_TRUE((sel_l2.array() == sel_z.array()).all())
+            << "IEN L2 vs ZSCORE selections diverged (solver "
             << static_cast<int>(st) << ").\n"
             << "  L2     n_selected = " << sel_l2.sum() << "\n"
             << "  ZSCORE n_selected = " << sel_z.sum();
