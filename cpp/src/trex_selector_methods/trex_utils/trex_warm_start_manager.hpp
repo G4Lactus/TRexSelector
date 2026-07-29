@@ -75,7 +75,7 @@ private:
     /** @brief Per-slot dummy matrices co-retained with the solvers.
      *
      *  Solvers hold non-owning Eigen::Map views into their dummy matrix D_k.
-     *  For strategies whose D_k is a per-call temporary (PERMUTATION, DIRECT),
+     *  For strategies whose D_k is a per-call temporary (PERMUTATION, SEEDED),
      *  the buffer must be kept alive alongside the retained solver; moving the
      *  MatrixXd here transfers the heap buffer without changing its address,
      *  so the solver's view stays valid. Slots stay empty (0 x 0) for
@@ -207,7 +207,7 @@ public:
      * @brief Keep the dummy matrix of experiment k alive alongside its solver.
      *
      * @details For strategies whose D_k is a per-call temporary (PERMUTATION,
-     *          DIRECT). Moving the MatrixXd transfers its heap buffer without
+     *          SEEDED). Moving the MatrixXd transfers its heap buffer without
      *          changing the address, so the solver's non-owning view into D_k
      *          remains valid.
      */
