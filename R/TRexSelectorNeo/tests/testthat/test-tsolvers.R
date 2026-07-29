@@ -224,13 +224,17 @@ test_that("TLARS_Solver: get_lambda returns a non-increasing numeric vector of l
   expect_true(all(diff(lam) <= 1e-12), label = "lambda non-increasing")
 })
 
-test_that("TLASSO_Solver: get_lambda numeric, get_num_removals non-negative integer", {
+test_that("TLASSO_Solver: get_lambda, get_num_removals, get_cycling_ratio all correct", {
   s <- TLASSO_Solver$new(X, D, y)
   s$execute_step(T_stop = 8)
   expect_type(s$get_lambda(), "double")
   nr <- s$get_num_removals()
   expect_type(nr, "integer")
   expect_gte(nr, 0L)
+  cr <- s$get_cycling_ratio()
+  expect_type(cr, "double")
+  expect_gte(cr, 0.0)
+  expect_lte(cr, 1.0)
 })
 
 test_that("TSTEPWISE_Solver: get_lambda returns a numeric vector", {

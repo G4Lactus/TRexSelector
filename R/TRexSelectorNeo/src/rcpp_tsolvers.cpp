@@ -830,6 +830,9 @@ double tsolver_get_cycling_ratio(
     if (auto* p = dynamic_cast<TENET_Solver*>(ptr->solver_)) {
         return p->getCyclingRatio();
     }
+    if (auto* p = dynamic_cast<TLASSO_Solver*>(ptr->solver_)) {
+        return p->getCyclingRatio();
+    }
     stop("tsolver_get_cycling_ratio: Solver type does not support getCyclingRatio().");
 }
 

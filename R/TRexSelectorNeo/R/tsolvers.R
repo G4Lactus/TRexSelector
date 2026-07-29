@@ -272,6 +272,12 @@ TLASSO_Solver <- R6::R6Class(
       tsolver_get_num_removals(self$ptr)
     },
 
+    #' @description Get the cycling ratio (removals / total steps).
+    #' @return Scalar numeric cycling ratio.
+    get_cycling_ratio = function() {
+      tsolver_get_cycling_ratio(self$ptr)
+    },
+
     #' @description Get the regularization (lambda) path.
     #' @return Numeric vector of lambda values, one per step.
     get_lambda = function() {

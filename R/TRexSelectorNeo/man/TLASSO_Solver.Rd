@@ -26,6 +26,7 @@ solver$get_beta()
   \itemize{
     \item \href{#method-TLASSO_Solver-initialize}{\code{TLASSO_Solver$new()}}
     \item \href{#method-TLASSO_Solver-get_num_removals}{\code{TLASSO_Solver$get_num_removals()}}
+    \item \href{#method-TLASSO_Solver-get_cycling_ratio}{\code{TLASSO_Solver$get_cycling_ratio()}}
     \item \href{#method-TLASSO_Solver-get_lambda}{\code{TLASSO_Solver$get_lambda()}}
     \item \href{#method-TLASSO_Solver-clone}{\code{TLASSO_Solver$clone()}}
   }
@@ -83,6 +84,21 @@ solver$get_beta()
   }
   \subsection{Returns}{
     Integer count of removals.
+  }
+}
+
+\if{html}{\out{<hr>}}
+\if{html}{\out{<a id="method-TLASSO_Solver-get_cycling_ratio"></a>}}
+\if{latex}{\out{\hypertarget{method-TLASSO_Solver-get_cycling_ratio}{}}}
+\subsection{\code{TLASSO_Solver$get_cycling_ratio()}}{
+  Get the cycling ratio (removals / total steps).
+  \subsection{Usage}{
+    \if{html}{\out{<div class="r">}}
+    \preformatted{TLASSO_Solver$get_cycling_ratio()}
+    \if{html}{\out{</div>}}
+  }
+  \subsection{Returns}{
+    Scalar numeric cycling ratio.
   }
 }
 
