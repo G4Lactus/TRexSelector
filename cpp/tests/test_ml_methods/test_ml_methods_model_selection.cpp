@@ -22,6 +22,11 @@
 // project ml_methods includes
 #include <ml_methods/model_selection/enet_cv_ccd.hpp>
 #include <ml_methods/model_selection/ridge_cv_svd.hpp>
+#include <ml_methods/model_selection/ienet_cv_ccd.hpp>
+#include <ml_methods/model_selection/tikhonov_cv_svd.hpp>
+
+// Eigen sparse (Tikhonov K construction)
+#include <Eigen/SparseCore>
 
 // ==================================================================================
 
@@ -389,6 +394,355 @@ TEST(EnetCvCcdTest, ValidationThrows) {
     EXPECT_THROW(cv.fit(X, y, 0.0, 5, /*n_lambda=*/0), std::invalid_argument);
     EXPECT_THROW(cv.cv_min(), std::runtime_error);
     EXPECT_THROW(cv.cv_1se(), std::runtime_error);
+}
+
+// ==================================================================================
+// tikhonov_cv_svd (generalized-Tikhonov ridge CV, IEN geometry)
+// ==================================================================================
+
+/** @brief All-singleton groups (K = I) must reproduce ridge_cv_svd exactly:
+ *  identical grid anchor, folds (same seed), and CV curves — for BOTH the
+ *  closed-form group basis and the general eigendecomposition path. */
+TEST(TikhonovCvSvdTest, SingletonGroupsMatchRidgeCvSvd) {
+    const Eigen::Index n = 60, p = 15;
+    Eigen::MatrixXd X = random_matrix(n, p, 11);
+    Eigen::VectorXd y = X.col(0) - 2.0 * X.col(3) + 0.5 * random_vector(n, 12);
+
+    ridge_cv_svd ref;
+    ref.fit(X, y, 5, 50, 1e4, 3);
+
+    // Closed-form group basis (singleton groups).
+    Eigen::VectorXi singleton = Eigen::VectorXi::LinSpaced(
+        p, 0, static_cast<int>(p) - 1);
+    tikhonov_cv_svd grp;
+    grp.fit(X, y, singleton, 5, 50, 1e4, 3);
+
+    // General eigendecomposition path (sparse identity K).
+    Eigen::SparseMatrix<double> I(p, p);
+    I.setIdentity();
+    tikhonov_cv_svd gen;
+    gen.fit(X, y, I, 5, 50, 1e4, 3);
+
+    ASSERT_EQ(ref.lambdas().size(), grp.lambdas().size());
+    for (Eigen::Index k = 0; k < ref.lambdas().size(); ++k) {
+        EXPECT_NEAR(grp.lambdas()(k), ref.lambdas()(k),
+                    1e-9 * ref.lambdas()(k));
+        EXPECT_NEAR(grp.cv_mse()(k), ref.cv_mse()(k),
+                    1e-7 * (1.0 + ref.cv_mse()(k)));
+        EXPECT_NEAR(gen.cv_mse()(k), ref.cv_mse()(k),
+                    1e-7 * (1.0 + ref.cv_mse()(k)));
+    }
+    EXPECT_EQ(grp.index_min(), ref.index_min());
+    EXPECT_EQ(grp.index_1se(), ref.index_1se());
+    EXPECT_EQ(gen.index_min(), ref.index_min());
+}
+
+
+/** @brief The closed-form group basis and the general sparse-K
+ *  eigendecomposition path must coincide for a NON-trivial K: the group-mean
+ *  matrix W = sum_m 1_m 1_m^T / p_m (rank M, null_dim p - M). Also pins the
+ *  tall-regime diagnostics: no interpolation, zero null-space floor. */
+TEST(TikhonovCvSvdTest, GroupSparseKMatchesGroupMode) {
+    const Eigen::Index n = 60, p = 20;
+    const int M = 5;                       // 5 groups of 4
+    Eigen::MatrixXd X = random_matrix(n, p, 61);
+    Eigen::VectorXd y = 2.0 * X.col(2) - X.col(9) + 0.5 * random_vector(n, 62);
+    Eigen::VectorXi groups(p);
+    for (Eigen::Index j = 0; j < p; ++j) groups(j) = static_cast<int>(j / 4);
+
+    Eigen::SparseMatrix<double> W(p, p);
+    {
+        std::vector<Eigen::Triplet<double>> trip;
+        for (Eigen::Index i = 0; i < p; ++i)
+            for (Eigen::Index j = 0; j < p; ++j)
+                if (groups(i) == groups(j))
+                    trip.emplace_back(i, j, 0.25);   // 1 / p_m, p_m = 4
+        W.setFromTriplets(trip.begin(), trip.end());
+    }
+
+    tikhonov_cv_svd grp, gen;
+    grp.fit(X, y, groups, 5, 40, 1e4, 3);
+    gen.fit(X, y, W, 5, 40, 1e4, 3);
+
+    ASSERT_EQ(grp.lambdas().size(), gen.lambdas().size());
+    for (Eigen::Index k = 0; k < grp.lambdas().size(); ++k) {
+        EXPECT_NEAR(gen.lambdas()(k), grp.lambdas()(k),
+                    1e-9 * grp.lambdas()(k));
+        EXPECT_NEAR(gen.cv_mse()(k), grp.cv_mse()(k),
+                    1e-7 * (1.0 + grp.cv_mse()(k)));
+    }
+    EXPECT_EQ(gen.index_min(), grp.index_min());
+    EXPECT_EQ(gen.index_1se(), grp.index_1se());
+
+    // Tall regime (n_train = 48 > null_dim = 15): informative curve.
+    EXPECT_FALSE(grp.contrast_interpolates());
+    EXPECT_EQ(grp.epsilon(), 0.0);
+    EXPECT_EQ(grp.null_dim(), p - M);
+    EXPECT_EQ(gen.null_dim(), p - M);
+}
+
+
+/** @brief Malformed inputs and pre-fit accessors must throw. */
+TEST(TikhonovCvSvdTest, ValidationAndDegenerateThrows) {
+    const Eigen::Index n = 30, p = 8;
+    Eigen::MatrixXd X = random_matrix(n, p, 71);
+    Eigen::VectorXd y = random_vector(n, 72);
+
+    // Pre-fit accessors.
+    tikhonov_cv_svd unfitted;
+    EXPECT_THROW(unfitted.cv_min(), std::runtime_error);
+    EXPECT_THROW(unfitted.cv_1se(), std::runtime_error);
+
+    // Non-contiguous group ids.
+    Eigen::VectorXi bad_groups = Eigen::VectorXi::Zero(p);
+    bad_groups(p - 1) = 2;                 // ids {0, 2}: 1 is missing
+    tikhonov_cv_svd cv;
+    EXPECT_THROW(cv.fit(X, y, bad_groups, 5, 20, 1e4, 3),
+                 std::invalid_argument);
+
+    // Dimension-mismatched K.
+    Eigen::SparseMatrix<double> K_bad(p + 1, p + 1);
+    K_bad.setIdentity();
+    EXPECT_THROW(cv.fit(X, y, K_bad, 5, 20, 1e4, 3), std::invalid_argument);
+
+    // Non-PSD K (negative identity).
+    Eigen::SparseMatrix<double> K_neg(p, p);
+    K_neg.setIdentity();
+    K_neg *= -1.0;
+    EXPECT_THROW(cv.fit(X, y, K_neg, 5, 20, 1e4, 3), std::invalid_argument);
+}
+
+
+/** @brief In the wide regime p - M >= n_train the unpenalized contrast block
+ *  interpolates the training folds: the class must flag it (and auto-select
+ *  a positive null-space floor). */
+TEST(TikhonovCvSvdTest, InterpolationFlagInWideRegime) {
+    const Eigen::Index n = 30, p = 60;
+    Eigen::MatrixXd X = random_matrix(n, p, 21);
+    Eigen::VectorXd y = X.col(0) + 0.5 * random_vector(n, 22);
+
+    Eigen::VectorXi groups(p);           // 6 groups of 10 -> null_dim = 54
+    for (Eigen::Index j = 0; j < p; ++j)
+        groups(j) = static_cast<int>(j / 10);
+
+    tikhonov_cv_svd cv;
+    cv.fit(X, y, groups, 5, 30, 1e4, 3);
+    EXPECT_TRUE(cv.contrast_interpolates());
+    EXPECT_GT(cv.epsilon(), 0.0);
+    EXPECT_EQ(cv.null_dim(), p - 6);
+}
+
+// ==================================================================================
+// ien_gaussian (CCD IEN path engine)
+// ==================================================================================
+
+/** @brief Solutions must satisfy the IEN KKT conditions on the standardized
+ *  solver scale: |x_j^T r - lambda2 sigma_m / p_m| <= lambda1 on the
+ *  non-support, == lambda1 * sign(beta_j) on the support. */
+TEST(IenGaussianTest, KktConditionsHoldGroupMode) {
+    const Eigen::Index n = 50, p = 20;
+    Eigen::MatrixXd X = random_matrix(n, p, 31);
+    Eigen::VectorXd y = 3.0 * X.col(0) - 2.0 * X.col(5)
+                        + 0.5 * random_vector(n, 32);
+    Eigen::VectorXi groups(p);           // 5 groups of 4
+    for (Eigen::Index j = 0; j < p; ++j) groups(j) = static_cast<int>(j / 4);
+    const double lambda2 = 0.7;
+
+    Eigen::VectorXd grid(3);
+    grid << 2.0, 1.0, 0.5;
+
+    ien_gaussian en;
+    en.fit(X, y, lambda2, groups, grid);
+    ASSERT_TRUE(en.converged());
+
+    // Standardized replica (center + column-L2-normalize X, center y).
+    Eigen::MatrixXd Xs = X.rowwise() - X.colwise().mean();
+    for (Eigen::Index j = 0; j < p; ++j) Xs.col(j) /= Xs.col(j).norm();
+    Eigen::VectorXd yc = y.array() - y.mean();
+
+    for (Eigen::Index l = 0; l < grid.size(); ++l) {
+        const double l1 = en.lambda1s()(l);
+        const Eigen::VectorXd beta = en.coef_std().col(l);
+        const Eigen::VectorXd r = yc - Xs * beta;
+
+        Eigen::VectorXd sigma = Eigen::VectorXd::Zero(5);
+        Eigen::VectorXd pm = Eigen::VectorXd::Zero(5);
+        for (Eigen::Index j = 0; j < p; ++j) {
+            sigma(groups(j)) += beta(j);
+            pm(groups(j)) += 1.0;
+        }
+
+        const double tol = 1e-4 * std::max(1.0, l1);
+        for (Eigen::Index j = 0; j < p; ++j) {
+            const double c_j = Xs.col(j).dot(r)
+                - lambda2 * sigma(groups(j)) / pm(groups(j));
+            if (beta(j) == 0.0) {
+                EXPECT_LE(std::abs(c_j), l1 + tol)
+                    << "KKT violated on non-support at (l=" << l
+                    << ", j=" << j << ")";
+            } else {
+                EXPECT_NEAR(c_j, l1 * (beta(j) > 0.0 ? 1.0 : -1.0), tol)
+                    << "KKT violated on support at (l=" << l
+                    << ", j=" << j << ")";
+            }
+        }
+    }
+}
+
+
+/** @brief The O(1) group-sum specialization and the matrix-passing sparse-K
+ *  path must produce identical coefficient paths for K = W. */
+TEST(IenGaussianTest, GroupMatchesSparseW) {
+    const Eigen::Index n = 50, p = 20;
+    Eigen::MatrixXd X = random_matrix(n, p, 41);
+    Eigen::VectorXd y = 2.0 * X.col(1) - X.col(7) + 0.5 * random_vector(n, 42);
+    Eigen::VectorXi groups(p);
+    for (Eigen::Index j = 0; j < p; ++j) groups(j) = static_cast<int>(j / 4);
+
+    // W = sum_m 1_m 1_m^T / p_m as an explicit sparse matrix.
+    Eigen::SparseMatrix<double> W(p, p);
+    {
+        std::vector<Eigen::Triplet<double>> trip;
+        for (Eigen::Index i = 0; i < p; ++i)
+            for (Eigen::Index j = 0; j < p; ++j)
+                if (groups(i) == groups(j))
+                    trip.emplace_back(i, j, 0.25);   // 1 / p_m, p_m = 4
+        W.setFromTriplets(trip.begin(), trip.end());
+    }
+
+    Eigen::VectorXd grid(4);
+    grid << 3.0, 1.5, 0.8, 0.4;
+
+    ien_gaussian grp, spk;
+    grp.fit(X, y, 0.9, groups, grid);
+    spk.fit(X, y, 0.9, W, grid);
+
+    EXPECT_TRUE(grp.coef().isApprox(spk.coef(), 1e-8));
+    EXPECT_TRUE(grp.intercepts().isApprox(spk.intercepts(), 1e-8));
+}
+
+// ==================================================================================
+// ienet_cv_ccd (2D CV with lambda1 profiled out)
+// ==================================================================================
+
+/** @brief Structural coherence and seed determinism of the profiled CV. */
+TEST(IenetCvCcdTest, StructureAndDeterminism) {
+    const Eigen::Index n = 60, p = 24;
+    Eigen::MatrixXd X = random_matrix(n, p, 51);
+    Eigen::VectorXd y = 2.0 * X.col(0) + X.col(1) - X.col(6)
+                        + 0.5 * random_vector(n, 52);
+    Eigen::VectorXi groups(p);
+    for (Eigen::Index j = 0; j < p; ++j) groups(j) = static_cast<int>(j / 3);
+
+    ienet_cv_ccd cv;
+    cv.fit(X, y, groups, 5, 10, 1e3, 30, -1.0, 9);
+
+    // Grids: lambda2 ascending, lambda1 descending; surface dimensions.
+    ASSERT_EQ(cv.lambdas().size(), 10);
+    ASSERT_EQ(cv.lambda1s().size(), 30);
+    for (Eigen::Index k = 1; k < cv.lambdas().size(); ++k)
+        EXPECT_GT(cv.lambdas()(k), cv.lambdas()(k - 1));
+    for (Eigen::Index k = 1; k < cv.lambda1s().size(); ++k)
+        EXPECT_LT(cv.lambda1s()(k), cv.lambda1s()(k - 1));
+    EXPECT_EQ(cv.cv_mse_full().rows(), 10);
+    EXPECT_EQ(cv.cv_mse_full().cols(), 30);
+
+    // Profiled curve is the row-min of the surface; picks are on-grid.
+    for (Eigen::Index k = 0; k < 10; ++k)
+        EXPECT_NEAR(cv.cv_mse()(k), cv.cv_mse_full().row(k).minCoeff(),
+                    1e-12);
+    EXPECT_GT(cv.cv_min(), 0.0);
+    EXPECT_GE(cv.cv_1se(), cv.cv_min());
+    EXPECT_GE(cv.lambda1_at_min(), cv.lambda1s()(cv.lambda1s().size() - 1));
+    EXPECT_LE(cv.lambda1_at_min(), cv.lambda1s()(0));
+
+    // Same seed => identical curves.
+    ienet_cv_ccd cv2;
+    cv2.fit(X, y, groups, 5, 10, 1e3, 30, -1.0, 9);
+    EXPECT_TRUE(cv.cv_mse().isApprox(cv2.cv_mse(), 0.0));
+    EXPECT_EQ(cv.index_min(), cv2.index_min());
+    EXPECT_EQ(cv.index_1se(), cv2.index_1se());
+}
+
+
+/** @brief The sparse-K overload with the group-mean matrix W must reproduce
+ *  the O(1) group-sum specialization: identical grids, CV surface, profiled
+ *  curve, and picks (same folds via the same seed). Also pins the lambda1
+ *  profile accessors to the surface argmin. */
+TEST(IenetCvCcdTest, SparseKOverloadMatchesGroupMode) {
+    const Eigen::Index n = 60, p = 20;
+    Eigen::MatrixXd X = random_matrix(n, p, 81);
+    Eigen::VectorXd y = 2.0 * X.col(0) - X.col(5) + 0.5 * random_vector(n, 82);
+    Eigen::VectorXi groups(p);
+    for (Eigen::Index j = 0; j < p; ++j) groups(j) = static_cast<int>(j / 4);
+
+    Eigen::SparseMatrix<double> W(p, p);
+    {
+        std::vector<Eigen::Triplet<double>> trip;
+        for (Eigen::Index i = 0; i < p; ++i)
+            for (Eigen::Index j = 0; j < p; ++j)
+                if (groups(i) == groups(j))
+                    trip.emplace_back(i, j, 0.25);   // 1 / p_m, p_m = 4
+        W.setFromTriplets(trip.begin(), trip.end());
+    }
+
+    ienet_cv_ccd grp, spk;
+    grp.fit(X, y, groups, 4, 8, 1e3, 25, -1.0, 9);
+    spk.fit(X, y, W, 4, 8, 1e3, 25, -1.0, 9);
+
+    EXPECT_TRUE(grp.lambdas().isApprox(spk.lambdas(), 1e-12));
+    EXPECT_TRUE(grp.lambda1s().isApprox(spk.lambda1s(), 1e-12));
+    EXPECT_TRUE(grp.cv_mse_full().isApprox(spk.cv_mse_full(), 1e-6));
+    EXPECT_TRUE(grp.cv_mse().isApprox(spk.cv_mse(), 1e-6));
+    EXPECT_EQ(grp.index_min(), spk.index_min());
+    EXPECT_EQ(grp.index_1se(), spk.index_1se());
+
+    // lambda1 profile: one on-grid lambda1 per lambda2, equal to the row
+    // argmin of the CV surface; the at-min / at-1se accessors read it.
+    ASSERT_EQ(grp.lambda1_profile().size(), grp.lambdas().size());
+    for (Eigen::Index k = 0; k < grp.lambdas().size(); ++k) {
+        Eigen::Index amin = 0;
+        grp.cv_mse_full().row(k).minCoeff(&amin);
+        EXPECT_DOUBLE_EQ(grp.lambda1_profile()(k), grp.lambda1s()(amin));
+    }
+    EXPECT_DOUBLE_EQ(grp.lambda1_at_min(),
+                     grp.lambda1_profile()(grp.index_min()));
+    EXPECT_DOUBLE_EQ(grp.lambda1_at_1se(),
+                     grp.lambda1_profile()(grp.index_1se()));
+}
+
+
+/** @brief Malformed inputs and pre-fit accessors must throw; the pathwise
+ *  engine rejects non-positive lambda1 grid entries (lambda1 = 0 is the
+ *  tikhonov_cv_svd backbone, not an IEN path point). */
+TEST(IenetCvCcdTest, ValidationThrows) {
+    const Eigen::Index n = 30, p = 8;
+    Eigen::MatrixXd X = random_matrix(n, p, 91);
+    Eigen::VectorXd y = random_vector(n, 92);
+    Eigen::VectorXi groups(p);
+    for (Eigen::Index j = 0; j < p; ++j) groups(j) = static_cast<int>(j / 2);
+
+    // Pre-fit accessors.
+    ienet_cv_ccd unfitted;
+    EXPECT_THROW(unfitted.cv_min(), std::runtime_error);
+    EXPECT_THROW(unfitted.cv_1se(), std::runtime_error);
+
+    // Non-contiguous group ids.
+    Eigen::VectorXi bad_groups = Eigen::VectorXi::Zero(p);
+    bad_groups(p - 1) = 2;                 // ids {0, 2}: 1 is missing
+    ienet_cv_ccd cv;
+    EXPECT_THROW(cv.fit(X, y, bad_groups, 4, 5, 1e3, 10, -1.0, 9),
+                 std::invalid_argument);
+
+    // Degenerate fold counts.
+    EXPECT_THROW(cv.fit(X, y, groups, 1, 5, 1e3, 10, -1.0, 9),
+                 std::invalid_argument);
+
+    // Path engine: a grid containing lambda1 <= 0 is rejected.
+    ien_gaussian en;
+    Eigen::VectorXd bad_grid(2);
+    bad_grid << 1.0, 0.0;
+    EXPECT_THROW(en.fit(X, y, 0.5, groups, bad_grid), std::invalid_argument);
 }
 
 // ==================================================================================

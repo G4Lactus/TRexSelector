@@ -30,6 +30,7 @@ using namespace trex::trex_selector_methods::trex_da;
 using namespace trex::trex_selector_methods::trex_core;
 using namespace trex::utils::datageneration::datagen;
 namespace dn = trex::trex_selector_methods::utils::data_normalizer;
+namespace sd = trex::trex_selector_methods::utils::solver_dispatch;
 
 // ========================================================================================
 
@@ -45,7 +46,8 @@ void run_trex_da_test(Eigen::Index n,
                       Eigen::Index p,
                       DAMethod method,
                       std::size_t K = 3,
-                      LLoopStrategy l_strategy = LLoopStrategy::HCONCAT)
+                      LLoopStrategy l_strategy = LLoopStrategy::HCONCAT,
+                      sd::SolverTypeForTRex solver = sd::SolverTypeForTRex::TLARS)
 {
     // Explicit vectors prevent template resolution errors in the constructor
     std::vector<std::size_t> support = {1, 2, 3};
@@ -62,6 +64,7 @@ void run_trex_da_test(Eigen::Index n,
     TRexControlParameter trex_ctrl;
     trex_ctrl.K = K;
     trex_ctrl.max_dummy_multiplier = 2;
+    trex_ctrl.solver_type = solver;
 
     TRexDAControlParameter da_ctrl;
     da_ctrl.method = method;
@@ -245,6 +248,21 @@ TEST(TRexDATest, Method_BT_SelectionModeField) {
 /** @brief Test TRexDASelector with AR1 method and SKIPL L loop strategy */
 TEST(TRexDATest, Method_AR1_SKIPL) {
     run_trex_da_test(150, 300, DAMethod::AR1, 3, LLoopStrategy::SKIPL);
+}
+
+
+/** @brief DA with the CCD lasso solver (TCCD): the deflation loop drives
+ *  the shared dispatch, so the CD path solver must run end-to-end. */
+TEST(TRexDATest, Param_Solvers_TCCD) {
+    run_trex_da_test(150, 300, DAMethod::AR1, 3, LLoopStrategy::HCONCAT,
+                     sd::SolverTypeForTRex::TCCD);
+}
+
+
+/** @brief DA with the CCD elastic-net solver (TCENET). */
+TEST(TRexDATest, Param_Solvers_TCENET) {
+    run_trex_da_test(150, 300, DAMethod::AR1, 3, LLoopStrategy::HCONCAT,
+                     sd::SolverTypeForTRex::TCENET);
 }
 
 

@@ -23,6 +23,8 @@
 #include <tsolvers/linear_model/lars_based/tlars_solver.hpp>
 #include <tsolvers/linear_model/lars_based/tlasso_solver.hpp>
 #include <tsolvers/linear_model/lars_based/tstagewise_solver.hpp>
+#include <tsolvers/linear_model/lars_based/tienet_solver.hpp>
+#include <tsolvers/linear_model/lars_based/tienet_aug_solver.hpp>
 #include <tsolvers/linear_model/omp_based/tncgmp_solver.hpp>
 #include <tsolvers/linear_model/omp_based/tmp_solver.hpp>
 #include <tsolvers/linear_model/omp_based/tomp_solver.hpp>
@@ -339,6 +341,79 @@ TEST_F(TSolverExecutionTest, StagewiseNNLSDropKeepsLambdaMonotone) {
     for (std::size_t k = 1; k < lambda.size(); ++k) {
         EXPECT_LE(lambda[k], lambda[k - 1] + 1e-8) << "lambda jumped upward at step " << k;
     }
+}
+
+
+/** @brief The native pathwise TIENET and the row-augmented TIENETAug solve
+ *  the same IEN problem (both standardize the data blocks before the group
+ *  penalty enters, and neither re-normalizes the penalty rows), so with
+ *  identical inputs the two must walk the identical solution path. */
+TEST_F(TSolverExecutionTest, TIENETNativeMatchesAugmentedPath) {
+    // 10 contiguous groups of 5; the single dummy layer (L = p = 50) shares
+    // the group of its originating variable, per the T-Rex+GVS convention.
+    Eigen::VectorXi groups(X.cols());
+    for (Eigen::Index j = 0; j < X.cols(); ++j) {
+        groups(j) = static_cast<int>(j / 5);
+    }
+
+    for (double lambda2 : {0.5, 2.0}) {
+        // Native solver normalizes in place -> give it its own copies.
+        Eigen::MatrixXd Xn = X, Dn = D;
+        Eigen::VectorXd yn = y;
+        Eigen::Map<Eigen::MatrixXd> Xn_map(Xn.data(), Xn.rows(), Xn.cols());
+        Eigen::Map<Eigen::MatrixXd> Dn_map(Dn.data(), Dn.rows(), Dn.cols());
+        Eigen::Map<Eigen::VectorXd> yn_map(yn.data(), yn.size());
+        TIENET_Solver native(Xn_map, Dn_map, yn_map, lambda2, groups,
+                             true, true, false);
+        native.executeStep(5, true);
+
+        Eigen::MatrixXd Xa = X, Da = D;
+        Eigen::VectorXd ya = y;
+        Eigen::Map<Eigen::MatrixXd> Xa_map(Xa.data(), Xa.rows(), Xa.cols());
+        Eigen::Map<Eigen::MatrixXd> Da_map(Da.data(), Da.rows(), Da.cols());
+        Eigen::Map<Eigen::VectorXd> ya_map(ya.data(), ya.size());
+        TIENETAug_Solver aug(Xa_map, Da_map, ya_map, lambda2, groups,
+                             true, true, false);
+        aug.executeStep(5, true);
+
+        // Identical step-by-step action sequences (adds and drops).
+        EXPECT_EQ(native.getActions(), aug.getActions())
+            << "native and augmented IEN paths diverged at lambda2 = "
+            << lambda2;
+        EXPECT_EQ(native.getActives(), aug.getActives());
+        EXPECT_EQ(native.getActiveDummyIndices().size(),
+                  aug.getActiveDummyIndices().size());
+    }
+}
+
+
+/** @brief lambda2 == 0 collapses the native TIENET exactly to T-LASSO. */
+TEST_F(TSolverExecutionTest, TIENETLambda2ZeroReducesToTLASSO) {
+    Eigen::VectorXi groups(X.cols());
+    for (Eigen::Index j = 0; j < X.cols(); ++j) {
+        groups(j) = static_cast<int>(j / 5);
+    }
+
+    Eigen::MatrixXd Xi = X, Di = D;
+    Eigen::VectorXd yi = y;
+    Eigen::Map<Eigen::MatrixXd> Xi_map(Xi.data(), Xi.rows(), Xi.cols());
+    Eigen::Map<Eigen::MatrixXd> Di_map(Di.data(), Di.rows(), Di.cols());
+    Eigen::Map<Eigen::VectorXd> yi_map(yi.data(), yi.size());
+    TIENET_Solver ien(Xi_map, Di_map, yi_map, 0.0, groups, true, true, false);
+    ien.executeStep(5, true);
+
+    Eigen::MatrixXd Xl = X, Dl = D;
+    Eigen::VectorXd yl = y;
+    Eigen::Map<Eigen::MatrixXd> Xl_map(Xl.data(), Xl.rows(), Xl.cols());
+    Eigen::Map<Eigen::MatrixXd> Dl_map(Dl.data(), Dl.rows(), Dl.cols());
+    Eigen::Map<Eigen::VectorXd> yl_map(yl.data(), yl.size());
+    TLASSO_Solver lasso(Xl_map, Dl_map, yl_map, true, true, false);
+    lasso.executeStep(5, true);
+
+    EXPECT_EQ(ien.getActions(), lasso.getActions());
+    auto beta_ien   = ien.getBeta(-1);
+    auto beta_lasso = lasso.getBeta(-1);
+    EXPECT_TRUE(beta_ien.isApprox(beta_lasso, 1e-10));
 }
 
 // ========================================================================================
