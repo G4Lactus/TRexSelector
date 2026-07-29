@@ -406,6 +406,54 @@ TEST_F(TRexGVSTest, EndToEnd_IEN_TCIENET) {
 }
 
 
+/** @brief Memory-mapped GVS must select identically to the in-memory run:
+ *  prepareDummiesForLStep writes the same cluster-MVN layers into the
+ *  per-experiment mmap files as into the in-RAM buffers, and the T-steps
+ *  reuse them without rewrite in both modes. Covers EN (TENET) and IEN
+ *  (TCIENET, pinned lambda_2). */
+TEST_F(TRexGVSTest, MemmapMatchesInMemory) {
+
+    auto run_with = [&](GVSType gvs_type, SolverTypeForTRex solver_type,
+                        double fixed_lambda2, bool use_mmap) {
+        const Eigen::Index n = 150, p = 40;
+        GroupedData d(n, p, 0.75, 1.0, 7);
+        Eigen::Map<Eigen::MatrixXd> Xm(d.X.data(), d.X.rows(), d.X.cols());
+        Eigen::Map<Eigen::VectorXd> ym(d.y.data(), d.y.size());
+
+        TRexGVSControlParameter ctrl;
+        ctrl.gvs_type  = gvs_type;
+        ctrl.lambda_2  = fixed_lambda2;
+        ctrl.trex_ctrl.solver_type = solver_type;
+        ctrl.trex_ctrl.K = 5;
+        ctrl.trex_ctrl.max_dummy_multiplier = 2;
+        ctrl.trex_ctrl.use_memory_mapping = use_mmap;
+
+        TRexGVSSelector trex(Xm, ym, 0.2, ctrl, 42, false);
+        return trex.select().selected_var;
+    };
+
+    {
+        const auto mem  = run_with(GVSType::EN,
+                                   SolverTypeForTRex::TENET, 1.0, false);
+        const auto mmap = run_with(GVSType::EN,
+                                   SolverTypeForTRex::TENET, 1.0, true);
+        ASSERT_EQ(mem.size(), mmap.size());
+        EXPECT_TRUE((mem.array() == mmap.array()).all())
+            << "EN: memory-mapped GVS selection differs from in-memory.";
+    }
+    {
+        const auto mem  = run_with(GVSType::IEN,
+                                   SolverTypeForTRex::TCIENET, 1.0, false);
+        const auto mmap = run_with(GVSType::IEN,
+                                   SolverTypeForTRex::TCIENET, 1.0, true);
+        ASSERT_EQ(mem.size(), mmap.size());
+        EXPECT_TRUE((mem.array() == mmap.array()).all())
+            << "IEN/TCIENET: memory-mapped GVS selection differs from "
+               "in-memory.";
+    }
+}
+
+
 /** @brief THE auto-lambda_2 milestone: with the IEN-geometry profiled CV
  *  (ienet_cv_ccd, 1SE) the IEN track recovers the planted groups WITHOUT a
  *  hand-pinned lambda_2 — the EN-shaped ridge CV chose ~26 on this design
