@@ -139,6 +139,10 @@ struct ExperimentRunnerConfig {
      *  into SolverConfig::tikhonov_K. Must outlive the run() call. */
     const Eigen::SparseMatrix<double>* tikhonov_K = nullptr;
 
+    /** @brief Dummy-coupling mode for the sparse-K TCIENET dispatch;
+     *  forwarded verbatim into SolverConfig::tikhonov_fold_dummies. */
+    bool tikhonov_fold_dummies = false;
+
     // --- Diagnostics ---
     bool verbose = false;
     double eps = std::numeric_limits<double>::epsilon();
@@ -373,7 +377,8 @@ private:
 
         std::vector<ExperimentSummary> summaries(cfg.K);
 
-        // Sequential — permutation reuses one buffer
+        // Sequential by design; getPermuted() returns a fresh permuted
+        // copy per k (base + one working copy alive at a time)
         #ifdef _OPENMP
         Eigen::setNbThreads(omp_get_max_threads());
         #endif
@@ -657,7 +662,8 @@ private:
                           static_cast<std::uint64_t>(cfg.tie_seed_base), k)
                       & 0x7FFFFFFFULL)
                 : -1LL,
-            .tikhonov_K = cfg.tikhonov_K
+            .tikhonov_K = cfg.tikhonov_K,
+            .tikhonov_fold_dummies = cfg.tikhonov_fold_dummies
         };
 
         std::unique_ptr<trex::tsolvers::TSolver_Base> retained;

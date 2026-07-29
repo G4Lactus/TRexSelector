@@ -264,6 +264,14 @@ struct SolverConfig {
      *  serialized warm starts K travels inside the solver state instead. */
     const Eigen::SparseMatrix<double>* tikhonov_K = nullptr;
 
+    /** @brief Dummy-coupling mode of the sparse-K TCIENET dispatch:
+     *  false = INDEPENDENT_RIDGE (kappa_dummy * I dummy block; preserves
+     *  the K = I ≡ TCENET collapse), true = FOLDED (dummy copies join
+     *  their originating variable's K-coupling — GVS layered convention;
+     *  restores dummy/null exchangeability for arbitrary K). Ignored
+     *  when tikhonov_K is nullptr. */
+    bool tikhonov_fold_dummies = false;
+
 };
 
 
@@ -370,7 +378,8 @@ std::unique_ptr<TSolver> makeSolverForConfig(const SolverConfig& cfg) {
         }
         return std::make_unique<TSolver>(
             cfg.X, cfg.D, cfg.y, cfg.hyperparams.lambda2, *cfg.tikhonov_K,
-            cfg.normalize, cfg.intercept, cfg.verbose, cfg.scaling_mode);
+            cfg.normalize, cfg.intercept, cfg.verbose, cfg.scaling_mode,
+            /*kappa_dummy=*/1.0, cfg.tikhonov_fold_dummies);
 
     } else if constexpr (std::is_same_v<TSolver, cd::TCCD_Solver>) {
 
