@@ -6,7 +6,7 @@ import collections.abc
 import numpy
 import numpy.typing
 import typing
-__all__: list[str] = ['AR1', 'ActiveSet', 'BT', 'BTSelectionMode', 'BiobankScreenTRexControl', 'BiobankScreenTRexResult', 'CV_1SE_CCD', 'CV_1SE_SVD', 'CV_MIN_CCD', 'CV_MIN_SVD', 'DAMethod', 'DASelectionResult', 'DummyDistribution', 'EN', 'ENSolverType', 'EQUI', 'FeasibleOnly', 'GVSSelectionResult', 'GVSType', 'HCONCAT', 'IEN', 'L2', 'LLoopStrategy', 'LambdaSelectionMethod', 'NN', 'ONDEMAND', 'PERMUTATION', 'PERMUTATION_ONDEMAND', 'PRIOR_GROUPS', 'RFaithful', 'SKIPL', 'SPCAMode', 'STANDARD', 'ScalingMode', 'ScreenTRexControlParameter', 'ScreenTRexMethod', 'ScreenTRexSelectionResult', 'SelectionResult', 'SolverHyperparameters', 'SolverTypeForTRex', 'TACGP', 'TAFS', 'TENET', 'TENET_AUG', 'TGP', 'TIENET_AUG', 'TLARS', 'TLASSO', 'TMP', 'TNCGMP', 'TOMP', 'TOOLS', 'TREX', 'TREX_DA_AR1', 'TREX_DA_BLOCK_EQUI', 'TREX_DA_EQUI', 'TRexBiobankScreeningSelector', 'TRexControlParameter', 'TRexDAControlParameter', 'TRexDASelector', 'TRexGVSControlParameter', 'TRexGVSSelector', 'TRexSPCAControlParameter', 'TRexSPCAResult', 'TRexSPCASelector', 'TRexScreeningSelector', 'TRexSelector', 'TSTAGEWISE', 'TSTEPWISE', 'Thresholded', 'ZSCORE']
+__all__: list[str] = ['AR1', 'ActiveSet', 'BT', 'BTSelectionMode', 'BiobankScreenTRexControl', 'BiobankScreenTRexResult', 'CV_1SE_CCD', 'CV_1SE_SVD', 'CV_MIN_CCD', 'CV_MIN_SVD', 'DAMethod', 'DASelectionResult', 'DummyDistribution', 'EN', 'ENSolverType', 'EQUI', 'FeasibleOnly', 'GVSSelectionResult', 'GVSType', 'HCONCAT', 'IEN', 'L2', 'LLoopStrategy', 'LambdaSelectionMethod', 'NN', 'SEEDED', 'PERMUTATION', 'PERMUTATION_SEEDED', 'PRIOR_GROUPS', 'RFaithful', 'SKIPL', 'SPCAMode', 'STANDARD', 'ScalingMode', 'ScreenTRexControlParameter', 'ScreenTRexMethod', 'ScreenTRexSelectionResult', 'SelectionResult', 'SolverHyperparameters', 'SolverTypeForTRex', 'TACGP', 'TAFS', 'TENET', 'TENET_AUG', 'TGP', 'TIENET_AUG', 'TLARS', 'TLASSO', 'TMP', 'TNCGMP', 'TOMP', 'TOOLS', 'TREX', 'TREX_DA_AR1', 'TREX_DA_BLOCK_EQUI', 'TREX_DA_EQUI', 'TRexBiobankScreeningSelector', 'TRexControlParameter', 'TRexDAControlParameter', 'TRexDASelector', 'TRexGVSControlParameter', 'TRexGVSSelector', 'TRexSPCAControlParameter', 'TRexSPCAResult', 'TRexSPCASelector', 'TRexScreeningSelector', 'TRexSelector', 'TSTAGEWISE', 'TSTEPWISE', 'Thresholded', 'ZSCORE']
 class BTSelectionMode:
     """
     Cell-selection policy for the BT (binary-tree) DA method.
@@ -580,17 +580,17 @@ class LLoopStrategy:
 
       PERMUTATION : Stored base dummy matrix + deterministic row permutations per experiment.
 
-      PERMUTATION_ONDEMAND : Seed-derived base + row permutations per experiment; nothing stored.
+      PERMUTATION_SEEDED : Seed-derived base + row permutations per experiment; nothing stored.
 
-      ONDEMAND : Seed-derived independent dummies per experiment; nothing stored.
+      SEEDED : Seed-derived independent dummies per experiment; nothing stored.
     """
     HCONCAT: typing.ClassVar[LLoopStrategy]  # value = <LLoopStrategy.HCONCAT: 2>
-    ONDEMAND: typing.ClassVar[LLoopStrategy]  # value = <LLoopStrategy.ONDEMAND: 5>
+    SEEDED: typing.ClassVar[LLoopStrategy]  # value = <LLoopStrategy.SEEDED: 5>
     PERMUTATION: typing.ClassVar[LLoopStrategy]  # value = <LLoopStrategy.PERMUTATION: 3>
-    PERMUTATION_ONDEMAND: typing.ClassVar[LLoopStrategy]  # value = <LLoopStrategy.PERMUTATION_ONDEMAND: 4>
+    PERMUTATION_SEEDED: typing.ClassVar[LLoopStrategy]  # value = <LLoopStrategy.PERMUTATION_SEEDED: 4>
     SKIPL: typing.ClassVar[LLoopStrategy]  # value = <LLoopStrategy.SKIPL: 0>
     STANDARD: typing.ClassVar[LLoopStrategy]  # value = <LLoopStrategy.STANDARD: 1>
-    __members__: typing.ClassVar[dict[str, LLoopStrategy]]  # value = {'SKIPL': <LLoopStrategy.SKIPL: 0>, 'STANDARD': <LLoopStrategy.STANDARD: 1>, 'HCONCAT': <LLoopStrategy.HCONCAT: 2>, 'PERMUTATION': <LLoopStrategy.PERMUTATION: 3>, 'PERMUTATION_ONDEMAND': <LLoopStrategy.PERMUTATION_ONDEMAND: 4>, 'ONDEMAND': <LLoopStrategy.ONDEMAND: 5>}
+    __members__: typing.ClassVar[dict[str, LLoopStrategy]]  # value = {'SKIPL': <LLoopStrategy.SKIPL: 0>, 'STANDARD': <LLoopStrategy.STANDARD: 1>, 'HCONCAT': <LLoopStrategy.HCONCAT: 2>, 'PERMUTATION': <LLoopStrategy.PERMUTATION: 3>, 'PERMUTATION_SEEDED': <LLoopStrategy.PERMUTATION_SEEDED: 4>, 'SEEDED': <LLoopStrategy.SEEDED: 5>}
     def __eq__(self, other: typing.Any) -> bool:
         ...
     def __getstate__(self) -> int:
@@ -1636,9 +1636,9 @@ HCONCAT: LLoopStrategy  # value = <LLoopStrategy.HCONCAT: 2>
 IEN: GVSType  # value = <GVSType.IEN: 1>
 L2: ScalingMode  # value = <ScalingMode.L2: 0>
 NN: DAMethod  # value = <DAMethod.NN: 3>
-ONDEMAND: LLoopStrategy  # value = <LLoopStrategy.ONDEMAND: 5>
+SEEDED: LLoopStrategy  # value = <LLoopStrategy.SEEDED: 5>
 PERMUTATION: LLoopStrategy  # value = <LLoopStrategy.PERMUTATION: 3>
-PERMUTATION_ONDEMAND: LLoopStrategy  # value = <LLoopStrategy.PERMUTATION_ONDEMAND: 4>
+PERMUTATION_SEEDED: LLoopStrategy  # value = <LLoopStrategy.PERMUTATION_SEEDED: 4>
 PRIOR_GROUPS: DAMethod  # value = <DAMethod.PRIOR_GROUPS: 4>
 RFaithful: BTSelectionMode  # value = <BTSelectionMode.RFaithful: 1>
 SKIPL: LLoopStrategy  # value = <LLoopStrategy.SKIPL: 0>

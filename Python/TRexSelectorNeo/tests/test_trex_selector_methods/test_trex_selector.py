@@ -167,8 +167,8 @@ def test_selection_result_fields(signal_data, fast_control):
     trex_selector_neo.LLoopStrategy.STANDARD,
     trex_selector_neo.LLoopStrategy.HCONCAT,
     trex_selector_neo.LLoopStrategy.PERMUTATION,
-    trex_selector_neo.LLoopStrategy.PERMUTATION_ONDEMAND,
-    trex_selector_neo.LLoopStrategy.ONDEMAND,
+    trex_selector_neo.LLoopStrategy.PERMUTATION_SEEDED,
+    trex_selector_neo.LLoopStrategy.SEEDED,
 ])
 def test_lloop_strategy_variants(signal_data, strategy):
     X, y, n, p = signal_data

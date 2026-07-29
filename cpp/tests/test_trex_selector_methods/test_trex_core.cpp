@@ -395,7 +395,7 @@ TEST(TRexCoreTest, WarmStart_DirectStrategyContinuationMatchesCold) {
     er::ExperimentRunner runner(X_map, d.y, dummy_gen, warm_mgr, nullptr);
 
     auto cfg = make_runner_cfg(K, static_cast<std::size_t>(p),
-                               er::ExperimentStrategy::OnDemand);
+                               er::ExperimentStrategy::Seeded);
 
     runner.run(cfg);           // T = 1, retains solvers + dummy buffers
     cfg.T_stop = 2;
@@ -543,9 +543,9 @@ TEST(TRexCoreTest, DirectDummies_HonourUserSeedAndAreStableWithinRun) {
     dg::DummyGenerator g_seed2(n, dummygen::Distribution::Normal(), 2, false);
     dg::DummyGenerator g_seed1_again(n, dummygen::Distribution::Normal(), 1, false);
 
-    Eigen::MatrixXd D1  = g_seed1.generateDirect(num_dummies, 0);
-    Eigen::MatrixXd D2  = g_seed2.generateDirect(num_dummies, 0);
-    Eigen::MatrixXd D1b = g_seed1_again.generateDirect(num_dummies, 0);
+    Eigen::MatrixXd D1  = g_seed1.generateSeeded(num_dummies, 0);
+    Eigen::MatrixXd D2  = g_seed2.generateSeeded(num_dummies, 0);
+    Eigen::MatrixXd D1b = g_seed1_again.generateSeeded(num_dummies, 0);
 
     EXPECT_FALSE(D1.isApprox(D2, 1e-12))
         << "Different user seeds produced identical DIRECT dummies.";
@@ -556,8 +556,8 @@ TEST(TRexCoreTest, DirectDummies_HonourUserSeedAndAreStableWithinRun) {
     // repeated derivation of the same experiment's dummies must be identical
     // (the T-loop re-derives D_k at every step).
     dg::DummyGenerator g_random(n, dummygen::Distribution::Normal(), -1, false);
-    Eigen::MatrixXd Da = g_random.generateDirect(num_dummies, 3);
-    Eigen::MatrixXd Db = g_random.generateDirect(num_dummies, 3);
+    Eigen::MatrixXd Da = g_random.generateSeeded(num_dummies, 3);
+    Eigen::MatrixXd Db = g_random.generateSeeded(num_dummies, 3);
     EXPECT_TRUE(Da.isApprox(Db, 1e-12))
         << "Unseeded DIRECT dummies changed between calls within one run.";
 }

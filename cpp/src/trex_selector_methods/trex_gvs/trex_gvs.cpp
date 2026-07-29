@@ -182,20 +182,20 @@ TRexGVSSelector::TRexGVSSelector(
     // known.
 
     // ---- L-loop strategy gate ---------------------------------------------
-    // Supported: STANDARD, HCONCAT, SKIPL, ONDEMAND.
-    //   * STANDARD / SKIPL / ONDEMAND: redraw all `LL` layers from scratch
+    // Supported: STANDARD, HCONCAT, SKIPL, SEEDED.
+    //   * STANDARD / SKIPL / SEEDED: redraw all `LL` layers from scratch
     //     per L-iteration. SKIPL collapses to a single iteration with
-    //     `LL = max_dummy_multiplier`. ONDEMAND is functionally identical to
+    //     `LL = max_dummy_multiplier`. SEEDED is functionally identical to
     //     STANDARD inside GVS because the overridden `evaluateStep`
     //     consumes `D_solver_bufs_` rather than streaming from disk.
     //   * HCONCAT: append one fresh layer per L-iteration.
-    // Rejected: PERMUTATION, PERMUTATION_ONDEMAND. Row permutations of the
+    // Rejected: PERMUTATION, PERMUTATION_SEEDED. Row permutations of the
     // base dummy matrix would destroy the per-cluster MVN covariance
     // structure that the GVS dummies are explicitly designed to mirror.
     if (trex_ctrl_.lloop_strategy == tc::LLoopStrategy::PERMUTATION ||
-        trex_ctrl_.lloop_strategy == tc::LLoopStrategy::PERMUTATION_ONDEMAND) {
+        trex_ctrl_.lloop_strategy == tc::LLoopStrategy::PERMUTATION_SEEDED) {
         throw std::invalid_argument(
-            "TRexGVSSelector: PERMUTATION and PERMUTATION_ONDEMAND L-loop "
+            "TRexGVSSelector: PERMUTATION and PERMUTATION_SEEDED L-loop "
             "strategies are not supported. Row permutation of the base "
             "dummy matrix would destroy the per-cluster MVN covariance "
             "structure that GVS dummies are designed to mirror."
@@ -1064,8 +1064,8 @@ TRexGVSSelector::StepView TRexGVSSelector::evaluateStep(
 
 // ===================================================================================
 // L-loop hook: cluster-aware dummy generation.
-// Strategies handled: STANDARD, HCONCAT, SKIPL, ONDEMAND.
-//   - STANDARD / SKIPL / ONDEMAND : redraw all LL layers from scratch.
+// Strategies handled: STANDARD, HCONCAT, SKIPL, SEEDED.
+//   - STANDARD / SKIPL / SEEDED : redraw all LL layers from scratch.
 //   - HCONCAT                   : append one fresh layer per L-iteration.
 // ===================================================================================
 
@@ -1096,14 +1096,14 @@ void TRexGVSSelector::prepareDummiesForLStep(LStepContext& ctx)
     switch (trex_ctrl_.lloop_strategy) {
         case tc::LLoopStrategy::STANDARD:
         case tc::LLoopStrategy::SKIPL:
-        case tc::LLoopStrategy::ONDEMAND:
+        case tc::LLoopStrategy::SEEDED:
             redraw_all = true;
             break;
         case tc::LLoopStrategy::HCONCAT:
             redraw_all = false;
             break;
         case tc::LLoopStrategy::PERMUTATION:
-        case tc::LLoopStrategy::PERMUTATION_ONDEMAND:
+        case tc::LLoopStrategy::PERMUTATION_SEEDED:
         default:
             throw std::logic_error(
                 "TRexGVSSelector::prepareDummiesForLStep: unsupported "

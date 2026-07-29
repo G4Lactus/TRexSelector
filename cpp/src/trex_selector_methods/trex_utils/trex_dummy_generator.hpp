@@ -13,7 +13,7 @@
  *  Responsibilities:
  *    - Generate fresh dummy matrices D_k from configured distributions.
  *    - Generate permuted variants from a stored base dummy matrix.
- *    - Generate experiment-specific dummies from deterministic seeds (DIRECT).
+ *    - Generate experiment-specific dummies from deterministic seeds (SEEDED).
  *    - Center + L2-normalize all generated dummies.
  *    - Store / manage the base dummy matrix for PERMUTATION strategies.
  *    - Store / manage K pre-generated dummy matrices for STANDARD/HCONCAT/SKIP.
@@ -140,7 +140,7 @@ public:
     /**
      * @brief Generate a dummy matrix with a seed derived via mix_seed.
      *
-     * @details Used by the DIRECT strategy where each experiment k needs
+     * @details Used by the SEEDED strategy where each experiment k needs
      *          a deterministic seed that is uncorrelated with adjacent k's.
      *
      * @param num_dummies    Number of dummy columns.
@@ -148,11 +148,11 @@ public:
      *
      * @return Normalized dummy matrix (n × num_dummies).
      */
-    Eigen::MatrixXd generateDirect(std::size_t num_dummies,
+    Eigen::MatrixXd generateSeeded(std::size_t num_dummies,
                                     std::size_t experiment_id) const {
 
         Eigen::MatrixXd D(n_, num_dummies);
-        generateDirectInto(D, experiment_id);
+        generateSeededInto(D, experiment_id);
         return D;
     }
 
@@ -272,7 +272,7 @@ public:
 
 
     /**
-     * @brief Generate DIRECT-strategy dummies directly into an existing matrix.
+     * @brief Generate SEEDED-strategy dummies directly into an existing matrix.
      *
      * @details Seeds via `deriveBlockSeed64(experiment_id, 0)`, i.e. from the
      *          resolved base seed with the prefix-stable tag. This honours the
@@ -284,7 +284,7 @@ public:
      * @param target         Matrix to write into (n × num_dummies, pre-sized).
      * @param experiment_id  Experiment index k.
      */
-    void generateDirectInto(Eigen::Ref<Eigen::MatrixXd> target,
+    void generateSeededInto(Eigen::Ref<Eigen::MatrixXd> target,
                             std::size_t experiment_id) const {
 
         const std::uint64_t seed_k = deriveBlockSeed64(experiment_id, 0);
@@ -563,19 +563,19 @@ public:
 
 
     // ==========================================================================
-    // Permutation strategy — stateless (ONDEMAND) variants
+    // Permutation strategy — stateless (SEEDED) variants
     // ==========================================================================
 
     /**
      * @brief Row-permute a caller-supplied base matrix for experiment k.
      *
      * @details Stateless companion of getPermuted() for the
-     *          PERMUTATION_ONDEMAND strategy: the caller re-derives the base
+     *          PERMUTATION_SEEDED strategy: the caller re-derives the base
      *          from the seed (generate(num_dummies, base_id) is prefix-stable
      *          under l_tag = 0) and this method applies the SAME deterministic
      *          per-experiment row permutation as the stored path — engine
      *          seeded by mix_seed64(base_id, k). With identical base_id the
-     *          stored (PERMUTATION) and stateless (PERMUTATION_ONDEMAND)
+     *          stored (PERMUTATION) and stateless (PERMUTATION_SEEDED)
      *          strategies therefore produce bit-identical experiments.
      *
      * @param base     Base dummy matrix (n × num_dummies), already normalized.
@@ -659,7 +659,7 @@ private:
      *  Equals `seed_` when a deterministic seed (>= 0) was requested, and two
      *  `std::random_device` draws packed into 64 bits otherwise. Resolving the
      *  base once (instead of per call) guarantees that repeated generation
-     *  requests for the same (experiment, l_tag) pair — e.g. the DIRECT
+     *  requests for the same (experiment, l_tag) pair — e.g. the SEEDED
      *  strategy re-deriving D_k at every T-loop step — reproduce the identical
      *  dummy matrix within one selector run, while separate runs still obtain
      *  fresh entropy. 64-bit width keeps the whole seeding pipeline out of the
@@ -709,7 +709,7 @@ private:
      *          advances the column offset) are likewise impossible.
      *
      *          Tag conventions:
-     *            - l_tag = 0:      prefix-stable strategies (HCONCAT, DIRECT,
+     *            - l_tag = 0:      prefix-stable strategies (HCONCAT, SEEDED,
      *                              PERMUTATION base). The same (k, col) always
      *                              reproduces the same column, so re-derivation
      *                              at any T-/L-step and incremental expansion

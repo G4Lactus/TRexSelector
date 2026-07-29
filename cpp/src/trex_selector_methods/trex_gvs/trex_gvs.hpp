@@ -92,11 +92,11 @@
  *      by the base class at the end of `select()`); see `gvs_use_mmap_`.
  *
  *    - Support L-looop strategies:
- *.     `LLoopStrategy::STANDARD`, `HCONCAT`, `SKIPL`, and `ONDEMAND`.
- *      `STANDARD` and `ONDEMAND` are equivalent inside GVS (the overridden
+ *.     `LLoopStrategy::STANDARD`, `HCONCAT`, `SKIPL`, and `SEEDED`.
+ *      `STANDARD` and `SEEDED` are equivalent inside GVS (the overridden
  *      `evaluateStep` consumes `D_solver_bufs_` rather than streaming dummies from disk).
  *      `SKIPL` collapses to a single L-iter with LL = max_dummy_multiplier.
- *      `PERMUTATION` and `PERMUTATION_ONDEMAND` are rejected because row permutation
+ *      `PERMUTATION` and `PERMUTATION_SEEDED` are rejected because row permutation
  *      would destroy the per-cluster MVN covariance structure that GVS dummies
  *      are designed to mirror.
  *
@@ -768,11 +768,11 @@ protected:
      * @brief Per-L-iteration dummy preparation for GVS.
      *
      * @details
-     *  Honors `LLoopStrategy::STANDARD`, `HCONCAT`, `SKIPL`, and `ONDEMAND`.
-     *  STANDARD / SKIPL / ONDEMAND redraw all `LL` cluster-MVN dummy layers
+     *  Honors `LLoopStrategy::STANDARD`, `HCONCAT`, `SKIPL`, and `SEEDED`.
+     *  STANDARD / SKIPL / SEEDED redraw all `LL` cluster-MVN dummy layers
      *  from scratch per L-iteration; HCONCAT appends one fresh layer per
      *  L-iteration. SKIPL is invoked exactly once per `select()` with
-     *  `LL = max_dummy_multiplier`. PERMUTATION and PERMUTATION_ONDEMAND are
+     *  `LL = max_dummy_multiplier`. PERMUTATION and PERMUTATION_SEEDED are
      *  rejected in the constructor; reaching them here triggers a defensive
      *  `std::logic_error`. Also (re)builds `D_solver_bufs_` for the K
      *  experiments and clears `solvers_cache_` so the next `evaluateStep()`

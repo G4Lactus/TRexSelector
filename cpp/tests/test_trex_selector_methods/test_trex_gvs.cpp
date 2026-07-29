@@ -137,7 +137,7 @@ TEST_F(TRexGVSTest, Validation_ThrowsOnPermutationLLoop) {
     EXPECT_THROW(TRexGVSSelector(X_map, y_map, 0.1, gvs_params),
                  std::invalid_argument);
 
-    gvs_params.trex_ctrl.lloop_strategy = LLoopStrategy::PERMUTATION_ONDEMAND;
+    gvs_params.trex_ctrl.lloop_strategy = LLoopStrategy::PERMUTATION_SEEDED;
     EXPECT_THROW(TRexGVSSelector(X_map, y_map, 0.1, gvs_params),
                  std::invalid_argument);
 }

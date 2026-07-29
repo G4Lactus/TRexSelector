@@ -104,10 +104,10 @@ inline constexpr bool isGreedySolver(
  *
  * @details Two orthogonal axes:
  *  - Dummy source: fresh INDEPENDENT draws per experiment (SKIPL / STANDARD /
- *    HCONCAT / ONDEMAND) vs one shared base matrix whose rows are permuted per
- *    experiment (PERMUTATION / PERMUTATION_ONDEMAND).
+ *    HCONCAT / SEEDED) vs one shared base matrix whose rows are permuted per
+ *    experiment (PERMUTATION / PERMUTATION_SEEDED).
  *  - Storage: STORED strategies keep matrices in the DummyGenerator for the
- *    whole run; ONDEMAND strategies re-derive everything from the seed at each
+ *    whole run; SEEDED strategies re-derive everything from the seed at each
  *    step (zero persistent state, prefix-stable via deriveBlockSeed64 l_tag=0).
  */
 enum class LLoopStrategy {
@@ -115,8 +115,8 @@ enum class LLoopStrategy {
     STANDARD,              // Stored, fresh dummies at each L-loop iteration (conservative).
     HCONCAT,               // Stored, horizontally expand dummy matrices (faster, same result).
     PERMUTATION,           // Stored base dummy matrix + deterministic row permutations per k.
-    PERMUTATION_ONDEMAND,  // Seed-derived base + row permutations per k; nothing stored.
-    ONDEMAND               // Seed-derived independent dummies per k; nothing stored.
+    PERMUTATION_SEEDED,  // Seed-derived base + row permutations per k; nothing stored.
+    SEEDED               // Seed-derived independent dummies per k; nothing stored.
 };
 
 
@@ -850,7 +850,7 @@ protected:
 
     /**
      * @brief Unified L-loop calibration driver shared by the four looping
-     *        strategies (STANDARD, HCONCAT, PERMUTATION, DIRECT).
+     *        strategies (STANDARD, HCONCAT, PERMUTATION, SEEDED).
      *
      * Implements the common while-loop skeleton:
      *   - guard `dummy_multiplier_LL_ <= max_dummy_multiplier &&
@@ -909,12 +909,12 @@ protected:
                                          er::ExperimentResults& exp_results);
 
     /**
-     * @brief Run L-loop calibration using the PERMUTATION_ONDEMAND strategy.
+     * @brief Run L-loop calibration using the PERMUTATION_SEEDED strategy.
      *
      * @param FDP_hat Current FDP estimates (updated in-place).
      * @param exp_results Current experiment results (updated in-place).
      */
-    void runLLoopCalibration_OnDemand(Eigen::VectorXd& FDP_hat, er::ExperimentResults& exp_results);
+    void runLLoopCalibration_Seeded(Eigen::VectorXd& FDP_hat, er::ExperimentResults& exp_results);
 
 
     // ============================================================
