@@ -40,6 +40,8 @@
 #include <ml_methods/model_selection/tikhonov_cv_svd.hpp>
 
 // Data normalization helpers
+#include <trex_selector_methods/trex_utils/trex_cluster_dummies.hpp>
+#include <trex_selector_methods/trex_utils/trex_cluster_hac.hpp>
 #include <trex_selector_methods/trex_utils/trex_data_normalizer.hpp>
 
 // Solver dispatch
@@ -65,6 +67,7 @@
 namespace trex::trex_selector_methods::trex_gvs {
 
 // Local namespace aliases
+namespace cdum = trex::trex_selector_methods::utils::cluster_dummies;
 namespace dn   = trex::trex_selector_methods::utils::data_normalizer;
 namespace lars = trex::tsolvers::linear_model::lars_based;
 namespace ccd  = trex::tsolvers::linear_model::cd_based;
@@ -74,10 +77,11 @@ namespace mm   = trex::trex_selector_methods::utils::memmap_manager;
 // frozen into the base class.
 //
 //   1. `use_memory_mapping` is forced to false, so the base ctor does not
-//      pre-allocate `memmap_mgr_` (which would use the base row count `n_`
-//      instead of the GVS effective row count `n_eff_ = n_ + M` required for
-//      IEN). GVS re-allocates the manager in `onSelectBegin()` once `n_eff_`
-//      is known.
+//      pre-allocate `memmap_mgr_` with the base layout (shared files for
+//      SEEDED) and no base code path can enter its memory-mapped runner.
+//      GVS re-allocates the manager in `onSelectBegin()` with the
+//      per-experiment (shared = false) files its parallel-K loop and its
+//      no-rewrite T-steps require.
 //   2. For `gvs_type == EN`, `solver_type` is DERIVED from `en_solver`
 //      (the single EN-solver knob). The pre-derivation value may only be
 //      the neutral default (TENET) or already consistent; an explicitly
@@ -177,9 +181,10 @@ TRexGVSSelector::TRexGVSSelector(
     // The user-requested flag is captured in the member-initializer list as
     // `gvs_use_mmap_` (read from the *original* parameter copy). The flag
     // passed to the base ctor was stripped via prepareBaseCtrl() so the
-    // base does not pre-allocate `memmap_mgr_` at the wrong row count.
-    // GVS re-allocates the manager in `onSelectBegin()` once `n_eff_` is
-    // known.
+    // base does not pre-allocate `memmap_mgr_` with the base layout — GVS
+    // re-allocates the manager in `onSelectBegin()` with per-experiment
+    // (shared=false) files, which its parallel-K loop and its no-rewrite
+    // T-steps REQUIRE (see the warning at the allocation site).
 
     // ---- L-loop strategy gate ---------------------------------------------
     // Supported: STANDARD, HCONCAT, SKIPL, SEEDED.
@@ -187,7 +192,10 @@ TRexGVSSelector::TRexGVSSelector(
     //     per L-iteration. SKIPL collapses to a single iteration with
     //     `LL = max_dummy_multiplier`. SEEDED is functionally identical to
     //     STANDARD inside GVS because the overridden `evaluateStep`
-    //     consumes `D_solver_bufs_` rather than streaming from disk.
+    //     consumes `D_solver_bufs_` rather than streaming from disk — NOTE
+    //     that this includes the MEMORY profile: GVS keeps one buffer (or
+    //     one mmap file) per experiment either way, so SEEDED's usual
+    //     "one dummy matrix at a time" saving does NOT apply here.
     //   * HCONCAT: append one fresh layer per L-iteration.
     // Rejected: PERMUTATION, PERMUTATION_SEEDED. Row permutations of the
     // base dummy matrix would destroy the per-cluster MVN covariance
@@ -321,26 +329,9 @@ void TRexGVSSelector::setupGVS_PriorGroups() {
 
 
 std::vector<hac::MergeStep> TRexGVSSelector::runClustering() const {
-    using MapType = Eigen::Map<Eigen::MatrixXd>;
-    using CorrDist = hac::DistancePolicy<MapType, hac::DistanceMetric::Correlation>;
-
-    switch (trex_gvs_ctrl_.hc_linkage) {
-        case hac::LinkageMethod::Single:
-            return hac::AgglomerativeClustering::cluster<
-                MapType, CorrDist, hac::LinkageMethod::Single>(*X_, /*use_mmap=*/false, verbose_);
-        case hac::LinkageMethod::Complete:
-            return hac::AgglomerativeClustering::cluster<
-                MapType, CorrDist, hac::LinkageMethod::Complete>(*X_, /*use_mmap=*/false, verbose_);
-        case hac::LinkageMethod::Average:
-            return hac::AgglomerativeClustering::cluster<
-                MapType, CorrDist, hac::LinkageMethod::Average>(*X_, /*use_mmap=*/false, verbose_);
-        case hac::LinkageMethod::WPGMA:
-            return hac::AgglomerativeClustering::cluster<
-                MapType, CorrDist, hac::LinkageMethod::WPGMA>(*X_, /*use_mmap=*/false, verbose_);
-        default:
-            throw std::invalid_argument(
-                "TRexGVSSelector: unsupported linkage method.");
-    }
+    // Shared correlation-HAC dispatch (trex_cluster_dummies.hpp) — the same
+    // machinery TRexTikhonovSelector uses for its cluster-aware dummies.
+    return cdum::runCorrelationHAC(*X_, trex_gvs_ctrl_.hc_linkage, verbose_);
 }
 
 
@@ -381,49 +372,18 @@ void TRexGVSSelector::finalizeSetup() {
 
     const std::size_t M = gvs_setup_.max_clusters;
     const auto p_idx = static_cast<Eigen::Index>(p_);
-    const double inv_nm1 = 1.0 / static_cast<double>(static_cast<Eigen::Index>(n_) - 1);
 
     // Per-cluster sizes
     gvs_setup_.cluster_sizes.resize(M);
-    gvs_setup_.cholesky_lower_list.resize(M);
+    for (std::size_t m = 0; m < M; ++m) {
+        gvs_setup_.cluster_sizes[m] = gvs_setup_.clusters_list[m].size();
+    }
 
     // Per-cluster Sigma_m and Cholesky factor L_m on X_ (already normalized
-    // per trex_ctrl_.scaling_mode; the estimator below adapts to either mode).
-    for (std::size_t m = 0; m < M; ++m) {
-
-        const auto& cols = gvs_setup_.clusters_list[m];
-        const auto p_m = static_cast<Eigen::Index>(cols.size());
-        gvs_setup_.cluster_sizes[m] = static_cast<std::size_t>(p_m);
-
-        // Group covariance computation: Sigma_m = (1 / (n-1)) * X_m^T X_m.
-        // This auto-adapts to the column scaling chosen for X_:
-        //   - ScalingMode::L2     -> ||x_j|| = 1, so diag(Sigma_m) = 1/(n-1)
-        //                            (dummies sampled unit-L2, matching X_).
-        //   - ScalingMode::ZSCORE -> ||x_j|| = sqrt(n-1), so diag(Sigma_m) = 1
-        //                            (dummies sampled unit-SD, matching X_).
-        // In both cases the sampled dummy columns share the scale of X_.
-        Eigen::MatrixXd Sigma_m(p_m, p_m);
-        for (Eigen::Index i = 0; i < p_m; ++i) {
-            for (Eigen::Index j = i; j < p_m; ++j) {
-                const double v = inv_nm1 *
-                                 X_->col(cols[static_cast<std::size_t>(i)])
-                                 .dot(X_->col(cols[static_cast<std::size_t>(j)]));
-                Sigma_m(i, j) = v;
-                Sigma_m(j, i) = v;
-            }
-            Sigma_m(i, i) += 1e-10;
-        }
-
-        // Cholesky factorization for MVN sampling
-        Eigen::LLT<Eigen::MatrixXd> llt(Sigma_m);
-        if (llt.info() != Eigen::Success) {
-            throw std::runtime_error(
-                "TRexGVSSelector: Cholesky factorization failed for cluster " +
-                std::to_string(m) + ".");
-        }
-        // store only the lower triangular factor (L_m) since Sigma_m is symmetric
-        gvs_setup_.cholesky_lower_list[m] = llt.matrixL();
-    }
+    // per trex_ctrl_.scaling_mode; the shared estimator adapts to either
+    // mode — see trex_cluster_dummies.hpp).
+    gvs_setup_.cholesky_lower_list = cdum::buildClusterCholeskys(
+        *X_, gvs_setup_.clusters_list, n_, "TRexGVSSelector");
 
     // (M x p) IEN binary support matrix (row m = 1_m^T).
     gvs_setup_.IEN_cl_id_vectors = Eigen::MatrixXd::Zero(
@@ -664,41 +624,12 @@ double TRexGVSSelector::computeLambda2() const {
 // ===================================================================================
 
 Eigen::MatrixXd TRexGVSSelector::drawClusterDummyLayer(std::mt19937& rng) const {
-
-    const auto n_rows = static_cast<Eigen::Index>(n_);
-    const auto p = static_cast<Eigen::Index>(p_);
-
-    Eigen::MatrixXd layer = Eigen::MatrixXd::Zero(n_rows, p);
-    std::normal_distribution<double> N01(0.0, 1.0);
-
-    for (std::size_t m = 0; m < gvs_setup_.max_clusters; ++m) {
-
-        const auto& cols = gvs_setup_.clusters_list[m];
-        const auto p_m = static_cast<Eigen::Index>(cols.size());
-
-        // skip empty clusters (should not happen)
-        if (p_m == 0) {
-            continue;
-        }
-
-        // drawn univariate Z ~ N(0, I) of shape (n_rows x p_m).
-        Eigen::MatrixXd Z(n_rows, p_m);
-        for (Eigen::Index j = 0; j < p_m; ++j) {
-            for (Eigen::Index i = 0; i < n_rows; ++i) {
-                Z(i, j) = N01(rng);
-            }
-        }
-
-        // coloring transform: block = Z * L_m^T  (rows of block ~ N(0, Sigma_m)).
-        Eigen::MatrixXd block = Z * gvs_setup_.cholesky_lower_list[m].transpose();
-
-        // Scatter into output columns.
-        for (Eigen::Index j = 0; j < p_m; ++j) {
-            layer.col(cols[static_cast<std::size_t>(j)]) = block.col(j);
-        }
-    }
-
-    return layer;
+    // Shared cluster-MVN draw (trex_cluster_dummies.hpp); the draw order is
+    // part of the reproducibility contract with TRexTikhonovSelector.
+    return cdum::drawClusterDummyLayer(n_, p_,
+                                       gvs_setup_.clusters_list,
+                                       gvs_setup_.cholesky_lower_list,
+                                       rng);
 }
 
 
@@ -1008,6 +939,15 @@ TRexGVSSelector::ExpAgg TRexGVSSelector::runKExperiments(
             phi_T_per_k[k] = extractPhiContribFromPath(
                 beta_path, p_, num_dummies, T_stop,
                 std::numeric_limits<double>::epsilon(), verbose_);
+
+            // Flush this experiment's dirty dummy pages and drop their
+            // residency (same contract as the base ExperimentRunner):
+            // otherwise the K written D regions stay resident for the whole
+            // selector run. The cached solvers keep valid Eigen::Maps into
+            // the region — later T-steps simply refault the data from disk.
+            if (gvs_use_mmap_) {
+                memmap_mgr_->releaseResidency(k);
+            }
         }
     }
 
@@ -1126,21 +1066,11 @@ void TRexGVSSelector::prepareDummiesForLStep(LStepContext& ctx)
     // ---- Generate / extend per-experiment dummy layers -------------------
     for (std::size_t k = 0; k < K; ++k) {
 
-        // Seed the FULL mt19937 state via std::seed_seq.  Seeding mt19937 from
-        // a single 32-bit value (e.g. a scalar mix_seed result) leaves nearby
-        // seeds able to emit correlated initial output — fatal for T-Rex,
-        // whose FDR calibration assumes the K dummy realisations are mutually
-        // independent and independent of X.  seed_seq scrambles the supplied
-        // entropy words across the entire 624-word generator state, so every
-        // (experiment k, L-iteration LL) draws a decorrelated dummy stream.
-        std::seed_seq seq{
-            static_cast<std::uint32_t>(base_seed & 0xFFFFFFFFu),
-            static_cast<std::uint32_t>(base_seed >> 32),
-            static_cast<std::uint32_t>(k),
-            static_cast<std::uint32_t>(LL),
-            0x9E3779B9u  // golden-ratio constant for extra avalanche mixing
-        };
-        std::mt19937 rng(seq);
+        // Shared full-state seed_seq stream (trex_cluster_dummies.hpp) —
+        // the same recipe the DummyGenerator cluster mode uses, so equal
+        // (seed, k, LL) means bit-identical draws across GVS and the
+        // Tikhonov selector. See makeLayerStream for the rationale.
+        std::mt19937 rng = cdum::makeLayerStream(base_seed, k, LL);
 
         if (redraw_all) {
             // Redraw all LL layers from scratch.
@@ -1225,6 +1155,20 @@ void TRexGVSSelector::prepareDummiesForLStep(LStepContext& ctx)
         }
     }
 
+    // Drain the layer cache for the redraw-all strategies: the assembled
+    // solver blocks (D_solver_bufs_ / mmap regions) are now the single
+    // authoritative copy, and the next L-iteration rebuilds the layers from
+    // scratch anyway. Keeping them would double the in-memory footprint
+    // (and in mmap mode hold a full K x n x num_dummies RAM copy NEXT TO
+    // the mapped files). HCONCAT is the one strategy that genuinely needs
+    // the retained layers (it appends to them next iteration).
+    if (redraw_all) {
+        for (std::size_t k = 0; k < K; ++k) {
+            dummy_layers_[k].clear();
+            dummy_layers_[k].shrink_to_fit();
+        }
+    }
+
     ctx.existing_on_disk = 0;
 
     if (verbose_) {
@@ -1274,6 +1218,12 @@ void TRexGVSSelector::onSelectBegin() {
     //    parallel-K loop in runKExperiments). Rows = n for all variants
     //    (the files hold the plain dummy blocks; augmented buffers are
     //    solver-owned).
+    //    WARNING: do NOT align this with the base class's shared-file
+    //    heuristic (shared=true for SEEDED) — GVS's T-steps reuse the
+    //    per-k regions with NO rewrite (evaluateStep ignores
+    //    existing_on_disk entirely), so a shared file would hand every
+    //    experiment the LAST experiment's dummies, the exact stale-dummy
+    //    bug fixed in the core T-loop on 2026-07-28.
     if (gvs_use_mmap_) {
         const std::size_t max_dummies = trex_ctrl_.max_dummy_multiplier * p_;
         memmap_mgr_ = std::make_unique<mm::MemmapManager>(

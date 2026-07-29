@@ -95,6 +95,9 @@
  *.     `LLoopStrategy::STANDARD`, `HCONCAT`, `SKIPL`, and `SEEDED`.
  *      `STANDARD` and `SEEDED` are equivalent inside GVS (the overridden
  *      `evaluateStep` consumes `D_solver_bufs_` rather than streaming dummies from disk).
+ *      This equivalence includes the MEMORY profile: GVS keeps one dummy
+ *      buffer (or one mmap file) per experiment under both, so SEEDED's
+ *      usual one-matrix-at-a-time saving does not apply here.
  *      `SKIPL` collapses to a single L-iter with LL = max_dummy_multiplier.
  *      `PERMUTATION` and `PERMUTATION_SEEDED` are rejected because row permutation
  *      would destroy the per-cluster MVN covariance structure that GVS dummies
@@ -609,8 +612,10 @@ protected:
     /** @brief User-requested memory-mapping flag, captured before passing
      *  the base control parameter to the parent constructor. The base
      *  copy is forced to `false` so that the inherited `memmap_mgr_` is
-     *  not auto-allocated with the wrong row count; GVS re-allocates it
-     *  in `onSelectBegin()` with `n_eff_` once it is known.
+     *  not auto-allocated with the base layout; GVS re-allocates it in
+     *  `onSelectBegin()` with per-experiment (shared = false) files, a
+     *  hard requirement of its parallel-K loop and its no-rewrite T-steps
+     *  (see the warning at the allocation site in trex_gvs.cpp).
      */
     bool gvs_use_mmap_{false};
 
