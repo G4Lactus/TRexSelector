@@ -20,24 +20,52 @@
  *    - K = I                     -> plain elastic net (TCENET),
  *    - K = sum_m 1_m 1_m^T / p_m -> the group-informed IEN penalty that
  *      TRexGVSSelector builds from a clustering (kept separate on purpose:
- *      GVS owns the cluster-aware dummy machinery; this class uses the
- *      canonical i.i.d. T-Rex dummies),
+ *      GVS owns the cluster-aware K-experiment loop; this class runs the
+ *      shared base runner),
  *    - banded / Laplacian K      -> smoothness-informed selection.
  *
- *  Dummies get the neutral unit ridge (kappa_dummy = 1), preserving the
- *  real/dummy exchangeability the FDR calibration relies on; an informed K
- *  should therefore keep diag(K) = 1 (see tcienet_solver.hpp).
+ *  Dummy coupling (default FOLDED, `fold_dummy_coupling`): dummy copies
+ *  join their originating variable's K-coupling — the exact generalization
+ *  of GVS's layered group convention — so dummy/null exchangeability holds
+ *  for arbitrary K. The INDEPENDENT_RIDGE escape (decoupled kappa_dummy = 1
+ *  dummy block) preserves the K = I ≡ TCENET collapse for validation runs;
+ *  under it, prefer diag(K) = 1 (see tcienet_solver.hpp).
+ *
+ *  Dummy generation:
+ *  -----------------
+ *  Cluster-aware by default (`cluster_dummies = true`), on GVS parity:
+ *  variables are partitioned into clusters (user-supplied `prior_groups`,
+ *  else correlation-HAC with `corr_max` / `hc_linkage`), and dummies are
+ *  drawn as per-cluster colored MVN layers via the shared machinery in
+ *  trex_cluster_dummies.hpp — same seed_seq scheme, same center-only /
+ *  realized-norms convention as TRexGVSSelector. An informed K encodes
+ *  structure among correlated variables; i.i.d. dummies would be
+ *  systematically less competitive than correlated null reals there,
+ *  deforming the dummy/null exchangeability the FDR calibration relies on.
+ *  `cluster_dummies = false` restores the canonical i.i.d. dummy path
+ *  (validation / equivalence runs only). The model is installed into the
+ *  base DummyGenerator (`setClusterModel`), whose cluster mode serves
+ *  EVERY strategy natively: STANDARD / HCONCAT / SKIPL (stored matrices),
+ *  SEEDED (one D_k at a time, serial — content bit-identical to
+ *  STANDARD at the same L), and the memory-mapped writers (the mmap region
+ *  is pre-allocated at maximum dimensions and layers are regenerated into
+ *  it deterministically). Only the PERMUTATION variants are rejected: K
+ *  row-permuted copies of one base cannot carry the per-cluster MVN
+ *  convention.
  *
  *  Architecture:
  *  -------------
  *  Unlike GVS (private K-experiment loop), this class reuses the ENTIRE base
- *  machinery — dummy generation, L/T loops, warm starts, memory mapping —
+ *  machinery — L/T loops, warm starts, the shared ExperimentRunner —
  *  by injecting the penalty matrix into the shared solver dispatch:
  *  `buildRunnerConfig()` is overridden to set
  *  `ExperimentRunnerConfig::tikhonov_K` (forwarded to
  *  `SolverConfig::tikhonov_K`, where dispatchByType() routes TCIENET through
  *  its sparse-K constructor) and to overwrite `solver_params.lambda2` with
- *  the resolved penalty weight.
+ *  the resolved penalty weight. Cluster-aware dummies enter through the
+ *  DummyGenerator cluster mode (`setClusterModel()` in `onSelectBegin()`),
+ *  so the base dummy hook, the ExperimentRunner, and the memory-mapped
+ *  writers all run unchanged.
  *
  *  lambda_2 selection:
  *  -------------------
@@ -55,6 +83,7 @@
 
 // std includes
 #include <cstddef>
+#include <vector>
 
 // Eigen includes
 #include <Eigen/Dense>
@@ -62,6 +91,9 @@
 
 // Base T-Rex
 #include <trex_selector_methods/trex_core/trex.hpp>
+
+// Hierarchical clustering types (LinkageMethod for the dummy clustering)
+#include <ml_methods/clustering/hierarchical/agglomerative/agglomerative_types.hpp>
 
 // ===================================================================================
 
@@ -72,6 +104,7 @@ namespace trex::trex_selector_methods::trex_tikhonov {
 namespace tc = trex::trex_selector_methods::trex_core;
 namespace sd = trex::trex_selector_methods::utils::solver_dispatch;
 namespace er = trex::trex_selector_methods::utils::experiment_runner;
+namespace hac = trex::ml_methods::clustering::hierarchical::agglomerative;
 
 
 // ===================================================================================
@@ -137,6 +170,46 @@ struct TRexTikhonovControlParameter {
      *  - `>= 0`: explicit fold seed; overrides `seed` for CV only. */
     int cv_seed = -1;
 
+    /** @brief Dummy-coupling mode of the sparse-K TCIENET penalty.
+     *  Default: true (FOLDED) — dummy copy t joins its originating
+     *  variable (t - p) mod p in the K-coupling, the exact generalization
+     *  of GVS's layered group convention; dummy/null exchangeability then
+     *  holds for arbitrary K (with K = sum_m 1_m 1_m^T / p_m the solver
+     *  reproduces GVS-TCIENET bit-exactly). Set to false
+     *  (INDEPENDENT_RIDGE: decoupled unit-ridge dummy block) ONLY for
+     *  validation / equivalence runs — it preserves the K = I ≡ TCENET
+     *  collapse but deforms exchangeability whenever K has off-diagonals
+     *  (conservative for positive off-diagonals such as group-mean K,
+     *  anti-conservative for negative ones such as Laplacians). */
+    bool fold_dummy_coupling = true;
+
+    /** @brief Cluster-aware dummy generation (GVS parity). Default: true.
+     *  When true, dummies are drawn as per-cluster colored MVN layers on
+     *  the clustering below via the DummyGenerator cluster mode — all
+     *  strategies and memory mapping supported; only the PERMUTATION
+     *  variants throw. Set to false ONLY for validation / equivalence runs
+     *  against the canonical i.i.d. dummy path (e.g. the K = I ≡ TCENET
+     *  anchor test): with an informed K, i.i.d. dummies deform the
+     *  dummy/null exchangeability the FDR calibration relies on. */
+    bool cluster_dummies = true;
+
+    /** @brief User-supplied dummy clustering: 0-based cluster ID per
+     *  variable (length p, contiguous IDs). Empty (default): clusters are
+     *  discovered by correlation-HAC with `corr_max` / `hc_linkage`.
+     *  Ignored when `cluster_dummies == false`. */
+    std::vector<Eigen::Index> prior_groups;
+
+    /** @brief Maximum allowed pairwise |corr| between variables from
+     *  different clusters when clusters are discovered by HAC (the
+     *  dendrogram is cut at height 1 - corr_max). Same semantics and
+     *  default as TRexGVSSelector. Ignored when `prior_groups` is set or
+     *  `cluster_dummies == false`. */
+    double corr_max = 0.5;
+
+    /** @brief Linkage method for the HAC dummy clustering. Ignored when
+     *  `prior_groups` is set or `cluster_dummies == false`. */
+    hac::LinkageMethod hc_linkage = hac::LinkageMethod::Single;
+
     /** @brief Base T-Rex algorithmic control parameters (nested).
      *  `solver_type` must remain TCIENET (the only solver with a general-K
      *  mode); the default here overrides the base class's own default
@@ -177,7 +250,9 @@ public:
      * @param verbose Progress output.
      *
      * @throws std::invalid_argument on an empty or mis-dimensioned
-     *         `tikhonov_K`, or a `solver_type` other than TCIENET.
+     *         `tikhonov_K`, a `solver_type` other than TCIENET, malformed
+     *         `prior_groups` / `corr_max`, or — with `cluster_dummies` on —
+     *         a PERMUTATION-family L-loop strategy.
      */
     TRexTikhonovSelector(Eigen::Map<Eigen::MatrixXd>& X,
                          Eigen::Map<Eigen::VectorXd>& y,
@@ -198,8 +273,12 @@ public:
 
 protected:
 
-    /** @brief Resolves lambda_2 (CV on the normalized X / centered y)
-     *  before the L-loop runs. */
+    /** @brief Builds the dummy cluster model (prior groups or
+     *  correlation-HAC on the normalized X), installs it into the base
+     *  DummyGenerator (cluster mode), and resolves lambda_2 (CV on the
+     *  normalized X / centered y) before the L-loop runs. The base dummy
+     *  hook and ExperimentRunner then run unchanged — the generator draws
+     *  cluster layers for every strategy and the memory-mapped writers. */
     void onSelectBegin() override;
 
     /** @brief Base config plus the Tikhonov injection: sets
@@ -218,6 +297,13 @@ private:
     /** @brief lambda_2 resolution (user value or sparse-K CV tuners). */
     double computeLambda2() const;
 
+    /** @brief Build the dummy cluster model: clusters from `prior_groups`
+     *  or correlation-HAC on the normalized X_, then the per-cluster
+     *  Cholesky factors (shared machinery, trex_cluster_dummies.hpp /
+     *  trex_cluster_hac.hpp); installed into the base DummyGenerator via
+     *  setClusterModel(). */
+    void setupClusterModel();
+
     /** @brief Tikhonov control parameters (owns the K matrix the runner
      *  configs point into). */
     TRexTikhonovControlParameter trex_tik_ctrl_;
@@ -227,6 +313,13 @@ private:
 
     /** @brief Resolved penalty weight for the current select() run. */
     double lambda2_{-1.0};
+
+    // ----- Cluster-aware dummy state (cluster_dummies == true) -----
+
+    /** @brief Per-cluster column indices into X (0-based). Length M.
+     *  Kept for diagnostics; the Cholesky factors live inside the
+     *  DummyGenerator cluster model. */
+    std::vector<std::vector<Eigen::Index>> clusters_list_;
 };
 
 // ===================================================================================
