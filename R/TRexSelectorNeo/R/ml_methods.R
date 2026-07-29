@@ -8,7 +8,13 @@
 #' @details The \code{*_inplace} methods mutate \code{X} directly (zero-copy)
 #'   when it is a double-storage matrix; other inputs are coerced to a double
 #'   matrix first, in which case the coerced copy is modified. The (modified)
-#'   matrix is returned in both cases.
+#'   matrix is returned in both cases. \code{X} may also be an
+#'   \code{mmap_matrix} created by \code{\link{mmap_matrix}} /
+#'   \code{\link{convert_to_memory_mapped}}: the disk-backed buffer is then
+#'   bound zero-copy through the same Eigen map interface and modified in
+#'   place on disk. All scaler methods — including \code{fit()} — require the
+#'   handle to be open in \code{"readwrite"} mode, because the scaler core
+#'   binds a mutable map.
 #'
 #' @examples
 #' set.seed(1)
@@ -36,22 +42,32 @@ ZScoreScaler <- R6::R6Class("ZScoreScaler",
 
     #' @description Compute the centers and scales to be used for later scaling.
     #'
-    #' @param X A numeric matrix (n x p).
+    #' @param X A numeric matrix (n x p) or an \code{mmap_matrix} in
+    #'   \code{"readwrite"} mode (the scaler core binds a mutable map).
     #' @param threshold Double, lower bound for the scale statistic (default: 1e-12).
     #'
     #' @return Value.
     fit = function(X, threshold = 1e-12) {
-      X <- .as_double_matrix(X)
-      zscore_scaler_fit(private$cpp_ptr, X, threshold)
+      if (inherits(X, "mmap_matrix")) {
+        zscore_scaler_fit_mmap(private$cpp_ptr, X, threshold)
+      } else {
+        X <- .as_double_matrix(X)
+        zscore_scaler_fit(private$cpp_ptr, X, threshold)
+      }
       invisible(self)
     },
 
     #' @description Perform standardization by centering and scaling in-place.
     #'
-    #' @param X A numeric matrix (n x p).
+    #' @param X A numeric matrix (n x p) or an \code{mmap_matrix} in
+    #'   \code{"readwrite"} mode.
     #'
-    #' @return The modified matrix `X`.
+    #' @return The modified matrix `X` (the same handle for an \code{mmap_matrix}).
     transform_inplace = function(X) {
+      if (inherits(X, "mmap_matrix")) {
+        zscore_scaler_transform_inplace_mmap(private$cpp_ptr, X)
+        return(invisible(X))
+      }
       X <- .as_double_matrix(X)
       zscore_scaler_transform_inplace(private$cpp_ptr, X)
       return(X)
@@ -59,10 +75,15 @@ ZScoreScaler <- R6::R6Class("ZScoreScaler",
 
     #' @description Inverse transform to original scale.
     #'
-    #' @param X A numeric matrix (n x p).
+    #' @param X A numeric matrix (n x p) or an \code{mmap_matrix} in
+    #'   \code{"readwrite"} mode.
     #'
-    #' @return The modified matrix `X`.
+    #' @return The modified matrix `X` (the same handle for an \code{mmap_matrix}).
     inverse_transform_inplace = function(X) {
+      if (inherits(X, "mmap_matrix")) {
+        zscore_scaler_inverse_transform_inplace_mmap(private$cpp_ptr, X)
+        return(invisible(X))
+      }
       X <- .as_double_matrix(X)
       zscore_scaler_inverse_transform_inplace(private$cpp_ptr, X)
       return(X)
@@ -70,11 +91,16 @@ ZScoreScaler <- R6::R6Class("ZScoreScaler",
 
     #' @description Fit and transform in one call, like R's scale().
     #'
-    #' @param X A numeric matrix (n x p).
+    #' @param X A numeric matrix (n x p) or an \code{mmap_matrix} in
+    #'   \code{"readwrite"} mode.
     #' @param threshold Double, lower bound for the scale statistic (default: 1e-12).
     #'
-    #' @return The modified matrix `X`.
+    #' @return The modified matrix `X` (the same handle for an \code{mmap_matrix}).
     fit_transform_inplace = function(X, threshold = 1e-12) {
+      if (inherits(X, "mmap_matrix")) {
+        zscore_scaler_fit_transform_inplace_mmap(private$cpp_ptr, X, threshold)
+        return(invisible(X))
+      }
       X <- .as_double_matrix(X)
       zscore_scaler_fit_transform_inplace(private$cpp_ptr, X, threshold)
       return(X)
@@ -163,7 +189,13 @@ ZScoreScaler <- R6::R6Class("ZScoreScaler",
 #' @details The \code{*_inplace} methods mutate \code{X} directly (zero-copy)
 #'   when it is a double-storage matrix; other inputs are coerced to a double
 #'   matrix first, in which case the coerced copy is modified. The (modified)
-#'   matrix is returned in both cases.
+#'   matrix is returned in both cases. \code{X} may also be an
+#'   \code{mmap_matrix} created by \code{\link{mmap_matrix}} /
+#'   \code{\link{convert_to_memory_mapped}}: the disk-backed buffer is then
+#'   bound zero-copy through the same Eigen map interface and modified in
+#'   place on disk. All scaler methods — including \code{fit()} — require the
+#'   handle to be open in \code{"readwrite"} mode, because the scaler core
+#'   binds a mutable map.
 #'
 #' @examples
 #' set.seed(1)
@@ -193,22 +225,32 @@ LpNormScaler <- R6::R6Class("LpNormScaler",
 
     #' @description Compute the norm parameters.
     #'
-    #' @param X A numeric matrix (n x p).
+    #' @param X A numeric matrix (n x p) or an \code{mmap_matrix} in
+    #'   \code{"readwrite"} mode (the scaler core binds a mutable map).
     #' @param threshold Double, lower bound for the scale statistic (default: 1e-12).
     #'
     #' @return Value.
     fit = function(X, threshold = 1e-12) {
-      X <- .as_double_matrix(X)
-      lpnorm_scaler_fit(private$cpp_ptr, X, threshold)
+      if (inherits(X, "mmap_matrix")) {
+        lpnorm_scaler_fit_mmap(private$cpp_ptr, X, threshold)
+      } else {
+        X <- .as_double_matrix(X)
+        lpnorm_scaler_fit(private$cpp_ptr, X, threshold)
+      }
       invisible(self)
     },
 
     #' @description Perform standardization in-place.
     #'
-    #' @param X A numeric matrix (n x p).
+    #' @param X A numeric matrix (n x p) or an \code{mmap_matrix} in
+    #'   \code{"readwrite"} mode.
     #'
-    #' @return The modified matrix `X`.
+    #' @return The modified matrix `X` (the same handle for an \code{mmap_matrix}).
     transform_inplace = function(X) {
+      if (inherits(X, "mmap_matrix")) {
+        lpnorm_scaler_transform_inplace_mmap(private$cpp_ptr, X)
+        return(invisible(X))
+      }
       X <- .as_double_matrix(X)
       lpnorm_scaler_transform_inplace(private$cpp_ptr, X)
       return(X)
@@ -216,10 +258,15 @@ LpNormScaler <- R6::R6Class("LpNormScaler",
 
     #' @description Inverse transform to original scale.
     #'
-    #' @param X A numeric matrix (n x p).
+    #' @param X A numeric matrix (n x p) or an \code{mmap_matrix} in
+    #'   \code{"readwrite"} mode.
     #'
-    #' @return The modified matrix `X`.
+    #' @return The modified matrix `X` (the same handle for an \code{mmap_matrix}).
     inverse_transform_inplace = function(X) {
+      if (inherits(X, "mmap_matrix")) {
+        lpnorm_scaler_inverse_transform_inplace_mmap(private$cpp_ptr, X)
+        return(invisible(X))
+      }
       X <- .as_double_matrix(X)
       lpnorm_scaler_inverse_transform_inplace(private$cpp_ptr, X)
       return(X)
@@ -227,11 +274,16 @@ LpNormScaler <- R6::R6Class("LpNormScaler",
 
     #' @description Fit and transform in one call, like R's scale().
     #'
-    #' @param X A numeric matrix (n x p).
+    #' @param X A numeric matrix (n x p) or an \code{mmap_matrix} in
+    #'   \code{"readwrite"} mode.
     #' @param threshold Double, lower bound for the scale statistic (default: 1e-12).
     #'
-    #' @return The modified matrix `X`.
+    #' @return The modified matrix `X` (the same handle for an \code{mmap_matrix}).
     fit_transform_inplace = function(X, threshold = 1e-12) {
+      if (inherits(X, "mmap_matrix")) {
+        lpnorm_scaler_fit_transform_inplace_mmap(private$cpp_ptr, X, threshold)
+        return(invisible(X))
+      }
       X <- .as_double_matrix(X)
       lpnorm_scaler_fit_transform_inplace(private$cpp_ptr, X, threshold)
       return(X)
@@ -343,7 +395,10 @@ RidgeCV <- R6::R6Class("RidgeCV",
 
     #' @description Fit the CV model.
     #'
-    #' @param X Predictor matrix.
+    #' @param X Predictor matrix, or an \code{mmap_matrix} created by
+    #'   \code{\link{mmap_matrix}} / \code{\link{convert_to_memory_mapped}}
+    #'   (bound zero-copy; \code{"readonly"} mode suffices since the fit does
+    #'   not modify \code{X}).
     #' @param y Response vector.
     #' @param num_folds Number of folds (default 10).
     #' @param n_lambda Number of lambdas in path (default 100).
@@ -352,6 +407,12 @@ RidgeCV <- R6::R6Class("RidgeCV",
     #'
     #' @return Value.
     fit = function(X, y, num_folds = 10, n_lambda = 100, lambda_ratio = 1000.0, seed = 0) {
+      if (inherits(X, "mmap_matrix")) {
+        stopifnot(is.numeric(y), dim(X)[1] == length(y))
+        ridge_cv_fit_mmap(private$cpp_ptr, X, as.numeric(y), as.integer(num_folds),
+                          as.integer(n_lambda), as.numeric(lambda_ratio), as.integer(seed))
+        return(invisible(self))
+      }
       if (!is.matrix(X)) X <- as.matrix(X)
       stopifnot(is.numeric(y), nrow(X) == length(y))
       ridge_cv_fit(private$cpp_ptr, X, as.numeric(y), as.integer(num_folds), as.integer(n_lambda),

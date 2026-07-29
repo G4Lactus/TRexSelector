@@ -785,3 +785,83 @@ test_that("ElasticNetCV rejects dimension mismatch and invalid folds", {
   expect_error(ElasticNetCV$new()$fit(X, rnorm(49)))
   expect_error(ElasticNetCV$new()$fit(X, rnorm(50), n_folds = 1))
 })
+
+
+# =============================================================================
+# Memory-mapped inputs (zero-copy dispatch on mmap_matrix handles)
+# =============================================================================
+
+test_that("ZScoreScaler operates zero-copy on an mmap_matrix handle", {
+  set.seed(31)
+  n <- 40; p <- 6
+  X <- matrix(rnorm(n * p, mean = 3, sd = 2), n, p)
+  f <- tempfile(fileext = ".bin")
+  on.exit(unlink(f), add = TRUE)
+  mm <- convert_to_memory_mapped(X, f)
+
+  sc <- ZScoreScaler$new()
+  sc$fit(mm)
+  sc$transform_inplace(mm)
+
+  # Must match the in-memory path bit-for-bit (same Eigen code path).
+  X_mem <- X + 0
+  sc_mem <- ZScoreScaler$new()
+  sc_mem$fit(X_mem)
+  X_mem <- sc_mem$transform_inplace(X_mem)
+  expect_identical(as.matrix(mm), X_mem)
+
+  # Inverse round-trip restores the file contents.
+  sc$inverse_transform_inplace(mm)
+  expect_equal(as.matrix(mm), X, tolerance = 1e-12)
+})
+
+test_that("LpNormScaler fit_transform_inplace works on an mmap_matrix handle", {
+  set.seed(32)
+  n <- 40; p <- 6
+  X <- matrix(rnorm(n * p), n, p)
+  f <- tempfile(fileext = ".bin")
+  on.exit(unlink(f), add = TRUE)
+  mm <- convert_to_memory_mapped(X, f)
+
+  l2 <- LpNormScaler$new(norm_type = 2L, center = TRUE)
+  l2$fit_transform_inplace(mm)
+  expect_equal(max(abs(sqrt(colSums(as.matrix(mm)^2)) - 1)), 0, tolerance = 1e-12)
+
+  l2$inverse_transform_inplace(mm)
+  expect_equal(as.matrix(mm), X, tolerance = 1e-12)
+})
+
+test_that("scaler methods on a readonly mmap_matrix raise the C++ mode guard", {
+  set.seed(33)
+  X <- matrix(rnorm(20 * 4), 20, 4)
+  f <- tempfile(fileext = ".bin")
+  on.exit(unlink(f), add = TRUE)
+  convert_to_memory_mapped(X, f)
+  ro <- mmap_matrix(f, rows = 20, cols = 4, mode = "readonly")
+
+  # The scaler core binds a mutable Eigen map, so every scaler method —
+  # including fit() — requires a "readwrite" handle.
+  sc <- ZScoreScaler$new()
+  expect_error(sc$fit(ro), "ReadOnly")
+  expect_error(sc$transform_inplace(ro), "ReadOnly")
+})
+
+test_that("RidgeCV fits zero-copy from a readonly mmap_matrix handle", {
+  set.seed(34)
+  n <- 60; p <- 10
+  X <- matrix(rnorm(n * p), n, p)
+  y <- as.numeric(X[, 1] * 2 + rnorm(n))
+  f <- tempfile(fileext = ".bin")
+  on.exit(unlink(f), add = TRUE)
+  convert_to_memory_mapped(X, f)
+  ro <- mmap_matrix(f, rows = n, cols = p, mode = "readonly")
+
+  cv_mm <- RidgeCV$new()
+  cv_mm$fit(ro, y, num_folds = 5, n_lambda = 20, seed = 7)
+  cv_mem <- RidgeCV$new()
+  cv_mem$fit(X, y, num_folds = 5, n_lambda = 20, seed = 7)
+
+  expect_equal(cv_mm$cv_min(), cv_mem$cv_min())
+  expect_equal(cv_mm$get_cv_errors(), cv_mem$get_cv_errors())
+  expect_error(RidgeCV$new()$fit(ro, rnorm(n - 1)))  # dimension mismatch
+})
