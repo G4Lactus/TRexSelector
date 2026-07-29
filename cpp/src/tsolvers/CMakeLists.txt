@@ -28,6 +28,18 @@
 #   - TAFS:      Terminating Adaptive Forward Selection Solver (AFS).
 #
 #
+#   VD (Virtual Dummy) forward selectors (dummies realized on demand):
+#   - VD_LARS:         Virtual Dummy LARS (equiangular direction, gamma-step).
+#   - VD_OMP:          Virtual Dummy OMP (greedy argmax, full OLS refit).
+#   - VD_AFS:          Virtual Dummy Adaptive Forward Stepwise.
+#   - VD_AFS_Logistic: VD-AFS with logistic link (binary response).
+#
+#
+#   SD (Sparse Dummy) terminating solvers (sparse Rademacher dummies,
+#   inner products replaced by index-set sums):
+#   - SD_TLARS:  T-LARS racing X against an on-demand sparse-dummy pool.
+#
+#
 # Organization:
 # -------------
 # src/tsolvers/
@@ -128,11 +140,16 @@ target_sources(trex_tsolvers PUBLIC
         ${CMAKE_CURRENT_SOURCE_DIR}/tsolver_base.hpp
         ${CMAKE_CURRENT_SOURCE_DIR}/lm_tsolvers.hpp
         ${CMAKE_CURRENT_SOURCE_DIR}/solver_utils/solver_preprocessing.hpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/linear_model/cd_based.hpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/linear_model/cd_based/tccd_solver.hpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/linear_model/cd_based/tcenet_solver.hpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/linear_model/cd_based/tcienet_solver.hpp
         ${CMAKE_CURRENT_SOURCE_DIR}/linear_model/lars_based.hpp
         ${CMAKE_CURRENT_SOURCE_DIR}/linear_model/lars_based/tlars_solver.hpp
         ${CMAKE_CURRENT_SOURCE_DIR}/linear_model/lars_based/tlasso_solver.hpp
         ${CMAKE_CURRENT_SOURCE_DIR}/linear_model/lars_based/tenet_solver.hpp
         ${CMAKE_CURRENT_SOURCE_DIR}/linear_model/lars_based/tienet_solver.hpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/linear_model/lars_based/tienet_aug_solver.hpp
         ${CMAKE_CURRENT_SOURCE_DIR}/linear_model/lars_based/tstagewise_solver.hpp
         ${CMAKE_CURRENT_SOURCE_DIR}/linear_model/lars_based/tstepwise_solver.hpp
         ${CMAKE_CURRENT_SOURCE_DIR}/linear_model/omp_based.hpp
