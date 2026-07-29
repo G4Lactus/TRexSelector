@@ -60,6 +60,20 @@ TRexSPCA::TRexSPCA(Eigen::Map<Eigen::MatrixXd>& X,
         throw std::invalid_argument(
             "TRexSPCA: M must not exceed min(n, p).");
     }
+
+    // Fail fast on strategies the per-PC GVS runs will reject anyway:
+    // without this pre-check the error only surfaces at PC 0 INSIDE
+    // select(), after the (potentially expensive) ordinary PCA has already
+    // been computed, and with a message naming TRexGVSSelector.
+    const auto strat = spca_ctrl_.gvs_ctrl.trex_ctrl.lloop_strategy;
+    if (strat == tc::LLoopStrategy::PERMUTATION ||
+        strat == tc::LLoopStrategy::PERMUTATION_SEEDED) {
+        throw std::invalid_argument(
+            "TRexSPCA: the PERMUTATION-family L-loop strategies are not "
+            "supported (the per-PC TRexGVSSelector rejects them: row "
+            "permutations of one base cannot carry the per-cluster MVN "
+            "dummy convention).");
+    }
 }
 
 

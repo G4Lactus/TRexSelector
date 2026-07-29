@@ -43,6 +43,7 @@ BiobankScreenTRex::BiobankScreenTRex(
     seed_(seed),
     verbose_(verbose)
 {
+    validateBiobankStrategy();
     printProgressMessage(
         "Biobank Screen-TRex: Single phenotype mode"
     );
@@ -62,9 +63,37 @@ BiobankScreenTRex::BiobankScreenTRex(
     seed_(seed),
     verbose_(verbose)
 {
+    validateBiobankStrategy();
     printProgressMessage(
         "Biobank Screen-TRex: Multiple phenotype mode"
     );
+}
+
+
+// ======================================================================
+// Validation
+// ======================================================================
+
+void BiobankScreenTRex::validateBiobankStrategy() const {
+    // Mirror ScreenTRexSelector's gate HERE: the per-phenotype selectors are
+    // only constructed inside screenPhenotype()/screenAllPhenotypes(), so an
+    // unsupported strategy would otherwise surface mid-loop — after
+    // phenotype 0 has already been screened.
+    switch (bio_ctrl_.trex_screen_ctrl.trex_ctrl.lloop_strategy) {
+        case tc::LLoopStrategy::STANDARD:
+        case tc::LLoopStrategy::SEEDED:
+        case tc::LLoopStrategy::PERMUTATION:
+        case tc::LLoopStrategy::PERMUTATION_SEEDED:
+            break;  // Supported (see ScreenTRexSelector::validateScreenTRexStrategy)
+        default:
+            throw std::invalid_argument(
+                "BiobankScreenTRex: only the STANDARD, SEEDED, PERMUTATION, "
+                "and PERMUTATION_SEEDED dummy strategies are supported "
+                "(screening runs a single pass at L = p, T = 1; HCONCAT / "
+                "SKIPL describe L-loop growth). Got lloop_strategy = "
+                + std::to_string(static_cast<int>(
+                      bio_ctrl_.trex_screen_ctrl.trex_ctrl.lloop_strategy)));
+    }
 }
 
 
