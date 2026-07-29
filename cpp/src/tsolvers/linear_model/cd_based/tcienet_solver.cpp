@@ -87,6 +87,24 @@ void TCIENET_Solver::assignGroupsLayered(const Eigen::VectorXi& groups) {
 
 void TCIENET_Solver::ensureCdState() {
     TCCD_Solver::ensureCdState();     // base caches + configurePenaltyDiag()
+
+    if (penalty_kind_ == PenaltyKind::SPARSE && fold_dummies_) {
+        // Rebuild the folded coupling state w = lambda2 * K * s from the
+        // (possibly deserialized) coefficients: s_i sums variable i's
+        // coefficient and those of all its dummy copies.
+        const auto p_idx = static_cast<Eigen::Index>(p_original_);
+        Eigen::VectorXd s = Eigen::VectorXd::Zero(p_idx);
+        const std::size_t p_total = p_original_ + num_dummies_;
+        for (std::size_t t = 0; t < p_total; ++t) {
+            const double b = beta_cd_(static_cast<Eigen::Index>(t));
+            if (b != 0.0) {
+                s(static_cast<Eigen::Index>(foldedBase(t))) += b;
+            }
+        }
+        folded_w_ = lambda2_ * (tikhonov_K_ * s);
+        return;
+    }
+
     if (penalty_kind_ != PenaltyKind::GROUP) { return; }
 
     // Per-group constants lambda2 / p_m.
@@ -109,6 +127,26 @@ void TCIENET_Solver::ensureCdState() {
 
 
 void TCIENET_Solver::configurePenaltyDiag() {
+    if (penalty_kind_ == PenaltyKind::SPARSE && fold_dummies_) {
+        // FOLDED coupling: every unified column carries the diagonal of its
+        // base variable, lambda2 * K_bb — dummies included (kappa_dummy_
+        // is ignored; the dummy block is coupled through K, not ridged).
+        const std::size_t p_total = p_original_ + num_dummies_;
+        penalty_diag_.setZero(static_cast<Eigen::Index>(p_total));
+        if (lambda2_ <= 0.0) { return; }
+
+        Eigen::VectorXd kdiag(static_cast<Eigen::Index>(p_original_));
+        for (std::size_t j = 0; j < p_original_; ++j) {
+            kdiag(static_cast<Eigen::Index>(j)) =
+                tikhonov_K_.coeff(static_cast<Eigen::Index>(j),
+                                  static_cast<Eigen::Index>(j));
+        }
+        for (std::size_t t = 0; t < p_total; ++t) {
+            penalty_diag_(static_cast<Eigen::Index>(t)) =
+                lambda2_ * kdiag(static_cast<Eigen::Index>(foldedBase(t)));
+        }
+        return;
+    }
     if (penalty_kind_ != PenaltyKind::GROUP) {
         TCCD_Solver::configurePenaltyDiag();   // Tikhonov diag + dummy ridge
         return;
@@ -132,11 +170,22 @@ void TCIENET_Solver::configurePenaltyDiag() {
 
 
 void TCIENET_Solver::penaltyRankUpdate(std::size_t j, double delta) {
-    if (penalty_kind_ != PenaltyKind::GROUP) {
-        TCCD_Solver::penaltyRankUpdate(j, delta);
+    if (penalty_kind_ == PenaltyKind::GROUP) {
+        group_sums_[static_cast<std::size_t>(group_of_[j])] += delta;
         return;
     }
-    group_sums_[static_cast<std::size_t>(group_of_[j])] += delta;
+    if (penalty_kind_ == PenaltyKind::SPARSE && fold_dummies_) {
+        // FOLDED coupling: s_base(j) += delta, maintained through
+        // w += lambda2 * delta * K.col(base(j)) — O(nnz(K col)).
+        const auto b = static_cast<Eigen::Index>(foldedBase(j));
+        const double f = lambda2_ * delta;
+        for (Eigen::SparseMatrix<double>::InnerIterator it(tikhonov_K_, b);
+             it; ++it) {
+            folded_w_(it.row()) += f * it.value();
+        }
+        return;
+    }
+    TCCD_Solver::penaltyRankUpdate(j, delta);
 }
 
 // ============================================================================

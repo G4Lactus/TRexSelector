@@ -70,14 +70,32 @@ namespace trex::tsolvers::linear_model::cd_based {
  *  group partition. K is passed as data (matrix-passing core): it enters
  *  only through the coordinate denominator, the incrementally maintained
  *  lambda2 * K * beta vector (O(nnz(K col)) per coordinate change), and the
- *  penalized KKT conditions; dummies receive a kappa_dummy * I ridge block.
+ *  penalized KKT conditions. Dummy coupling is selectable:
+ *
+ *  - INDEPENDENT_RIDGE (fold_dummies = false): dummies receive a
+ *    kappa_dummy * I ridge block, decoupled from K. Preserves the
+ *    K = I ≡ TCENET collapse WITH dummies, but penalizes null reals
+ *    differently from dummies whenever K has off-diagonals — the
+ *    exchangeability deformation documented below.
+ *  - FOLDED (fold_dummies = true): dummy copy t joins its originating
+ *    variable base(t) = (t - p) mod p in the K-coupling — the exact
+ *    generalization of the GROUP-mode layered dummy convention. The
+ *    penalty state is the folded sum s in R^p (s_i = beta_i + sum of the
+ *    copies' betas) with the maintained vector w = lambda2 * K * s
+ *    (O(nnz(K col)) per coordinate change); gradient of unified column t
+ *    is w_base(t), diagonal lambda2 * K_bb (kappa_dummy is ignored).
+ *    With K = sum_m 1_m 1_m^T / p_m this reproduces the GROUP mode
+ *    bit-exactly ((K s)_b = sigma_m / p_m, K_bb = 1 / p_m), and dummy/null
+ *    exchangeability holds for arbitrary K.
+ *
  *  The canonical group constructor is the O(1)-per-update specialization of
- *  this general form.
+ *  this general form (FOLDED coupling by construction).
  *
  *  Degenerate cases: WITHOUT dummies, all-singleton groups reproduce
  *  TCENET_Solver exactly (with dummies they do not: every dummy copy joins
  *  its originating variable's group and couples with it through the group
- *  sum, whereas TCENET gives each dummy its own independent ridge). A single
+ *  sum, whereas TCENET gives each dummy its own independent ridge — the
+ *  same collapse/coupling trade-off as K = I under FOLDED). A single
  *  global group is statistically degenerate and should be avoided.
  */
 class TCIENET_Solver: public TCENET_Solver {
@@ -102,6 +120,28 @@ protected:
 
     /** @brief Precomputed lambda2 / p_m per group (transient). */
     std::vector<double> lambda2_over_pm_{};
+
+    // ==================================================================================
+    // T-CIENET specific state variables (SPARSE kind, FOLDED dummy coupling)
+    // ==================================================================================
+
+    /** @brief Dummy-coupling mode of the SPARSE kind: false =
+     *  INDEPENDENT_RIDGE (kappa_dummy * I block, base machinery), true =
+     *  FOLDED (dummy copies join their originating variable's K-coupling;
+     *  see the file header). Always false in GROUP mode (the group hooks
+     *  fold by construction). */
+    bool fold_dummies_{false};
+
+    /** @brief FOLDED coupling: maintained w = lambda2 * K * s over the
+     *  REAL index space, where s_i sums the coefficients of variable i and
+     *  all its dummy copies (transient: rebuilt in ensureCdState()). */
+    Eigen::VectorXd folded_w_{};
+
+    /** @brief FOLDED coupling: base variable of unified column t
+     *  (identity for reals, (t - p) mod p for dummy copies). */
+    std::size_t foldedBase(std::size_t t) const noexcept {
+        return (t < p_original_) ? t : (t - p_original_) % p_original_;
+    }
 
     // ==================================================================================
     // Constructor protected for inheritance
@@ -168,12 +208,24 @@ public:
      * @param intercept If true, variables are centered. Default true.
      * @param verbose If true, print detailed status and diagnostics. Default false.
      * @param scaling_mode Column-scaling convention (L2 or z-score). Default L2.
-     * @param kappa_dummy Ridge weight of the dummy block. Default 1.0.
+     * @param kappa_dummy Ridge weight of the dummy block under
+     *        INDEPENDENT_RIDGE coupling. Default 1.0. Ignored when
+     *        fold_dummies is true.
+     * @param fold_dummies Dummy-coupling mode (see the file header).
+     *        false (default): INDEPENDENT_RIDGE — dummies get a decoupled
+     *        kappa_dummy * I ridge (preserves K = I ≡ TCENET with dummies).
+     *        true: FOLDED — dummy copy t joins variable (t - p) mod p in
+     *        the K-coupling (GVS layered convention; restores dummy/null
+     *        exchangeability for arbitrary K). Requires D.cols() to be a
+     *        multiple of X.cols().
      *
-     * @note Methodological caveat: informed penalties with diag(K) deviating
-     * from kappa_dummy penalize null reals differently from dummies,
-     * deforming the dummy/null exchangeability the T-Rex FDR calibration
-     * relies on. Prefer normalizing diag(K) = 1 with kappa_dummy = 1.
+     * @note Methodological caveat (INDEPENDENT_RIDGE only): informed
+     * penalties with off-diagonal K couple null reals to their neighbors'
+     * coefficients while dummies stay uncoupled, deforming the dummy/null
+     * exchangeability the T-Rex FDR calibration relies on; diag(K) = 1 with
+     * kappa_dummy = 1 only equalizes the self-ridge. FOLDED coupling
+     * removes the deformation (at the price of the K = I ≡ TCENET
+     * collapse — mirroring "singleton groups + dummies != TCENET").
      */
     TCIENET_Solver(Eigen::Map<Eigen::MatrixXd>& X,
                    Eigen::Map<Eigen::MatrixXd>& D,
@@ -184,7 +236,8 @@ public:
                    bool intercept = true,
                    bool verbose = false,
                    ScalingMode scaling_mode = ScalingMode::L2,
-                   double kappa_dummy = 1.0)
+                   double kappa_dummy = 1.0,
+                   bool fold_dummies = false)
         : TCENET_Solver(X, D, y, lambda2, normalize, intercept, verbose,
                         scaling_mode, kappa_dummy,
                         SolverTypeCdBased::TCIENET) {
@@ -195,7 +248,15 @@ public:
                 "x", tikhonov_matrix.cols(), ", expected ",
                 p_original_, "x", p_original_));
         }
+        if (fold_dummies && num_dummies_ > 0 &&
+            num_dummies_ % p_original_ != 0) {
+            throw std::invalid_argument(concatMsg(
+                "TCIENET_Solver: FOLDED dummy coupling requires D.cols() "
+                "to be a multiple of X.cols() (layered dummy convention); "
+                "got L = ", num_dummies_, ", p = ", p_original_));
+        }
         penalty_kind_ = PenaltyKind::SPARSE;
+        fold_dummies_ = fold_dummies;
         tikhonov_K_ = tikhonov_matrix;
         tikhonov_K_.makeCompressed();
     }
@@ -240,6 +301,9 @@ public:
         return group_sums_;
     }
 
+    /** @brief Whether the SPARSE kind runs FOLDED dummy coupling. */
+    bool isFoldedDummyCoupling() const noexcept { return fold_dummies_; }
+
     // ============================================================================
     // Serialization & State Management
     // ============================================================================
@@ -260,7 +324,8 @@ public:
         archive(
             cereal::base_class<TCENET_Solver>(this),
             CEREAL_NVP(group_of_),
-            CEREAL_NVP(group_size_)
+            CEREAL_NVP(group_size_),
+            CEREAL_NVP(fold_dummies_)   // folded_w_ is transient (ensureCdState)
         );
     }
 
@@ -303,26 +368,34 @@ protected:
     /**
      * @brief Rebuild the transient CD caches of the base plus (GROUP mode)
      * the group-sum bookkeeping sigma and the per-group constants
-     * lambda2 / p_m.
+     * lambda2 / p_m, or (SPARSE + FOLDED) the folded coupling state
+     * w = lambda2 * K * s.
      */
     void ensureCdState() override;
 
-    /** @brief GROUP: lambda2 / p_m for every grouped column; otherwise the
-     *  base diagonal (Tikhonov diag + dummy ridge). */
+    /** @brief GROUP: lambda2 / p_m for every grouped column;
+     *  SPARSE + FOLDED: lambda2 * K_bb of the base variable for every
+     *  unified column (dummies included, kappa_dummy ignored); otherwise
+     *  the base diagonal (Tikhonov diag + dummy ridge). */
     void configurePenaltyDiag() override;
 
-    /** @brief GROUP: O(1) group-sum update sigma_m += delta; otherwise the
-     *  base lambda2 * K * beta maintenance. */
+    /** @brief GROUP: O(1) group-sum update sigma_m += delta;
+     *  SPARSE + FOLDED: O(nnz(K col base(j))) folded-w update; otherwise
+     *  the base lambda2 * K * beta maintenance. */
     void penaltyRankUpdate(std::size_t j, double delta) override;
 
-    /** @brief GROUP: [lambda2 W beta]_j = lambda2 * sigma_m / p_m; otherwise
-     *  the base maintained gradient. */
+    /** @brief GROUP: [lambda2 W beta]_j = lambda2 * sigma_m / p_m;
+     *  SPARSE + FOLDED: w_base(j) from the folded K-coupling state;
+     *  otherwise the base maintained gradient. */
     double penaltyGradient(std::size_t j) const override {
-        if (penalty_kind_ != PenaltyKind::GROUP) {
-            return TCCD_Solver::penaltyGradient(j);
+        if (penalty_kind_ == PenaltyKind::GROUP) {
+            const std::size_t m = static_cast<std::size_t>(group_of_[j]);
+            return lambda2_over_pm_[m] * group_sums_[m];
         }
-        const std::size_t m = static_cast<std::size_t>(group_of_[j]);
-        return lambda2_over_pm_[m] * group_sums_[m];
+        if (penalty_kind_ == PenaltyKind::SPARSE && fold_dummies_) {
+            return folded_w_(static_cast<Eigen::Index>(foldedBase(j)));
+        }
+        return TCCD_Solver::penaltyGradient(j);
     }
 };
 
