@@ -46,9 +46,12 @@ jobs:
         with:
           use-public-rspm: true
 
-      - name: Install package dependencies
-        run: |
-          Rscript -e 'install.packages(c("Rcpp", "RcppEigen", "R6", "testthat"))'
+      # Reads DESCRIPTION and installs Depends/Imports/LinkingTo/Suggests
+      # (with caching) — never hand-list the dependencies here: a stale list
+      # fails the moment DESCRIPTION gains a LinkingTo entry.
+      - uses: r-lib/actions/setup-r-dependencies@v2
+        with:
+          working-directory: R/TRexSelectorNeo
 
       - name: Install package
         run: R CMD INSTALL --no-docs R/TRexSelectorNeo
