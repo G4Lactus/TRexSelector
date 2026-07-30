@@ -37,11 +37,13 @@ pure T-LASSO case (no ridge); a positive value is used as-is.}
 \code{"CV_1SE_SVD"}, \code{"CV_MIN_SVD"}.}
 
 \item{en_solver}{Elastic Net solver variant for \code{gvs_type = "EN"}:
-\code{"TENET"} (default, Gram-based) or \code{"TENET_AUG"}
-(row-augmented LASSO). Both are mathematically equivalent for
-\code{lambda_2 > 0} and select the same variables; this switch exists to
-validate solver equivalence, \strong{not} to choose a LARS vs LASSO path
-(for that, see \code{tenet_aug_use_lars}).}
+\code{"TENET"} (default, Gram-based), \code{"TENET_AUG"}
+(row-augmented LASSO), or \code{"TCENET"} (CCD; exact fixed-lambda1
+elastic-net minimizers per dummy crossing). All solve the same EN
+problem and select the same variables up to path-vs-minimizer
+differences; the switch exists to validate solver equivalence,
+\strong{not} to choose a LARS vs LASSO path (for that, see
+\code{tenet_aug_use_lars}).}
 
 \item{tenet_aug_use_lars}{Logical. When \code{en_solver = "TENET_AUG"}, run
 the augmented system with a pure-LARS inner path that never drops variables
@@ -71,9 +73,12 @@ A named list for use in TRexGVSSelector.
 \description{
 Build a control list for group variable selection augmentation policy in
 TRexGVSSelector. The solver is determined automatically from \code{gvs_type}:
-"EN" uses the T-Elastic-Net solver (TENET, or TENET_AUG per \code{en_solver});
-"IEN" uses the augmented T-Informed-Elastic-Net (TIENET_AUG) solver.
-The \code{solver} field in \code{\link{trex_control}} is ignored by TRexGVSSelector.
+"EN" selects the T-Elastic-Net solver via \code{en_solver} — TENET
+(default), with TENET_AUG and TCENET as optional variants; "IEN" honors
+an IEN-family \code{solver} field in \code{\link{trex_control}} —
+TIENET (default, native pathwise), with TIENET_AUG and TCIENET as
+optional variants. For \code{gvs_type = "EN"} the \code{solver} field
+is ignored.
 }
 \examples{
 trex_gvs_control()

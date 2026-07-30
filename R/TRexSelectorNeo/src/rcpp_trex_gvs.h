@@ -41,20 +41,39 @@ public:
         this->y_map_ = std::make_unique<Eigen::Map<Eigen::VectorXd>>(y);
 
         // The GVS control nests the base T-Rex control; merge the
-        // separately-supplied trex_control into that nested field and derive
-        // the solver_type GVS requires (EN -> TENET/TENET_AUG,
-        // IEN -> TIENET_AUG), overriding whatever the caller left in
-        // trex_control.solver_type.
+        // separately-supplied trex_control into that nested field and set
+        // the solver_type GVS requires, mirroring the C++ design:
+        //   EN  -> derived from en_solver (TENET / TENET_AUG / TCENET);
+        //   IEN -> honors an IEN-family control$solver (TIENET / TIENET_AUG
+        //          / TCIENET), defaulting anything else to TIENET (the
+        //          native pathwise IEN solver; the R level warns first).
         namespace gvs_sd = trex::trex_selector_methods::utils::solver_dispatch;
         TRexGVSControlParameter gvs_ctrl = gvs_control;
         gvs_ctrl.trex_ctrl = trex_control;
         if (gvs_ctrl.gvs_type == GVSType::IEN) {
-            gvs_ctrl.trex_ctrl.solver_type = gvs_sd::SolverTypeForTRex::TIENET_AUG;
+            const auto st = gvs_ctrl.trex_ctrl.solver_type;
+            const bool ien_family =
+                st == gvs_sd::SolverTypeForTRex::TIENET ||
+                st == gvs_sd::SolverTypeForTRex::TIENET_AUG ||
+                st == gvs_sd::SolverTypeForTRex::TCIENET;
+            if (!ien_family) {
+                gvs_ctrl.trex_ctrl.solver_type =
+                    gvs_sd::SolverTypeForTRex::TIENET;
+            }
         } else { // EN
-            gvs_ctrl.trex_ctrl.solver_type =
-                (gvs_ctrl.en_solver == ENSolverType::TENET_AUG)
-                    ? gvs_sd::SolverTypeForTRex::TENET_AUG
-                    : gvs_sd::SolverTypeForTRex::TENET;
+            switch (gvs_ctrl.en_solver) {
+                case ENSolverType::TENET_AUG:
+                    gvs_ctrl.trex_ctrl.solver_type =
+                        gvs_sd::SolverTypeForTRex::TENET_AUG;
+                    break;
+                case ENSolverType::TCENET:
+                    gvs_ctrl.trex_ctrl.solver_type =
+                        gvs_sd::SolverTypeForTRex::TCENET;
+                    break;
+                default:
+                    gvs_ctrl.trex_ctrl.solver_type =
+                        gvs_sd::SolverTypeForTRex::TENET;
+            }
         }
 
         this->selector_ = std::make_unique<TRexGVSSelector>(

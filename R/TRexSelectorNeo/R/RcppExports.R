@@ -955,6 +955,8 @@ trex_screening_get_selected_indices <- function(r_ptr) {
 #' @param seed Random seed (default: -1).
 #' @param verbose Whether to print progress (default: TRUE).
 #'
+NULL
+
 #' @noRd
 trex_selector_create <- function(X, y, tFDR, control_list, seed, verbose) {
     .Call(`_TRexSelectorNeo_trex_selector_create`, X, y, tFDR, control_list, seed, verbose)

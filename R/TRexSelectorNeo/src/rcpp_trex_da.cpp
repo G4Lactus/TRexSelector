@@ -9,6 +9,7 @@ using trx_ml_hac_LinkageMethod = trex::ml_methods::clustering::hierarchical::agg
 
 // Expose the parse_control_parameter from rcpp_trex_selector.cpp
 extern TRexControlParameter parse_control_parameter(const Rcpp::List& control);
+extern void validate_core_solver_type(const TRexControlParameter& params);
 
 /**
  * @brief Parses an R list into a TRexDAControlParameter C++ struct.
@@ -89,6 +90,7 @@ XPtr<RTRexDASelector> trex_da_create(
     Eigen::Map<Eigen::VectorXd> y_map(y.begin(), y.size());
     TRexDAControlParameter da_control = parse_da_parameter(da_control_list);
     TRexControlParameter trex_control = parse_control_parameter(trex_control_list);
+    validate_core_solver_type(trex_control);
     // Pin X and y until the finalizer has run: the base destructor writes the
     // de-normalized X back through the stored map (GC order is unspecified).
     return XPtr<RTRexDASelector>(new RTRexDASelector(X_map, y_map, tFDR, da_control, trex_control, seed, verbose),
@@ -110,6 +112,7 @@ XPtr<RTRexDASelector> trex_da_mmap_create(
     Eigen::Map<Eigen::VectorXd> y_map(y.begin(), y.size());
     TRexDAControlParameter da_control = parse_da_parameter(da_control_list);
     TRexControlParameter trex_control = parse_control_parameter(trex_control_list);
+    validate_core_solver_type(trex_control);
     // Pin the mmap holder and y until the finalizer has run (see above).
     return XPtr<RTRexDASelector>(new RTRexDASelector(X_ptr->getMap(), y_map, tFDR, da_control, trex_control, seed, verbose),
                                  true, R_NilValue, Rcpp::List::create(X_ptr, y));

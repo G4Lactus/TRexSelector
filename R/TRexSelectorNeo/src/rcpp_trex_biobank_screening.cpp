@@ -5,6 +5,7 @@
 using namespace Rcpp;
 
 extern TRexControlParameter parse_control_parameter(const Rcpp::List& control);
+extern void validate_core_solver_type(const TRexControlParameter& params);
 extern ScreenTRexControlParameter parse_screen_parameter(const Rcpp::List& control);
 
 BiobankScreenTRexControl parse_biobank_screen_parameter(
@@ -22,6 +23,7 @@ BiobankScreenTRexControl parse_biobank_screen_parameter(
     // truth shared by the Screen-TRex path and the plain T-Rex fallback).
     params.trex_screen_ctrl = parse_screen_parameter(screen_control);
     params.trex_screen_ctrl.trex_ctrl = parse_control_parameter(trex_control);
+    validate_core_solver_type(params.trex_screen_ctrl.trex_ctrl);
     
     return params;
 }
