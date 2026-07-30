@@ -1526,6 +1526,72 @@ BEGIN_RCPP
     return rcpp_result_gen;
 END_RCPP
 }
+// trex_tikhonov_create
+XPtr<RTRexTikhonovSelector> trex_tikhonov_create(Rcpp::NumericMatrix X, Rcpp::NumericVector y, double tFDR, Rcpp::List tik_control_list, Rcpp::List trex_control_list, int seed, bool verbose);
+RcppExport SEXP _TRexSelectorNeo_trex_tikhonov_create(SEXP XSEXP, SEXP ySEXP, SEXP tFDRSEXP, SEXP tik_control_listSEXP, SEXP trex_control_listSEXP, SEXP seedSEXP, SEXP verboseSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< Rcpp::NumericMatrix >::type X(XSEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericVector >::type y(ySEXP);
+    Rcpp::traits::input_parameter< double >::type tFDR(tFDRSEXP);
+    Rcpp::traits::input_parameter< Rcpp::List >::type tik_control_list(tik_control_listSEXP);
+    Rcpp::traits::input_parameter< Rcpp::List >::type trex_control_list(trex_control_listSEXP);
+    Rcpp::traits::input_parameter< int >::type seed(seedSEXP);
+    Rcpp::traits::input_parameter< bool >::type verbose(verboseSEXP);
+    rcpp_result_gen = Rcpp::wrap(trex_tikhonov_create(X, y, tFDR, tik_control_list, trex_control_list, seed, verbose));
+    return rcpp_result_gen;
+END_RCPP
+}
+// trex_tikhonov_mmap_create
+XPtr<RTRexTikhonovSelector> trex_tikhonov_mmap_create(XPtr<trex::utils::memmap::MemoryMappedMatrix<double>> X_ptr, Rcpp::NumericVector y, double tFDR, Rcpp::List tik_control_list, Rcpp::List trex_control_list, int seed, bool verbose);
+RcppExport SEXP _TRexSelectorNeo_trex_tikhonov_mmap_create(SEXP X_ptrSEXP, SEXP ySEXP, SEXP tFDRSEXP, SEXP tik_control_listSEXP, SEXP trex_control_listSEXP, SEXP seedSEXP, SEXP verboseSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< XPtr<trex::utils::memmap::MemoryMappedMatrix<double>> >::type X_ptr(X_ptrSEXP);
+    Rcpp::traits::input_parameter< Rcpp::NumericVector >::type y(ySEXP);
+    Rcpp::traits::input_parameter< double >::type tFDR(tFDRSEXP);
+    Rcpp::traits::input_parameter< Rcpp::List >::type tik_control_list(tik_control_listSEXP);
+    Rcpp::traits::input_parameter< Rcpp::List >::type trex_control_list(trex_control_listSEXP);
+    Rcpp::traits::input_parameter< int >::type seed(seedSEXP);
+    Rcpp::traits::input_parameter< bool >::type verbose(verboseSEXP);
+    rcpp_result_gen = Rcpp::wrap(trex_tikhonov_mmap_create(X_ptr, y, tFDR, tik_control_list, trex_control_list, seed, verbose));
+    return rcpp_result_gen;
+END_RCPP
+}
+// trex_tikhonov_select
+void trex_tikhonov_select(XPtr<RTRexTikhonovSelector> r_ptr);
+RcppExport SEXP _TRexSelectorNeo_trex_tikhonov_select(SEXP r_ptrSEXP) {
+BEGIN_RCPP
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< XPtr<RTRexTikhonovSelector> >::type r_ptr(r_ptrSEXP);
+    trex_tikhonov_select(r_ptr);
+    return R_NilValue;
+END_RCPP
+}
+// trex_tikhonov_get_lambda2_used
+double trex_tikhonov_get_lambda2_used(XPtr<RTRexTikhonovSelector> r_ptr);
+RcppExport SEXP _TRexSelectorNeo_trex_tikhonov_get_lambda2_used(SEXP r_ptrSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< XPtr<RTRexTikhonovSelector> >::type r_ptr(r_ptrSEXP);
+    rcpp_result_gen = Rcpp::wrap(trex_tikhonov_get_lambda2_used(r_ptr));
+    return rcpp_result_gen;
+END_RCPP
+}
+// trex_tikhonov_gamma_to_k
+Eigen::SparseMatrix<double> trex_tikhonov_gamma_to_k(SEXP gamma);
+RcppExport SEXP _TRexSelectorNeo_trex_tikhonov_gamma_to_k(SEXP gammaSEXP) {
+BEGIN_RCPP
+    Rcpp::RObject rcpp_result_gen;
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< SEXP >::type gamma(gammaSEXP);
+    rcpp_result_gen = Rcpp::wrap(trex_tikhonov_gamma_to_k(gamma));
+    return rcpp_result_gen;
+END_RCPP
+}
 // tsolver_lars_create
 XPtr<TSolverRcpp> tsolver_lars_create(Eigen::Map<Eigen::MatrixXd> X, Eigen::Map<Eigen::MatrixXd> D, Eigen::Map<Eigen::VectorXd> y, bool normalize, bool intercept, bool verbose);
 RcppExport SEXP _TRexSelectorNeo_tsolver_lars_create(SEXP XSEXP, SEXP DSEXP, SEXP ySEXP, SEXP normalizeSEXP, SEXP interceptSEXP, SEXP verboseSEXP) {
@@ -2540,6 +2606,11 @@ static const R_CallMethodDef CallEntries[] = {
     {"_TRexSelectorNeo_trex_selector_get_x_l2_norms", (DL_FUNC) &_TRexSelectorNeo_trex_selector_get_x_l2_norms, 1},
     {"_TRexSelectorNeo_trex_selector_get_y_mean", (DL_FUNC) &_TRexSelectorNeo_trex_selector_get_y_mean, 1},
     {"_TRexSelectorNeo_trex_spca_select", (DL_FUNC) &_TRexSelectorNeo_trex_spca_select, 6},
+    {"_TRexSelectorNeo_trex_tikhonov_create", (DL_FUNC) &_TRexSelectorNeo_trex_tikhonov_create, 7},
+    {"_TRexSelectorNeo_trex_tikhonov_mmap_create", (DL_FUNC) &_TRexSelectorNeo_trex_tikhonov_mmap_create, 7},
+    {"_TRexSelectorNeo_trex_tikhonov_select", (DL_FUNC) &_TRexSelectorNeo_trex_tikhonov_select, 1},
+    {"_TRexSelectorNeo_trex_tikhonov_get_lambda2_used", (DL_FUNC) &_TRexSelectorNeo_trex_tikhonov_get_lambda2_used, 1},
+    {"_TRexSelectorNeo_trex_tikhonov_gamma_to_k", (DL_FUNC) &_TRexSelectorNeo_trex_tikhonov_gamma_to_k, 1},
     {"_TRexSelectorNeo_tsolver_lars_create", (DL_FUNC) &_TRexSelectorNeo_tsolver_lars_create, 6},
     {"_TRexSelectorNeo_tsolver_omp_create", (DL_FUNC) &_TRexSelectorNeo_tsolver_omp_create, 6},
     {"_TRexSelectorNeo_tsolver_lars_mmap_create", (DL_FUNC) &_TRexSelectorNeo_tsolver_lars_mmap_create, 6},
