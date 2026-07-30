@@ -24,7 +24,7 @@
         },
         {
             "name": "release-libs",
-            "displayName": "Release (libraries only, no demos)",
+            "displayName": "Release (libraries only, portable)",
             "description": "Release build used for packaging and installation (portable, no -march=native)",
             "binaryDir": "${sourceDir}/build/release-portable",
             "cacheVariables": {
@@ -45,7 +45,7 @@
         {
             "name": "vcpkg-release",
             "displayName": "Release with vcpkg dependencies",
-            "description": "Release build (no demos) using vcpkg toolchain to auto-install dependencies. Requires VCPKG_ROOT to be set.",
+            "description": "Release build using vcpkg toolchain to auto-install dependencies. Requires VCPKG_ROOT to be set.",
             "binaryDir": "${sourceDir}/build/vcpkg-release",
             "toolchainFile": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
             "cacheVariables": {
@@ -89,7 +89,7 @@
         },
         {
             "name": "release-build-libs",
-            "displayName": "Release Build (libraries only, no demos)",
+            "displayName": "Release Build (libraries only, portable)",
             "configurePreset": "release-libs"
         },
         {
@@ -116,7 +116,7 @@
     "workflowPresets": [
         {
             "name": "release-libs",
-            "displayName": "Configure + Build libraries only (no demos)",
+            "displayName": "Configure + Build libraries only (portable)",
             "steps": [
                 { "type": "configure", "name": "release-libs" },
                 { "type": "build",     "name": "release-build-libs" }
