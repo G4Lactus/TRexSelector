@@ -1,0 +1,63 @@
+name: R Package
+
+on:
+  push:
+    paths:
+      - 'R/**'
+      - 'cpp/src/**'
+      - '.github/workflows/r-package.yml'
+  pull_request:
+    paths:
+      - 'R/**'
+      - 'cpp/src/**'
+      - '.github/workflows/r-package.yml'
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Guard: the vendored C++ sources under R/TRexSelectorNeo/src/ must match
+  # cpp/src/ (content-based). This is the check bundle_for_cran.sh documents
+  # as "run it in CI" — it goes red the moment a cpp/src change lands without
+  # a re-vendor, which is exactly how the tree silently drifted before.
+  # Pure rsync, no R toolchain needed, so it runs in seconds.
+  # ---------------------------------------------------------------------------
+  vendor-check:
+    name: vendored sources in sync
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+      - name: bundle_for_cran.sh --check
+        run: bash R/TRexSelectorNeo/tools/bundle_for_cran.sh --check
+
+  # ---------------------------------------------------------------------------
+  # Build the package from the vendored sources and run the testthat suite.
+  # ---------------------------------------------------------------------------
+  test:
+    name: R ${{ matrix.os }}
+    needs: vendor-check
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-latest]
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          use-public-rspm: true
+
+      - name: Install package dependencies
+        run: |
+          Rscript -e 'install.packages(c("Rcpp", "RcppEigen", "R6", "testthat"))'
+
+      - name: Install package
+        run: R CMD INSTALL --no-docs R/TRexSelectorNeo
+
+      - name: Run testthat suite
+        working-directory: R/TRexSelectorNeo
+        run: |
+          Rscript -e 'library(TRexSelectorNeo)
+                      res <- testthat::test_dir("tests/testthat", stop_on_failure = TRUE)
+                      df <- as.data.frame(res)
+                      cat(sprintf("TOTAL: %d passed, %d failed, %d skipped\n",
+                          sum(df$passed), sum(df$failed), sum(df$skipped)))'
