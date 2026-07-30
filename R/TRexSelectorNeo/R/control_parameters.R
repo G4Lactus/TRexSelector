@@ -265,8 +265,16 @@ trex_da_control <- function(da_method = "BT",
 #'   the method selected by \code{lambda2_method}; \code{0} is the degenerate
 #'   pure T-LASSO case (no ridge); a positive value is used as-is.
 #' @param lambda2_method Auto-determination strategy for \code{lambda_2} when
-#'   \code{lambda_2 < 0}: \code{"CV_1SE_CCD"} (default), \code{"CV_MIN_CCD"},
-#'   \code{"CV_1SE_SVD"}, \code{"CV_MIN_SVD"}.
+#'   \code{lambda_2 < 0}. \code{NULL} (default) resolves by track:
+#'   \code{"CV_1SE_CCD"} for \code{gvs_type = "EN"} and
+#'   \code{"CV_1SE_IEN_CCD"} for \code{gvs_type = "IEN"} (the IEN-geometry
+#'   tuner consumes the group structure; the 1SE rule is preferred because
+#'   the MIN rule tends to pin to the grid floor). Explicit choices:
+#'   EN-shaped ridge CV \code{"CV_1SE_CCD"}, \code{"CV_MIN_CCD"},
+#'   \code{"CV_1SE_SVD"}, \code{"CV_MIN_SVD"} (allowed on both tracks);
+#'   IEN-geometry \code{"CV_1SE_IEN_CCD"}, \code{"CV_MIN_IEN_CCD"},
+#'   \code{"CV_1SE_TIK_SVD"}, \code{"CV_MIN_TIK_SVD"} (require
+#'   \code{gvs_type = "IEN"} — they consume the group structure).
 #' @param en_solver Elastic Net solver variant for \code{gvs_type = "EN"}:
 #'   \code{"TENET"} (default, Gram-based), \code{"TENET_AUG"}
 #'   (row-augmented LASSO), or \code{"TCENET"} (CCD; exact fixed-lambda1
@@ -304,16 +312,31 @@ trex_gvs_control <- function(gvs_type = "EN",
                              corr_max = 0.5,
                              hc_linkage = "Single",
                              lambda_2 = -1.0,
-                             lambda2_method = "CV_1SE_CCD",
+                             lambda2_method = NULL,
                              en_solver = "TENET",
                              tenet_aug_use_lars = FALSE,
                              groups = NULL,
                              cv_n_folds = 10,
                              cv_n_lambda = 1000,
                              cv_seed = -1) {
+  # NULL resolves by track: the EN-shaped ridge CV for EN, the IEN-geometry
+  # tuner (group-consuming, no p/2 conversion) for IEN. 1SE in both cases —
+  # the MIN rule tends to pin to the grid floor.
+  if (is.null(lambda2_method)) {
+    lambda2_method <- if (gvs_type == "IEN") "CV_1SE_IEN_CCD" else "CV_1SE_CCD"
+  }
   lambda2_method <- match.arg(lambda2_method,
                               c("CV_1SE_CCD", "CV_MIN_CCD",
-                                "CV_1SE_SVD", "CV_MIN_SVD"))
+                                "CV_1SE_SVD", "CV_MIN_SVD",
+                                "CV_1SE_IEN_CCD", "CV_MIN_IEN_CCD",
+                                "CV_1SE_TIK_SVD", "CV_MIN_TIK_SVD"))
+  ien_methods <- c("CV_1SE_IEN_CCD", "CV_MIN_IEN_CCD",
+                   "CV_1SE_TIK_SVD", "CV_MIN_TIK_SVD")
+  if (gvs_type == "EN" && lambda2_method %in% ien_methods) {
+    stop("lambda2_method = \"", lambda2_method, "\" is an IEN-geometry ",
+         "tuner (it consumes the group structure) and requires ",
+         "gvs_type = \"IEN\".")
+  }
   en_solver <- match.arg(en_solver, c("TENET", "TENET_AUG", "TCENET"))
   list(
     gvs_type           = gvs_type,

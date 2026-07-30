@@ -60,20 +60,40 @@ public:
         this->y_map_ = std::make_unique<Eigen::Map<Eigen::VectorXd>>(y.data(),
                                                                   y.size());
 
-        // The refactored C++ constructor takes a single control struct that
-        // nests the base algorithmic parameters as `trex_ctrl`. Merge the
-        // separately-supplied `trex_control` and derive the solver_type GVS
-        // requires (EN -> TENET/TENET_AUG, IEN -> TIENET_AUG), overriding
-        // whatever the caller left in `trex_control.solver_type`.
+        // The C++ constructor takes a single control struct that nests the
+        // base algorithmic parameters as `trex_ctrl`. Merge the separately-
+        // supplied `trex_control` and set the solver_type GVS requires,
+        // mirroring the R surface:
+        //   EN  -> derived from en_solver (TENET / TENET_AUG / TCENET);
+        //   IEN -> honors an IEN-family trex_control.solver_type (TIENET /
+        //          TIENET_AUG / TCIENET), defaulting anything else to
+        //          TIENET (the native pathwise IEN solver).
         TRexGVSControlParameter gvs_ctrl = gvs_control;
         gvs_ctrl.trex_ctrl = trex_control;
         if (gvs_ctrl.gvs_type == GVSType::IEN) {
-            gvs_ctrl.trex_ctrl.solver_type = gvs_sd::SolverTypeForTRex::TIENET_AUG;
+            const auto st = gvs_ctrl.trex_ctrl.solver_type;
+            const bool ien_family =
+                st == gvs_sd::SolverTypeForTRex::TIENET ||
+                st == gvs_sd::SolverTypeForTRex::TIENET_AUG ||
+                st == gvs_sd::SolverTypeForTRex::TCIENET;
+            if (!ien_family) {
+                gvs_ctrl.trex_ctrl.solver_type =
+                    gvs_sd::SolverTypeForTRex::TIENET;
+            }
         } else { // EN
-            gvs_ctrl.trex_ctrl.solver_type =
-                (gvs_ctrl.en_solver == ENSolverType::TENET_AUG)
-                    ? gvs_sd::SolverTypeForTRex::TENET_AUG
-                    : gvs_sd::SolverTypeForTRex::TENET;
+            switch (gvs_ctrl.en_solver) {
+                case ENSolverType::TENET_AUG:
+                    gvs_ctrl.trex_ctrl.solver_type =
+                        gvs_sd::SolverTypeForTRex::TENET_AUG;
+                    break;
+                case ENSolverType::TCENET:
+                    gvs_ctrl.trex_ctrl.solver_type =
+                        gvs_sd::SolverTypeForTRex::TCENET;
+                    break;
+                default:
+                    gvs_ctrl.trex_ctrl.solver_type =
+                        gvs_sd::SolverTypeForTRex::TENET;
+            }
         }
 
         this->selector_ = std::make_unique<TRexGVSSelector>(
@@ -98,12 +118,13 @@ public:
 inline void bind_trex_gvs(py::module& m) {
     py::enum_<GVSType>(m, "GVSType", "Group Variable Selection method variants.")
         .value("EN", GVSType::EN, "Elastic-Net group variable selection (uses TENET solver).")
-        .value("IEN", GVSType::IEN, "Informed Elastic-Net using group structure from clustering (uses TIENETAug solver).")
+        .value("IEN", GVSType::IEN, "Informed Elastic-Net using group structure from clustering (solver via trex_control.solver_type: TIENET default, TIENET_AUG, TCIENET).")
         .export_values();
 
     py::enum_<ENSolverType>(m, "ENSolverType", "Elastic-Net solver variant used when gvs_type == EN.")
         .value("TENET",     ENSolverType::TENET,     "Gram-based Elastic Net (ridge absorbed via Cholesky update).")
         .value("TENET_AUG", ENSolverType::TENET_AUG, "Augmented-LASSO Elastic Net (row-augmented system).")
+        .value("TCENET",    ENSolverType::TCENET,    "CCD Elastic Net (exact fixed-lambda1 minimizers per dummy crossing).")
         .export_values();
 
     py::enum_<LambdaSelectionMethod>(m, "LambdaSelectionMethod", "Rule for auto-selecting the ridge parameter lambda_2 when lambda_2 < 0.")
@@ -111,12 +132,16 @@ inline void bind_trex_gvs(py::module& m) {
         .value("CV_MIN_SVD", LambdaSelectionMethod::CV_MIN_SVD, "JacobiSVD ridge CV, minimum-CV-error rule.")
         .value("CV_1SE_CCD", LambdaSelectionMethod::CV_1SE_CCD, "Coordinate-descent ridge CV, glmnet-faithful 1-SE rule (default).")
         .value("CV_MIN_CCD", LambdaSelectionMethod::CV_MIN_CCD, "Coordinate-descent ridge CV, glmnet-faithful minimum rule.")
+        .value("CV_1SE_IEN_CCD", LambdaSelectionMethod::CV_1SE_IEN_CCD, "IEN-geometry coordinate-descent CV (lambda1 profiled, group-consuming), 1-SE rule. IEN default.")
+        .value("CV_MIN_IEN_CCD", LambdaSelectionMethod::CV_MIN_IEN_CCD, "IEN-geometry coordinate-descent CV (lambda1 profiled, group-consuming), minimum rule.")
+        .value("CV_1SE_TIK_SVD", LambdaSelectionMethod::CV_1SE_TIK_SVD, "Generalized-Tikhonov SVD ridge CV (IEN geometry), 1-SE rule.")
+        .value("CV_MIN_TIK_SVD", LambdaSelectionMethod::CV_MIN_TIK_SVD, "Generalized-Tikhonov SVD ridge CV (IEN geometry), minimum rule.")
         .export_values();
 
     py::class_<TRexGVSControlParameter>(m, "TRexGVSControlParameter", "Control parameters for TRexGVSSelector.")
         .def(py::init<>())
         .def_readwrite("gvs_type",    &TRexGVSControlParameter::gvs_type,    "GVS method variant (EN = Elastic Net, IEN = Informed Elastic Net).")
-        .def_readwrite("en_solver",   &TRexGVSControlParameter::en_solver,   "EN solver variant when gvs_type == EN (TENET or TENET_AUG).")
+        .def_readwrite("en_solver",   &TRexGVSControlParameter::en_solver,   "EN solver variant when gvs_type == EN: TENET (default), TENET_AUG, or TCENET.")
         .def_readwrite("corr_max",    &TRexGVSControlParameter::corr_max,    "Maximum pairwise correlation for automatic cluster formation.")
         .def_readwrite("hc_linkage",  &TRexGVSControlParameter::hc_linkage,  "Hierarchical clustering linkage method.")
         .def_readwrite("lambda_2", &TRexGVSControlParameter::lambda_2, "Ridge L2 penalty in LARS units (< 0 = auto-select, 0 = pure TLASSO, > 0 = fixed).")

@@ -351,3 +351,38 @@ class TestSolverHyperparameters:
         hp.exch_tie_floor = 0.7
         assert hp.exch_tie_alpha == pytest.approx(0.25)
         assert hp.exch_tie_floor == pytest.approx(0.7)
+
+
+# ---------------------------------------------------------------------------
+# CCD family + construction gates (bindings-parity additions)
+# ---------------------------------------------------------------------------
+
+@pytest.mark.parametrize("solver", ["TCCD", "TCENET", "TENET_AUG"])
+def test_ccd_and_aug_solvers_run(signal_data, solver):
+    X, y, n, p = signal_data
+    ctrl = trex_selector_neo.TRexControlParameter()
+    ctrl.K = 3
+    ctrl.solver_type = getattr(trex_selector_neo.SolverTypeForTRex, solver)
+    sel = trex_selector_neo.TRexSelector(X, y, trex_control=ctrl, verbose=False)
+    res = sel.select()
+    assert res is not None
+
+
+def test_cd_knobs_and_tenet_aug_use_lars_bound():
+    hp = trex_selector_neo.SolverHyperparameters()
+    assert hp.cd_lambda_rel_tol > 0
+    assert hp.cd_tol_certify < 0 and hp.cd_tol_probe < 0
+    assert hp.cd_gram_cap == 0 and hp.cd_max_sweeps == 0
+    assert hp.tenet_aug_use_lars is False
+    hp.tenet_aug_use_lars = True
+    assert hp.tenet_aug_use_lars is True
+
+
+@pytest.mark.parametrize("solver", ["TIENET", "TIENET_AUG", "TCIENET"])
+def test_ien_family_gated_at_construction(signal_data, solver):
+    X, y, n, p = signal_data
+    ctrl = trex_selector_neo.TRexControlParameter()
+    ctrl.K = 3
+    ctrl.solver_type = getattr(trex_selector_neo.SolverTypeForTRex, solver)
+    with pytest.raises(ValueError, match="GVS|group assignment"):
+        trex_selector_neo.TRexSelector(X, y, trex_control=ctrl, verbose=False)
