@@ -13,22 +13,26 @@
  *  Responsibilities:
  *    - Generate fresh dummy matrices D_k from configured distributions.
  *    - Generate permuted variants from a stored base dummy matrix.
- *    - Generate experiment-specific dummies from deterministic seeds (DIRECT).
- *    - Center + L2-normalize all generated dummies.
+ *    - Generate experiment-specific dummies from deterministic seeds (SEEDED).
+ *    - Center + L2-normalize all generated dummies (i.i.d. mode).
  *    - Store / manage the base dummy matrix for PERMUTATION strategies.
  *    - Store / manage K pre-generated dummy matrices for STANDARD/HCONCAT/SKIP.
+ *    - Cluster mode (setClusterModel): draw per-cluster colored MVN layers
+ *      instead of i.i.d. columns — same convention and streams as the GVS
+ *      cluster dummies (trex_cluster_dummies.hpp); blocks are centered only
+ *      (realized norms kept), and the PERMUTATION-family entry points throw.
  *
  *  Ownership model:
  *  TRexSelector owns a DummyGenerator member. Derived TRex classes that
- *  need different dummy generation can either:
- *    (a) override a virtual getDummyGenerator() accessor, or
- *    (b) call a custom DummyGenerator via the constructor.
+ *  need different dummy generation configure it (setClusterModel) or
+ *  bypass it with their own machinery (TRexGVSSelector).
  *
  *  Thread safety:
- *  generate() and generateForExperiment() are const and thread-safe
- *  (each call uses its own RNG state derived from the seed).
- *  Mutating methods (storeBaseDummies, storeGeneratedDummies, reset)
- *  are not thread-safe. They must be called outside parallel regions.
+ *  The generation methods are const and thread-safe (each call uses its
+ *  own RNG state derived from the seed; the cluster model is read-only
+ *  after setup). Mutating methods (storeBaseDummies, setClusterModel,
+ *  clearClusterModel) are not thread-safe. They must be called outside
+ *  parallel regions.
  */
 // ===================================================================================
 
@@ -51,13 +55,17 @@
 // Data normalizer (for center + L2 normalize)
 #include <trex_selector_methods/trex_utils/trex_data_normalizer.hpp>
 
+// Cluster-aware dummy machinery (layer draw + shared stream; Eigen-only)
+#include <trex_selector_methods/trex_utils/trex_cluster_dummies.hpp>
+
 // ===================================================================================
 
 // Embedded into namespace trex::trex_selector_methods::utils::dummy_generator
 namespace trex::trex_selector_methods::utils::dummy_generator {
 
-// Namespace alias
+// Namespace aliases
 namespace dummygen = trex::utils::datageneration::dummygen;
+namespace cdum     = trex::trex_selector_methods::utils::cluster_dummies;
 
 // ===================================================================================
 
@@ -140,7 +148,7 @@ public:
     /**
      * @brief Generate a dummy matrix with a seed derived via mix_seed.
      *
-     * @details Used by the DIRECT strategy where each experiment k needs
+     * @details Used by the SEEDED strategy where each experiment k needs
      *          a deterministic seed that is uncorrelated with adjacent k's.
      *
      * @param num_dummies    Number of dummy columns.
@@ -172,6 +180,16 @@ public:
      */
     void generateInto(Eigen::Ref<Eigen::MatrixXd> target,
                       std::size_t experiment_id) const {
+
+        if (cluster_mode_) {
+            // Only reachable via generate(), i.e. the PERMUTATION-family
+            // base draw: K row-permuted copies of ONE base cannot carry the
+            // per-cluster MVN convention, so fail loudly instead of drawing
+            // an i.i.d. base silently.
+            throw std::logic_error(
+                "DummyGenerator::generateInto: permutation-family base "
+                "generation is unsupported in cluster mode.");
+        }
 
         const std::uint64_t base_seed = deriveBlockSeed64(experiment_id, 0);
 
@@ -206,6 +224,17 @@ public:
     void generateInto(Eigen::Ref<Eigen::MatrixXd> target,
                       std::size_t experiment_k,
                       std::size_t l_tag) const {
+
+        if (cluster_mode_) {
+            // l_tag = LL: fresh-per-iteration (STANDARD / SKIPL) — all
+            // layers from the single (k, LL) stream. l_tag = 0: prefix-
+            // stable per-layer streams (HCONCAT re-derivation) — a full
+            // generation reproduces the incrementally expanded matrix
+            // bit-exactly, mirroring the i.i.d. contract.
+            clusterGenerateInto(target, experiment_k, l_tag,
+                                /*first_layer=*/0);
+            return;
+        }
 
         const std::uint64_t base_seed = deriveBlockSeed64(experiment_k, l_tag);
 
@@ -248,6 +277,20 @@ public:
         const std::size_t total_cols = static_cast<std::size_t>(target.cols());
         if (existing_cols >= total_cols) return;  // nothing to expand
 
+        if (cluster_mode_) {
+            // Append whole layers under the prefix-stable per-layer scheme;
+            // existing layers are left untouched (same contract as the
+            // i.i.d. column-offset expansion).
+            if (existing_cols % cluster_layer_cols_ != 0) {
+                throw std::invalid_argument(
+                    "DummyGenerator::expandInto: existing_cols must be a "
+                    "multiple of the layer width p in cluster mode.");
+            }
+            clusterGenerateInto(target, experiment_k, /*l_tag=*/0,
+                                existing_cols / cluster_layer_cols_);
+            return;
+        }
+
         const std::size_t new_cols = total_cols - existing_cols;
 
         // Same base as the initial block; new columns are distinguished by
@@ -272,7 +315,7 @@ public:
 
 
     /**
-     * @brief Generate DIRECT-strategy dummies directly into an existing matrix.
+     * @brief Generate SEEDED-strategy dummies directly into an existing matrix.
      *
      * @details Seeds via `deriveBlockSeed64(experiment_id, 0)`, i.e. from the
      *          resolved base seed with the prefix-stable tag. This honours the
@@ -286,6 +329,19 @@ public:
      */
     void generateSeededInto(Eigen::Ref<Eigen::MatrixXd> target,
                             std::size_t experiment_id) const {
+
+        if (cluster_mode_) {
+            // SEEDED cluster convention: tag with LL = cols / p, the
+            // fresh-per-iteration scheme — bit-identical content to a
+            // STANDARD run at the same LL (the GVS "STANDARD ≡ SEEDED"
+            // equivalence). Stable across T-steps: LL is fixed within one
+            // L-iteration, so every re-derivation reproduces the same D_k.
+            const std::size_t LL =
+                static_cast<std::size_t>(target.cols()) / cluster_layer_cols_;
+            clusterGenerateInto(target, experiment_id, /*l_tag=*/LL,
+                                /*first_layer=*/0);
+            return;
+        }
 
         const std::uint64_t seed_k = deriveBlockSeed64(experiment_id, 0);
 
@@ -461,6 +517,85 @@ public:
 
 
     // ==========================================================================
+    // Cluster mode — per-cluster colored MVN dummies (GVS convention)
+    // ==========================================================================
+
+    /**
+     * @brief Enable cluster-aware dummy generation.
+     *
+     * @details All subsequent generation requests draw per-cluster colored
+     *          MVN layers (shared convention, trex_cluster_dummies.hpp)
+     *          instead of i.i.d. columns: layer width is `layer_cols` (= p),
+     *          each layer is drawn per cluster as Z * L_m^T and scattered to
+     *          the cluster's column positions, and blocks are CENTERED ONLY
+     *          (realized column norms kept — FIX 2026-07-08; the i.i.d.
+     *          path's per-column norm equalization is deliberately skipped).
+     *
+     *          Stream discipline (see cluster_dummies::makeLayerStream):
+     *          fresh-per-iteration entry points (generateAndStore /
+     *          generateInto with l_tag = LL, generateSeededInto with
+     *          LL = cols / p) draw all LL layers from the single (k, LL)
+     *          stream — bit-identical to TRexGVSSelector's STANDARD hook for
+     *          equal (seed, k, LL). Prefix-stable entry points (expandStored
+     *          / expandInto, generateInto with l_tag = 0) draw layer li from
+     *          the (k, li + 1) stream, so incremental expansion and full
+     *          re-derivation agree bit-exactly — the memory-mapped and
+     *          in-memory paths coincide, and match GVS's HCONCAT hook.
+     *
+     *          The PERMUTATION-family entry points throw in cluster mode
+     *          (K row-permuted copies of one base cannot carry the
+     *          per-cluster convention).
+     *
+     * @param clusters_list       Per-cluster 0-based column indices; must
+     *                            partition [0, layer_cols).
+     * @param cholesky_lower_list Per-cluster lower Cholesky factors L_m
+     *                            (from cluster_dummies::buildClusterCholeskys).
+     * @param layer_cols          Layer width p (columns per dummy layer).
+     *
+     * @throws std::invalid_argument on a size mismatch between the cluster
+     *         lists or a cluster/column count inconsistency.
+     */
+    void setClusterModel(
+        std::vector<std::vector<Eigen::Index>> clusters_list,
+        std::vector<Eigen::MatrixXd> cholesky_lower_list,
+        std::size_t layer_cols)
+    {
+        if (clusters_list.size() != cholesky_lower_list.size()) {
+            throw std::invalid_argument(
+                "DummyGenerator::setClusterModel: clusters_list and "
+                "cholesky_lower_list must have equal length.");
+        }
+        std::size_t total = 0;
+        for (const auto& cols : clusters_list) total += cols.size();
+        if (total != layer_cols) {
+            throw std::invalid_argument(
+                "DummyGenerator::setClusterModel: cluster sizes sum to "
+                + std::to_string(total) + " but layer_cols = "
+                + std::to_string(layer_cols) + ".");
+        }
+
+        cluster_cols_       = std::move(clusters_list);
+        cluster_chol_       = std::move(cholesky_lower_list);
+        cluster_layer_cols_ = layer_cols;
+        cluster_mode_       = true;
+    }
+
+
+    /** @brief Disable cluster mode and release the cluster model
+     *  (generation reverts to the canonical i.i.d. streams). */
+    void clearClusterModel() noexcept {
+        cluster_mode_ = false;
+        cluster_cols_.clear();
+        cluster_chol_.clear();
+        cluster_layer_cols_ = 0;
+    }
+
+
+    /** @brief Whether cluster-aware generation is active. */
+    bool isClusterMode() const noexcept { return cluster_mode_; }
+
+
+    // ==========================================================================
     // Permutation strategy — base dummy management
     // ==========================================================================
 
@@ -505,6 +640,15 @@ public:
         if (!base_initialized_) {
             throw std::logic_error(
                 "DummyGenerator::expandBaseDummies: base dummies not initialized");
+        }
+        if (cluster_mode_) {
+            // Defense in depth: the initial base draw already throws in
+            // cluster mode (see generateInto), but expandInto has a working
+            // cluster branch (HCONCAT) that would otherwise silently append
+            // cluster layers onto a permutation base.
+            throw std::logic_error(
+                "DummyGenerator::expandBaseDummies: permutation-family base "
+                "expansion is unsupported in cluster mode.");
         }
 
         const std::size_t old_cols =
@@ -616,8 +760,8 @@ public:
     }
 
 
-    /** @brief Get the base permutation seed. */
-    unsigned int baseSeedPerm() const noexcept { return base_seed_perm_; }
+    /** @brief Get the base permutation seed (full 64-bit id). */
+    std::uint64_t baseSeedPerm() const noexcept { return base_seed_perm_; }
 
 
     // ==========================================================================
@@ -633,6 +777,8 @@ public:
         stored_dummies_.clear();
         base_dummies_perm_.resize(0, 0);
         base_initialized_ = false;
+        base_seed_perm_ = 0;
+        clearClusterModel();
     }
 
 
@@ -659,7 +805,7 @@ private:
      *  Equals `seed_` when a deterministic seed (>= 0) was requested, and two
      *  `std::random_device` draws packed into 64 bits otherwise. Resolving the
      *  base once (instead of per call) guarantees that repeated generation
-     *  requests for the same (experiment, l_tag) pair — e.g. the DIRECT
+     *  requests for the same (experiment, l_tag) pair — e.g. the SEEDED
      *  strategy re-deriving D_k at every T-loop step — reproduce the identical
      *  dummy matrix within one selector run, while separate runs still obtain
      *  fresh entropy. 64-bit width keeps the whole seeding pipeline out of the
@@ -686,6 +832,23 @@ private:
     /** @brief Whether base dummies are initialized. */
     bool base_initialized_{false};
 
+    // ==========================================================================
+    // State — cluster mode
+    // ==========================================================================
+
+    /** @brief Whether cluster-aware generation is active. */
+    bool cluster_mode_{false};
+
+    /** @brief Per-cluster column indices into one layer (partition of
+     *  [0, cluster_layer_cols_)). */
+    std::vector<std::vector<Eigen::Index>> cluster_cols_;
+
+    /** @brief Per-cluster lower Cholesky factors L_m of Sigma_m. */
+    std::vector<Eigen::MatrixXd> cluster_chol_;
+
+    /** @brief Layer width p (columns per dummy layer). */
+    std::size_t cluster_layer_cols_{0};
+
 
     // ==========================================================================
     // Internal helpers
@@ -709,7 +872,7 @@ private:
      *          advances the column offset) are likewise impossible.
      *
      *          Tag conventions:
-     *            - l_tag = 0:      prefix-stable strategies (HCONCAT, DIRECT,
+     *            - l_tag = 0:      prefix-stable strategies (HCONCAT, SEEDED,
      *                              PERMUTATION base). The same (k, col) always
      *                              reproduces the same column, so re-derivation
      *                              at any T-/L-step and incremental expansion
@@ -736,6 +899,90 @@ private:
             (static_cast<std::uint64_t>(l_tag) << 32)
             | (static_cast<std::uint64_t>(experiment_id) & 0xFFFFFFFFULL);
         return dummygen::mix_seed64(resolved_base_seed_, packed);
+    }
+
+
+    /**
+     * @brief Cluster-mode layer generation into a target block.
+     *
+     * @details Fills layers [first_layer, cols / p) of `target` with
+     *          per-cluster colored MVN draws and centers each written
+     *          column (realized norms kept — FIX 2026-07-08 convention).
+     *
+     *          Stream discipline (cluster_dummies::makeLayerStream):
+     *            - l_tag > 0 (fresh-per-iteration): all layers drawn
+     *              sequentially from the single (k, l_tag) stream;
+     *              first_layer must be 0. Matches TRexGVSSelector's
+     *              STANDARD / SKIPL hook bit-exactly for equal inputs.
+     *            - l_tag = 0 (prefix-stable): layer li drawn from its own
+     *              (k, li + 1) stream, so incremental expansion and full
+     *              re-derivation agree bit-exactly. Matches the GVS
+     *              HCONCAT hook (its iteration LL appends layer LL - 1
+     *              from the (k, LL) stream).
+     *
+     * @param target      Full destination block (n × LL * p, pre-sized).
+     * @param experiment_k Experiment index k.
+     * @param l_tag       Stream tag (see above).
+     * @param first_layer First layer index to (re)generate.
+     *
+     * @throws std::invalid_argument on a row/column geometry mismatch.
+     * @throws std::logic_error if l_tag > 0 is combined with first_layer > 0.
+     */
+    void clusterGenerateInto(Eigen::Ref<Eigen::MatrixXd> target,
+                             std::size_t experiment_k,
+                             std::size_t l_tag,
+                             std::size_t first_layer) const {
+
+        if (static_cast<std::size_t>(target.rows()) != n_) {
+            throw std::invalid_argument(
+                "DummyGenerator::clusterGenerateInto: target rows "
+                + std::to_string(target.rows()) + " != n = "
+                + std::to_string(n_) + ".");
+        }
+        const std::size_t total_cols =
+            static_cast<std::size_t>(target.cols());
+        if (cluster_layer_cols_ == 0 ||
+            total_cols % cluster_layer_cols_ != 0) {
+            throw std::invalid_argument(
+                "DummyGenerator::clusterGenerateInto: target cols "
+                + std::to_string(total_cols) + " is not a multiple of the "
+                "layer width p = " + std::to_string(cluster_layer_cols_)
+                + ".");
+        }
+        const std::size_t LL = total_cols / cluster_layer_cols_;
+        if (l_tag > 0 && first_layer > 0) {
+            throw std::logic_error(
+                "DummyGenerator::clusterGenerateInto: the fresh-per-"
+                "iteration scheme (l_tag > 0) regenerates all layers; "
+                "first_layer must be 0.");
+        }
+
+        const auto n_idx = static_cast<Eigen::Index>(n_);
+        const auto p_idx = static_cast<Eigen::Index>(cluster_layer_cols_);
+
+        auto write_layer = [&](std::size_t li, std::mt19937& rng) {
+            auto block = target.block(
+                0, static_cast<Eigen::Index>(li) * p_idx, n_idx, p_idx);
+            block = cdum::drawClusterDummyLayer(
+                n_, cluster_layer_cols_, cluster_cols_, cluster_chol_, rng);
+            // Center-only; realized column norms are part of the dummy
+            // null distribution (FIX 2026-07-08).
+            block.rowwise() -= block.colwise().mean();
+        };
+
+        if (l_tag > 0) {
+            std::mt19937 rng = cdum::makeLayerStream(
+                resolved_base_seed_, experiment_k, l_tag);
+            for (std::size_t li = 0; li < LL; ++li) {
+                write_layer(li, rng);
+            }
+        } else {
+            for (std::size_t li = first_layer; li < LL; ++li) {
+                std::mt19937 rng = cdum::makeLayerStream(
+                    resolved_base_seed_, experiment_k, li + 1);
+                write_layer(li, rng);
+            }
+        }
     }
 
 

@@ -36,6 +36,19 @@ RSYNC_EXCLUDES=(
     --exclude 'main.cpp'
     --exclude '*.o'
     --exclude '*.so'
+    # Editor / OS clutter: rsync -a would otherwise carry it into the CRAN
+    # tarball. Gitignored in the C++ tree, so it is invisible to git review.
+    --exclude '.DS_Store'
+    # Research families with no R bindings yet. Vendoring them would add
+    # their translation units to OBJECTS — compiled into the shared object,
+    # lengthening every CRAN build, with nothing callable from R. These are
+    # no-ops on branches where the directories do not exist; drop the
+    # excludes when the corresponding Rcpp wrappers land.
+    --exclude 'vd_tsolvers'
+    --exclude 'vd_tsolvers.hpp'
+    --exclude 'sd_tsolvers'
+    --exclude 'trex_vd'
+    --exclude 'trex_sd'
 )
 
 # Regenerate the OBJECTS list from the .cpp files under a src directory.
@@ -50,10 +63,18 @@ if [ "${1:-}" = "--check" ]; then
     status=0
     for tree in "${SUBTREES[@]}"; do
         # -rlc compares content only (checksum; no perms/mtimes, which git
-        # does not preserve); itemized output is non-empty iff files differ,
-        # are missing, or would be deleted.
-        diff_out=$(rsync -rlci --delete --dry-run "${RSYNC_EXCLUDES[@]}" \
-            "$CPP_SRC/$tree/" "src/$tree/")
+        # does not preserve). Itemized lines starting with '.' are
+        # attribute-only entries (e.g. '.f..T....' after a branch switch or
+        # a fresh clone rewrites mtimes) with identical content — filter
+        # them, otherwise every CI checkout would report divergence. What
+        # remains is real: content changes ('>fc...'), new files/dirs
+        # ('>f+++++++' / 'cd+++++++'), and deletions ('*deleting').
+        # --prune-empty-dirs: a directory whose entire content is excluded
+        # (e.g. a CMakeLists.txt-only stub) vendors to empty, and git does
+        # not track empty directories — without pruning, the check demands
+        # a directory a fresh checkout can never contain.
+        diff_out=$(rsync -rlci --prune-empty-dirs --delete --dry-run "${RSYNC_EXCLUDES[@]}" \
+            "$CPP_SRC/$tree/" "src/$tree/" | grep -v '^\.' || true)
         if [ -n "$diff_out" ]; then
             echo "DIVERGED: src/$tree/"
             echo "$diff_out" | sed 's/^/    /'
@@ -78,7 +99,9 @@ fi
 
 echo "=== Vendoring C++ backend from $CPP_SRC ==="
 for tree in "${SUBTREES[@]}"; do
-    rsync -a --delete "${RSYNC_EXCLUDES[@]}" "$CPP_SRC/$tree/" "src/$tree/"
+    # --prune-empty-dirs mirrors the check: never create directories that
+    # would be empty after the excludes (git cannot commit them anyway).
+    rsync -a --prune-empty-dirs --delete "${RSYNC_EXCLUDES[@]}" "$CPP_SRC/$tree/" "src/$tree/"
 done
 
 echo "=== Regenerating OBJECTS list ==="

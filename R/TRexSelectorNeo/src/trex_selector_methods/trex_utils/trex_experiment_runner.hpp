@@ -94,7 +94,7 @@ struct ExperimentRunnerConfig {
     // --- L-loop seed tag (for deterministic dummy regeneration) ---
     std::size_t seed_factor = 0;    ///< L-loop tag (l_tag) for block seed derivation.
                                     ///< 0 for prefix-stable strategies (HCONCAT/
-                                    ///< DIRECT); the L-iteration for STANDARD/SKIPL.
+                                    ///< SEEDED); the L-iteration for STANDARD/SKIPL.
 
     // --- HCONCAT: number of previously written columns already on disk ---
     std::size_t existing_cols_on_disk = 0;  ///< For HCONCAT memmap: columns from prior L.
@@ -132,6 +132,16 @@ struct ExperimentRunnerConfig {
     // --- Parallelism ---
     int max_outer_threads = 1;
     int max_inner_threads = 1;
+
+    // --- General-Tikhonov penalty (TCIENET sparse-K dispatch) ---
+    /** @brief Non-owning pointer to the Tikhonov matrix K (nullptr = none).
+     *  Set by TRexTikhonovSelector::buildRunnerConfig(); forwarded verbatim
+     *  into SolverConfig::tikhonov_K. Must outlive the run() call. */
+    const Eigen::SparseMatrix<double>* tikhonov_K = nullptr;
+
+    /** @brief Dummy-coupling mode for the sparse-K TCIENET dispatch;
+     *  forwarded verbatim into SolverConfig::tikhonov_fold_dummies. */
+    bool tikhonov_fold_dummies = false;
 
     // --- Diagnostics ---
     bool verbose = false;
@@ -367,7 +377,8 @@ private:
 
         std::vector<ExperimentSummary> summaries(cfg.K);
 
-        // Sequential — permutation reuses one buffer
+        // Sequential by design; getPermuted() returns a fresh permuted
+        // copy per k (base + one working copy alive at a time)
         #ifdef _OPENMP
         Eigen::setNbThreads(omp_get_max_threads());
         #endif
@@ -451,7 +462,7 @@ private:
 
     /**
      * @brief Run experiment k for strategies whose D_k is a per-call temporary
-     *        (PERMUTATION, DIRECT), handling in-memory warm-start retention.
+     *        (PERMUTATION, SEEDED), handling in-memory warm-start retention.
      *
      * @details When a retained solver exists for slot k, the (expensive)
      *          dummy generation is skipped entirely: the solver already holds
@@ -650,7 +661,9 @@ private:
                       trex::utils::datageneration::dummygen::mix_seed64(
                           static_cast<std::uint64_t>(cfg.tie_seed_base), k)
                       & 0x7FFFFFFFULL)
-                : -1LL
+                : -1LL,
+            .tikhonov_K = cfg.tikhonov_K,
+            .tikhonov_fold_dummies = cfg.tikhonov_fold_dummies
         };
 
         std::unique_ptr<trex::tsolvers::TSolver_Base> retained;
