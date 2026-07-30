@@ -363,6 +363,16 @@ protected:
      */
     void printProgressMessage(const std::string& msg) const;
 
+    /** @brief Validate the configured dummy strategy at construction.
+     *
+     * @details Mirrors ScreenTRexSelector's gate so an unsupported strategy
+     *  fails immediately instead of mid-way through the per-phenotype loop
+     *  (the per-phenotype selectors are only built inside screening).
+     *
+     * @throws std::invalid_argument on an unsupported lloop_strategy.
+     */
+    void validateBiobankStrategy() const;
+
 };
 
 // ===================================================================================

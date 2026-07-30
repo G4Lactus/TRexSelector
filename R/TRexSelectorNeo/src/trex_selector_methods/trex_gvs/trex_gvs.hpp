@@ -40,43 +40,64 @@
  *                       tenet_aug_solver.hpp). GVS therefore passes the SAME
  *                       pre-normalized D_k as for plain TENET.
  *
- *    - GVSType::IEN   Informed Elastic Net (TIENETAug_Solver; Machkour et
- *                     al., CAMSAP 2023). The solver internally builds the
- *                     group-informed Lasso-type system of Theorem 1
- *                         X_aug = [ X ; B ]  (M extra rows; B(m, .) =
+ *                     - ENSolverType::TCENET — CCD elastic net
+ *                       (TCENET_Solver): exact fixed-lambda1 EN minimizers
+ *                       recorded per dummy crossing (K = I diagonal ridge;
+ *                       dummies get the same unit ridge, preserving
+ *                       exchangeability). Same data convention as TENET.
+ *
+ *    - GVSType::IEN   Informed Elastic Net (Machkour et al., CAMSAP 2023).
+ *                     Three mathematically equivalent solver variants,
+ *                     chosen via solver_type:
+ *                       * TIENET (native pathwise): LARS-IEN absorbs the
+ *                         group penalty into the Gram / correlation updates
+ *                         (no augmented copies). GVS passes the center-only
+ *                         dummy block and the solver runs AS CONSTRUCTED.
+ *                       * TCIENET (CCD): exact fixed-lambda1 IEN minimizers
+ *                         per dummy crossing via the O(1) group-sum penalty
+ *                         hooks. Same center-only data convention as TIENET.
+ *                       * TIENET_AUG: the solver internally builds the
+ *                         group-informed Lasso-type system of Theorem 1
+ *                           X_aug = [ X ; B ]  (M extra rows; B(m, .) =
  *                                 (sqrt(lambda2)/sqrt(p_m)) on cluster-m cols),
- *                         D_aug = [ D ; B tiled once per dummy layer ],
- *                         y_aug = [ y ; 0_M ],
- *                       applies the R-faithful post-augmentation preprocessing
- *                       (column centering + rescaling, y centering; R
- *                       lm_dummy.R `scale()`), and runs an inner T-LASSO.
- *                       GVS passes the RAW MVN dummy block (the solver
- *                       normalizes the augmented columns itself) plus the
- *                       0-based cluster assignment from the one-time
- *                       clustering of X.
+ *                           D_aug = [ D ; B tiled once per dummy layer ],
+ *                           y_aug = [ y ; 0_M ],
+ *                         centering its owned copies of the DATA blocks
+ *                         (no per-column rescaling; B rows never normalized)
+ *                         BEFORE augmentation, and runs an inner T-LASSO.
+ *                         GVS passes the RAW MVN dummy block (the wrapper
+ *                         centers it itself).
+ *                     Both receive the 0-based cluster assignment from the
+ *                     one-time clustering of X.
  *
  *    Reassembly rule (ALL variants): the per-experiment cluster-aware MVN
  *    dummy block D_k is (re)assembled every L-iteration because num_dummies
  *    (L) changes; fresh solvers are then constructed at T = 1.
  *
  *    Column scaling: X_ is centered + rescaled by the base class
- *    (ScalingMode::L2 or ZSCORE). The EN-variant dummy blocks are centered +
- *    rescaled with the same convention before being handed to the solver;
- *    the IEN dummy block is passed raw (see above).
+ *    (ScalingMode::L2 or ZSCORE). ALL dummy blocks keep their realized
+ *    column norms (chi fluctuation = part of the dummy null, FIX
+ *    2026-07-08): EN variants and native IEN (TIENET) are centered (only)
+ *    before being handed to the solver; the augmented IEN (TIENET_AUG)
+ *    block is passed raw and centered inside the wrapper (see above).
  *
  *  Design notes:
  *  ------------
  *    - GVS does NOT use the inherited `DummyGenerator` or `ExperimentRunner`.
  *      It owns a private K-experiment loop, a private per-experiment
  *      dummy-layer cache, and a private warm-start cache of in-memory solvers
- *      (TENET / TENETAug / TIENETAug). The inherited `MemmapManager` IS
+ *      (TENET / TENETAug / TCENET / TIENET / TIENETAug / TCIENET). The
+ *      inherited `MemmapManager` IS
  *      reused (re-allocated in `onSelectBegin()` with n rows, and torn down
  *      by the base class at the end of `select()`); see `gvs_use_mmap_`.
  *
  *    - Support L-looop strategies:
- *.     `LLoopStrategy::STANDARD`, `HCONCAT`, `SKIPL`, and `DIRECT`.
- *      `STANDARD` and `DIRECT` are equivalent inside GVS (the overridden
+ *.     `LLoopStrategy::STANDARD`, `HCONCAT`, `SKIPL`, and `SEEDED`.
+ *      `STANDARD` and `SEEDED` are equivalent inside GVS (the overridden
  *      `evaluateStep` consumes `D_solver_bufs_` rather than streaming dummies from disk).
+ *      This equivalence includes the MEMORY profile: GVS keeps one dummy
+ *      buffer (or one mmap file) per experiment under both, so SEEDED's
+ *      usual one-matrix-at-a-time saving does not apply here.
  *      `SKIPL` collapses to a single L-iter with LL = max_dummy_multiplier.
  *      `PERMUTATION` and `PERMUTATION_SEEDED` are rejected because row permutation
  *      would destroy the per-cluster MVN covariance structure that GVS dummies
@@ -88,10 +109,14 @@
  *      buffers internally); each L-loop step fills the per-K columns in place
  *      via `assembleDummyBlock`.
  *
- *    - The lambda_2 ridge parameter (LARS units) is resolved as follows:
+ *    - The lambda_2 ridge parameter is resolved as follows:
  *        * lambda_2 <  0 (default -1): "not supplied" sentinel (R's NULL
  *          equivalent) -> auto-computed via k-fold CV on the centered +
- *          z-score/L2-normalised (X, y), scaled by p / 2 to LARS units;
+ *          z-score/L2-normalised (X, y). The EN-shaped tuners (CV_*_SVD /
+ *          CV_*_CCD) convert by p / 2 to LARS units (as in R's lm_dummy);
+ *          the IEN-geometry tuners (CV_*_IEN_CCD / CV_*_TIK_SVD) return
+ *          lambda_2 on the SOLVER scale directly (no p/2 conversion, only
+ *          the ZSCORE working-scale factor);
  *        * lambda_2 == 0: degenerate case -> pure T-LASSO (no ridge);
  *        * lambda_2 >  0: fixed ridge penalty.
  *
@@ -158,14 +183,22 @@ namespace hac = trex::ml_methods::clustering::hierarchical::agglomerative;
 enum class GVSType {
     /** @brief Ordinary Elastic Net; solver variant controlled by ENSolverType. */
     EN,
-    /** @brief Informed Elastic Net (TIENETAug_Solver: group-informed
-     *  row-augmented system built inside the solver). */
+    /** @brief Informed Elastic Net. Solver variant chosen via
+     *  trex_ctrl.solver_type: TIENET (native pathwise LARS-IEN) or
+     *  TIENET_AUG (group-informed row-augmented system built inside
+     *  TIENETAug_Solver). */
     IEN
 };
 
 
 /**
  * @brief EN solver variant for GVSType::EN.
+ *
+ * @details The single EN-solver axis: when `gvs_type == EN`, the nested
+ *  `trex_ctrl.solver_type` is DERIVED from this enum (see `toSolverType()`),
+ *  so `en_solver` is the only knob a caller sets. All three variants solve
+ *  the same elastic-net problem and must produce the same active sets for
+ *  lambda2 > 0.
  */
 enum class ENSolverType {
     /** @brief Gram-based EN (TENET_Solver): X, D, y are passed unaugmented;
@@ -180,8 +213,32 @@ enum class ENSolverType {
      *  y_aug = [y; 0_{p+L}]
      *  Proved equivalent to TENET for lambda2 >= 0.
      */
-    TENET_AUG
+    TENET_AUG,
+
+    /** @brief CCD EN (TCENET_Solver): exact fixed-lambda1 elastic-net
+     *  minimizers per dummy crossing (K = I diagonal ridge; dummies get the
+     *  same unit ridge, preserving exchangeability). Same data convention as
+     *  TENET (pre-normalized X, center-only D, centered y).
+     */
+    TCENET
 };
+
+
+/**
+ * @brief Map an ENSolverType to the corresponding SolverTypeForTRex enumerator.
+ *
+ * @details Used by `TRexGVSSelector` to derive the nested
+ *  `trex_ctrl.solver_type` when `gvs_type == EN`, and by `TRexSPCA` when
+ *  forwarding its `en_solver` knob to the per-PC GVS runs.
+ */
+inline constexpr sd::SolverTypeForTRex toSolverType(ENSolverType en_solver) {
+    switch (en_solver) {
+        case ENSolverType::TENET_AUG: return sd::SolverTypeForTRex::TENET_AUG;
+        case ENSolverType::TCENET:    return sd::SolverTypeForTRex::TCENET;
+        case ENSolverType::TENET:
+        default:                      return sd::SolverTypeForTRex::TENET;
+    }
+}
 
 
 /**
@@ -198,6 +255,20 @@ enum class ENSolverType {
  *                 and lambda.1se within CV fold noise; returns lambda on glmnet's
  *                 reported scale (like the GLMNET variants), so the p/2 factor converts
  *                 to LARS units as in R's `lm_dummy`.
+ *
+ *   IEN-geometry methods (`gvs_type == IEN` only — they consume the group
+ *   structure; the selected lambda_2 is on the SOLVER scale and needs NO p/2
+ *   conversion, only the ZSCORE working-scale factor):
+ *   - `CV_1SE_IEN_CCD` / `CV_MIN_IEN_CCD` : coordinate-descent IEN CV
+ *                 (`ienet_cv_ccd`): per lambda_2 candidate the full lambda_1
+ *                 path is fitted per fold and profiled out. Well-posed in any
+ *                 p/n regime — the recommended IEN tuner.
+ *   - `CV_1SE_TIK_SVD` / `CV_MIN_TIK_SVD` : analytic generalized-Tikhonov
+ *                 ridge CV (`tikhonov_cv_svd`, lambda_1 = 0 backbone).
+ *                 Exact for n > p; in the p - M >= n_train regime the
+ *                 prediction-CV curve is structurally uninformative
+ *                 (contrast interpolation) — a warning is logged and the
+ *                 IEN_CCD tuner should be preferred there.
  */
 enum class LambdaSelectionMethod {
     /** @brief JacobiSVD direct ridge CV, 1SE. */
@@ -207,7 +278,15 @@ enum class LambdaSelectionMethod {
     /** @brief Coordinate-descent ridge CV, glmnet-faithful 1SE. */
     CV_1SE_CCD,
     /** @brief Coordinate-descent ridge CV, glmnet-faithful min. */
-    CV_MIN_CCD
+    CV_MIN_CCD,
+    /** @brief IEN-geometry coordinate-descent CV (lambda1 profiled), 1SE. */
+    CV_1SE_IEN_CCD,
+    /** @brief IEN-geometry coordinate-descent CV (lambda1 profiled), min. */
+    CV_MIN_IEN_CCD,
+    /** @brief Generalized-Tikhonov SVD ridge CV (IEN geometry), 1SE. */
+    CV_1SE_TIK_SVD,
+    /** @brief Generalized-Tikhonov SVD ridge CV (IEN geometry), min. */
+    CV_MIN_TIK_SVD
 };
 
 
@@ -224,7 +303,10 @@ struct TRexGVSControlParameter {
     GVSType gvs_type = GVSType::EN;
 
     /** @brief EN solver variant when gvs_type == GVSType::EN.
-     *  Only TENET and TENET_AUG are supported. Default: TENET.
+     *  TENET (Gram-based), TENET_AUG (augmented LASSO), or TCENET (CCD).
+     *  This is the SINGLE EN-solver knob: `trex_ctrl.solver_type` is derived
+     *  from it via `toSolverType()` (an explicitly conflicting EN-family
+     *  `solver_type` throws). Ignored when gvs_type == IEN. Default: TENET.
      */
     ENSolverType en_solver = ENSolverType::TENET;
 
@@ -246,13 +328,14 @@ struct TRexGVSControlParameter {
      */
     hac::LinkageMethod hc_linkage = hac::LinkageMethod::Single;
 
-    /** @brief User-supplied lambda_2 in LARS units.
+    /** @brief User-supplied lambda_2 (in the working column scale).
      *  - `< 0` (default `-1.0`): sentinel meaning "not supplied" (the C++
      *    equivalent of R's `NULL`); triggers auto-computation via
-     *    `lambda2_method`. The auto-computed lambda is scaled by p / 2 to
-     *    LARS units.
+     *    `lambda2_method`. The EN-shaped tuners scale the CV pick by p / 2
+     *    to LARS units; the IEN-geometry tuners return it on the solver
+     *    scale directly (see `LambdaSelectionMethod`).
      *  - `== 0`: fixed degenerate case -> pure TLASSO (no ridge penalty).
-     *  - `> 0` : fixed ridge penalty in LARS units.
+     *  - `> 0` : fixed ridge penalty.
      *
      *  A negative sentinel (rather than NaN) is used so the value stays
      *  well-defined under aggressive floating-point optimisation.
@@ -260,12 +343,17 @@ struct TRexGVSControlParameter {
     double lambda_2 = -1.0;
 
     /** @brief Selection rule for auto-computing `lambda_2` when `lambda_2 < 0`.
-     *         Options are: CV_1SE_SVD, CV_MIN_SVD, CV_1SE_CCD, CV_MIN_CCD.
+     *         Options (see the `LambdaSelectionMethod` enum for details):
      *          - CV_1SE_SVD / CV_MIN_SVD : JacobiSVD ridge CV (ridge_cv_svd);
      *            for numerical validation.
      *          - CV_1SE_CCD / CV_MIN_CCD : glmnet-faithful coordinate-descent ridge CV
      *            (enet_cv_ccd, alpha=0) with glmnet's fdev/devmax path early
      *            stopping. Default: CV_1SE_CCD.
+     *          - CV_1SE_IEN_CCD / CV_MIN_IEN_CCD : IEN-geometry profiled CV
+     *            (ienet_cv_ccd); gvs_type = IEN only, solver scale.
+     *          - CV_1SE_TIK_SVD / CV_MIN_TIK_SVD : analytic generalized-
+     *            Tikhonov CV (tikhonov_cv_svd); gvs_type = IEN only, solver
+     *            scale, refused in the contrast-interpolating wide regime.
      */
     LambdaSelectionMethod lambda2_method = LambdaSelectionMethod::CV_1SE_CCD;
 
@@ -299,20 +387,27 @@ struct TRexGVSControlParameter {
     std::vector<std::string> group_labels;
 
     /** @brief Diagnostic / R-parity option for the augmented solvers
-     *  (`en_solver == TENET_AUG` and `gvs_type == IEN`). When true, the
-     *  augmented system is solved with a pure-LARS inner solver (never drops
-     *  variables, matching R's `trex(type="lar")`) instead of the default
-     *  LARS-LASSO inner solver. Ignored for plain TENET. Default: false.
+     *  (`en_solver == TENET_AUG`, or `gvs_type == IEN` with
+     *  `solver_type == TIENET_AUG`). When true, the augmented system is
+     *  solved with a pure-LARS inner solver (never drops variables, matching
+     *  R's `trex(type="lar")`) instead of the default LARS-LASSO inner
+     *  solver. Ignored for plain TENET and the native pathwise TIENET.
+     *  Default: false.
      */
     bool tenet_aug_use_lars = false;
 
     /** @brief Base T-Rex algorithmic control parameters (nested).
-     *  GVS restricts `solver_type` to the solvers it actually drives (see
-     *  `TRexGVSSelector`'s validation): TENET/TENET_AUG for `GVSType::EN`,
-     *  TIENET_AUG for `GVSType::IEN`. The default here overrides the base
-     *  class's own default (TLARS) with TENET, matching the default
-     *  `gvs_type = EN` / `en_solver = TENET`, so a fully-defaulted
-     *  `TRexGVSControlParameter` constructs without throwing.
+     *  Solver selection is split by gvs_type:
+     *    - `GVSType::EN`  : `solver_type` is DERIVED from `en_solver`
+     *      (`toSolverType()`); leave it at the default. An explicitly
+     *      conflicting EN-family value throws, steering callers to the
+     *      `en_solver` knob.
+     *    - `GVSType::IEN` : `solver_type` IS the knob — TIENET (native
+     *      pathwise), TIENET_AUG (row-augmented), or TCIENET (CCD).
+     *  The default here overrides the base class's own default (TLARS) with
+     *  TENET, matching the default `gvs_type = EN` / `en_solver = TENET`, so
+     *  a fully-defaulted `TRexGVSControlParameter` constructs without
+     *  throwing.
      */
     tc::TRexControlParameter trex_ctrl = [] {
         tc::TRexControlParameter t;
@@ -517,8 +612,10 @@ protected:
     /** @brief User-requested memory-mapping flag, captured before passing
      *  the base control parameter to the parent constructor. The base
      *  copy is forced to `false` so that the inherited `memmap_mgr_` is
-     *  not auto-allocated with the wrong row count; GVS re-allocates it
-     *  in `onSelectBegin()` with `n_eff_` once it is known.
+     *  not auto-allocated with the base layout; GVS re-allocates it in
+     *  `onSelectBegin()` with per-experiment (shared = false) files, a
+     *  hard requirement of its parallel-K loop and its no-rewrite T-steps
+     *  (see the warning at the allocation site in trex_gvs.cpp).
      */
     bool gvs_use_mmap_{false};
 
@@ -527,8 +624,9 @@ protected:
     /** @brief Per-experiment dummy block D ((n x num_dummies) per k).
      *  In-memory mode: stable across T-iterations within one L-iter,
      *  rebuilt per L-iter. Memory-mapped mode: empty (storage lives in
-     *  the inherited `memmap_mgr_`). EN variants: centered + rescaled;
-     *  IEN: raw MVN draws (TIENETAug normalizes the augmented columns). */
+     *  the inherited `memmap_mgr_`). EN variants and native IEN (TIENET):
+     *  centered only (realized norms kept); augmented IEN (TIENET_AUG): raw
+     *  MVN draws (the wrapper centers its owned copies itself). */
     std::vector<Eigen::MatrixXd> D_solver_bufs_;
 
     /** @brief Stable Map over X_ seen by the solver (all variants; the
@@ -583,11 +681,11 @@ protected:
      *  the horizontal concatenation of `dummy_layers_[k]`. All augmentation
      *  (ridge rows, group blocks) lives inside the solvers.
      *
-     *  Column scaling is the CALLER's choice: the EN variants center +
-     *  rescale afterwards (TENET consumes pre-normalized columns; TENETAug's
-     *  d1/d2 algebra preserves unit scale exactly); IEN passes the block raw
-     *  (TIENETAug normalizes the augmented columns internally, mirroring R's
-     *  post-augmentation `scale()`).
+     *  Column scaling is the CALLER's choice: the EN variants and the
+     *  native IEN (TIENET) center afterwards (norm fluctuation kept, see
+     *  prepareDummiesForLStep); the augmented IEN (TIENET_AUG) passes the
+     *  block raw (the wrapper centers its owned data-block copies before
+     *  augmentation).
      */
     template <typename Derived>
     void assembleDummyBlock(std::size_t k,
@@ -675,8 +773,8 @@ protected:
      * @brief Per-L-iteration dummy preparation for GVS.
      *
      * @details
-     *  Honors `LLoopStrategy::STANDARD`, `HCONCAT`, `SKIPL`, and `DIRECT`.
-     *  STANDARD / SKIPL / DIRECT redraw all `LL` cluster-MVN dummy layers
+     *  Honors `LLoopStrategy::STANDARD`, `HCONCAT`, `SKIPL`, and `SEEDED`.
+     *  STANDARD / SKIPL / SEEDED redraw all `LL` cluster-MVN dummy layers
      *  from scratch per L-iteration; HCONCAT appends one fresh layer per
      *  L-iteration. SKIPL is invoked exactly once per `select()` with
      *  `LL = max_dummy_multiplier`. PERMUTATION and PERMUTATION_SEEDED are

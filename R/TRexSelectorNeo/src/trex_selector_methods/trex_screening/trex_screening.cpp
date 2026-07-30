@@ -36,6 +36,22 @@ namespace dummygen = trex::utils::datageneration::dummygen;
 // Constructor
 // ===================================================================================
 
+// Static helper: prepare the nested base control parameters before they are
+// frozen into the base class. Screening runs a SINGLE pass at exactly
+// L = p dummies (select() forces num_dummies_ = p_, T_stop_ = 1), so the
+// L-loop growth ceiling is meaningless here — but the base constructor
+// sizes the memory-mapped D files at max_dummy_multiplier * p. Pin the
+// multiplier to 1 so biobank-scale memmap runs are not sized (and their
+// address space not reserved) at 10x the width screening can ever use.
+static tc::TRexControlParameter prepareScreenBaseCtrl(
+    const ScreenTRexControlParameter& s)
+{
+    tc::TRexControlParameter ctrl = s.trex_ctrl;
+    ctrl.max_dummy_multiplier = 1;
+    return ctrl;
+}
+
+
 ScreenTRexSelector::ScreenTRexSelector(
     Eigen::Map<Eigen::MatrixXd>& X,
     Eigen::Map<Eigen::VectorXd>& y,
@@ -44,7 +60,7 @@ ScreenTRexSelector::ScreenTRexSelector(
     bool verbose
 ) : tc::TRexSelector(X, y,
                      /*tFDR=*/0.0,  // Screen-TRex does not use FDR calibration
-                     trex_screen_ctrl.trex_ctrl,
+                     prepareScreenBaseCtrl(trex_screen_ctrl),
                      seed,
                      verbose),
     trex_screen_ctrl_(trex_screen_ctrl)
@@ -58,14 +74,32 @@ ScreenTRexSelector::ScreenTRexSelector(
 // ===================================================================================
 
 void ScreenTRexSelector::validateScreenTRexStrategy() const {
+    // Screening is a SINGLE experiment pass at L = p, T = 1 (select() forces
+    // num_dummies_ = p_, T_stop_ = 1). Supported:
+    //   STANDARD           - K independent matrices, stored.
+    //   SEEDED             - the same independent draws, regenerated from
+    //                        the seed one D_k at a time in the serial
+    //                        runner loop; nothing stored (memory-lean
+    //                        twin of STANDARD, bit-identical results).
+    //   PERMUTATION        - one stored base D_1, D_k = Perm(D_1).
+    //   PERMUTATION_SEEDED - same experiments, base re-derived from the
+    //                        seed; stateless (no persistent base matrix).
+    // HCONCAT and SKIPL describe L-loop GROWTH (append per L-iteration /
+    // jump to max_dummy_multiplier * p) and have no meaning at a single
+    // L step; they are rejected so a user setting is never silently ignored.
     switch (trex_ctrl_.lloop_strategy) {
         case tc::LLoopStrategy::STANDARD:
+        case tc::LLoopStrategy::SEEDED:
         case tc::LLoopStrategy::PERMUTATION:
+        case tc::LLoopStrategy::PERMUTATION_SEEDED:
             break;  // Supported
         default:
             throw std::invalid_argument(
-                "ScreenTRexSelector: only STANDARD and PERMUTATION dummy "
-                "strategies are supported. Got lloop_strategy = "
+                "ScreenTRexSelector: only the STANDARD, SEEDED, "
+                "PERMUTATION, and PERMUTATION_SEEDED dummy strategies are "
+                "supported (HCONCAT / SKIPL describe L-loop growth, which "
+                "screening does not have: it runs a single pass at L = p, "
+                "T = 1). Got lloop_strategy = "
                 + std::to_string(static_cast<int>(trex_ctrl_.lloop_strategy)));
     }
 }
@@ -244,18 +278,45 @@ er::ExperimentResults ScreenTRexSelector::runScreenExperiments() {
         case tc::LLoopStrategy::STANDARD: {
             strategy = er::ExperimentStrategy::Standard;
             if (!use_mmap) {
+                // Retained solvers would view the stored buffers; screening
+                // runs without warm start, but keep the documented pairing
+                // (see DummyGenerator::generateAndStore's @warning).
+                warm_start_mgr_.invalidate();
                 dummy_gen_.generateAndStore(trex_ctrl_.K, p_);
             }
             break;
         }
+        case tc::LLoopStrategy::SEEDED: {
+            // Memory-lean twin of STANDARD: the identical seeded draws
+            // (both live in the prefix-stable tag-0 domain at L = p), but
+            // regenerated one D_k at a time in the runner's serial loop and
+            // never stored — bit-identical screening results.
+            strategy = er::ExperimentStrategy::Seeded;
+            break;
+        }
         case tc::LLoopStrategy::PERMUTATION: {
             strategy = er::ExperimentStrategy::Permutation;
-            // Generate and store the base dummy matrix for row-permutation
-            const unsigned int base_seed =
-                (seed_ >= 0) ? static_cast<unsigned int>(seed_)
-                             : std::random_device{}();
-            Eigen::MatrixXd base = dummy_gen_.generate(p_, base_seed);
-            dummy_gen_.storeBaseDummies(std::move(base), base_seed);
+            // Generate and store the base dummy matrix for row-permutation.
+            // Uses the base class's resolved 64-bit `permutation_base_seed_`
+            // (NOT a locally re-derived 32-bit draw), so this stored path and
+            // the stateless PERMUTATION_SEEDED below produce bit-identical
+            // experiments — including for seed_ < 0, where a local
+            // random_device draw would diverge and lose half the entropy.
+            // Retained solvers would view the base buffer; screening runs
+            // without warm start, but keep the documented pairing intact.
+            warm_start_mgr_.invalidate();
+            Eigen::MatrixXd base = dummy_gen_.generate(p_, permutation_base_seed_);
+            dummy_gen_.storeBaseDummies(std::move(base), permutation_base_seed_);
+            break;
+        }
+        case tc::LLoopStrategy::PERMUTATION_SEEDED: {
+            // Stateless twin of PERMUTATION: the runner re-derives the base
+            // D_1 from cfg.permutation_base_id (set by buildRunnerConfig from
+            // the same `permutation_base_seed_`) and forms D_k = Perm(D_1).
+            // Nothing is stored, so the DummyGenerator carries no persistent
+            // n x p base through the DA / bootstrap tail — the preferred
+            // choice at biobank scale.
+            strategy = er::ExperimentStrategy::PermutationSeeded;
             break;
         }
         default:

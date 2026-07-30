@@ -60,6 +60,20 @@ TRexSPCA::TRexSPCA(Eigen::Map<Eigen::MatrixXd>& X,
         throw std::invalid_argument(
             "TRexSPCA: M must not exceed min(n, p).");
     }
+
+    // Fail fast on strategies the per-PC GVS runs will reject anyway:
+    // without this pre-check the error only surfaces at PC 0 INSIDE
+    // select(), after the (potentially expensive) ordinary PCA has already
+    // been computed, and with a message naming TRexGVSSelector.
+    const auto strat = spca_ctrl_.gvs_ctrl.trex_ctrl.lloop_strategy;
+    if (strat == tc::LLoopStrategy::PERMUTATION ||
+        strat == tc::LLoopStrategy::PERMUTATION_SEEDED) {
+        throw std::invalid_argument(
+            "TRexSPCA: the PERMUTATION-family L-loop strategies are not "
+            "supported (the per-PC TRexGVSSelector rejects them: row "
+            "permutations of one base cannot carry the per-cluster MVN "
+            "dummy convention).");
+    }
 }
 
 
@@ -120,15 +134,15 @@ TRexSPCAResult TRexSPCA::select() {
 
         tg::TRexGVSControlParameter gvs_ctrl = spca_ctrl_.gvs_ctrl;
 
-        // EN + TENETAug: always override (IEN is not used by TRexSPCA).
-        // GVSType::EN + en_solver routes to TENET_Solver / TENETAug_Solver in
-        // TRexGVSSelector. The solver variant is user-selectable via
-        // spca_ctrl_.en_solver (both are equivalent for lambda2 > 0).
-        gvs_ctrl.gvs_type            = tg::GVSType::EN;
-        gvs_ctrl.en_solver           = spca_ctrl_.en_solver;
-        gvs_ctrl.trex_ctrl.solver_type = (spca_ctrl_.en_solver == tg::ENSolverType::TENET_AUG)
-            ? sd::SolverTypeForTRex::TENET_AUG
-            : sd::SolverTypeForTRex::TENET;
+        // EN is always forced (IEN is not used by TRexSPCA). The solver
+        // variant is user-selectable via spca_ctrl_.en_solver
+        // (TENET / TENET_AUG / TCENET — all equivalent for lambda2 > 0);
+        // solver_type is set to the matching enumerator so a conflicting
+        // value in the forwarded gvs_ctrl can never reach GVS's derivation
+        // check.
+        gvs_ctrl.gvs_type              = tg::GVSType::EN;
+        gvs_ctrl.en_solver             = spca_ctrl_.en_solver;
+        gvs_ctrl.trex_ctrl.solver_type = tg::toSolverType(spca_ctrl_.en_solver);
 
         std::vector<Eigen::Index> active_set;
         {
