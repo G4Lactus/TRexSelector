@@ -6,7 +6,7 @@ import collections.abc
 import numpy
 import numpy.typing
 import typing
-__all__: list[str] = ['AR1', 'ActiveSet', 'BT', 'BTSelectionMode', 'BiobankScreenTRexControl', 'BiobankScreenTRexResult', 'CV_1SE_CCD', 'CV_1SE_SVD', 'CV_MIN_CCD', 'CV_MIN_SVD', 'DAMethod', 'DASelectionResult', 'DummyDistribution', 'EN', 'ENSolverType', 'EQUI', 'FeasibleOnly', 'GVSSelectionResult', 'GVSType', 'HCONCAT', 'IEN', 'L2', 'LLoopStrategy', 'LambdaSelectionMethod', 'NN', 'SEEDED', 'PERMUTATION', 'PERMUTATION_SEEDED', 'PRIOR_GROUPS', 'RFaithful', 'SKIPL', 'SPCAMode', 'STANDARD', 'ScalingMode', 'ScreenTRexControlParameter', 'ScreenTRexMethod', 'ScreenTRexSelectionResult', 'SelectionResult', 'SolverHyperparameters', 'SolverTypeForTRex', 'TACGP', 'TAFS', 'TENET', 'TENET_AUG', 'TGP', 'TIENET_AUG', 'TLARS', 'TLASSO', 'TMP', 'TNCGMP', 'TOMP', 'TOOLS', 'TREX', 'TREX_DA_AR1', 'TREX_DA_BLOCK_EQUI', 'TREX_DA_EQUI', 'TRexBiobankScreeningSelector', 'TRexControlParameter', 'TRexDAControlParameter', 'TRexDASelector', 'TRexGVSControlParameter', 'TRexGVSSelector', 'TRexSPCAControlParameter', 'TRexSPCAResult', 'TRexSPCASelector', 'TRexScreeningSelector', 'TRexSelector', 'TSTAGEWISE', 'TSTEPWISE', 'Thresholded', 'ZSCORE']
+__all__: list[str] = ['AR1', 'ActiveSet', 'BT', 'BTSelectionMode', 'BiobankScreenTRexControl', 'BiobankScreenTRexResult', 'CV_1SE_CCD', 'CV_1SE_SVD', 'CV_MIN_CCD', 'CV_MIN_SVD', 'DAMethod', 'DASelectionResult', 'DummyDistribution', 'EN', 'ENSolverType', 'EQUI', 'FeasibleOnly', 'GVSSelectionResult', 'GVSType', 'HCONCAT', 'IEN', 'L2', 'LLoopStrategy', 'LambdaSelectionMethod', 'NN', 'PERMUTATION', 'PERMUTATION_SEEDED', 'PRIOR_GROUPS', 'RFaithful', 'SEEDED', 'SKIPL', 'SPCAMode', 'STANDARD', 'ScalingMode', 'ScreenTRexControlParameter', 'ScreenTRexMethod', 'ScreenTRexSelectionResult', 'SelectionResult', 'SolverHyperparameters', 'SolverTypeForTRex', 'TACGP', 'TAFS', 'TENET', 'TENET_AUG', 'TGP', 'TIENET_AUG', 'TLARS', 'TLASSO', 'TMP', 'TNCGMP', 'TOMP', 'TOOLS', 'TREX', 'TREX_DA_AR1', 'TREX_DA_BLOCK_EQUI', 'TREX_DA_EQUI', 'TRexBiobankScreeningSelector', 'TRexControlParameter', 'TRexDAControlParameter', 'TRexDASelector', 'TRexGVSControlParameter', 'TRexGVSSelector', 'TRexSPCAControlParameter', 'TRexSPCAResult', 'TRexSPCASelector', 'TRexScreeningSelector', 'TRexSelector', 'TSTAGEWISE', 'TSTEPWISE', 'Thresholded', 'ZSCORE']
 class BTSelectionMode:
     """
     Cell-selection policy for the BT (binary-tree) DA method.
@@ -71,7 +71,7 @@ class BiobankScreenTRexControl:
     @property
     def trex_screen_ctrl(self) -> ScreenTRexControlParameter:
         """
-        Nested Screen-TRex control shared by both the screening and fallback-T-Rex paths. Set the screening method via trex_screen_ctrl.trex_method and the base algorithm (K, solver_type, ...) via trex_screen_ctrl.trex_ctrl. Its lloop_strategy is forced to STANDARD by the default ctor.
+        Nested Screen-TRex control shared by both the screening and fallback-T-Rex paths. Set the screening method via trex_screen_ctrl.trex_method and the base algorithm (K, solver_type, ...) via trex_screen_ctrl.trex_ctrl. Its lloop_strategy defaults to STANDARD; accepted values are STANDARD, SEEDED, PERMUTATION, and PERMUTATION_SEEDED (validated at construction).
         """
     @trex_screen_ctrl.setter
     def trex_screen_ctrl(self, arg0: ScreenTRexControlParameter) -> None:
@@ -573,21 +573,21 @@ class LLoopStrategy:
     Members:
     
       SKIPL : Stored, one-shot: fixed dummies = max_dummy_multiplier * p.
-
+    
       STANDARD : Stored; fresh dummies at each L-loop iteration (conservative).
-
+    
       HCONCAT : Stored; horizontally expand dummy matrices across L (faster, same result).
-
+    
       PERMUTATION : Stored base dummy matrix + deterministic row permutations per experiment.
-
+    
       PERMUTATION_SEEDED : Seed-derived base + row permutations per experiment; nothing stored.
-
+    
       SEEDED : Seed-derived independent dummies per experiment; nothing stored.
     """
     HCONCAT: typing.ClassVar[LLoopStrategy]  # value = <LLoopStrategy.HCONCAT: 2>
-    SEEDED: typing.ClassVar[LLoopStrategy]  # value = <LLoopStrategy.SEEDED: 5>
     PERMUTATION: typing.ClassVar[LLoopStrategy]  # value = <LLoopStrategy.PERMUTATION: 3>
     PERMUTATION_SEEDED: typing.ClassVar[LLoopStrategy]  # value = <LLoopStrategy.PERMUTATION_SEEDED: 4>
+    SEEDED: typing.ClassVar[LLoopStrategy]  # value = <LLoopStrategy.SEEDED: 5>
     SKIPL: typing.ClassVar[LLoopStrategy]  # value = <LLoopStrategy.SKIPL: 0>
     STANDARD: typing.ClassVar[LLoopStrategy]  # value = <LLoopStrategy.STANDARD: 1>
     __members__: typing.ClassVar[dict[str, LLoopStrategy]]  # value = {'SKIPL': <LLoopStrategy.SKIPL: 0>, 'STANDARD': <LLoopStrategy.STANDARD: 1>, 'HCONCAT': <LLoopStrategy.HCONCAT: 2>, 'PERMUTATION': <LLoopStrategy.PERMUTATION: 3>, 'PERMUTATION_SEEDED': <LLoopStrategy.PERMUTATION_SEEDED: 4>, 'SEEDED': <LLoopStrategy.SEEDED: 5>}
@@ -1029,21 +1029,21 @@ class SolverTypeForTRex:
     
       TIENET_AUG : Terminating Informed Elastic Net via augmented LASSO (GVS, gvs_type=IEN).
     """
-    TACGP: typing.ClassVar[SolverTypeForTRex]  # value = <SolverTypeForTRex.TACGP: 9>
-    TAFS: typing.ClassVar[SolverTypeForTRex]  # value = <SolverTypeForTRex.TAFS: 13>
+    TACGP: typing.ClassVar[SolverTypeForTRex]  # value = <SolverTypeForTRex.TACGP: 13>
+    TAFS: typing.ClassVar[SolverTypeForTRex]  # value = <SolverTypeForTRex.TAFS: 17>
     TENET: typing.ClassVar[SolverTypeForTRex]  # value = <SolverTypeForTRex.TENET: 2>
     TENET_AUG: typing.ClassVar[SolverTypeForTRex]  # value = <SolverTypeForTRex.TENET_AUG: 3>
-    TGP: typing.ClassVar[SolverTypeForTRex]  # value = <SolverTypeForTRex.TGP: 8>
-    TIENET_AUG: typing.ClassVar[SolverTypeForTRex]  # value = <SolverTypeForTRex.TIENET_AUG: 4>
+    TGP: typing.ClassVar[SolverTypeForTRex]  # value = <SolverTypeForTRex.TGP: 12>
+    TIENET_AUG: typing.ClassVar[SolverTypeForTRex]  # value = <SolverTypeForTRex.TIENET_AUG: 5>
     TLARS: typing.ClassVar[SolverTypeForTRex]  # value = <SolverTypeForTRex.TLARS: 0>
     TLASSO: typing.ClassVar[SolverTypeForTRex]  # value = <SolverTypeForTRex.TLASSO: 1>
-    TMP: typing.ClassVar[SolverTypeForTRex]  # value = <SolverTypeForTRex.TMP: 10>
-    TNCGMP: typing.ClassVar[SolverTypeForTRex]  # value = <SolverTypeForTRex.TNCGMP: 11>
-    TOMP: typing.ClassVar[SolverTypeForTRex]  # value = <SolverTypeForTRex.TOMP: 7>
-    TOOLS: typing.ClassVar[SolverTypeForTRex]  # value = <SolverTypeForTRex.TOOLS: 12>
-    TSTAGEWISE: typing.ClassVar[SolverTypeForTRex]  # value = <SolverTypeForTRex.TSTAGEWISE: 6>
-    TSTEPWISE: typing.ClassVar[SolverTypeForTRex]  # value = <SolverTypeForTRex.TSTEPWISE: 5>
-    __members__: typing.ClassVar[dict[str, SolverTypeForTRex]]  # value = {'TLARS': <SolverTypeForTRex.TLARS: 0>, 'TLASSO': <SolverTypeForTRex.TLASSO: 1>, 'TENET': <SolverTypeForTRex.TENET: 2>, 'TSTEPWISE': <SolverTypeForTRex.TSTEPWISE: 5>, 'TSTAGEWISE': <SolverTypeForTRex.TSTAGEWISE: 6>, 'TOMP': <SolverTypeForTRex.TOMP: 7>, 'TGP': <SolverTypeForTRex.TGP: 8>, 'TACGP': <SolverTypeForTRex.TACGP: 9>, 'TMP': <SolverTypeForTRex.TMP: 10>, 'TNCGMP': <SolverTypeForTRex.TNCGMP: 11>, 'TOOLS': <SolverTypeForTRex.TOOLS: 12>, 'TAFS': <SolverTypeForTRex.TAFS: 13>, 'TENET_AUG': <SolverTypeForTRex.TENET_AUG: 3>, 'TIENET_AUG': <SolverTypeForTRex.TIENET_AUG: 4>}
+    TMP: typing.ClassVar[SolverTypeForTRex]  # value = <SolverTypeForTRex.TMP: 14>
+    TNCGMP: typing.ClassVar[SolverTypeForTRex]  # value = <SolverTypeForTRex.TNCGMP: 15>
+    TOMP: typing.ClassVar[SolverTypeForTRex]  # value = <SolverTypeForTRex.TOMP: 11>
+    TOOLS: typing.ClassVar[SolverTypeForTRex]  # value = <SolverTypeForTRex.TOOLS: 16>
+    TSTAGEWISE: typing.ClassVar[SolverTypeForTRex]  # value = <SolverTypeForTRex.TSTAGEWISE: 7>
+    TSTEPWISE: typing.ClassVar[SolverTypeForTRex]  # value = <SolverTypeForTRex.TSTEPWISE: 6>
+    __members__: typing.ClassVar[dict[str, SolverTypeForTRex]]  # value = {'TLARS': <SolverTypeForTRex.TLARS: 0>, 'TLASSO': <SolverTypeForTRex.TLASSO: 1>, 'TENET': <SolverTypeForTRex.TENET: 2>, 'TSTEPWISE': <SolverTypeForTRex.TSTEPWISE: 6>, 'TSTAGEWISE': <SolverTypeForTRex.TSTAGEWISE: 7>, 'TOMP': <SolverTypeForTRex.TOMP: 11>, 'TGP': <SolverTypeForTRex.TGP: 12>, 'TACGP': <SolverTypeForTRex.TACGP: 13>, 'TMP': <SolverTypeForTRex.TMP: 14>, 'TNCGMP': <SolverTypeForTRex.TNCGMP: 15>, 'TOOLS': <SolverTypeForTRex.TOOLS: 16>, 'TAFS': <SolverTypeForTRex.TAFS: 17>, 'TENET_AUG': <SolverTypeForTRex.TENET_AUG: 3>, 'TIENET_AUG': <SolverTypeForTRex.TIENET_AUG: 5>}
     def __eq__(self, other: typing.Any) -> bool:
         ...
     def __getstate__(self) -> int:
@@ -1636,30 +1636,30 @@ HCONCAT: LLoopStrategy  # value = <LLoopStrategy.HCONCAT: 2>
 IEN: GVSType  # value = <GVSType.IEN: 1>
 L2: ScalingMode  # value = <ScalingMode.L2: 0>
 NN: DAMethod  # value = <DAMethod.NN: 3>
-SEEDED: LLoopStrategy  # value = <LLoopStrategy.SEEDED: 5>
 PERMUTATION: LLoopStrategy  # value = <LLoopStrategy.PERMUTATION: 3>
 PERMUTATION_SEEDED: LLoopStrategy  # value = <LLoopStrategy.PERMUTATION_SEEDED: 4>
 PRIOR_GROUPS: DAMethod  # value = <DAMethod.PRIOR_GROUPS: 4>
 RFaithful: BTSelectionMode  # value = <BTSelectionMode.RFaithful: 1>
+SEEDED: LLoopStrategy  # value = <LLoopStrategy.SEEDED: 5>
 SKIPL: LLoopStrategy  # value = <LLoopStrategy.SKIPL: 0>
 STANDARD: LLoopStrategy  # value = <LLoopStrategy.STANDARD: 1>
-TACGP: SolverTypeForTRex  # value = <SolverTypeForTRex.TACGP: 9>
-TAFS: SolverTypeForTRex  # value = <SolverTypeForTRex.TAFS: 13>
+TACGP: SolverTypeForTRex  # value = <SolverTypeForTRex.TACGP: 13>
+TAFS: SolverTypeForTRex  # value = <SolverTypeForTRex.TAFS: 17>
 TENET: ENSolverType  # value = <ENSolverType.TENET: 0>
 TENET_AUG: ENSolverType  # value = <ENSolverType.TENET_AUG: 1>
-TGP: SolverTypeForTRex  # value = <SolverTypeForTRex.TGP: 8>
-TIENET_AUG: SolverTypeForTRex  # value = <SolverTypeForTRex.TIENET_AUG: 4>
+TGP: SolverTypeForTRex  # value = <SolverTypeForTRex.TGP: 12>
+TIENET_AUG: SolverTypeForTRex  # value = <SolverTypeForTRex.TIENET_AUG: 5>
 TLARS: SolverTypeForTRex  # value = <SolverTypeForTRex.TLARS: 0>
 TLASSO: SolverTypeForTRex  # value = <SolverTypeForTRex.TLASSO: 1>
-TMP: SolverTypeForTRex  # value = <SolverTypeForTRex.TMP: 10>
-TNCGMP: SolverTypeForTRex  # value = <SolverTypeForTRex.TNCGMP: 11>
-TOMP: SolverTypeForTRex  # value = <SolverTypeForTRex.TOMP: 7>
-TOOLS: SolverTypeForTRex  # value = <SolverTypeForTRex.TOOLS: 12>
+TMP: SolverTypeForTRex  # value = <SolverTypeForTRex.TMP: 14>
+TNCGMP: SolverTypeForTRex  # value = <SolverTypeForTRex.TNCGMP: 15>
+TOMP: SolverTypeForTRex  # value = <SolverTypeForTRex.TOMP: 11>
+TOOLS: SolverTypeForTRex  # value = <SolverTypeForTRex.TOOLS: 16>
 TREX: ScreenTRexMethod  # value = <ScreenTRexMethod.TREX: 0>
 TREX_DA_AR1: ScreenTRexMethod  # value = <ScreenTRexMethod.TREX_DA_AR1: 1>
 TREX_DA_BLOCK_EQUI: ScreenTRexMethod  # value = <ScreenTRexMethod.TREX_DA_BLOCK_EQUI: 3>
 TREX_DA_EQUI: ScreenTRexMethod  # value = <ScreenTRexMethod.TREX_DA_EQUI: 2>
-TSTAGEWISE: SolverTypeForTRex  # value = <SolverTypeForTRex.TSTAGEWISE: 6>
-TSTEPWISE: SolverTypeForTRex  # value = <SolverTypeForTRex.TSTEPWISE: 5>
+TSTAGEWISE: SolverTypeForTRex  # value = <SolverTypeForTRex.TSTAGEWISE: 7>
+TSTEPWISE: SolverTypeForTRex  # value = <SolverTypeForTRex.TSTEPWISE: 6>
 Thresholded: SPCAMode  # value = <SPCAMode.Thresholded: 1>
 ZSCORE: ScalingMode  # value = <ScalingMode.ZSCORE: 1>
