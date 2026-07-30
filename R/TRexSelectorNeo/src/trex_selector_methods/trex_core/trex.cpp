@@ -174,8 +174,8 @@ TRexSelector::TRexSelector(
     if (trex_ctrl_.use_memory_mapping) {
         const std::size_t max_dummies = trex_ctrl_.max_dummy_multiplier * p_;
         const bool shared = (trex_ctrl_.lloop_strategy == LLoopStrategy::PERMUTATION
-                          || trex_ctrl_.lloop_strategy == LLoopStrategy::PERMUTATION_ONDEMAND
-                          || trex_ctrl_.lloop_strategy == LLoopStrategy::ONDEMAND);
+                          || trex_ctrl_.lloop_strategy == LLoopStrategy::PERMUTATION_SEEDED
+                          || trex_ctrl_.lloop_strategy == LLoopStrategy::SEEDED);
         memmap_mgr_ = std::make_unique<mm::MemmapManager>(
             n_, max_dummies, trex_ctrl_.K, shared, verbose_);
         memmap_mgr_->initialize();
@@ -850,8 +850,8 @@ void TRexSelector::prepareDummiesForLStep(LStepContext& ctx) {
             warm_start_mgr_.invalidate();
             break;
         }
-        case LLoopStrategy::ONDEMAND:
-        case LLoopStrategy::PERMUTATION_ONDEMAND: {
+        case LLoopStrategy::SEEDED:
+        case LLoopStrategy::PERMUTATION_SEEDED: {
             // Seed-based, on-the-fly: nothing to pre-generate.
             warm_start_mgr_.invalidate();
             break;
@@ -899,9 +899,9 @@ void TRexSelector::runLLoop(
             runLLoopCalibration_Permutation(FDP_hat, exp_results);
             break;
         }
-        case LLoopStrategy::ONDEMAND:              // independent dummies, seed-derived
-        case LLoopStrategy::PERMUTATION_ONDEMAND: {
-            runLLoopCalibration_OnDemand(FDP_hat, exp_results);
+        case LLoopStrategy::SEEDED:              // independent dummies, seed-derived
+        case LLoopStrategy::PERMUTATION_SEEDED: {
+            runLLoopCalibration_Seeded(FDP_hat, exp_results);
             break;
         }
         default: {
@@ -1104,7 +1104,7 @@ void TRexSelector::runLLoopCalibration_Permutation(
 // L-Loop: DIRECT
 // ===================================================================================
 
-void TRexSelector::runLLoopCalibration_OnDemand(
+void TRexSelector::runLLoopCalibration_Seeded(
     Eigen::VectorXd& FDP_hat,
     er::ExperimentResults& exp_results)
 {
@@ -1112,19 +1112,19 @@ void TRexSelector::runLLoopCalibration_OnDemand(
     dummy_multiplier_LL_ = 1;
     FDP_hat.resize(0);
 
-    // The L-loop dispatcher routes both ONDEMAND and PERMUTATION_ONDEMAND to
+    // The L-loop dispatcher routes both SEEDED and PERMUTATION_SEEDED to
     // this method; mirror that disambiguation when forwarding to the hook and
     // when choosing the runner strategy.
     const bool independent =
-        (trex_ctrl_.lloop_strategy == LLoopStrategy::ONDEMAND);
+        (trex_ctrl_.lloop_strategy == LLoopStrategy::SEEDED);
     const LLoopStrategy hook_strategy = independent
-            ? LLoopStrategy::ONDEMAND
-            : LLoopStrategy::PERMUTATION_ONDEMAND;
+            ? LLoopStrategy::SEEDED
+            : LLoopStrategy::PERMUTATION_SEEDED;
 
     LLoopPolicyContext ctx;
     ctx.strategy            = independent
-            ? er::ExperimentStrategy::OnDemand
-            : er::ExperimentStrategy::PermutationOnDemand;
+            ? er::ExperimentStrategy::Seeded
+            : er::ExperimentStrategy::PermutationSeeded;
     ctx.seed_factor_uses_LL = false;
     ctx.policy = [this, hook_strategy](std::size_t LL,
                                        std::size_t num_dummies,
@@ -1183,11 +1183,11 @@ void TRexSelector::runTLoop(
         case LLoopStrategy::PERMUTATION:
             exp_strategy = er::ExperimentStrategy::Permutation;
             break;
-        case LLoopStrategy::PERMUTATION_ONDEMAND:
-            exp_strategy = er::ExperimentStrategy::PermutationOnDemand;
+        case LLoopStrategy::PERMUTATION_SEEDED:
+            exp_strategy = er::ExperimentStrategy::PermutationSeeded;
             break;
-        case LLoopStrategy::ONDEMAND:
-            exp_strategy = er::ExperimentStrategy::OnDemand;
+        case LLoopStrategy::SEEDED:
+            exp_strategy = er::ExperimentStrategy::Seeded;
             break;
         default:
             exp_strategy = er::ExperimentStrategy::Standard;

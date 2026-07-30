@@ -68,8 +68,8 @@ namespace mm = trex::trex_selector_methods::utils::memmap_manager;
 enum class ExperimentStrategy {
     Standard,             // Pre-generated K dummy matrices (stored in DummyGenerator).
     Permutation,          // Row permutations of a STORED base dummy matrix.
-    PermutationOnDemand,  // Row permutations of a seed-derived base; nothing stored.
-    OnDemand              // On-the-fly seed-based independent dummies per experiment.
+    PermutationSeeded,  // Row permutations of a seed-derived base; nothing stored.
+    Seeded              // On-the-fly seed-based independent dummies per experiment.
 };
 
 
@@ -99,7 +99,7 @@ struct ExperimentRunnerConfig {
     // --- HCONCAT: number of previously written columns already on disk ---
     std::size_t existing_cols_on_disk = 0;  ///< For HCONCAT memmap: columns from prior L.
 
-    // --- PERMUTATION_ONDEMAND: seed id of the shared base ---
+    // --- PERMUTATION_SEEDED: seed id of the shared base ---
     /** @brief Base id for the stateless permutation strategy: the base is
      *  re-derived as generate(num_dummies, permutation_base_id) and the per-k
      *  permutation engines are keyed mix_seed64(permutation_base_id, k) —
@@ -263,11 +263,11 @@ public:
                 case ExperimentStrategy::Permutation:
                     summaries = runPermutation(cfg);
                     break;
-                case ExperimentStrategy::PermutationOnDemand:
-                    summaries = runPermutationOnDemand(cfg);
+                case ExperimentStrategy::PermutationSeeded:
+                    summaries = runPermutationSeeded(cfg);
                     break;
-                case ExperimentStrategy::OnDemand:
-                    summaries = runOnDemand(cfg);
+                case ExperimentStrategy::Seeded:
+                    summaries = runSeeded(cfg);
                     break;
             }
         }
@@ -383,13 +383,13 @@ private:
 
 
     /**
-     * @brief ONDEMAND: Sequential, on-the-fly seed-based independent dummies.
+     * @brief SEEDED: Sequential, on-the-fly seed-based independent dummies.
      *
-     * @param cfg ExperimentRunnerConfig with strategy = OnDemand.
+     * @param cfg ExperimentRunnerConfig with strategy = Seeded.
      *
      * @return Vector of K experiment summaries (one per experiment).
      */
-    std::vector<ExperimentSummary> runOnDemand(const ExperimentRunnerConfig& cfg) {
+    std::vector<ExperimentSummary> runSeeded(const ExperimentRunnerConfig& cfg) {
 
         std::vector<ExperimentSummary> summaries(cfg.K);
 
@@ -400,7 +400,7 @@ private:
         for (std::size_t k = 0; k < cfg.K; ++k) {
             summaries[k] = runWithTemporaryDummies(
                 k, cfg,
-                [&]() { return dummy_gen_.generateDirect(cfg.num_dummies, k); });
+                [&]() { return dummy_gen_.generateSeeded(cfg.num_dummies, k); });
         }
 
         return summaries;
@@ -408,7 +408,7 @@ private:
 
 
     /**
-     * @brief PERMUTATION_ONDEMAND: seed-derived base + per-k row permutations.
+     * @brief PERMUTATION_SEEDED: seed-derived base + per-k row permutations.
      *
      * @details Statistically identical to PERMUTATION (same base id ⇒ bit-
      *          identical experiments), but stateless: the base is re-derived
@@ -418,11 +418,11 @@ private:
      *          the base an incremental stored build would hold. One transient
      *          base materialization per call, then K cheap permutations.
      *
-     * @param cfg ExperimentRunnerConfig with strategy = PermutationOnDemand.
+     * @param cfg ExperimentRunnerConfig with strategy = PermutationSeeded.
      *
      * @return Vector of K experiment summaries (one per experiment).
      */
-    std::vector<ExperimentSummary> runPermutationOnDemand(
+    std::vector<ExperimentSummary> runPermutationSeeded(
         const ExperimentRunnerConfig& cfg) {
 
         std::vector<ExperimentSummary> summaries(cfg.K);
@@ -750,7 +750,7 @@ private:
                 break;
             }
 
-            case ExperimentStrategy::PermutationOnDemand: {
+            case ExperimentStrategy::PermutationSeeded: {
                 // Stateless: re-derive the base (prefix-stable), permute into
                 // the map. Regenerated per k — the shared-file mmap layout for
                 // permutation strategies is sequential anyway.
@@ -762,8 +762,8 @@ private:
                 break;
             }
 
-            case ExperimentStrategy::OnDemand: {
-                dummy_gen_.generateDirectInto(D_map, k);
+            case ExperimentStrategy::Seeded: {
+                dummy_gen_.generateSeededInto(D_map, k);
                 break;
             }
 
