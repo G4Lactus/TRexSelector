@@ -134,6 +134,48 @@ TEST(TRexCoreTest, Param_Solvers_TENET_AUG) {
 }
 
 
+/** @brief A select-time C++ exception must surface as a catchable exception,
+ *  not a process abort. Regression test for the OpenMP structured-block
+ *  rule: an exception may not leave an `omp parallel` region — even an
+ *  INACTIVE one (`if(false)`, single thread) — or the runtime calls
+ *  std::terminate, which killed the R host session before the runner and
+ *  GVS loops gained the capture-and-rethrow discipline. TCIENET without a
+ *  Tikhonov matrix throws inside the experiment loop at dispatch time,
+ *  making it the canonical trigger. */
+TEST(TRexCoreTest, SelectTimeThrowPropagatesInsteadOfTerminating) {
+    std::vector<std::size_t> support = {1, 2, 3};
+    std::vector<double> coefs = {5.0, -3.0, 2.0};
+    SyntheticData data(60, 20, support, coefs, 1.0, 42);
+
+    auto X = data.getX();
+    auto y = data.getY();
+    Eigen::Map<Eigen::MatrixXd> X_map(X.data(), X.rows(), X.cols());
+    Eigen::Map<Eigen::VectorXd> y_map(y.data(), y.size());
+
+    TRexControlParameter trex_ctrl;
+    trex_ctrl.K = 3;
+    trex_ctrl.max_dummy_multiplier = 2;
+    trex_ctrl.solver_type = sd::SolverTypeForTRex::TCIENET;
+
+    // Serial path (parallel_rnd_experiments = false): the omp region is
+    // inactive but still a structured block.
+    TRexSelector trex(X_map, y_map, 0.1, trex_ctrl, 42, false);
+    EXPECT_THROW(trex.select(), std::invalid_argument);
+
+    // Parallel path: the same discipline must hold with live threads.
+    TRexControlParameter par_ctrl = trex_ctrl;
+    par_ctrl.parallel_rnd_experiments = true;
+    par_ctrl.max_outer_threads = 2;
+    SyntheticData data2(60, 20, support, coefs, 1.0, 42);
+    auto X2 = data2.getX();
+    auto y2 = data2.getY();
+    Eigen::Map<Eigen::MatrixXd> X2_map(X2.data(), X2.rows(), X2.cols());
+    Eigen::Map<Eigen::VectorXd> y2_map(y2.data(), y2.size());
+    TRexSelector trex_par(X2_map, y2_map, 0.1, par_ctrl, 42, false);
+    EXPECT_THROW(trex_par.select(), std::invalid_argument);
+}
+
+
 /** @brief TENET_AUG is the row-augmented formulation of the SAME elastic-net
  *  problem TENET solves via the Gram-based path (proved equivalent for
  *  lambda2 >= 0), so with identical data and seed the two must select the
