@@ -105,7 +105,17 @@ TRexControlParameter parse_control_parameter(const Rcpp::List& control) {
             {"TMP",        SolverTypeForTRex::TMP},
             {"TNCGMP",     SolverTypeForTRex::TNCGMP},
             {"TOOLS",     SolverTypeForTRex::TOOLS},
-            {"TAFS",      SolverTypeForTRex::TAFS}
+            {"TAFS",      SolverTypeForTRex::TAFS},
+            // CCD family (exact penalized-lasso minimizers per crossing).
+            {"TCCD",      SolverTypeForTRex::TCCD},
+            {"TCENET",    SolverTypeForTRex::TCENET},
+            {"TENET_AUG", SolverTypeForTRex::TENET_AUG},
+            // IEN family: GVS-only names, accepted so the full enum
+            // vocabulary parses (gvs_type = "IEN" + this solver field);
+            // validate_core_solver_type() rejects them elsewhere.
+            {"TIENET",    SolverTypeForTRex::TIENET},
+            {"TIENET_AUG", SolverTypeForTRex::TIENET_AUG},
+            {"TCIENET",   SolverTypeForTRex::TCIENET}
         };
 
         auto it = solver_map.find(solver);
@@ -134,6 +144,29 @@ TRexControlParameter parse_control_parameter(const Rcpp::List& control) {
     }
     if (control.containsElementNamed("exch_tie_floor")) {
         params.solver_params.exch_tie_floor = control["exch_tie_floor"];
+    }
+    if (control.containsElementNamed("tenet_aug_use_lars")) {
+        params.solver_params.tenet_aug_use_lars =
+            Rcpp::as<bool>(control["tenet_aug_use_lars"]);
+    }
+
+    // CD knobs (TCCD/TCENET/TCIENET; ignored by the other families).
+    if (control.containsElementNamed("cd_lambda_rel_tol")) {
+        params.solver_params.cd_lambda_rel_tol = control["cd_lambda_rel_tol"];
+    }
+    if (control.containsElementNamed("cd_tol_certify")) {
+        params.solver_params.cd_tol_certify = control["cd_tol_certify"];
+    }
+    if (control.containsElementNamed("cd_tol_probe")) {
+        params.solver_params.cd_tol_probe = control["cd_tol_probe"];
+    }
+    if (control.containsElementNamed("cd_gram_cap")) {
+        params.solver_params.cd_gram_cap =
+            static_cast<std::size_t>(Rcpp::as<double>(control["cd_gram_cap"]));
+    }
+    if (control.containsElementNamed("cd_max_sweeps")) {
+        params.solver_params.cd_max_sweeps =
+            static_cast<std::size_t>(Rcpp::as<double>(control["cd_max_sweeps"]));
     }
 
     // Dummy variable distribution
@@ -204,6 +237,34 @@ TRexControlParameter parse_control_parameter(const Rcpp::List& control) {
 //' @param seed Random seed (default: -1).
 //' @param verbose Whether to print progress (default: TRUE).
 //'
+/**
+ * @brief Reject solver types the core dispatch cannot serve — at
+ * construction time and as a translatable R error.
+ *
+ * The shared C++ dispatch throws the same guidance, but at SELECT time from
+ * inside the experiment loop, where the exception cannot cross the OpenMP
+ * region boundary and terminates the R session instead of raising an error.
+ * Shared by the plain/DA/screening/biobank glue; the GVS glue deliberately
+ * bypasses it (these types are exactly its vocabulary).
+ */
+void validate_core_solver_type(const TRexControlParameter& params) {
+    switch (params.solver_type) {
+        case SolverTypeForTRex::TIENET:
+            Rcpp::stop("solver = \"TIENET\" is a GVS-only solver (needs a "
+                       "group assignment); use TRexGVSSelector with "
+                       "gvs_type = \"IEN\".");
+        case SolverTypeForTRex::TIENET_AUG:
+            Rcpp::stop("solver = \"TIENET_AUG\" is a GVS-only solver; use "
+                       "TRexGVSSelector with gvs_type = \"IEN\".");
+        case SolverTypeForTRex::TCIENET:
+            Rcpp::stop("solver = \"TCIENET\" needs a group assignment; use "
+                       "TRexGVSSelector with gvs_type = \"IEN\".");
+        default:
+            break;
+    }
+}
+
+
 //' @noRd
 // [[Rcpp::export]]
 XPtr<RTRexSelector> trex_selector_create(
@@ -217,6 +278,7 @@ XPtr<RTRexSelector> trex_selector_create(
     Eigen::Map<Eigen::MatrixXd> X_map(X.begin(), X.nrow(), X.ncol());
     Eigen::Map<Eigen::VectorXd> y_map(y.begin(), y.size());
     TRexControlParameter control = parse_control_parameter(control_list);
+    validate_core_solver_type(control);
     // The prot slot pins X and y until the finalizer has run: the selector's
     // destructor writes the de-normalized X back through the stored map, so
     // the R buffers must survive it (GC finalizer order is unspecified).
@@ -247,6 +309,7 @@ XPtr<RTRexSelector> trex_selector_mmap_create(
 ) {
     Eigen::Map<Eigen::VectorXd> y_map(y.begin(), y.size());
     TRexControlParameter control = parse_control_parameter(control_list);
+    validate_core_solver_type(control);
     // Pin the mmap holder and y until the finalizer has run (see above).
     return XPtr<RTRexSelector>(new RTRexSelector(X_ptr->getMap(), y_map, tFDR,
                                control, seed, verbose),

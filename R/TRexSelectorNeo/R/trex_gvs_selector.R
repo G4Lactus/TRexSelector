@@ -29,12 +29,15 @@ TRexGVSSelector <- R6::R6Class("TRexGVSSelector",
     #' @param seed Random seed (default: -1).
     #' @param verbose Whether to print progress (default: TRUE).
     #' @param gvs_control A GVS control list from \code{\link{trex_gvs_control}()} (default:
-    #'   \code{trex_gvs_control()}). The solver is derived from \code{gvs_type}:
-    #'   "EN" uses TENET (or TENET_AUG, per \code{en_solver}), "IEN" uses
-    #'   TIENET_AUG. The \code{solver} field in \code{control} is ignored;
-    #'   a warning is issued if it is set to a non-matching solver.
+    #'   \code{trex_gvs_control()}). For \code{gvs_type = "EN"} the solver is
+    #'   derived from \code{en_solver} (TENET, TENET_AUG, or TCENET) and the
+    #'   \code{solver} field in \code{control} is ignored (a warning is issued
+    #'   if it is set to a non-matching solver). For \code{gvs_type = "IEN"}
+    #'   the \code{solver} field selects the IEN solver: "TIENET"
+    #'   (default, native pathwise), "TIENET_AUG", or "TCIENET".
     #' @param control A control list from \code{\link{trex_control}()} (default:
-    #'   \code{trex_control()}). The \code{solver} field is overridden by \code{gvs_type}.
+    #'   \code{trex_control()}). For \code{gvs_type = "EN"} the \code{solver}
+    #'   field is overridden; for "IEN" it selects the IEN-family solver.
     initialize = function(X, y,
                           tFDR = 0.1,
                           seed = -1,
@@ -42,28 +45,42 @@ TRexGVSSelector <- R6::R6Class("TRexGVSSelector",
                           gvs_control = trex_gvs_control(),
                           control = trex_control()) {
 
-      # The effective solver is derived inside the C++ glue from gvs_type
-      # (EN -> TENET/TENET_AUG via en_solver, IEN -> TIENET_AUG); the
-      # control$solver field is ignored. Warn when the user explicitly set a
-      # non-matching solver ("TLARS" is the trex_control() default and cannot
-      # be distinguished from an explicit choice, so it never warns).
-      derived_solver <- if (gvs_control$gvs_type == "IEN") {
-        "TIENET_AUG"
-      } else if (identical(gvs_control$en_solver, "TENET_AUG")) {
-        "TENET_AUG"
+      # Solver selection mirrors the C++ design:
+      #   EN  -> derived from en_solver (TENET / TENET_AUG / TCENET);
+      #          control$solver is ignored (warn when it was explicitly set
+      #          to a non-matching value; "TLARS" is the trex_control()
+      #          default and cannot be distinguished from an explicit
+      #          choice, so it never warns).
+      #   IEN -> control$solver IS the IEN-solver choice: "TIENET" (native
+      #          pathwise, default), "TIENET_AUG" (row-augmented), or
+      #          "TCIENET" (CCD). The default "TLARS" maps to "TIENET";
+      #          any other value warns and falls back to "TIENET".
+      if (gvs_control$gvs_type == "IEN") {
+        ien_family <- c("TIENET", "TIENET_AUG", "TCIENET")
+        if (!(control$solver %in% c("TLARS", ien_family))) {
+          warning("control$solver = \"", control$solver,
+                  "\" is not an IEN-family solver; gvs_type = \"IEN\" ",
+                  "accepts \"TIENET\", \"TIENET_AUG\", or \"TCIENET\". ",
+                  "Using \"TIENET\".")
+          control$solver <- "TLARS"  # glue defaults it to TIENET
+        }
       } else {
-        "TENET"
+        derived_solver <- if (identical(gvs_control$en_solver, "TENET_AUG")) {
+          "TENET_AUG"
+        } else if (identical(gvs_control$en_solver, "TCENET")) {
+          "TCENET"
+        } else {
+          "TENET"
+        }
+        if (!(control$solver %in% c("TLARS", derived_solver))) {
+          warning("control$solver = \"", control$solver,
+                  "\" is ignored by TRexGVSSelector: gvs_type = \"EN\" ",
+                  "derives solver \"", derived_solver,
+                  "\" from en_solver.")
+        }
+        # The C++ glue derives solver_type from en_solver regardless.
+        control$solver <- "TLARS"
       }
-      if (!(control$solver %in% c("TLARS", derived_solver))) {
-        warning("control$solver = \"", control$solver,
-                "\" is ignored by TRexGVSSelector: gvs_type = \"",
-                gvs_control$gvs_type, "\" derives solver \"",
-                derived_solver, "\".")
-      }
-      # Reset to a value the shared control parser accepts (the AUG solver
-      # names are not part of the base solver vocabulary); the C++ glue
-      # overrides solver_type regardless.
-      control$solver <- "TLARS"
 
       # lambda_2 == 0 is the degenerate no-ridge case, NOT automatic CV
       # (the sentinel for that is lambda_2 < 0). A user passing exactly 0

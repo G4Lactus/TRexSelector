@@ -128,6 +128,46 @@ TEST(TRexCoreTest, Param_Solvers_TCENET) {
 }
 
 
+/** @brief Test TRexSelector with the row-augmented elastic net (TENET_AUG). */
+TEST(TRexCoreTest, Param_Solvers_TENET_AUG) {
+    run_trex_core_test(150, 200, sd::SolverTypeForTRex::TENET_AUG);
+}
+
+
+/** @brief TENET_AUG is the row-augmented formulation of the SAME elastic-net
+ *  problem TENET solves via the Gram-based path (proved equivalent for
+ *  lambda2 >= 0), so with identical data and seed the two must select the
+ *  same variables in the core selector. */
+TEST(TRexCoreTest, Equivalence_TenetAugMatchesTenet) {
+
+    auto run_with = [](sd::SolverTypeForTRex solver) {
+        std::vector<std::size_t> support = {1, 2, 3};
+        std::vector<double> coefs = {5.0, -3.0, 2.0};
+        SyntheticData data(150, 60, support, coefs, 1.0, 42);
+
+        auto X = data.getX();
+        auto y = data.getY();
+        Eigen::Map<Eigen::MatrixXd> X_map(X.data(), X.rows(), X.cols());
+        Eigen::Map<Eigen::VectorXd> y_map(y.data(), y.size());
+
+        TRexControlParameter trex_ctrl;
+        trex_ctrl.K = 3;
+        trex_ctrl.max_dummy_multiplier = 2;
+        trex_ctrl.solver_type = solver;
+
+        TRexSelector trex(X_map, y_map, 0.1, trex_ctrl, 42, false);
+        return trex.select().selected_var;
+    };
+
+    const auto sel_tenet = run_with(sd::SolverTypeForTRex::TENET);
+    const auto sel_aug   = run_with(sd::SolverTypeForTRex::TENET_AUG);
+
+    ASSERT_EQ(sel_tenet.size(), sel_aug.size());
+    EXPECT_TRUE((sel_tenet.array() == sel_aug.array()).all())
+        << "TENET_AUG selection diverged from TENET in the core selector.";
+}
+
+
 /** @brief Test TRexSelector with SKIPL L loop strategy. */
 TEST(TRexCoreTest, Param_LStrategies_SKIPL) {
     run_trex_core_test(150, 200, sd::SolverTypeForTRex::TLARS,

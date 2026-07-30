@@ -25,11 +25,22 @@
 #'   draws hardware entropy via \code{std::random_device}, matching the
 #'   behaviour of the standalone C++ demo.
 #'
-#' @param solver Solver algorithm: "TLARS", "TLASSO", "TENET", "TSTAGEWISE", "TSTEPWISE",
-#'   "TOMP", "TGP", "TACGP", "TMP", "TNCGMP", "TOOLS", "TAFS" (default: "TLARS").
+#' @param solver Solver algorithm: "TLARS", "TLASSO", "TENET", "TENET_AUG",
+#'   "TSTAGEWISE", "TSTEPWISE", "TOMP", "TGP", "TACGP", "TMP", "TNCGMP",
+#'   "TOOLS", "TAFS", "TCCD", "TCENET" (default: "TLARS"). "TENET_AUG" is
+#'   the row-augmented formulation of the TENET elastic net (proved
+#'   equivalent for \code{lambda2 >= 0}) and is accepted wherever TENET
+#'   runs; it solves with the standard LASSO inner path unless the optional
+#'   \code{tenet_aug_use_lars} is set. The CCD family (TCCD/TCENET)
+#'   records exact penalized-lasso minimizers per dummy crossing. The
+#'   IEN-family names "TIENET", "TIENET_AUG", and "TCIENET" are accepted by
+#'   the parser but only dispatchable inside \code{TRexGVSSelector} with
+#'   \code{gvs_type = "IEN"}; the plain selector rejects them with an
+#'   informative error.
 #' @param K Number of random experiments (default: 20).
 #' @param tloop_stagnation_stop Whether to stop T-loop on stagnation. NULL (default) enables
-#'   auto-detection: FALSE for non-greedy solvers (TLARS, TLASSO, TENET), TRUE for all others.
+#'   auto-detection: FALSE for non-greedy solvers (TLARS, TLASSO, TENET,
+#'   TENET_AUG, and the CCD family TCCD/TCENET/TCIENET), TRUE for all others.
 #' @param tloop_max_stagnant_steps Steps before stagnation trigger (default: 5).
 #' @param use_openmp Whether to use OpenMP parallelization (default: FALSE).
 #' @param use_memory_mapping Use out-of-core memory mapping (default: FALSE).
@@ -58,6 +69,27 @@
 #' @param exch_tie_floor Minimum absolute correlation for exchangeable-tie
 #'   candidates, in (0, 1) (default: 0.5). Ignored unless
 #'   \code{exch_tie_alpha > 0}.
+#' @param tenet_aug_use_lars Logical, for \code{solver = "TENET_AUG"} in the
+#'   plain/DA/screening selectors. The default \code{FALSE} runs the
+#'   STANDARD LASSO inner path (variables can be dropped); \code{TRUE}
+#'   opts into the pure-LARS inner path that never drops variables. Inside
+#'   \code{TRexGVSSelector} use the \code{gvs_control} knob of the same
+#'   name instead. Ignored by every other solver.
+#' @param cd_lambda_rel_tol Relative lambda step tolerance of the CCD family's
+#'   crossing search (default: 1e-5). Values <= 0 keep the solver's internal
+#'   default. Ignored by the non-CCD solvers.
+#' @param cd_tol_certify KKT certification tolerance of the CCD family. Must
+#'   be set together with \code{cd_tol_probe}; the default -1 keeps the
+#'   solver's own tolerances. Ignored by the non-CCD solvers.
+#' @param cd_tol_probe Probing tolerance of the CCD family's coordinate
+#'   sweeps. Must be set together with \code{cd_tol_certify}; the default -1
+#'   keeps the solver's own tolerances. Ignored by the non-CCD solvers.
+#' @param cd_gram_cap Column cap for the CCD family's cached Gram matrix;
+#'   above it the solver falls back to the naive updates (default: 0 = keep
+#'   the solver's internal default). Ignored by the non-CCD solvers.
+#' @param cd_max_sweeps Maximum coordinate sweeps per CCD subproblem
+#'   (default: 0 = keep the solver's internal default). Ignored by the
+#'   non-CCD solvers.
 #' @param dummy_distribution Dummy variable distribution, created with
 #'   \code{\link{trex_dummy_distribution}} (default: standard Normal).
 #'
@@ -86,6 +118,12 @@ trex_control <- function(solver = "TLARS",
                          ncgmp_variant = 0,
                          exch_tie_alpha = 0,
                          exch_tie_floor = 0.5,
+                         tenet_aug_use_lars = FALSE,
+                         cd_lambda_rel_tol = 1e-5,
+                         cd_tol_certify = -1,
+                         cd_tol_probe = -1,
+                         cd_gram_cap = 0,
+                         cd_max_sweeps = 0,
                          dummy_distribution = trex_dummy_distribution()) {
 
   if (max_dummy_multiplier < 1) {
@@ -100,8 +138,22 @@ trex_control <- function(solver = "TLARS",
   if (max_inner_threads < 1) {
     stop("max_inner_threads must be >= 1. Got: ", max_inner_threads)
   }
+  # The C++ side applies the certify/probe pair only when BOTH are > 0;
+  # fail loudly here instead of silently ignoring a half-set pair.
+  if (xor(cd_tol_certify > 0, cd_tol_probe > 0)) {
+    stop("cd_tol_certify and cd_tol_probe must be set together (both > 0), ",
+         "or both left at their defaults. Got: cd_tol_certify = ",
+         cd_tol_certify, ", cd_tol_probe = ", cd_tol_probe)
+  }
+  if (cd_gram_cap < 0) {
+    stop("cd_gram_cap must be >= 0. Got: ", cd_gram_cap)
+  }
+  if (cd_max_sweeps < 0) {
+    stop("cd_max_sweeps must be >= 0. Got: ", cd_max_sweeps)
+  }
 
-  non_greedy_solvers <- c("TLARS", "TLASSO", "TENET")
+  non_greedy_solvers <- c("TLARS", "TLASSO", "TENET", "TENET_AUG",
+                          "TCCD", "TCENET", "TCIENET")
   if (is.null(tloop_stagnation_stop)) {
     tloop_stagnation_stop <- !(solver %in% non_greedy_solvers)
   }
@@ -125,6 +177,12 @@ trex_control <- function(solver = "TLARS",
     ncgmp_variant           = ncgmp_variant,
     exch_tie_alpha          = exch_tie_alpha,
     exch_tie_floor          = exch_tie_floor,
+    tenet_aug_use_lars      = tenet_aug_use_lars,
+    cd_lambda_rel_tol       = cd_lambda_rel_tol,
+    cd_tol_certify          = cd_tol_certify,
+    cd_tol_probe            = cd_tol_probe,
+    cd_gram_cap             = cd_gram_cap,
+    cd_max_sweeps           = cd_max_sweeps,
     dummy_distribution      = dummy_distribution
   )
 }
@@ -190,9 +248,12 @@ trex_da_control <- function(da_method = "BT",
 #'
 #' @description Build a control list for group variable selection augmentation policy in
 #'   TRexGVSSelector. The solver is determined automatically from \code{gvs_type}:
-#'   "EN" uses the T-Elastic-Net solver (TENET, or TENET_AUG per \code{en_solver});
-#'   "IEN" uses the augmented T-Informed-Elastic-Net (TIENET_AUG) solver.
-#'   The \code{solver} field in \code{\link{trex_control}} is ignored by TRexGVSSelector.
+#'   "EN" selects the T-Elastic-Net solver via \code{en_solver} — TENET
+#'   (default), with TENET_AUG and TCENET as optional variants; "IEN" honors
+#'   an IEN-family \code{solver} field in \code{\link{trex_control}} —
+#'   TIENET (default, native pathwise), with TIENET_AUG and TCIENET as
+#'   optional variants. For \code{gvs_type = "EN"} the \code{solver} field
+#'   is ignored.
 #'
 #' @param gvs_type Augmentation policy: "EN" (Elastic Net) or "IEN" (Informed Elastic Net)
 #'   (default: "EN").
@@ -207,11 +268,13 @@ trex_da_control <- function(da_method = "BT",
 #'   \code{lambda_2 < 0}: \code{"CV_1SE_CCD"} (default), \code{"CV_MIN_CCD"},
 #'   \code{"CV_1SE_SVD"}, \code{"CV_MIN_SVD"}.
 #' @param en_solver Elastic Net solver variant for \code{gvs_type = "EN"}:
-#'   \code{"TENET"} (default, Gram-based) or \code{"TENET_AUG"}
-#'   (row-augmented LASSO). Both are mathematically equivalent for
-#'   \code{lambda_2 > 0} and select the same variables; this switch exists to
-#'   validate solver equivalence, \strong{not} to choose a LARS vs LASSO path
-#'   (for that, see \code{tenet_aug_use_lars}).
+#'   \code{"TENET"} (default, Gram-based), \code{"TENET_AUG"}
+#'   (row-augmented LASSO), or \code{"TCENET"} (CCD; exact fixed-lambda1
+#'   elastic-net minimizers per dummy crossing). All solve the same EN
+#'   problem and select the same variables up to path-vs-minimizer
+#'   differences; the switch exists to validate solver equivalence,
+#'   \strong{not} to choose a LARS vs LASSO path (for that, see
+#'   \code{tenet_aug_use_lars}).
 #' @param tenet_aug_use_lars Logical. When \code{en_solver = "TENET_AUG"}, run
 #'   the augmented system with a pure-LARS inner path that never drops variables
 #'   (\code{TRUE}) instead of the default LASSO inner path that can
@@ -251,7 +314,7 @@ trex_gvs_control <- function(gvs_type = "EN",
   lambda2_method <- match.arg(lambda2_method,
                               c("CV_1SE_CCD", "CV_MIN_CCD",
                                 "CV_1SE_SVD", "CV_MIN_SVD"))
-  en_solver <- match.arg(en_solver, c("TENET", "TENET_AUG"))
+  en_solver <- match.arg(en_solver, c("TENET", "TENET_AUG", "TCENET"))
   list(
     gvs_type           = gvs_type,
     corr_max           = corr_max,
