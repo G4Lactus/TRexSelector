@@ -6,6 +6,7 @@
 #include <ml_methods/svd/svd.hpp>
 #include <ml_methods/pca/pca.hpp>
 #include <ml_methods/ridge_regression/ridge.hpp>
+#include <utils/memmap/memory_mapped_matrix.hpp>
 
 // [[Rcpp::plugins(cpp20)]]
 // [[Rcpp::depends(RcppEigen)]]
@@ -25,6 +26,11 @@ using ridge_cv = trex::ml_methods::model_selection::ridge_cv_svd;
 // fit (glmnet-equivalent), enet_cv_ccd its K-fold CV lambda selector.
 using enet_path = trex::ml_methods::model_selection::enet_gaussian;
 using enet_cv   = trex::ml_methods::model_selection::enet_cv_ccd;
+
+// Memory-mapped matrix handle type shared with the mmap_matrix() utilities in
+// rcpp_utils.cpp. The *_mmap endpoints below bind the mapped buffer zero-copy
+// through the same Eigen::Map interface that serves in-memory matrices.
+using MmapMatrixD = trex::utils::memmap::MemoryMappedMatrix<double>;
 
 // =================================================================================
 
@@ -202,6 +208,66 @@ void zscore_scaler_load(
     const std::string& filename
 ) {
     ptr->load(filename);
+}
+
+//' @title Fit ZScoreScaler on a MemoryMappedMatrix (zero-copy)
+//'
+//' @param ptr XPtr to ZScoreScaler
+//' @param mmap_ptr XPtr to a MemoryMappedMatrix<double> (readwrite mode)
+//' @param threshold Numerical stability threshold
+//' @noRd
+// [[Rcpp::export]]
+void zscore_scaler_fit_mmap(
+    XPtr<ZScoreScaler> ptr,   // NOLINT(performance-unnecessary-value-param)
+    XPtr<MmapMatrixD> mmap_ptr, // NOLINT(performance-unnecessary-value-param)
+    double threshold = 1e-12
+) {
+    auto map = mmap_ptr->getMap();
+    ptr->fit(map, threshold);
+}
+
+//' @title Transform Inplace ZScoreScaler on a MemoryMappedMatrix (zero-copy)
+//'
+//' @param ptr XPtr to ZScoreScaler
+//' @param mmap_ptr XPtr to a MemoryMappedMatrix<double> (readwrite mode)
+//' @noRd
+// [[Rcpp::export]]
+void zscore_scaler_transform_inplace_mmap(
+    XPtr<ZScoreScaler> ptr,   // NOLINT(performance-unnecessary-value-param)
+    XPtr<MmapMatrixD> mmap_ptr // NOLINT(performance-unnecessary-value-param)
+) {
+    auto map = mmap_ptr->getMap();
+    ptr->transform_inplace(map);
+}
+
+//' @title Fit and Transform Inplace ZScoreScaler on a MemoryMappedMatrix (zero-copy)
+//'
+//' @param ptr XPtr to ZScoreScaler
+//' @param mmap_ptr XPtr to a MemoryMappedMatrix<double> (readwrite mode)
+//' @param threshold Numerical stability threshold
+//' @noRd
+// [[Rcpp::export]]
+void zscore_scaler_fit_transform_inplace_mmap(
+    XPtr<ZScoreScaler> ptr,   // NOLINT(performance-unnecessary-value-param)
+    XPtr<MmapMatrixD> mmap_ptr, // NOLINT(performance-unnecessary-value-param)
+    double threshold = 1e-12
+) {
+    auto map = mmap_ptr->getMap();
+    ptr->fit_transform_inplace(map, threshold);
+}
+
+//' @title Inverse Transform Inplace ZScoreScaler on a MemoryMappedMatrix (zero-copy)
+//'
+//' @param ptr XPtr to ZScoreScaler
+//' @param mmap_ptr XPtr to a MemoryMappedMatrix<double> (readwrite mode)
+//' @noRd
+// [[Rcpp::export]]
+void zscore_scaler_inverse_transform_inplace_mmap(
+    XPtr<ZScoreScaler> ptr,   // NOLINT(performance-unnecessary-value-param)
+    XPtr<MmapMatrixD> mmap_ptr // NOLINT(performance-unnecessary-value-param)
+) {
+    auto map = mmap_ptr->getMap();
+    ptr->inverse_transform_inplace(map);
 }
 
 // =================================================================================
@@ -387,6 +453,66 @@ void lpnorm_scaler_load(
     ptr->load(filename);
 }
 
+//' @title Fit LpNormScaler on a MemoryMappedMatrix (zero-copy)
+//'
+//' @param ptr XPtr to LpNormScaler
+//' @param mmap_ptr XPtr to a MemoryMappedMatrix<double> (readwrite mode)
+//' @param threshold Numerical stability threshold
+//' @noRd
+// [[Rcpp::export]]
+void lpnorm_scaler_fit_mmap(
+    XPtr<LpNormScaler> ptr,   // NOLINT(performance-unnecessary-value-param)
+    XPtr<MmapMatrixD> mmap_ptr, // NOLINT(performance-unnecessary-value-param)
+    double threshold = 1e-12
+) {
+    auto map = mmap_ptr->getMap();
+    ptr->fit(map, threshold);
+}
+
+//' @title Transform Inplace LpNormScaler on a MemoryMappedMatrix (zero-copy)
+//'
+//' @param ptr XPtr to LpNormScaler
+//' @param mmap_ptr XPtr to a MemoryMappedMatrix<double> (readwrite mode)
+//' @noRd
+// [[Rcpp::export]]
+void lpnorm_scaler_transform_inplace_mmap(
+    XPtr<LpNormScaler> ptr,   // NOLINT(performance-unnecessary-value-param)
+    XPtr<MmapMatrixD> mmap_ptr // NOLINT(performance-unnecessary-value-param)
+) {
+    auto map = mmap_ptr->getMap();
+    ptr->transform_inplace(map);
+}
+
+//' @title Fit and Transform Inplace LpNormScaler on a MemoryMappedMatrix (zero-copy)
+//'
+//' @param ptr XPtr to LpNormScaler
+//' @param mmap_ptr XPtr to a MemoryMappedMatrix<double> (readwrite mode)
+//' @param threshold Numerical stability threshold
+//' @noRd
+// [[Rcpp::export]]
+void lpnorm_scaler_fit_transform_inplace_mmap(
+    XPtr<LpNormScaler> ptr,   // NOLINT(performance-unnecessary-value-param)
+    XPtr<MmapMatrixD> mmap_ptr, // NOLINT(performance-unnecessary-value-param)
+    double threshold = 1e-12
+) {
+    auto map = mmap_ptr->getMap();
+    ptr->fit_transform_inplace(map, threshold);
+}
+
+//' @title Inverse Transform Inplace LpNormScaler on a MemoryMappedMatrix (zero-copy)
+//'
+//' @param ptr XPtr to LpNormScaler
+//' @param mmap_ptr XPtr to a MemoryMappedMatrix<double> (readwrite mode)
+//' @noRd
+// [[Rcpp::export]]
+void lpnorm_scaler_inverse_transform_inplace_mmap(
+    XPtr<LpNormScaler> ptr,   // NOLINT(performance-unnecessary-value-param)
+    XPtr<MmapMatrixD> mmap_ptr // NOLINT(performance-unnecessary-value-param)
+) {
+    auto map = mmap_ptr->getMap();
+    ptr->inverse_transform_inplace(map);
+}
+
 // =================================================================================
 // Model Selection: RidgeCV
 // =================================================================================
@@ -421,6 +547,34 @@ void ridge_cv_fit(
     unsigned int seed
 ) {
     ptr->fit(X, y, num_folds, n_lambda, lambda_ratio, seed);
+}
+
+//' @title Fit RidgeCV on a MemoryMappedMatrix (zero-copy)
+//'
+//' @details The const map (ConstMapType) binds to fit()'s
+//'   Eigen::Ref<const MatrixXd> without copying the full matrix, so
+//'   readonly-opened handles are accepted as well.
+//'
+//' @param ptr XPtr to ridge_cv
+//' @param mmap_ptr XPtr to a MemoryMappedMatrix<double> holding the design matrix
+//' @param y Response vector
+//' @param num_folds Number of folds
+//' @param n_lambda Number of lambdas
+//' @param lambda_ratio Lambda ratio
+//' @param seed Random seed
+//' @noRd
+// [[Rcpp::export]]
+void ridge_cv_fit_mmap(
+    XPtr<ridge_cv> ptr,       // NOLINT(performance-unnecessary-value-param)
+    XPtr<MmapMatrixD> mmap_ptr, // NOLINT(performance-unnecessary-value-param)
+    const Eigen::VectorXd& y,
+    int num_folds,
+    int n_lambda,
+    double lambda_ratio,
+    unsigned int seed
+) {
+    const MmapMatrixD& mmap = *mmap_ptr;   // const overload -> ConstMapType
+    ptr->fit(mmap.getMap(), y, num_folds, n_lambda, lambda_ratio, seed);
 }
 
 //' @title Get min CV error

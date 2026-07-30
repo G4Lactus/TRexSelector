@@ -62,7 +62,10 @@ cv$cv_min()
   \subsection{Arguments}{
     \if{html}{\out{<div class="arguments">}}
     \describe{
-      \item{\code{X}}{Predictor matrix.}
+      \item{\code{X}}{Predictor matrix, or an \code{mmap_matrix} created by
+\code{\link{mmap_matrix}} / \code{\link{convert_to_memory_mapped}}
+(bound zero-copy; \code{"readonly"} mode suffices since the fit does
+not modify \code{X}).}
       \item{\code{y}}{Response vector.}
       \item{\code{num_folds}}{Number of folds (default 10).}
       \item{\code{n_lambda}}{Number of lambdas in path (default 100).}

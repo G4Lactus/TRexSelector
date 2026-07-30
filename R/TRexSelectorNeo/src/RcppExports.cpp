@@ -198,6 +198,52 @@ BEGIN_RCPP
     return R_NilValue;
 END_RCPP
 }
+// zscore_scaler_fit_mmap
+void zscore_scaler_fit_mmap(XPtr<ZScoreScaler> ptr, XPtr<MmapMatrixD> mmap_ptr, double threshold);
+RcppExport SEXP _TRexSelectorNeo_zscore_scaler_fit_mmap(SEXP ptrSEXP, SEXP mmap_ptrSEXP, SEXP thresholdSEXP) {
+BEGIN_RCPP
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< XPtr<ZScoreScaler> >::type ptr(ptrSEXP);
+    Rcpp::traits::input_parameter< XPtr<MmapMatrixD> >::type mmap_ptr(mmap_ptrSEXP);
+    Rcpp::traits::input_parameter< double >::type threshold(thresholdSEXP);
+    zscore_scaler_fit_mmap(ptr, mmap_ptr, threshold);
+    return R_NilValue;
+END_RCPP
+}
+// zscore_scaler_transform_inplace_mmap
+void zscore_scaler_transform_inplace_mmap(XPtr<ZScoreScaler> ptr, XPtr<MmapMatrixD> mmap_ptr);
+RcppExport SEXP _TRexSelectorNeo_zscore_scaler_transform_inplace_mmap(SEXP ptrSEXP, SEXP mmap_ptrSEXP) {
+BEGIN_RCPP
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< XPtr<ZScoreScaler> >::type ptr(ptrSEXP);
+    Rcpp::traits::input_parameter< XPtr<MmapMatrixD> >::type mmap_ptr(mmap_ptrSEXP);
+    zscore_scaler_transform_inplace_mmap(ptr, mmap_ptr);
+    return R_NilValue;
+END_RCPP
+}
+// zscore_scaler_fit_transform_inplace_mmap
+void zscore_scaler_fit_transform_inplace_mmap(XPtr<ZScoreScaler> ptr, XPtr<MmapMatrixD> mmap_ptr, double threshold);
+RcppExport SEXP _TRexSelectorNeo_zscore_scaler_fit_transform_inplace_mmap(SEXP ptrSEXP, SEXP mmap_ptrSEXP, SEXP thresholdSEXP) {
+BEGIN_RCPP
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< XPtr<ZScoreScaler> >::type ptr(ptrSEXP);
+    Rcpp::traits::input_parameter< XPtr<MmapMatrixD> >::type mmap_ptr(mmap_ptrSEXP);
+    Rcpp::traits::input_parameter< double >::type threshold(thresholdSEXP);
+    zscore_scaler_fit_transform_inplace_mmap(ptr, mmap_ptr, threshold);
+    return R_NilValue;
+END_RCPP
+}
+// zscore_scaler_inverse_transform_inplace_mmap
+void zscore_scaler_inverse_transform_inplace_mmap(XPtr<ZScoreScaler> ptr, XPtr<MmapMatrixD> mmap_ptr);
+RcppExport SEXP _TRexSelectorNeo_zscore_scaler_inverse_transform_inplace_mmap(SEXP ptrSEXP, SEXP mmap_ptrSEXP) {
+BEGIN_RCPP
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< XPtr<ZScoreScaler> >::type ptr(ptrSEXP);
+    Rcpp::traits::input_parameter< XPtr<MmapMatrixD> >::type mmap_ptr(mmap_ptrSEXP);
+    zscore_scaler_inverse_transform_inplace_mmap(ptr, mmap_ptr);
+    return R_NilValue;
+END_RCPP
+}
 // lpnorm_scaler_create
 XPtr<LpNormScaler> lpnorm_scaler_create(int norm_type, bool center, bool scale);
 RcppExport SEXP _TRexSelectorNeo_lpnorm_scaler_create(SEXP norm_typeSEXP, SEXP centerSEXP, SEXP scaleSEXP) {
@@ -356,6 +402,52 @@ BEGIN_RCPP
     return R_NilValue;
 END_RCPP
 }
+// lpnorm_scaler_fit_mmap
+void lpnorm_scaler_fit_mmap(XPtr<LpNormScaler> ptr, XPtr<MmapMatrixD> mmap_ptr, double threshold);
+RcppExport SEXP _TRexSelectorNeo_lpnorm_scaler_fit_mmap(SEXP ptrSEXP, SEXP mmap_ptrSEXP, SEXP thresholdSEXP) {
+BEGIN_RCPP
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< XPtr<LpNormScaler> >::type ptr(ptrSEXP);
+    Rcpp::traits::input_parameter< XPtr<MmapMatrixD> >::type mmap_ptr(mmap_ptrSEXP);
+    Rcpp::traits::input_parameter< double >::type threshold(thresholdSEXP);
+    lpnorm_scaler_fit_mmap(ptr, mmap_ptr, threshold);
+    return R_NilValue;
+END_RCPP
+}
+// lpnorm_scaler_transform_inplace_mmap
+void lpnorm_scaler_transform_inplace_mmap(XPtr<LpNormScaler> ptr, XPtr<MmapMatrixD> mmap_ptr);
+RcppExport SEXP _TRexSelectorNeo_lpnorm_scaler_transform_inplace_mmap(SEXP ptrSEXP, SEXP mmap_ptrSEXP) {
+BEGIN_RCPP
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< XPtr<LpNormScaler> >::type ptr(ptrSEXP);
+    Rcpp::traits::input_parameter< XPtr<MmapMatrixD> >::type mmap_ptr(mmap_ptrSEXP);
+    lpnorm_scaler_transform_inplace_mmap(ptr, mmap_ptr);
+    return R_NilValue;
+END_RCPP
+}
+// lpnorm_scaler_fit_transform_inplace_mmap
+void lpnorm_scaler_fit_transform_inplace_mmap(XPtr<LpNormScaler> ptr, XPtr<MmapMatrixD> mmap_ptr, double threshold);
+RcppExport SEXP _TRexSelectorNeo_lpnorm_scaler_fit_transform_inplace_mmap(SEXP ptrSEXP, SEXP mmap_ptrSEXP, SEXP thresholdSEXP) {
+BEGIN_RCPP
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< XPtr<LpNormScaler> >::type ptr(ptrSEXP);
+    Rcpp::traits::input_parameter< XPtr<MmapMatrixD> >::type mmap_ptr(mmap_ptrSEXP);
+    Rcpp::traits::input_parameter< double >::type threshold(thresholdSEXP);
+    lpnorm_scaler_fit_transform_inplace_mmap(ptr, mmap_ptr, threshold);
+    return R_NilValue;
+END_RCPP
+}
+// lpnorm_scaler_inverse_transform_inplace_mmap
+void lpnorm_scaler_inverse_transform_inplace_mmap(XPtr<LpNormScaler> ptr, XPtr<MmapMatrixD> mmap_ptr);
+RcppExport SEXP _TRexSelectorNeo_lpnorm_scaler_inverse_transform_inplace_mmap(SEXP ptrSEXP, SEXP mmap_ptrSEXP) {
+BEGIN_RCPP
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< XPtr<LpNormScaler> >::type ptr(ptrSEXP);
+    Rcpp::traits::input_parameter< XPtr<MmapMatrixD> >::type mmap_ptr(mmap_ptrSEXP);
+    lpnorm_scaler_inverse_transform_inplace_mmap(ptr, mmap_ptr);
+    return R_NilValue;
+END_RCPP
+}
 // ridge_cv_create
 XPtr<ridge_cv> ridge_cv_create();
 RcppExport SEXP _TRexSelectorNeo_ridge_cv_create() {
@@ -379,6 +471,22 @@ BEGIN_RCPP
     Rcpp::traits::input_parameter< double >::type lambda_ratio(lambda_ratioSEXP);
     Rcpp::traits::input_parameter< unsigned int >::type seed(seedSEXP);
     ridge_cv_fit(ptr, X, y, num_folds, n_lambda, lambda_ratio, seed);
+    return R_NilValue;
+END_RCPP
+}
+// ridge_cv_fit_mmap
+void ridge_cv_fit_mmap(XPtr<ridge_cv> ptr, XPtr<MmapMatrixD> mmap_ptr, const Eigen::VectorXd& y, int num_folds, int n_lambda, double lambda_ratio, unsigned int seed);
+RcppExport SEXP _TRexSelectorNeo_ridge_cv_fit_mmap(SEXP ptrSEXP, SEXP mmap_ptrSEXP, SEXP ySEXP, SEXP num_foldsSEXP, SEXP n_lambdaSEXP, SEXP lambda_ratioSEXP, SEXP seedSEXP) {
+BEGIN_RCPP
+    Rcpp::RNGScope rcpp_rngScope_gen;
+    Rcpp::traits::input_parameter< XPtr<ridge_cv> >::type ptr(ptrSEXP);
+    Rcpp::traits::input_parameter< XPtr<MmapMatrixD> >::type mmap_ptr(mmap_ptrSEXP);
+    Rcpp::traits::input_parameter< const Eigen::VectorXd& >::type y(ySEXP);
+    Rcpp::traits::input_parameter< int >::type num_folds(num_foldsSEXP);
+    Rcpp::traits::input_parameter< int >::type n_lambda(n_lambdaSEXP);
+    Rcpp::traits::input_parameter< double >::type lambda_ratio(lambda_ratioSEXP);
+    Rcpp::traits::input_parameter< unsigned int >::type seed(seedSEXP);
+    ridge_cv_fit_mmap(ptr, mmap_ptr, y, num_folds, n_lambda, lambda_ratio, seed);
     return R_NilValue;
 END_RCPP
 }
@@ -2321,6 +2429,10 @@ static const R_CallMethodDef CallEntries[] = {
     {"_TRexSelectorNeo_zscore_scaler_get_scales", (DL_FUNC) &_TRexSelectorNeo_zscore_scaler_get_scales, 1},
     {"_TRexSelectorNeo_zscore_scaler_save", (DL_FUNC) &_TRexSelectorNeo_zscore_scaler_save, 2},
     {"_TRexSelectorNeo_zscore_scaler_load", (DL_FUNC) &_TRexSelectorNeo_zscore_scaler_load, 2},
+    {"_TRexSelectorNeo_zscore_scaler_fit_mmap", (DL_FUNC) &_TRexSelectorNeo_zscore_scaler_fit_mmap, 3},
+    {"_TRexSelectorNeo_zscore_scaler_transform_inplace_mmap", (DL_FUNC) &_TRexSelectorNeo_zscore_scaler_transform_inplace_mmap, 2},
+    {"_TRexSelectorNeo_zscore_scaler_fit_transform_inplace_mmap", (DL_FUNC) &_TRexSelectorNeo_zscore_scaler_fit_transform_inplace_mmap, 3},
+    {"_TRexSelectorNeo_zscore_scaler_inverse_transform_inplace_mmap", (DL_FUNC) &_TRexSelectorNeo_zscore_scaler_inverse_transform_inplace_mmap, 2},
     {"_TRexSelectorNeo_lpnorm_scaler_create", (DL_FUNC) &_TRexSelectorNeo_lpnorm_scaler_create, 3},
     {"_TRexSelectorNeo_lpnorm_scaler_fit", (DL_FUNC) &_TRexSelectorNeo_lpnorm_scaler_fit, 3},
     {"_TRexSelectorNeo_lpnorm_scaler_transform_inplace", (DL_FUNC) &_TRexSelectorNeo_lpnorm_scaler_transform_inplace, 2},
@@ -2335,8 +2447,13 @@ static const R_CallMethodDef CallEntries[] = {
     {"_TRexSelectorNeo_lpnorm_scaler_get_norm_type", (DL_FUNC) &_TRexSelectorNeo_lpnorm_scaler_get_norm_type, 1},
     {"_TRexSelectorNeo_lpnorm_scaler_save", (DL_FUNC) &_TRexSelectorNeo_lpnorm_scaler_save, 2},
     {"_TRexSelectorNeo_lpnorm_scaler_load", (DL_FUNC) &_TRexSelectorNeo_lpnorm_scaler_load, 2},
+    {"_TRexSelectorNeo_lpnorm_scaler_fit_mmap", (DL_FUNC) &_TRexSelectorNeo_lpnorm_scaler_fit_mmap, 3},
+    {"_TRexSelectorNeo_lpnorm_scaler_transform_inplace_mmap", (DL_FUNC) &_TRexSelectorNeo_lpnorm_scaler_transform_inplace_mmap, 2},
+    {"_TRexSelectorNeo_lpnorm_scaler_fit_transform_inplace_mmap", (DL_FUNC) &_TRexSelectorNeo_lpnorm_scaler_fit_transform_inplace_mmap, 3},
+    {"_TRexSelectorNeo_lpnorm_scaler_inverse_transform_inplace_mmap", (DL_FUNC) &_TRexSelectorNeo_lpnorm_scaler_inverse_transform_inplace_mmap, 2},
     {"_TRexSelectorNeo_ridge_cv_create", (DL_FUNC) &_TRexSelectorNeo_ridge_cv_create, 0},
     {"_TRexSelectorNeo_ridge_cv_fit", (DL_FUNC) &_TRexSelectorNeo_ridge_cv_fit, 7},
+    {"_TRexSelectorNeo_ridge_cv_fit_mmap", (DL_FUNC) &_TRexSelectorNeo_ridge_cv_fit_mmap, 7},
     {"_TRexSelectorNeo_ridge_cv_min", (DL_FUNC) &_TRexSelectorNeo_ridge_cv_min, 1},
     {"_TRexSelectorNeo_ridge_cv_1se", (DL_FUNC) &_TRexSelectorNeo_ridge_cv_1se, 1},
     {"_TRexSelectorNeo_ridge_cv_index_min", (DL_FUNC) &_TRexSelectorNeo_ridge_cv_index_min, 1},

@@ -13,7 +13,13 @@ columns are divided by the root-mean-square around 0.
 The \code{*_inplace} methods mutate \code{X} directly (zero-copy)
 when it is a double-storage matrix; other inputs are coerced to a double
 matrix first, in which case the coerced copy is modified. The (modified)
-matrix is returned in both cases.
+matrix is returned in both cases. \code{X} may also be an
+\code{mmap_matrix} created by \code{\link{mmap_matrix}} /
+\code{\link{convert_to_memory_mapped}}: the disk-backed buffer is then
+bound zero-copy through the same Eigen map interface and modified in
+place on disk. All scaler methods — including \code{fit()} — require the
+handle to be open in \code{"readwrite"} mode, because the scaler core
+binds a mutable map.
 }
 \examples{
 set.seed(1)
@@ -77,7 +83,8 @@ around 0 instead of the mean when \code{center = FALSE}, as in R's scale().}
   \subsection{Arguments}{
     \if{html}{\out{<div class="arguments">}}
     \describe{
-      \item{\code{X}}{A numeric matrix (n x p).}
+      \item{\code{X}}{A numeric matrix (n x p) or an \code{mmap_matrix} in
+\code{"readwrite"} mode (the scaler core binds a mutable map).}
       \item{\code{threshold}}{Double, lower bound for the scale statistic (default: 1e-12).}
     }
     \if{html}{\out{</div>}}
@@ -100,12 +107,13 @@ around 0 instead of the mean when \code{center = FALSE}, as in R's scale().}
   \subsection{Arguments}{
     \if{html}{\out{<div class="arguments">}}
     \describe{
-      \item{\code{X}}{A numeric matrix (n x p).}
+      \item{\code{X}}{A numeric matrix (n x p) or an \code{mmap_matrix} in
+\code{"readwrite"} mode.}
     }
     \if{html}{\out{</div>}}
   }
   \subsection{Returns}{
-    The modified matrix \code{X}.
+    The modified matrix \code{X} (the same handle for an \code{mmap_matrix}).
   }
 }
 
@@ -122,12 +130,13 @@ around 0 instead of the mean when \code{center = FALSE}, as in R's scale().}
   \subsection{Arguments}{
     \if{html}{\out{<div class="arguments">}}
     \describe{
-      \item{\code{X}}{A numeric matrix (n x p).}
+      \item{\code{X}}{A numeric matrix (n x p) or an \code{mmap_matrix} in
+\code{"readwrite"} mode.}
     }
     \if{html}{\out{</div>}}
   }
   \subsection{Returns}{
-    The modified matrix \code{X}.
+    The modified matrix \code{X} (the same handle for an \code{mmap_matrix}).
   }
 }
 
@@ -144,13 +153,14 @@ around 0 instead of the mean when \code{center = FALSE}, as in R's scale().}
   \subsection{Arguments}{
     \if{html}{\out{<div class="arguments">}}
     \describe{
-      \item{\code{X}}{A numeric matrix (n x p).}
+      \item{\code{X}}{A numeric matrix (n x p) or an \code{mmap_matrix} in
+\code{"readwrite"} mode.}
       \item{\code{threshold}}{Double, lower bound for the scale statistic (default: 1e-12).}
     }
     \if{html}{\out{</div>}}
   }
   \subsection{Returns}{
-    The modified matrix \code{X}.
+    The modified matrix \code{X} (the same handle for an \code{mmap_matrix}).
   }
 }
 

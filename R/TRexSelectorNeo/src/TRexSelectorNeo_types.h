@@ -79,6 +79,10 @@ using ridge_cv = trex::ml_methods::model_selection::ridge_cv_svd;
 // path fit, enet_cv its K-fold CV lambda selector.
 using enet_path = trex::ml_methods::model_selection::enet_gaussian;
 using enet_cv   = trex::ml_methods::model_selection::enet_cv_ccd;
+
+// Memory-mapped matrix handle shared by the mmap_matrix() utilities and the
+// zero-copy *_mmap ml_methods endpoints.
+using MmapMatrixD = trex::utils::memmap::MemoryMappedMatrix<double>;
 using namespace trex::ml_methods::svd;
 using namespace trex::ml_methods::pca;
 using namespace trex::ml_methods::ridge;

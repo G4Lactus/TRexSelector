@@ -170,6 +170,44 @@ zscore_scaler_load <- function(ptr, filename) {
     invisible(.Call(`_TRexSelectorNeo_zscore_scaler_load`, ptr, filename))
 }
 
+#' @title Fit ZScoreScaler on a MemoryMappedMatrix (zero-copy)
+#'
+#' @param ptr XPtr to ZScoreScaler
+#' @param mmap_ptr XPtr to a MemoryMappedMatrix<double> (readwrite mode)
+#' @param threshold Numerical stability threshold
+#' @noRd
+zscore_scaler_fit_mmap <- function(ptr, mmap_ptr, threshold = 1e-12) {
+    invisible(.Call(`_TRexSelectorNeo_zscore_scaler_fit_mmap`, ptr, mmap_ptr, threshold))
+}
+
+#' @title Transform Inplace ZScoreScaler on a MemoryMappedMatrix (zero-copy)
+#'
+#' @param ptr XPtr to ZScoreScaler
+#' @param mmap_ptr XPtr to a MemoryMappedMatrix<double> (readwrite mode)
+#' @noRd
+zscore_scaler_transform_inplace_mmap <- function(ptr, mmap_ptr) {
+    invisible(.Call(`_TRexSelectorNeo_zscore_scaler_transform_inplace_mmap`, ptr, mmap_ptr))
+}
+
+#' @title Fit and Transform Inplace ZScoreScaler on a MemoryMappedMatrix (zero-copy)
+#'
+#' @param ptr XPtr to ZScoreScaler
+#' @param mmap_ptr XPtr to a MemoryMappedMatrix<double> (readwrite mode)
+#' @param threshold Numerical stability threshold
+#' @noRd
+zscore_scaler_fit_transform_inplace_mmap <- function(ptr, mmap_ptr, threshold = 1e-12) {
+    invisible(.Call(`_TRexSelectorNeo_zscore_scaler_fit_transform_inplace_mmap`, ptr, mmap_ptr, threshold))
+}
+
+#' @title Inverse Transform Inplace ZScoreScaler on a MemoryMappedMatrix (zero-copy)
+#'
+#' @param ptr XPtr to ZScoreScaler
+#' @param mmap_ptr XPtr to a MemoryMappedMatrix<double> (readwrite mode)
+#' @noRd
+zscore_scaler_inverse_transform_inplace_mmap <- function(ptr, mmap_ptr) {
+    invisible(.Call(`_TRexSelectorNeo_zscore_scaler_inverse_transform_inplace_mmap`, ptr, mmap_ptr))
+}
+
 #' @title Create LpNormScaler
 #'
 #' @param norm_type Type of norm (1 for L1, 2 for L2)
@@ -300,6 +338,44 @@ lpnorm_scaler_load <- function(ptr, filename) {
     invisible(.Call(`_TRexSelectorNeo_lpnorm_scaler_load`, ptr, filename))
 }
 
+#' @title Fit LpNormScaler on a MemoryMappedMatrix (zero-copy)
+#'
+#' @param ptr XPtr to LpNormScaler
+#' @param mmap_ptr XPtr to a MemoryMappedMatrix<double> (readwrite mode)
+#' @param threshold Numerical stability threshold
+#' @noRd
+lpnorm_scaler_fit_mmap <- function(ptr, mmap_ptr, threshold = 1e-12) {
+    invisible(.Call(`_TRexSelectorNeo_lpnorm_scaler_fit_mmap`, ptr, mmap_ptr, threshold))
+}
+
+#' @title Transform Inplace LpNormScaler on a MemoryMappedMatrix (zero-copy)
+#'
+#' @param ptr XPtr to LpNormScaler
+#' @param mmap_ptr XPtr to a MemoryMappedMatrix<double> (readwrite mode)
+#' @noRd
+lpnorm_scaler_transform_inplace_mmap <- function(ptr, mmap_ptr) {
+    invisible(.Call(`_TRexSelectorNeo_lpnorm_scaler_transform_inplace_mmap`, ptr, mmap_ptr))
+}
+
+#' @title Fit and Transform Inplace LpNormScaler on a MemoryMappedMatrix (zero-copy)
+#'
+#' @param ptr XPtr to LpNormScaler
+#' @param mmap_ptr XPtr to a MemoryMappedMatrix<double> (readwrite mode)
+#' @param threshold Numerical stability threshold
+#' @noRd
+lpnorm_scaler_fit_transform_inplace_mmap <- function(ptr, mmap_ptr, threshold = 1e-12) {
+    invisible(.Call(`_TRexSelectorNeo_lpnorm_scaler_fit_transform_inplace_mmap`, ptr, mmap_ptr, threshold))
+}
+
+#' @title Inverse Transform Inplace LpNormScaler on a MemoryMappedMatrix (zero-copy)
+#'
+#' @param ptr XPtr to LpNormScaler
+#' @param mmap_ptr XPtr to a MemoryMappedMatrix<double> (readwrite mode)
+#' @noRd
+lpnorm_scaler_inverse_transform_inplace_mmap <- function(ptr, mmap_ptr) {
+    invisible(.Call(`_TRexSelectorNeo_lpnorm_scaler_inverse_transform_inplace_mmap`, ptr, mmap_ptr))
+}
+
 #' @title Create Ridge CV
 #'
 #' @return XPtr to ridge_cv
@@ -320,6 +396,24 @@ ridge_cv_create <- function() {
 #' @noRd
 ridge_cv_fit <- function(ptr, X, y, num_folds, n_lambda, lambda_ratio, seed) {
     invisible(.Call(`_TRexSelectorNeo_ridge_cv_fit`, ptr, X, y, num_folds, n_lambda, lambda_ratio, seed))
+}
+
+#' @title Fit RidgeCV on a MemoryMappedMatrix (zero-copy)
+#'
+#' @details The const map (ConstMapType) binds to fit()'s
+#'   Eigen::Ref<const MatrixXd> without copying the full matrix, so
+#'   readonly-opened handles are accepted as well.
+#'
+#' @param ptr XPtr to ridge_cv
+#' @param mmap_ptr XPtr to a MemoryMappedMatrix<double> holding the design matrix
+#' @param y Response vector
+#' @param num_folds Number of folds
+#' @param n_lambda Number of lambdas
+#' @param lambda_ratio Lambda ratio
+#' @param seed Random seed
+#' @noRd
+ridge_cv_fit_mmap <- function(ptr, mmap_ptr, y, num_folds, n_lambda, lambda_ratio, seed) {
+    invisible(.Call(`_TRexSelectorNeo_ridge_cv_fit_mmap`, ptr, mmap_ptr, y, num_folds, n_lambda, lambda_ratio, seed))
 }
 
 #' @title Get min CV error
