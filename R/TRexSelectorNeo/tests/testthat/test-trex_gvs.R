@@ -151,11 +151,17 @@ test_that("TRexGVSSelector warns when control$solver does not match the derived 
   # needs its own copy (see the shared-buffer claim guard). fresh() supplies one.
   fresh <- function() matrix(rnorm(n * p), n, p)
 
-  # Non-matching solver: warning names the derived solver
+  # IEN: control$solver now selects the IEN solver, so a non-IEN-family
+  # value warns and falls back to TIENET_AUG; an IEN-family value is honored
+  # silently.
   expect_warning(
     TRexGVSSelector$new(fresh(), y, gvs_control = trex_gvs_control(gvs_type = "IEN"),
                         control = trex_control(solver = "TOMP"), verbose = FALSE),
-    'derives solver "TIENET_AUG"'
+    "not an IEN-family solver"
+  )
+  expect_no_warning(
+    TRexGVSSelector$new(fresh(), y, gvs_control = trex_gvs_control(gvs_type = "IEN"),
+                        control = trex_control(solver = "TCIENET"), verbose = FALSE)
   )
   expect_warning(
     TRexGVSSelector$new(fresh(), y, gvs_control = trex_gvs_control(gvs_type = "EN"),

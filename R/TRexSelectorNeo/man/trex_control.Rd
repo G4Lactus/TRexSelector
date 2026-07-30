@@ -23,17 +23,34 @@ trex_control(
   ncgmp_variant = 0,
   exch_tie_alpha = 0,
   exch_tie_floor = 0.5,
+  tenet_aug_use_lars = FALSE,
+  cd_lambda_rel_tol = 1e-05,
+  cd_tol_certify = -1,
+  cd_tol_probe = -1,
+  cd_gram_cap = 0,
+  cd_max_sweeps = 0,
   dummy_distribution = trex_dummy_distribution()
 )
 }
 \arguments{
-\item{solver}{Solver algorithm: "TLARS", "TLASSO", "TENET", "TSTAGEWISE", "TSTEPWISE",
-"TOMP", "TGP", "TACGP", "TMP", "TNCGMP", "TOOLS", "TAFS" (default: "TLARS").}
+\item{solver}{Solver algorithm: "TLARS", "TLASSO", "TENET", "TENET_AUG",
+"TSTAGEWISE", "TSTEPWISE", "TOMP", "TGP", "TACGP", "TMP", "TNCGMP",
+"TOOLS", "TAFS", "TCCD", "TCENET" (default: "TLARS"). "TENET_AUG" is
+the row-augmented formulation of the TENET elastic net (proved
+equivalent for \code{lambda2 >= 0}) and is accepted wherever TENET
+runs; it solves with the standard LASSO inner path unless the optional
+\code{tenet_aug_use_lars} is set. The CCD family (TCCD/TCENET)
+records exact penalized-lasso minimizers per dummy crossing. The
+IEN-family names "TIENET", "TIENET_AUG", and "TCIENET" are accepted by
+the parser but only dispatchable inside \code{TRexGVSSelector} with
+\code{gvs_type = "IEN"}; the plain selector rejects them with an
+informative error.}
 
 \item{K}{Number of random experiments (default: 20).}
 
 \item{tloop_stagnation_stop}{Whether to stop T-loop on stagnation. NULL (default) enables
-auto-detection: FALSE for non-greedy solvers (TLARS, TLASSO, TENET), TRUE for all others.}
+auto-detection: FALSE for non-greedy solvers (TLARS, TLASSO, TENET,
+TENET_AUG, and the CCD family TCCD/TCENET/TCIENET), TRUE for all others.}
 
 \item{tloop_max_stagnant_steps}{Steps before stagnation trigger (default: 5).}
 
@@ -77,6 +94,33 @@ behavior; ignored by path solvers).}
 \item{exch_tie_floor}{Minimum absolute correlation for exchangeable-tie
 candidates, in (0, 1) (default: 0.5). Ignored unless
 \code{exch_tie_alpha > 0}.}
+
+\item{tenet_aug_use_lars}{Logical, for \code{solver = "TENET_AUG"} in the
+plain/DA/screening selectors. The default \code{FALSE} runs the
+STANDARD LASSO inner path (variables can be dropped); \code{TRUE}
+opts into the pure-LARS inner path that never drops variables. Inside
+\code{TRexGVSSelector} use the \code{gvs_control} knob of the same
+name instead. Ignored by every other solver.}
+
+\item{cd_lambda_rel_tol}{Relative lambda step tolerance of the CCD family's
+crossing search (default: 1e-5). Values <= 0 keep the solver's internal
+default. Ignored by the non-CCD solvers.}
+
+\item{cd_tol_certify}{KKT certification tolerance of the CCD family. Must
+be set together with \code{cd_tol_probe}; the default -1 keeps the
+solver's own tolerances. Ignored by the non-CCD solvers.}
+
+\item{cd_tol_probe}{Probing tolerance of the CCD family's coordinate
+sweeps. Must be set together with \code{cd_tol_certify}; the default -1
+keeps the solver's own tolerances. Ignored by the non-CCD solvers.}
+
+\item{cd_gram_cap}{Column cap for the CCD family's cached Gram matrix;
+above it the solver falls back to the naive updates (default: 0 = keep
+the solver's internal default). Ignored by the non-CCD solvers.}
+
+\item{cd_max_sweeps}{Maximum coordinate sweeps per CCD subproblem
+(default: 0 = keep the solver's internal default). Ignored by the
+non-CCD solvers.}
 
 \item{dummy_distribution}{Dummy variable distribution, created with
 \code{\link{trex_dummy_distribution}} (default: standard Normal).}

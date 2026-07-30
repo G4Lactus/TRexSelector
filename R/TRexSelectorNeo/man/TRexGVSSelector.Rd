@@ -76,12 +76,15 @@ supplied.}
       \item{\code{seed}}{Random seed (default: -1).}
       \item{\code{verbose}}{Whether to print progress (default: TRUE).}
       \item{\code{gvs_control}}{A GVS control list from \code{\link{trex_gvs_control}()} (default:
-\code{trex_gvs_control()}). The solver is derived from \code{gvs_type}:
-"EN" uses TENET (or TENET_AUG, per \code{en_solver}), "IEN" uses
-TIENET_AUG. The \code{solver} field in \code{control} is ignored;
-a warning is issued if it is set to a non-matching solver.}
+\code{trex_gvs_control()}). For \code{gvs_type = "EN"} the solver is
+derived from \code{en_solver} (TENET, TENET_AUG, or TCENET) and the
+\code{solver} field in \code{control} is ignored (a warning is issued
+if it is set to a non-matching solver). For \code{gvs_type = "IEN"}
+the \code{solver} field selects the IEN solver: "TIENET"
+(default, native pathwise), "TIENET_AUG", or "TCIENET".}
       \item{\code{control}}{A control list from \code{\link{trex_control}()} (default:
-\code{trex_control()}). The \code{solver} field is overridden by \code{gvs_type}.}
+\code{trex_control()}). For \code{gvs_type = "EN"} the \code{solver}
+field is overridden; for "IEN" it selects the IEN-family solver.}
     }
     \if{html}{\out{</div>}}
   }
