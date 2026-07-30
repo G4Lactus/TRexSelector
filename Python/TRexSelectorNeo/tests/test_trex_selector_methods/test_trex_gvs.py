@@ -164,8 +164,8 @@ def test_gvs_lambda2_used(signal_data, fast_control):
 # ---------------------------------------------------------------------------
 
 def test_gvs_warns_on_non_matching_solver(signal_data):
-    """A user-set solver_type that does not match the gvs_type-derived solver
-    is ignored by the C++ wrapper; the Python wrapper must warn about it."""
+    """IEN: solver_type now selects the IEN solver, so a non-IEN-family value
+    warns and falls back to TIENET; an IEN-family value is honored silently."""
     import warnings
     X, y, n, p = signal_data
     gvs_ctrl = trex_selector_neo.TRexGVSControlParameter()
@@ -173,7 +173,7 @@ def test_gvs_warns_on_non_matching_solver(signal_data):
 
     ctrl = trex_selector_neo.TRexControlParameter()
     ctrl.solver_type = trex_selector_neo.SolverTypeForTRex.TOMP
-    with pytest.warns(UserWarning, match="derives solver TIENET_AUG"):
+    with pytest.warns(UserWarning, match="not an IEN-family solver"):
         trex_selector_neo.TRexGVSSelector(X, y, gvs_control=gvs_ctrl,
                                           trex_control=ctrl, verbose=False)
 
@@ -228,5 +228,67 @@ def test_gvs_linkage_methods(signal_data, linkage):
     gvs_ctrl.hc_linkage = getattr(LinkageMethod, linkage)
     sel = trex_selector_neo.TRexGVSSelector(X, y, gvs_control=gvs_ctrl,
                                          trex_control=ctrl, verbose=False)
+    res = sel.select()
+    assert res is not None
+
+
+# ---------------------------------------------------------------------------
+# CCD family + IEN-geometry lambda_2 tuners (bindings-parity additions)
+# ---------------------------------------------------------------------------
+
+def test_lambda2_method_ien_entries_exist():
+    m = trex_selector_neo.LambdaSelectionMethod
+    for name in ("CV_1SE_IEN_CCD", "CV_MIN_IEN_CCD",
+                 "CV_1SE_TIK_SVD", "CV_MIN_TIK_SVD"):
+        assert hasattr(m, name)
+
+
+def test_lambda2_method_track_resolution_and_restore(signal_data):
+    X, y, n, p = signal_data
+    ctrl = trex_selector_neo.TRexControlParameter()
+    ctrl.K = 3
+    gvs_ctrl = trex_selector_neo.TRexGVSControlParameter()
+    gvs_ctrl.gvs_type = trex_selector_neo.GVSType.IEN
+    gvs_ctrl.lambda_2 = 1.0
+    assert gvs_ctrl.lambda2_method == trex_selector_neo.LambdaSelectionMethod.CV_1SE_CCD
+    trex_selector_neo.TRexGVSSelector(X, y, gvs_control=gvs_ctrl,
+                                      trex_control=ctrl, verbose=False)
+    # The wrapper resolves the default to the IEN-geometry tuner for the
+    # C++ copy, but restores the caller's object afterwards.
+    assert gvs_ctrl.lambda2_method == trex_selector_neo.LambdaSelectionMethod.CV_1SE_CCD
+
+
+def test_lambda2_method_ien_tuner_rejected_on_en_track(signal_data):
+    X, y, n, p = signal_data
+    gvs_ctrl = trex_selector_neo.TRexGVSControlParameter()
+    gvs_ctrl.gvs_type = trex_selector_neo.GVSType.EN
+    gvs_ctrl.lambda2_method = trex_selector_neo.LambdaSelectionMethod.CV_1SE_IEN_CCD
+    with pytest.raises(ValueError, match="requires gvs_type = IEN"):
+        trex_selector_neo.TRexGVSSelector(X, y, gvs_control=gvs_ctrl, verbose=False)
+
+
+def test_gvs_en_tcenet_runs(signal_data):
+    X, y, n, p = signal_data
+    ctrl = trex_selector_neo.TRexControlParameter()
+    ctrl.K = 3
+    gvs_ctrl = trex_selector_neo.TRexGVSControlParameter()
+    gvs_ctrl.en_solver = trex_selector_neo.ENSolverType.TCENET
+    gvs_ctrl.lambda_2 = 1.0
+    sel = trex_selector_neo.TRexGVSSelector(X, y, gvs_control=gvs_ctrl,
+                                            trex_control=ctrl, verbose=False)
+    res = sel.select()
+    assert res is not None
+
+
+def test_gvs_ien_solver_choice_tcienet(signal_data):
+    X, y, n, p = signal_data
+    ctrl = trex_selector_neo.TRexControlParameter()
+    ctrl.K = 3
+    ctrl.solver_type = trex_selector_neo.SolverTypeForTRex.TCIENET
+    gvs_ctrl = trex_selector_neo.TRexGVSControlParameter()
+    gvs_ctrl.gvs_type = trex_selector_neo.GVSType.IEN
+    gvs_ctrl.lambda_2 = 1.0
+    sel = trex_selector_neo.TRexGVSSelector(X, y, gvs_control=gvs_ctrl,
+                                            trex_control=ctrl, verbose=False)
     res = sel.select()
     assert res is not None

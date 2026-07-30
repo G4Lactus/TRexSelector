@@ -479,3 +479,59 @@ test_that("TRexGVSSelector groups reflects HAC assignment for Route 2", {
   expect_length(g, p)
   expect_identical(length(unique(g)), s$max_clusters)
 })
+
+
+test_that("lambda2_method resolves by track and gates the IEN-geometry tuners", {
+
+  # NULL default resolves by track (1SE; MIN pins to the grid floor).
+  expect_identical(trex_gvs_control(gvs_type = "EN")$lambda2_method,
+                   "CV_1SE_CCD")
+  expect_identical(trex_gvs_control(gvs_type = "IEN")$lambda2_method,
+                   "CV_1SE_IEN_CCD")
+
+  # Explicit IEN-geometry choices parse for the IEN track.
+  for (m in c("CV_1SE_IEN_CCD", "CV_MIN_IEN_CCD",
+              "CV_1SE_TIK_SVD", "CV_MIN_TIK_SVD")) {
+    expect_identical(
+      trex_gvs_control(gvs_type = "IEN", lambda2_method = m)$lambda2_method, m)
+  }
+
+  # EN-shaped methods stay allowed on both tracks (legacy behaviour is an
+  # explicit opt-in for IEN).
+  expect_identical(
+    trex_gvs_control(gvs_type = "IEN",
+                     lambda2_method = "CV_1SE_CCD")$lambda2_method,
+    "CV_1SE_CCD")
+
+  # IEN-geometry tuners consume the group structure: EN track rejects them.
+  expect_error(
+    trex_gvs_control(gvs_type = "EN", lambda2_method = "CV_1SE_IEN_CCD"),
+    "requires\\s+gvs_type = \"IEN\""
+  )
+})
+
+
+test_that("GVS-IEN auto-calibrates lambda_2 with the IEN-geometry default", {
+  set.seed(42)
+  n <- 80
+  p <- 20
+  z <- matrix(rnorm(n * 4), n, 4)
+  X <- matrix(0, n, p)
+  for (g in 1:4) {
+    for (j in 1:5) {
+      X[, (g - 1) * 5 + j] <- 0.85 * z[, g] + sqrt(1 - 0.85^2) * rnorm(n)
+    }
+  }
+  y <- as.vector(rowSums(X[, 1:3]) * 3 + rnorm(n))
+
+  # lambda_2 < 0 triggers the auto path; the IEN default is now the
+  # IEN-geometry tuner (CV_1SE_IEN_CCD).
+  sel <- TRexGVSSelector$new(
+    X, y, tFDR = 0.2, seed = 42, verbose = FALSE,
+    gvs_control = trex_gvs_control(gvs_type = "IEN", lambda_2 = -1),
+    control = trex_control(K = 5)
+  )
+  sel$select()
+  expect_length(sel$selected_var, p)
+  expect_gt(sel$lambda2_used, 0)
+})
