@@ -38,7 +38,12 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-24.04, macos-latest]
+        os: [ubuntu-24.04, macos-latest, windows-latest]
+    # Windows runners default to PowerShell; the multi-line Rscript steps
+    # below are written for a POSIX shell (Rtools ships bash).
+    defaults:
+      run:
+        shell: bash
     steps:
       - uses: actions/checkout@v5
 
