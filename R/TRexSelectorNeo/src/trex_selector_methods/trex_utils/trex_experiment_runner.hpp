@@ -32,6 +32,8 @@
 
 // std includes
 #include <algorithm>
+#include <atomic>
+#include <exception>
 #include <cstddef>
 #include <memory>
 #include <string>
@@ -343,6 +345,14 @@ private:
         omp_set_max_active_levels(2);
         #endif
 
+        // An exception may not leave an OpenMP structured block — even an
+        // INACTIVE region (if(false), single thread): the runtime calls
+        // std::terminate, killing the host process (observed from R).
+        // Capture the first error, drain the remaining iterations, and
+        // rethrow after the region.
+        std::exception_ptr first_error = nullptr;
+        std::atomic<bool> has_error{false};
+
         #pragma omp parallel if(do_parallel)
         {
             #ifdef _OPENMP
@@ -352,9 +362,20 @@ private:
 
             #pragma omp for schedule(dynamic)
             for (std::size_t k = 0; k < cfg.K; ++k) {
-                summaries[k] = summarizePath(
-                    runSingleExperiment(k, dummy_gen_.getStored(k), cfg),
-                    cfg);
+                if (has_error.load(std::memory_order_relaxed)) { continue; }
+                try {
+                    summaries[k] = summarizePath(
+                        runSingleExperiment(k, dummy_gen_.getStored(k), cfg),
+                        cfg);
+                } catch (...) {
+                    #pragma omp critical(trex_runner_error)
+                    {
+                        if (!first_error) {
+                            first_error = std::current_exception();
+                            has_error.store(true, std::memory_order_relaxed);
+                        }
+                    }
+                }
             }
         }
 
@@ -362,6 +383,7 @@ private:
         omp_set_max_active_levels(old_max_levels);
         #endif
 
+        if (first_error) { std::rethrow_exception(first_error); }
         return summaries;
     }
 
@@ -541,6 +563,11 @@ private:
         if (do_parallel) omp_set_max_active_levels(2);
         #endif
 
+        // Same OpenMP exception discipline as runStandard: capture, drain,
+        // rethrow after the region (an escaping exception terminates).
+        std::exception_ptr first_error = nullptr;
+        std::atomic<bool> has_error{false};
+
         #pragma omp parallel if(do_parallel)
         {
             #ifdef _OPENMP
@@ -550,6 +577,8 @@ private:
 
             #pragma omp for schedule(dynamic)
             for (std::size_t k = 0; k < cfg.K; ++k) {
+                if (has_error.load(std::memory_order_relaxed)) { continue; }
+                try {
                 // Get memory-mapped D region for experiment k
                 auto D_map = memmap_mgr_->getDMap(k, cfg.num_dummies);
 
@@ -569,6 +598,15 @@ private:
                 // num_dummies * 8 B; a jetsam kill at large scale). Later
                 // T-steps refault the data from disk.
                 memmap_mgr_->releaseResidency(k);
+                } catch (...) {
+                    #pragma omp critical(trex_runner_error)
+                    {
+                        if (!first_error) {
+                            first_error = std::current_exception();
+                            has_error.store(true, std::memory_order_relaxed);
+                        }
+                    }
+                }
             }
         }
 
@@ -576,6 +614,7 @@ private:
         if (do_parallel) omp_set_max_active_levels(old_max_levels);
         #endif
 
+        if (first_error) { std::rethrow_exception(first_error); }
         return summaries;
     }
 

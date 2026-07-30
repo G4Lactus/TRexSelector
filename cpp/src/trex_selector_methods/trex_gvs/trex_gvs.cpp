@@ -9,8 +9,10 @@
 // ===================================================================================
 
 // std includes
+#include <atomic>
 #include <cmath>
 #include <cstddef>
+#include <exception>
 #include <iomanip>
 #include <memory>
 #include <random>
@@ -776,6 +778,14 @@ TRexGVSSelector::ExpAgg TRexGVSSelector::runKExperiments(
     if (do_parallel) omp_set_max_active_levels(2);
     #endif
 
+    // An exception may not leave an OpenMP structured block — even an
+    // INACTIVE region (if(false), single thread): the runtime calls
+    // std::terminate, killing the host process. Capture the first error,
+    // drain the remaining iterations, and rethrow after the region (same
+    // discipline as the base ExperimentRunner).
+    std::exception_ptr first_error = nullptr;
+    std::atomic<bool> has_error{false};
+
     #pragma omp parallel if(do_parallel)
     {
         #ifdef _OPENMP
@@ -785,6 +795,8 @@ TRexGVSSelector::ExpAgg TRexGVSSelector::runKExperiments(
 
         #pragma omp for schedule(dynamic)
         for (std::size_t k = 0; k < K; ++k) {
+            if (has_error.load(std::memory_order_relaxed)) { continue; }
+            try {
 
             tsolvers::SparseBetaPath beta_path;
 
@@ -948,8 +960,19 @@ TRexGVSSelector::ExpAgg TRexGVSSelector::runKExperiments(
             if (gvs_use_mmap_) {
                 memmap_mgr_->releaseResidency(k);
             }
+            } catch (...) {
+                #pragma omp critical(trex_gvs_error)
+                {
+                    if (!first_error) {
+                        first_error = std::current_exception();
+                        has_error.store(true, std::memory_order_relaxed);
+                    }
+                }
+            }
         }
     }
+
+    if (first_error) { std::rethrow_exception(first_error); }
 
     #ifdef _OPENMP
     if (do_parallel) omp_set_max_active_levels(old_max_levels);
