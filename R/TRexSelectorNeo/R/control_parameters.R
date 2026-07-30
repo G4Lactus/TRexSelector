@@ -479,3 +479,96 @@ trex_dummy_distribution <- function(type     = "Normal",
   if (!is.null(s))        dist$s        <- s
   dist
 }
+
+
+#' @name trex_tikhonov_control
+#'
+#' @title TRex Tikhonov Control Parameters
+#'
+#' @description Build a control list for \code{\link{TRexTikhonovSelector}},
+#'   the general-Tikhonov T-Rex: a user-supplied penalty matrix
+#'   \code{K = t(Gamma) \%*\% Gamma} drives the informed elastic net
+#'   (TCIENET sparse-K mode). \code{K = I} collapses to the plain elastic
+#'   net; a group-mean K reproduces the GVS-IEN penalty; banded/Laplacian K
+#'   encode smoothness.
+#'
+#' @param tikhonov_K Penalty matrix K (p x p): a base \code{matrix} or a
+#'   sparse \code{Matrix::dgCMatrix}. Build it from a regularization
+#'   operator Gamma with \code{\link{gamma_to_k}}.
+#' @param lambda_2 Penalty weight, solver scale. A negative value (default
+#'   \code{-1}) triggers auto-determination via \code{lambda2_method};
+#'   \code{0} is the degenerate pure-lasso case; a positive value is used
+#'   as-is.
+#' @param lambda2_method Auto-determination strategy when
+#'   \code{lambda_2 < 0}. All four rules consume K and return lambda_2 on
+#'   the solver scale (no p/2 conversion): \code{"CV_1SE_IEN_CCD"}
+#'   (default; well-posed in any p/n regime), \code{"CV_MIN_IEN_CCD"},
+#'   \code{"CV_1SE_TIK_SVD"}, \code{"CV_MIN_TIK_SVD"}.
+#' @param cv_n_folds Folds for the CV paths (default: 10).
+#' @param cv_n_lambda Points on the CV lambda grid (default: 100).
+#' @param cv_seed Seed for the CV fold permutation; \code{-1} (default)
+#'   derives it from the selector seed, \code{>= 0} overrides it for CV
+#'   folds only.
+#' @param fold_dummy_coupling Logical (default \code{TRUE}): dummy copies
+#'   join their originating variable's K-coupling (FOLDED — the exact
+#'   generalization of the GVS layered convention; dummy/null
+#'   exchangeability holds for arbitrary K). \code{FALSE} restores the
+#'   decoupled unit-ridge dummy block (INDEPENDENT_RIDGE) — a validation
+#'   escape hatch that preserves the \code{K = I} == TCENET collapse but
+#'   deforms exchangeability whenever K has off-diagonals.
+#' @param cluster_dummies Logical (default \code{TRUE}): draw dummies as
+#'   per-cluster colored MVN layers (GVS parity) on the clustering below.
+#'   \code{FALSE} restores canonical i.i.d. dummies — validation runs only;
+#'   with an informed K, i.i.d. dummies deform the dummy/null
+#'   exchangeability the FDR calibration relies on.
+#' @param prior_groups Integer vector of 1-based cluster IDs per variable
+#'   (length p) for the dummy clustering. \code{NULL} (default): clusters
+#'   are discovered by correlation-HAC with \code{corr_max} /
+#'   \code{hc_linkage}. Ignored when \code{cluster_dummies = FALSE}.
+#' @param corr_max Maximum cross-cluster |correlation| for the HAC dummy
+#'   clustering (default: 0.5). Ignored when \code{prior_groups} is set or
+#'   \code{cluster_dummies = FALSE}.
+#' @param hc_linkage HAC linkage: "Single" (default), "Complete",
+#'   "Average", "WPGMA". Ignored under \code{prior_groups} or
+#'   \code{cluster_dummies = FALSE}.
+#'
+#' @return A named list for use in TRexTikhonovSelector.
+#'
+#' @examples
+#' trex_tikhonov_control(tikhonov_K = diag(10))
+#'
+#' @export
+trex_tikhonov_control <- function(tikhonov_K,
+                                  lambda_2 = -1.0,
+                                  lambda2_method = "CV_1SE_IEN_CCD",
+                                  cv_n_folds = 10,
+                                  cv_n_lambda = 100,
+                                  cv_seed = -1,
+                                  fold_dummy_coupling = TRUE,
+                                  cluster_dummies = TRUE,
+                                  prior_groups = NULL,
+                                  corr_max = 0.5,
+                                  hc_linkage = "Single") {
+  lambda2_method <- match.arg(lambda2_method,
+                              c("CV_1SE_IEN_CCD", "CV_MIN_IEN_CCD",
+                                "CV_1SE_TIK_SVD", "CV_MIN_TIK_SVD"))
+  hc_linkage <- match.arg(hc_linkage,
+                          c("Single", "Complete", "Average", "WPGMA"))
+  if (missing(tikhonov_K) || is.null(tikhonov_K)) {
+    stop("tikhonov_K is required (p x p penalty matrix; use gamma_to_k() ",
+         "to build K from a regularization operator Gamma).")
+  }
+  list(
+    tikhonov_K          = tikhonov_K,
+    lambda_2            = lambda_2,
+    lambda2_method      = lambda2_method,
+    cv_n_folds          = cv_n_folds,
+    cv_n_lambda         = cv_n_lambda,
+    cv_seed             = cv_seed,
+    fold_dummy_coupling = fold_dummy_coupling,
+    cluster_dummies     = cluster_dummies,
+    prior_groups        = prior_groups,
+    corr_max            = corr_max,
+    hc_linkage          = hc_linkage
+  )
+}
