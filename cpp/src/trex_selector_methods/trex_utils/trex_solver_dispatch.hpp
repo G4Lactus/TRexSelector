@@ -136,6 +136,12 @@ struct SolverHyperparameters {
      * (0, 1) (ignored unless exch_tie_alpha > 0). */
     double exch_tie_floor = 0.5;
 
+    /** @brief TENET_AUG: run the augmented system with a pure-LARS inner
+     * path that never drops variables (true) instead of the default LASSO
+     * inner path that can (false). Same knob as the GVS
+     * tenet_aug_use_lars; ignored by every other solver. */
+    bool tenet_aug_use_lars = false;
+
     // --- CD-family knobs (TCCD / TCENET / TCIENET; ignored by other solvers) ---
 
     /** @brief Relative lambda tolerance of the CD crossing bisection.
@@ -337,6 +343,15 @@ std::unique_ptr<TSolver> makeSolverForConfig(const SolverConfig& cfg) {
             cfg.X, cfg.D, cfg.y, cfg.hyperparams.lambda2, cfg.normalize,
             cfg.intercept, cfg.verbose, cfg.scaling_mode);
 
+    } else if constexpr (std::is_same_v<TSolver, lars::TENETAug_Solver>) {
+
+        // TENET signature plus the LARS-vs-LASSO inner-path switch; the
+        // Zou-Hastie augmented system is built inside the solver.
+        return std::make_unique<TSolver>(
+            cfg.X, cfg.D, cfg.y, cfg.hyperparams.lambda2, cfg.normalize,
+            cfg.intercept, cfg.verbose, cfg.scaling_mode,
+            cfg.hyperparams.tenet_aug_use_lars);
+
     } else if constexpr (std::is_same_v<TSolver, afs::TAFS_Solver>) {
 
         return std::make_unique<TSolver>(
@@ -493,9 +508,7 @@ inline SparseBetaPath dispatchByType(SolverTypeForTRex solver_type, const Solver
         case SolverTypeForTRex::TLASSO:     return dispatchSolver<lars::TLASSO_Solver>(cfg);
         case SolverTypeForTRex::TSTEPWISE:  return dispatchSolver<lars::TSTEPWISE_Solver>(cfg);
         case SolverTypeForTRex::TENET:      return dispatchSolver<lars::TENET_Solver>(cfg);
-        case SolverTypeForTRex::TENET_AUG:  throw std::invalid_argument(
-                "trex_solver_dispatch: TENET_AUG is a GVS-only solver; "
-                "use TRexGVSSelector with gvs_type=EN.");
+        case SolverTypeForTRex::TENET_AUG: return dispatchSolver<lars::TENETAug_Solver>(cfg);
         case SolverTypeForTRex::TIENET:     throw std::invalid_argument(
                 "trex_solver_dispatch: TIENET is a GVS-only solver (needs a "
                 "group assignment); use TRexGVSSelector with gvs_type=IEN.");
