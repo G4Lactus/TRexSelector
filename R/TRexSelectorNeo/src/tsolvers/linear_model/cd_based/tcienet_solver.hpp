@@ -85,8 +85,14 @@ namespace trex::tsolvers::linear_model::cd_based {
  *    (O(nnz(K col)) per coordinate change); gradient of unified column t
  *    is w_base(t), diagonal lambda2 * K_bb (kappa_dummy is ignored).
  *    With K = sum_m 1_m 1_m^T / p_m this reproduces the GROUP mode
- *    bit-exactly ((K s)_b = sigma_m / p_m, K_bb = 1 / p_m), and dummy/null
- *    exchangeability holds for arbitrary K.
+ *    mathematically exactly ((K s)_b = sigma_m / p_m, K_bb = 1 / p_m) —
+ *    NOT bit-exactly: the two modes accumulate in different floating-point
+ *    orders (FOLDED maintains w += lambda2*delta*K.col(b) per update,
+ *    GROUP accumulates sigma_m += delta and multiplies once), so
+ *    knife-edge designs can flip borderline selections at ULP margins
+ *    (observed: 2 flips at n = 80, rho = 0.85; the anchor tests pin
+ *    wide-margin designs). Dummy/null exchangeability holds for
+ *    arbitrary K.
  *
  *  The canonical group constructor is the O(1)-per-update specialization of
  *  this general form (FOLDED coupling by construction).
