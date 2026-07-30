@@ -69,7 +69,11 @@ if [ "${1:-}" = "--check" ]; then
         # them, otherwise every CI checkout would report divergence. What
         # remains is real: content changes ('>fc...'), new files/dirs
         # ('>f+++++++' / 'cd+++++++'), and deletions ('*deleting').
-        diff_out=$(rsync -rlci --delete --dry-run "${RSYNC_EXCLUDES[@]}" \
+        # --prune-empty-dirs: a directory whose entire content is excluded
+        # (e.g. a CMakeLists.txt-only stub) vendors to empty, and git does
+        # not track empty directories — without pruning, the check demands
+        # a directory a fresh checkout can never contain.
+        diff_out=$(rsync -rlci --prune-empty-dirs --delete --dry-run "${RSYNC_EXCLUDES[@]}" \
             "$CPP_SRC/$tree/" "src/$tree/" | grep -v '^\.' || true)
         if [ -n "$diff_out" ]; then
             echo "DIVERGED: src/$tree/"
@@ -95,7 +99,9 @@ fi
 
 echo "=== Vendoring C++ backend from $CPP_SRC ==="
 for tree in "${SUBTREES[@]}"; do
-    rsync -a --delete "${RSYNC_EXCLUDES[@]}" "$CPP_SRC/$tree/" "src/$tree/"
+    # --prune-empty-dirs mirrors the check: never create directories that
+    # would be empty after the excludes (git cannot commit them anyway).
+    rsync -a --prune-empty-dirs --delete "${RSYNC_EXCLUDES[@]}" "$CPP_SRC/$tree/" "src/$tree/"
 done
 
 echo "=== Regenerating OBJECTS list ==="
