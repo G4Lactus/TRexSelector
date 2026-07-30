@@ -9,7 +9,7 @@ trex_gvs_control(
   corr_max = 0.5,
   hc_linkage = "Single",
   lambda_2 = -1,
-  lambda2_method = "CV_1SE_CCD",
+  lambda2_method = NULL,
   en_solver = "TENET",
   tenet_aug_use_lars = FALSE,
   groups = NULL,
@@ -33,8 +33,16 @@ the method selected by \code{lambda2_method}; \code{0} is the degenerate
 pure T-LASSO case (no ridge); a positive value is used as-is.}
 
 \item{lambda2_method}{Auto-determination strategy for \code{lambda_2} when
-\code{lambda_2 < 0}: \code{"CV_1SE_CCD"} (default), \code{"CV_MIN_CCD"},
-\code{"CV_1SE_SVD"}, \code{"CV_MIN_SVD"}.}
+\code{lambda_2 < 0}. \code{NULL} (default) resolves by track:
+\code{"CV_1SE_CCD"} for \code{gvs_type = "EN"} and
+\code{"CV_1SE_IEN_CCD"} for \code{gvs_type = "IEN"} (the IEN-geometry
+tuner consumes the group structure; the 1SE rule is preferred because
+the MIN rule tends to pin to the grid floor). Explicit choices:
+EN-shaped ridge CV \code{"CV_1SE_CCD"}, \code{"CV_MIN_CCD"},
+\code{"CV_1SE_SVD"}, \code{"CV_MIN_SVD"} (allowed on both tracks);
+IEN-geometry \code{"CV_1SE_IEN_CCD"}, \code{"CV_MIN_IEN_CCD"},
+\code{"CV_1SE_TIK_SVD"}, \code{"CV_MIN_TIK_SVD"} (require
+\code{gvs_type = "IEN"} — they consume the group structure).}
 
 \item{en_solver}{Elastic Net solver variant for \code{gvs_type = "EN"}:
 \code{"TENET"} (default, Gram-based), \code{"TENET_AUG"}

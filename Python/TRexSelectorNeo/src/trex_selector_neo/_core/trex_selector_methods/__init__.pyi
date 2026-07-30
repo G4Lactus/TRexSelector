@@ -6,7 +6,7 @@ import collections.abc
 import numpy
 import numpy.typing
 import typing
-__all__: list[str] = ['AR1', 'ActiveSet', 'BT', 'BTSelectionMode', 'BiobankScreenTRexControl', 'BiobankScreenTRexResult', 'CV_1SE_CCD', 'CV_1SE_SVD', 'CV_MIN_CCD', 'CV_MIN_SVD', 'DAMethod', 'DASelectionResult', 'DummyDistribution', 'EN', 'ENSolverType', 'EQUI', 'FeasibleOnly', 'GVSSelectionResult', 'GVSType', 'HCONCAT', 'IEN', 'L2', 'LLoopStrategy', 'LambdaSelectionMethod', 'NN', 'PERMUTATION', 'PERMUTATION_SEEDED', 'PRIOR_GROUPS', 'RFaithful', 'SEEDED', 'SKIPL', 'SPCAMode', 'STANDARD', 'ScalingMode', 'ScreenTRexControlParameter', 'ScreenTRexMethod', 'ScreenTRexSelectionResult', 'SelectionResult', 'SolverHyperparameters', 'SolverTypeForTRex', 'TACGP', 'TAFS', 'TENET', 'TENET_AUG', 'TGP', 'TIENET_AUG', 'TLARS', 'TLASSO', 'TMP', 'TNCGMP', 'TOMP', 'TOOLS', 'TREX', 'TREX_DA_AR1', 'TREX_DA_BLOCK_EQUI', 'TREX_DA_EQUI', 'TRexBiobankScreeningSelector', 'TRexControlParameter', 'TRexDAControlParameter', 'TRexDASelector', 'TRexGVSControlParameter', 'TRexGVSSelector', 'TRexSPCAControlParameter', 'TRexSPCAResult', 'TRexSPCASelector', 'TRexScreeningSelector', 'TRexSelector', 'TSTAGEWISE', 'TSTEPWISE', 'Thresholded', 'ZSCORE']
+__all__: list[str] = ['AR1', 'ActiveSet', 'BT', 'BTSelectionMode', 'BiobankScreenTRexControl', 'BiobankScreenTRexResult', 'CV_1SE_CCD', 'CV_1SE_IEN_CCD', 'CV_1SE_SVD', 'CV_1SE_TIK_SVD', 'CV_MIN_CCD', 'CV_MIN_IEN_CCD', 'CV_MIN_SVD', 'CV_MIN_TIK_SVD', 'DAMethod', 'DASelectionResult', 'DummyDistribution', 'EN', 'ENSolverType', 'EQUI', 'FeasibleOnly', 'GVSSelectionResult', 'GVSType', 'HCONCAT', 'IEN', 'L2', 'LLoopStrategy', 'LambdaSelectionMethod', 'NN', 'PERMUTATION', 'PERMUTATION_SEEDED', 'PRIOR_GROUPS', 'RFaithful', 'SEEDED', 'SKIPL', 'SPCAMode', 'STANDARD', 'ScalingMode', 'ScreenTRexControlParameter', 'ScreenTRexMethod', 'ScreenTRexSelectionResult', 'SelectionResult', 'SolverHyperparameters', 'SolverTypeForTRex', 'TACGP', 'TAFS', 'TCCD', 'TCENET', 'TCIENET', 'TENET', 'TENET_AUG', 'TGP', 'TIENET', 'TIENET_AUG', 'TLARS', 'TLASSO', 'TMP', 'TNCGMP', 'TOMP', 'TOOLS', 'TREX', 'TREX_DA_AR1', 'TREX_DA_BLOCK_EQUI', 'TREX_DA_EQUI', 'TRexBiobankScreeningSelector', 'TRexControlParameter', 'TRexDAControlParameter', 'TRexDASelector', 'TRexGVSControlParameter', 'TRexGVSSelector', 'TRexSPCAControlParameter', 'TRexSPCAResult', 'TRexSPCASelector', 'TRexScreeningSelector', 'TRexSelector', 'TSTAGEWISE', 'TSTEPWISE', 'Thresholded', 'ZSCORE']
 class BTSelectionMode:
     """
     Cell-selection policy for the BT (binary-tree) DA method.
@@ -463,10 +463,13 @@ class ENSolverType:
       TENET : Gram-based Elastic Net (ridge absorbed via Cholesky update).
     
       TENET_AUG : Augmented-LASSO Elastic Net (row-augmented system).
+    
+      TCENET : CCD Elastic Net (exact fixed-lambda1 minimizers per dummy crossing).
     """
+    TCENET: typing.ClassVar[ENSolverType]  # value = <ENSolverType.TCENET: 2>
     TENET: typing.ClassVar[ENSolverType]  # value = <ENSolverType.TENET: 0>
     TENET_AUG: typing.ClassVar[ENSolverType]  # value = <ENSolverType.TENET_AUG: 1>
-    __members__: typing.ClassVar[dict[str, ENSolverType]]  # value = {'TENET': <ENSolverType.TENET: 0>, 'TENET_AUG': <ENSolverType.TENET_AUG: 1>}
+    __members__: typing.ClassVar[dict[str, ENSolverType]]  # value = {'TENET': <ENSolverType.TENET: 0>, 'TENET_AUG': <ENSolverType.TENET_AUG: 1>, 'TCENET': <ENSolverType.TCENET: 2>}
     def __eq__(self, other: typing.Any) -> bool:
         ...
     def __getstate__(self) -> int:
@@ -535,7 +538,7 @@ class GVSType:
     
       EN : Elastic-Net group variable selection (uses TENET solver).
     
-      IEN : Informed Elastic-Net using group structure from clustering (uses TIENETAug solver).
+      IEN : Informed Elastic-Net using group structure from clustering (solver via trex_control.solver_type: TIENET default, TIENET_AUG, TCIENET).
     """
     EN: typing.ClassVar[GVSType]  # value = <GVSType.EN: 0>
     IEN: typing.ClassVar[GVSType]  # value = <GVSType.IEN: 1>
@@ -630,12 +633,24 @@ class LambdaSelectionMethod:
       CV_1SE_CCD : Coordinate-descent ridge CV, glmnet-faithful 1-SE rule (default).
     
       CV_MIN_CCD : Coordinate-descent ridge CV, glmnet-faithful minimum rule.
+    
+      CV_1SE_IEN_CCD : IEN-geometry coordinate-descent CV (lambda1 profiled, group-consuming), 1-SE rule. IEN default.
+    
+      CV_MIN_IEN_CCD : IEN-geometry coordinate-descent CV (lambda1 profiled, group-consuming), minimum rule.
+    
+      CV_1SE_TIK_SVD : Generalized-Tikhonov SVD ridge CV (IEN geometry), 1-SE rule.
+    
+      CV_MIN_TIK_SVD : Generalized-Tikhonov SVD ridge CV (IEN geometry), minimum rule.
     """
     CV_1SE_CCD: typing.ClassVar[LambdaSelectionMethod]  # value = <LambdaSelectionMethod.CV_1SE_CCD: 2>
+    CV_1SE_IEN_CCD: typing.ClassVar[LambdaSelectionMethod]  # value = <LambdaSelectionMethod.CV_1SE_IEN_CCD: 4>
     CV_1SE_SVD: typing.ClassVar[LambdaSelectionMethod]  # value = <LambdaSelectionMethod.CV_1SE_SVD: 0>
+    CV_1SE_TIK_SVD: typing.ClassVar[LambdaSelectionMethod]  # value = <LambdaSelectionMethod.CV_1SE_TIK_SVD: 6>
     CV_MIN_CCD: typing.ClassVar[LambdaSelectionMethod]  # value = <LambdaSelectionMethod.CV_MIN_CCD: 3>
+    CV_MIN_IEN_CCD: typing.ClassVar[LambdaSelectionMethod]  # value = <LambdaSelectionMethod.CV_MIN_IEN_CCD: 5>
     CV_MIN_SVD: typing.ClassVar[LambdaSelectionMethod]  # value = <LambdaSelectionMethod.CV_MIN_SVD: 1>
-    __members__: typing.ClassVar[dict[str, LambdaSelectionMethod]]  # value = {'CV_1SE_SVD': <LambdaSelectionMethod.CV_1SE_SVD: 0>, 'CV_MIN_SVD': <LambdaSelectionMethod.CV_MIN_SVD: 1>, 'CV_1SE_CCD': <LambdaSelectionMethod.CV_1SE_CCD: 2>, 'CV_MIN_CCD': <LambdaSelectionMethod.CV_MIN_CCD: 3>}
+    CV_MIN_TIK_SVD: typing.ClassVar[LambdaSelectionMethod]  # value = <LambdaSelectionMethod.CV_MIN_TIK_SVD: 7>
+    __members__: typing.ClassVar[dict[str, LambdaSelectionMethod]]  # value = {'CV_1SE_SVD': <LambdaSelectionMethod.CV_1SE_SVD: 0>, 'CV_MIN_SVD': <LambdaSelectionMethod.CV_MIN_SVD: 1>, 'CV_1SE_CCD': <LambdaSelectionMethod.CV_1SE_CCD: 2>, 'CV_MIN_CCD': <LambdaSelectionMethod.CV_MIN_CCD: 3>, 'CV_1SE_IEN_CCD': <LambdaSelectionMethod.CV_1SE_IEN_CCD: 4>, 'CV_MIN_IEN_CCD': <LambdaSelectionMethod.CV_MIN_IEN_CCD: 5>, 'CV_1SE_TIK_SVD': <LambdaSelectionMethod.CV_1SE_TIK_SVD: 6>, 'CV_MIN_TIK_SVD': <LambdaSelectionMethod.CV_MIN_TIK_SVD: 7>}
     def __eq__(self, other: typing.Any) -> bool:
         ...
     def __getstate__(self) -> int:
@@ -948,6 +963,46 @@ class SolverHyperparameters:
     def __init__(self) -> None:
         ...
     @property
+    def cd_gram_cap(self) -> int:
+        """
+        CCD family: column cap for the cached Gram matrix (0 keeps the solver default).
+        """
+    @cd_gram_cap.setter
+    def cd_gram_cap(self, arg0: typing.SupportsInt | typing.SupportsIndex) -> None:
+        ...
+    @property
+    def cd_lambda_rel_tol(self) -> float:
+        """
+        CCD family: relative lambda step tolerance of the crossing search (<= 0 keeps the solver default).
+        """
+    @cd_lambda_rel_tol.setter
+    def cd_lambda_rel_tol(self, arg0: typing.SupportsFloat | typing.SupportsIndex) -> None:
+        ...
+    @property
+    def cd_max_sweeps(self) -> int:
+        """
+        CCD family: maximum coordinate sweeps per subproblem (0 keeps the solver default).
+        """
+    @cd_max_sweeps.setter
+    def cd_max_sweeps(self, arg0: typing.SupportsInt | typing.SupportsIndex) -> None:
+        ...
+    @property
+    def cd_tol_certify(self) -> float:
+        """
+        CCD family: KKT certification tolerance; applied only when set together with cd_tol_probe (both > 0).
+        """
+    @cd_tol_certify.setter
+    def cd_tol_certify(self, arg0: typing.SupportsFloat | typing.SupportsIndex) -> None:
+        ...
+    @property
+    def cd_tol_probe(self) -> float:
+        """
+        CCD family: probing tolerance; applied only when set together with cd_tol_certify (both > 0).
+        """
+    @cd_tol_probe.setter
+    def cd_tol_probe(self, arg0: typing.SupportsFloat | typing.SupportsIndex) -> None:
+        ...
+    @property
     def exch_tie_alpha(self) -> float:
         """
         Exchangeable-tie band width for greedy solvers (TOMP/TAFS) in pairwise ranking-noise sd units; 0 = off. Recommended under trex+DA: 0.25.
@@ -988,6 +1043,14 @@ class SolverHyperparameters:
     def rho_afs(self, arg0: typing.SupportsFloat | typing.SupportsIndex) -> None:
         ...
     @property
+    def tenet_aug_use_lars(self) -> bool:
+        """
+        TENET_AUG: False (default) = standard LASSO inner path; True = optional pure-LARS inner path that never drops variables.
+        """
+    @tenet_aug_use_lars.setter
+    def tenet_aug_use_lars(self, arg0: bool) -> None:
+        ...
+    @property
     def tol(self) -> float:
         """
         Numerical tolerance for solver steps.
@@ -1025,15 +1088,27 @@ class SolverTypeForTRex:
     
       TAFS : Terminating AFS.
     
-      TENET_AUG : Terminating Elastic Net via augmented LASSO (GVS).
+      TENET_AUG : Terminating Elastic Net via augmented LASSO; accepted wherever TENET runs (LASSO inner path standard, LARS via tenet_aug_use_lars).
     
-      TIENET_AUG : Terminating Informed Elastic Net via augmented LASSO (GVS, gvs_type=IEN).
+      TCCD : Terminating CCD LASSO (exact penalized-lasso minimizers per crossing).
+    
+      TCENET : Terminating CCD Elastic Net.
+    
+      TIENET : Terminating Informed Elastic Net, native pathwise (GVS-only, gvs_type=IEN; IEN default).
+    
+      TIENET_AUG : Terminating Informed Elastic Net via augmented LASSO (GVS-only, gvs_type=IEN).
+    
+      TCIENET : Terminating CCD Informed Elastic Net (GVS gvs_type=IEN, or sparse-K Tikhonov).
     """
     TACGP: typing.ClassVar[SolverTypeForTRex]  # value = <SolverTypeForTRex.TACGP: 13>
     TAFS: typing.ClassVar[SolverTypeForTRex]  # value = <SolverTypeForTRex.TAFS: 17>
+    TCCD: typing.ClassVar[SolverTypeForTRex]  # value = <SolverTypeForTRex.TCCD: 8>
+    TCENET: typing.ClassVar[SolverTypeForTRex]  # value = <SolverTypeForTRex.TCENET: 9>
+    TCIENET: typing.ClassVar[SolverTypeForTRex]  # value = <SolverTypeForTRex.TCIENET: 10>
     TENET: typing.ClassVar[SolverTypeForTRex]  # value = <SolverTypeForTRex.TENET: 2>
     TENET_AUG: typing.ClassVar[SolverTypeForTRex]  # value = <SolverTypeForTRex.TENET_AUG: 3>
     TGP: typing.ClassVar[SolverTypeForTRex]  # value = <SolverTypeForTRex.TGP: 12>
+    TIENET: typing.ClassVar[SolverTypeForTRex]  # value = <SolverTypeForTRex.TIENET: 4>
     TIENET_AUG: typing.ClassVar[SolverTypeForTRex]  # value = <SolverTypeForTRex.TIENET_AUG: 5>
     TLARS: typing.ClassVar[SolverTypeForTRex]  # value = <SolverTypeForTRex.TLARS: 0>
     TLASSO: typing.ClassVar[SolverTypeForTRex]  # value = <SolverTypeForTRex.TLASSO: 1>
@@ -1043,7 +1118,7 @@ class SolverTypeForTRex:
     TOOLS: typing.ClassVar[SolverTypeForTRex]  # value = <SolverTypeForTRex.TOOLS: 16>
     TSTAGEWISE: typing.ClassVar[SolverTypeForTRex]  # value = <SolverTypeForTRex.TSTAGEWISE: 7>
     TSTEPWISE: typing.ClassVar[SolverTypeForTRex]  # value = <SolverTypeForTRex.TSTEPWISE: 6>
-    __members__: typing.ClassVar[dict[str, SolverTypeForTRex]]  # value = {'TLARS': <SolverTypeForTRex.TLARS: 0>, 'TLASSO': <SolverTypeForTRex.TLASSO: 1>, 'TENET': <SolverTypeForTRex.TENET: 2>, 'TSTEPWISE': <SolverTypeForTRex.TSTEPWISE: 6>, 'TSTAGEWISE': <SolverTypeForTRex.TSTAGEWISE: 7>, 'TOMP': <SolverTypeForTRex.TOMP: 11>, 'TGP': <SolverTypeForTRex.TGP: 12>, 'TACGP': <SolverTypeForTRex.TACGP: 13>, 'TMP': <SolverTypeForTRex.TMP: 14>, 'TNCGMP': <SolverTypeForTRex.TNCGMP: 15>, 'TOOLS': <SolverTypeForTRex.TOOLS: 16>, 'TAFS': <SolverTypeForTRex.TAFS: 17>, 'TENET_AUG': <SolverTypeForTRex.TENET_AUG: 3>, 'TIENET_AUG': <SolverTypeForTRex.TIENET_AUG: 5>}
+    __members__: typing.ClassVar[dict[str, SolverTypeForTRex]]  # value = {'TLARS': <SolverTypeForTRex.TLARS: 0>, 'TLASSO': <SolverTypeForTRex.TLASSO: 1>, 'TENET': <SolverTypeForTRex.TENET: 2>, 'TSTEPWISE': <SolverTypeForTRex.TSTEPWISE: 6>, 'TSTAGEWISE': <SolverTypeForTRex.TSTAGEWISE: 7>, 'TOMP': <SolverTypeForTRex.TOMP: 11>, 'TGP': <SolverTypeForTRex.TGP: 12>, 'TACGP': <SolverTypeForTRex.TACGP: 13>, 'TMP': <SolverTypeForTRex.TMP: 14>, 'TNCGMP': <SolverTypeForTRex.TNCGMP: 15>, 'TOOLS': <SolverTypeForTRex.TOOLS: 16>, 'TAFS': <SolverTypeForTRex.TAFS: 17>, 'TENET_AUG': <SolverTypeForTRex.TENET_AUG: 3>, 'TCCD': <SolverTypeForTRex.TCCD: 8>, 'TCENET': <SolverTypeForTRex.TCENET: 9>, 'TIENET': <SolverTypeForTRex.TIENET: 4>, 'TIENET_AUG': <SolverTypeForTRex.TIENET_AUG: 5>, 'TCIENET': <SolverTypeForTRex.TCIENET: 10>}
     def __eq__(self, other: typing.Any) -> bool:
         ...
     def __getstate__(self) -> int:
@@ -1341,7 +1416,7 @@ class TRexGVSControlParameter:
     @property
     def en_solver(self) -> ENSolverType:
         """
-        EN solver variant when gvs_type == EN (TENET or TENET_AUG).
+        EN solver variant when gvs_type == EN: TENET (default), TENET_AUG, or TCENET.
         """
     @en_solver.setter
     def en_solver(self, arg0: ENSolverType) -> None:
@@ -1626,9 +1701,13 @@ AR1: DAMethod  # value = <DAMethod.AR1: 0>
 ActiveSet: SPCAMode  # value = <SPCAMode.ActiveSet: 0>
 BT: DAMethod  # value = <DAMethod.BT: 2>
 CV_1SE_CCD: LambdaSelectionMethod  # value = <LambdaSelectionMethod.CV_1SE_CCD: 2>
+CV_1SE_IEN_CCD: LambdaSelectionMethod  # value = <LambdaSelectionMethod.CV_1SE_IEN_CCD: 4>
 CV_1SE_SVD: LambdaSelectionMethod  # value = <LambdaSelectionMethod.CV_1SE_SVD: 0>
+CV_1SE_TIK_SVD: LambdaSelectionMethod  # value = <LambdaSelectionMethod.CV_1SE_TIK_SVD: 6>
 CV_MIN_CCD: LambdaSelectionMethod  # value = <LambdaSelectionMethod.CV_MIN_CCD: 3>
+CV_MIN_IEN_CCD: LambdaSelectionMethod  # value = <LambdaSelectionMethod.CV_MIN_IEN_CCD: 5>
 CV_MIN_SVD: LambdaSelectionMethod  # value = <LambdaSelectionMethod.CV_MIN_SVD: 1>
+CV_MIN_TIK_SVD: LambdaSelectionMethod  # value = <LambdaSelectionMethod.CV_MIN_TIK_SVD: 7>
 EN: GVSType  # value = <GVSType.EN: 0>
 EQUI: DAMethod  # value = <DAMethod.EQUI: 1>
 FeasibleOnly: BTSelectionMode  # value = <BTSelectionMode.FeasibleOnly: 0>
@@ -1645,9 +1724,13 @@ SKIPL: LLoopStrategy  # value = <LLoopStrategy.SKIPL: 0>
 STANDARD: LLoopStrategy  # value = <LLoopStrategy.STANDARD: 1>
 TACGP: SolverTypeForTRex  # value = <SolverTypeForTRex.TACGP: 13>
 TAFS: SolverTypeForTRex  # value = <SolverTypeForTRex.TAFS: 17>
+TCCD: SolverTypeForTRex  # value = <SolverTypeForTRex.TCCD: 8>
+TCENET: ENSolverType  # value = <ENSolverType.TCENET: 2>
+TCIENET: SolverTypeForTRex  # value = <SolverTypeForTRex.TCIENET: 10>
 TENET: ENSolverType  # value = <ENSolverType.TENET: 0>
 TENET_AUG: ENSolverType  # value = <ENSolverType.TENET_AUG: 1>
 TGP: SolverTypeForTRex  # value = <SolverTypeForTRex.TGP: 12>
+TIENET: SolverTypeForTRex  # value = <SolverTypeForTRex.TIENET: 4>
 TIENET_AUG: SolverTypeForTRex  # value = <SolverTypeForTRex.TIENET_AUG: 5>
 TLARS: SolverTypeForTRex  # value = <SolverTypeForTRex.TLARS: 0>
 TLASSO: SolverTypeForTRex  # value = <SolverTypeForTRex.TLASSO: 1>

@@ -1096,6 +1096,36 @@ trex_spca_select <- function(X, M, tFDR, spca_ctrl_list, seed, verbose) {
     .Call(`_TRexSelectorNeo_trex_spca_select`, X, M, tFDR, spca_ctrl_list, seed, verbose)
 }
 
+#' @title Create TRexTikhonovSelector
+#' @noRd
+trex_tikhonov_create <- function(X, y, tFDR, tik_control_list, trex_control_list, seed, verbose) {
+    .Call(`_TRexSelectorNeo_trex_tikhonov_create`, X, y, tFDR, tik_control_list, trex_control_list, seed, verbose)
+}
+
+#' @title Create TRexTikhonovSelector from MemoryMappedMatrix
+#' @noRd
+trex_tikhonov_mmap_create <- function(X_ptr, y, tFDR, tik_control_list, trex_control_list, seed, verbose) {
+    .Call(`_TRexSelectorNeo_trex_tikhonov_mmap_create`, X_ptr, y, tFDR, tik_control_list, trex_control_list, seed, verbose)
+}
+
+#' @title Run TRexTikhonovSelector
+#' @noRd
+trex_tikhonov_select <- function(r_ptr) {
+    invisible(.Call(`_TRexSelectorNeo_trex_tikhonov_select`, r_ptr))
+}
+
+#' @title Get the resolved lambda_2 (solver scale)
+#' @noRd
+trex_tikhonov_get_lambda2_used <- function(r_ptr) {
+    .Call(`_TRexSelectorNeo_trex_tikhonov_get_lambda2_used`, r_ptr)
+}
+
+#' @title Build K = Gamma^T Gamma from a Tikhonov operator Gamma
+#' @noRd
+trex_tikhonov_gamma_to_k <- function(gamma) {
+    .Call(`_TRexSelectorNeo_trex_tikhonov_gamma_to_k`, gamma)
+}
+
 #' @title Create LARS Solver
 #'
 #' @param X Design matrix

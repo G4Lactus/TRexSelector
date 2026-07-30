@@ -64,9 +64,19 @@ TRexGVSControlParameter parse_gvs_parameter(const Rcpp::List& control) {
             params.lambda2_method = LambdaSelectionMethod::CV_1SE_CCD;
         } else if (method_str == "CV_MIN_CCD") {
             params.lambda2_method = LambdaSelectionMethod::CV_MIN_CCD;
+        } else if (method_str == "CV_1SE_IEN_CCD") {
+            params.lambda2_method = LambdaSelectionMethod::CV_1SE_IEN_CCD;
+        } else if (method_str == "CV_MIN_IEN_CCD") {
+            params.lambda2_method = LambdaSelectionMethod::CV_MIN_IEN_CCD;
+        } else if (method_str == "CV_1SE_TIK_SVD") {
+            params.lambda2_method = LambdaSelectionMethod::CV_1SE_TIK_SVD;
+        } else if (method_str == "CV_MIN_TIK_SVD") {
+            params.lambda2_method = LambdaSelectionMethod::CV_MIN_TIK_SVD;
         } else {
             Rcpp::stop("Unknown lambda2_method: '" + method_str +
-                       "'. Use 'CV_1SE_SVD', 'CV_MIN_SVD', 'CV_1SE_CCD', or 'CV_MIN_CCD'.");
+                       "'. Use 'CV_1SE_SVD', 'CV_MIN_SVD', 'CV_1SE_CCD', "
+                       "'CV_MIN_CCD', 'CV_1SE_IEN_CCD', 'CV_MIN_IEN_CCD', "
+                       "'CV_1SE_TIK_SVD', or 'CV_MIN_TIK_SVD'.");
         }
     }
 

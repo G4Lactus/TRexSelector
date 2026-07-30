@@ -25,6 +25,7 @@
 #include "rcpp_trex_selector.h"
 #include "rcpp_trex_da.h"
 #include "rcpp_trex_gvs.h"
+#include "rcpp_trex_tikhonov.h"
 #include "rcpp_trex_screening.h"
 #include "rcpp_trex_biobank_screening.h"
 

@@ -34,6 +34,30 @@ from .trex_selector_methods import (
 )
 
 
+def _validate_core_solver_type(trex_control: "TRexControlParameter") -> None:
+    """Reject solver types the core dispatch cannot serve, at construction.
+
+    The shared C++ dispatch throws the same guidance at SELECT time, but from
+    inside the OpenMP experiment loop, where the exception cannot cross the
+    region boundary and terminates the process instead of raising. Used by
+    the plain/DA/screening/biobank wrappers; the GVS wrapper deliberately
+    bypasses it (the IEN family is exactly its vocabulary).
+    """
+    st = trex_control.solver_type
+    if st == SolverTypeForTRex.TIENET:
+        raise ValueError(
+            'solver_type = TIENET is a GVS-only solver (needs a group '
+            'assignment); use TRexGVSSelector with gvs_type = IEN.')
+    if st == SolverTypeForTRex.TIENET_AUG:
+        raise ValueError(
+            'solver_type = TIENET_AUG is a GVS-only solver; use '
+            'TRexGVSSelector with gvs_type = IEN.')
+    if st == SolverTypeForTRex.TCIENET:
+        raise ValueError(
+            'solver_type = TCIENET needs a group assignment; use '
+            'TRexGVSSelector with gvs_type = IEN.')
+
+
 class TRexSelector:
     """
     Python wrapper for the C++ TRexSelector.
@@ -52,6 +76,7 @@ class TRexSelector:
 
         if trex_control is None:
             trex_control = TRexControlParameter()
+        _validate_core_solver_type(trex_control)
 
         self._selector = PyTRexSelector(self.X, self.y, tFDR, trex_control, seed, verbose)
 
@@ -148,6 +173,7 @@ class TRexDASelector(TRexSelector):
             da_control = TRexDAControlParameter()
         if trex_control is None:
             trex_control = TRexControlParameter()
+        _validate_core_solver_type(trex_control)
 
         self._selector: PyTRexDASelector = PyTRexDASelector(self.X, self.y, tFDR,
                                                             da_control,
@@ -176,25 +202,61 @@ class TRexGVSSelector(TRexSelector):
         if trex_control is None:
             trex_control = TRexControlParameter()
 
-        # The C++ wrapper authoritatively derives the required solver_type from
-        # gvs_control.gvs_type and gvs_control.en_solver (EN -> TENET/TENET_AUG,
-        # IEN -> TIENET_AUG), overriding trex_control.solver_type. Warn when the
-        # user explicitly set a non-matching solver (TLARS is the default and
-        # cannot be distinguished from an explicit choice, so it never warns).
+        # Solver selection mirrors the R surface:
+        #   EN  -> derived from en_solver (TENET / TENET_AUG / TCENET);
+        #          trex_control.solver_type is ignored (warn on an explicit
+        #          non-matching value; TLARS is the default and cannot be
+        #          distinguished from an explicit choice, so it never warns).
+        #   IEN -> trex_control.solver_type IS the IEN-solver choice:
+        #          TIENET (native pathwise, default), TIENET_AUG, TCIENET.
+        #          The default TLARS maps to TIENET; any other value warns
+        #          and falls back to TIENET (in the C++ glue).
+        _ien_family = (SolverTypeForTRex.TIENET, SolverTypeForTRex.TIENET_AUG,
+                       SolverTypeForTRex.TCIENET)
         if gvs_control.gvs_type == GVSType.IEN:
-            derived_solver = SolverTypeForTRex.TIENET_AUG
-        elif gvs_control.en_solver == ENSolverType.TENET_AUG:
-            derived_solver = SolverTypeForTRex.TENET_AUG
+            if trex_control.solver_type not in (SolverTypeForTRex.TLARS,) + _ien_family:
+                warnings.warn(
+                    f"trex_control.solver_type = {trex_control.solver_type.name} "
+                    f"is not an IEN-family solver; gvs_type = IEN accepts "
+                    f"TIENET, TIENET_AUG, or TCIENET. Using TIENET.",
+                    UserWarning,
+                    stacklevel=2,
+                )
         else:
-            derived_solver = SolverTypeForTRex.TENET
-        if trex_control.solver_type not in (SolverTypeForTRex.TLARS, derived_solver):
-            warnings.warn(
-                f"trex_control.solver_type = {trex_control.solver_type.name} is "
-                f"ignored by TRexGVSSelector: gvs_type = {gvs_control.gvs_type.name} "
-                f"derives solver {derived_solver.name}.",
-                UserWarning,
-                stacklevel=2,
-            )
+            if gvs_control.en_solver == ENSolverType.TENET_AUG:
+                derived_solver = SolverTypeForTRex.TENET_AUG
+            elif gvs_control.en_solver == ENSolverType.TCENET:
+                derived_solver = SolverTypeForTRex.TCENET
+            else:
+                derived_solver = SolverTypeForTRex.TENET
+            if trex_control.solver_type not in (SolverTypeForTRex.TLARS, derived_solver):
+                warnings.warn(
+                    f"trex_control.solver_type = {trex_control.solver_type.name} is "
+                    f"ignored by TRexGVSSelector: gvs_type = EN "
+                    f"derives solver {derived_solver.name} from en_solver.",
+                    UserWarning,
+                    stacklevel=2,
+                )
+
+        # lambda2_method resolves by track: the struct default (CV_1SE_CCD,
+        # indistinguishable from an explicit choice — same convention as
+        # TLARS above) becomes the IEN-geometry tuner on the IEN track.
+        # IEN users wanting an EN-shaped ridge CV explicitly still have
+        # CV_MIN_CCD / CV_1SE_SVD / CV_MIN_SVD. The IEN-geometry tuners
+        # consume the group structure, so the EN track rejects them.
+        _ien_methods = (LambdaSelectionMethod.CV_1SE_IEN_CCD,
+                        LambdaSelectionMethod.CV_MIN_IEN_CCD,
+                        LambdaSelectionMethod.CV_1SE_TIK_SVD,
+                        LambdaSelectionMethod.CV_MIN_TIK_SVD)
+        _l2m_original = gvs_control.lambda2_method
+        if gvs_control.gvs_type == GVSType.IEN:
+            if gvs_control.lambda2_method == LambdaSelectionMethod.CV_1SE_CCD:
+                gvs_control.lambda2_method = LambdaSelectionMethod.CV_1SE_IEN_CCD
+        elif gvs_control.lambda2_method in _ien_methods:
+            raise ValueError(
+                f"lambda2_method = {gvs_control.lambda2_method.name} is an "
+                f"IEN-geometry tuner (it consumes the group structure) and "
+                f"requires gvs_type = IEN.")
 
         # lambda_2 == 0 is the degenerate no-ridge case (pure T-LASSO), NOT
         # automatic CV (the sentinel for that is lambda_2 < 0). Warn so a user
@@ -207,10 +269,15 @@ class TRexGVSSelector(TRexSelector):
                 UserWarning,
                 stacklevel=2,
             )
-        self._selector: PyTRexGVSSelector = PyTRexGVSSelector(self.X, self.y, tFDR,
-                                                              gvs_control,
-                                                              trex_control,
-                                                              seed, verbose)
+        try:
+            self._selector: PyTRexGVSSelector = PyTRexGVSSelector(self.X, self.y, tFDR,
+                                                                  gvs_control,
+                                                                  trex_control,
+                                                                  seed, verbose)
+        finally:
+            # The C++ selector copied the struct; undo the track resolution
+            # so the caller's control object is left as they set it.
+            gvs_control.lambda2_method = _l2m_original
 
     def select(self) -> GVSSelectionResult:
         self._selector.select()
@@ -234,9 +301,25 @@ class TRexScreeningSelector(TRexSelector):
         if trex_control is None:
             trex_control = TRexControlParameter()
 
-        # ScreenTRex only accepts STANDARD or PERMUTATION lloop_strategy.
-        if trex_control.lloop_strategy not in (LLoopStrategy.STANDARD, LLoopStrategy.PERMUTATION):
+        # ScreenTRex accepts STANDARD, SEEDED, PERMUTATION, and
+        # PERMUTATION_SEEDED (screening is a single pass at L = p; the L-loop
+        # growth strategies HCONCAT / SKIPL have no meaning there). The
+        # trex_control default (HCONCAT) silently maps to STANDARD — it is
+        # indistinguishable from an explicit choice, same convention as
+        # TLARS elsewhere; any other unsupported value warns.
+        _screen_ok = (LLoopStrategy.STANDARD, LLoopStrategy.SEEDED,
+                      LLoopStrategy.PERMUTATION, LLoopStrategy.PERMUTATION_SEEDED)
+        if trex_control.lloop_strategy not in _screen_ok:
+            if trex_control.lloop_strategy != LLoopStrategy.HCONCAT:
+                warnings.warn(
+                    f"lloop_strategy = {trex_control.lloop_strategy.name} is not "
+                    f"supported by screening (single pass at L = p); using "
+                    f"STANDARD.",
+                    UserWarning,
+                    stacklevel=2,
+                )
             trex_control.lloop_strategy = LLoopStrategy.STANDARD
+        _validate_core_solver_type(trex_control)
 
         self._selector: PyTRexScreeningSelector = PyTRexScreeningSelector(self.X, self.y,
                                                                           screen_control,
@@ -263,6 +346,8 @@ class TRexBiobankScreeningSelector:
         self.X = np.asfortranarray(X, dtype=np.float64)
         if bio_ctrl is None:
             bio_ctrl = BiobankScreenTRexControl()
+
+        _validate_core_solver_type(bio_ctrl.trex_screen_ctrl.trex_ctrl)
 
         Y = np.asarray(Y, dtype=np.float64)
         self._is_mD = Y.ndim > 1
