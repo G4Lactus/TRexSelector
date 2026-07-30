@@ -14,4 +14,4 @@
 #include <tsolvers/linear_model/afs_based/tafs_solver.hpp>
 
 // ====================================================================
-#endif /* TSOLVERS_LINEAR_MODEL_AFS_BASED_HPP */
+#endif /* End of TSOLVERS_LINEAR_MODEL_AFS_BASED_HPP */

@@ -787,28 +787,23 @@ void TRexSelector::prepareDummiesForLStep(LStepContext& ctx) {
     const bool mmap_mode = trex_ctrl_.use_memory_mapping;
 
     switch (ctx.strategy) {
-        case LLoopStrategy::SKIPL: {
-            // One-shot: generate K dummy matrices sized L_max * p.
-            // Use ctx.L_iter (= max_dummy_multiplier) as l_tag so that
-            // seeding is equivalent to a STANDARD run at the same LL level
-            // (deriveBlockSeed64(k, L) packs both into disjoint bit fields).
-            if (!mmap_mode) {
-                dummy_gen_.generateAndStore(trex_ctrl_.K,
-                                            ctx.num_dummies,
-                                            /*l_tag=*/ctx.L_iter);
-            }
-            break;
-        }
+        case LLoopStrategy::SKIPL:
         case LLoopStrategy::STANDARD: {
-            // Fresh dummies each iteration. Invalidate BEFORE mutating the
-            // stored matrices: retained solvers hold non-owning views into
-            // them, and dropping the solvers first guarantees no dangling
-            // view exists even transiently.
+            // STANDARD: fresh dummies each iteration (l_tag = L_iter).
+            // SKIPL: one-shot at L_max * p; ctx.L_iter equals
+            // max_dummy_multiplier, so seeding is equivalent to a STANDARD
+            // run at the same LL level (deriveBlockSeed64(k, L) packs both
+            // into disjoint bit fields) — the two branches are the same
+            // call, SKIPL just fires it once.
+            // Invalidate BEFORE mutating the stored matrices: retained
+            // solvers hold non-owning views into them, and dropping the
+            // solvers first guarantees no dangling view exists even
+            // transiently.
             warm_start_mgr_.invalidate();
             if (!mmap_mode) {
                 dummy_gen_.generateAndStore(trex_ctrl_.K,
                                             ctx.num_dummies,
-                                            ctx.L_iter);
+                                            /*l_tag=*/ctx.L_iter);
             }
             break;
         }
@@ -1101,7 +1096,7 @@ void TRexSelector::runLLoopCalibration_Permutation(
 
 
 // ===================================================================================
-// L-Loop: DIRECT
+// L-Loop: SEEDED / PERMUTATION_SEEDED
 // ===================================================================================
 
 void TRexSelector::runLLoopCalibration_Seeded(
@@ -1142,7 +1137,7 @@ void TRexSelector::runLLoopCalibration_Seeded(
 
     if (verbose_) {
         printProgress("L-loop converged: " + std::to_string(num_dummies_)
-                      + " dummies (on-demand generation from seeds).");
+                      + " dummies (seeded regeneration).");
     }
 }
 
@@ -1232,14 +1227,39 @@ void TRexSelector::runTLoop(
         // generation is deterministic per (k, L) — the memory-mapped runner
         // therefore skips the per-T-step rewrite of identical content
         // (ignored by the in-memory strategies).
+        //
+        // EXCEPTION — shared-file strategies (SEEDED / PERMUTATION /
+        // PERMUTATION_SEEDED, see the `shared` flag in the constructor):
+        // the single on-disk D region is overwritten per experiment, so
+        // after the L-loop it holds only the LAST experiment's dummies.
+        // The skip would silently run every experiment of every T-step
+        // against D_{K-1}; force the per-k rewrite instead (deterministic
+        // regeneration, so content is exact).
+        const bool shared_dummy_file =
+            (trex_ctrl_.lloop_strategy == LLoopStrategy::SEEDED
+             || trex_ctrl_.lloop_strategy == LLoopStrategy::PERMUTATION
+             || trex_ctrl_.lloop_strategy == LLoopStrategy::PERMUTATION_SEEDED);
         const std::size_t tloop_seed_factor =
             (trex_ctrl_.lloop_strategy == LLoopStrategy::HCONCAT)
                 ? 0
                 : dummy_multiplier_LL_;
-        StepView view = evaluateStep(num_dummies_, T_stop_, /*use_warm_start=*/true,
+        // Warm starts across T-steps retain each experiment's dummy matrix
+        // in RAM (the retained solver holds a non-owning view into it, see
+        // runWithTemporaryDummies). For the seeded / permutation family
+        // in IN_MEMORY mode that would silently keep K matrices resident —
+        // exactly the footprint those strategies exist to avoid (SEEDED:
+        // one matrix at a time; PERMUTATION: base + one working copy).
+        // Honor the memory contract instead: rebuild per T-step (dummy
+        // regeneration is deterministic, results are unchanged; the cost is
+        // CPU). Memory-mapped runs use SERIALIZED warm starts — no in-RAM
+        // dummy retention — and keep the continuation.
+        const bool tloop_warm_start =
+            !(shared_dummy_file && !trex_ctrl_.use_memory_mapping);
+        StepView view = evaluateStep(num_dummies_, T_stop_, tloop_warm_start,
                                      exp_strategy,
                                      /*seed_factor=*/tloop_seed_factor,
-                                     /*existing_on_disk=*/num_dummies_);
+                                     /*existing_on_disk=*/
+                                     shared_dummy_file ? 0 : num_dummies_);
         exp_results = view.exp_results;
         FDP_hat     = view.FDP_hat;
 

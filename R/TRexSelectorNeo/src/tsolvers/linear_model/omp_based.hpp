@@ -19,4 +19,4 @@
 #include <tsolvers/linear_model/omp_based/tncgmp_solver.hpp>
 
 // ====================================================================
-#endif /* TSOLVERS_LINEAR_MODEL_OMP_BASED_HPP */
+#endif /* End of TSOLVERS_LINEAR_MODEL_OMP_BASED_HPP */

@@ -78,9 +78,14 @@ struct ScreenTRexControlParameter {
     std::size_t n_blocks = 5;
 
     /** @brief Base T-Rex algorithmic control parameters (nested).
-     *  Screen-TRex only accepts `lloop_strategy` in {STANDARD, PERMUTATION}
-     *  (validated by `validateScreenTRexStrategy()`); the base class's own
-     *  default (STANDARD) already satisfies this, so no override is needed.
+     *  Screen-TRex accepts `lloop_strategy` in {STANDARD, SEEDED,
+     *  PERMUTATION, PERMUTATION_SEEDED} (validated by
+     *  `validateScreenTRexStrategy()`; HCONCAT / SKIPL describe L-loop
+     *  growth, which screening does not have). The base class's own
+     *  default (STANDARD) already satisfies this, so no override is
+     *  needed. `max_dummy_multiplier` is pinned to
+     *  1 internally (screening always runs at exactly L = p dummies),
+     *  which also sizes memory-mapped D files at the width actually used.
      */
     tc::TRexControlParameter trex_ctrl;
 };
@@ -125,7 +130,15 @@ struct ScreenTRexSelectionResult : public tc::TRexSelector::SelectionResult {
  *  a bootstrap-CI variant, and Dependency-Aware (DA) Phi adjustment for AR(1)
  *  and equi-correlated designs.
  *
- *  Supported dummy strategies: STANDARD and PERMUTATION only.
+ *  Supported dummy strategies: STANDARD, SEEDED, PERMUTATION, and
+ *  PERMUTATION_SEEDED (single pass at L = p, T = 1 — the L-loop growth
+ *  strategies HCONCAT / SKIPL have no meaning here). SEEDED is the
+ *  memory-lean twin of STANDARD: the identical seeded draws, regenerated
+ *  one D_k at a time in the serial runner loop and never stored.
+ *  PERMUTATION_SEEDED is the stateless twin of PERMUTATION: bit-identical
+ *  experiments (both key off the base class's resolved
+ *  permutation_base_seed_), but the base matrix is re-derived from the
+ *  seed instead of being stored for the selector's lifetime.
  *  Memory-mapped D storage is supported through the base class MemmapManager
  *  when TRexControlParameter::use_memory_mapping is set.
  *
@@ -166,12 +179,14 @@ public:
      * @param y             Response vector (n × 1) — Eigen::Map, copied internally.
      * @param trex_screen_ctrl Screen-TRex specific parameters, nesting the base
      *                      algorithmic control (solver, dummy strategy, memmap)
-     *                      as `trex_screen_ctrl.trex_ctrl`. Only STANDARD and
-     *                      PERMUTATION lloop_strategy are accepted.
+     *                      as `trex_screen_ctrl.trex_ctrl`. Accepted
+     *                      lloop_strategy: STANDARD, SEEDED, PERMUTATION,
+     *                      PERMUTATION_SEEDED.
      * @param seed          Random seed (< 0 for non-deterministic).
      * @param verbose       Enable verbose output.
      *
-     * @throws std::invalid_argument if lloop_strategy is not STANDARD or PERMUTATION.
+     * @throws std::invalid_argument on an unsupported lloop_strategy
+     *         (HCONCAT / SKIPL).
      */
     ScreenTRexSelector(
         Eigen::Map<Eigen::MatrixXd>& X,
@@ -412,9 +427,11 @@ protected:
     // =========================================================================
 
     /**
-     * @brief Validate that lloop_strategy is STANDARD or PERMUTATION.
+     * @brief Validate that lloop_strategy is one of STANDARD, SEEDED,
+     *        PERMUTATION, PERMUTATION_SEEDED.
      *
-     * @throws std::invalid_argument for unsupported strategies.
+     * @throws std::invalid_argument for unsupported strategies (HCONCAT /
+     *         SKIPL, which describe L-loop growth).
      */
     void validateScreenTRexStrategy() const;
 

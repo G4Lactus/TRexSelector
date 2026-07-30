@@ -45,15 +45,23 @@
  *      D_aug = [ D               ]   (n rows)
  *              [ B  B  ...  B    ]   (M rows, w copies).
  *
- *  Preprocessing (R reference, lm_dummy.R with GVS_type == "IEN"): after
- *  augmentation the full system is column-centered and rescaled
- *  (R: `X_Dummy <- scale(X_Dummy)`), and the augmented response is centered
- *  (R: `y <- y - mean(y)`). This wrapper performs exactly that on its OWNED
- *  augmented buffers (honouring ScalingMode: unit-L2 or unit-SD columns) and
- *  then runs the inner solver with `normalize = false, intercept = false`.
- *  Consequently the reported coefficients live on the scale of the
- *  normalized augmented columns; the T-Rex framework only consumes the
- *  active/inactive pattern, which is scale-invariant.
+ *  Preprocessing (family convention): the DATA blocks X and D are
+ *  standardized BEFORE augmentation (column centering and unit-L2 / unit-SD
+ *  scaling per the caller's intercept/normalize flags and ScalingMode; y is
+ *  centered), the group-ridge rows are appended afterwards, and the
+ *  augmented columns are NOT re-normalized. The inner solver then runs with
+ *  `normalize = false, intercept = false`. This makes the wrapper exactly
+ *  equivalent to the native pathwise TIENET_Solver.
+ *
+ *  NOTE (R parity): the R reference (lm_dummy.R, GVS_type == "IEN") instead
+ *  rescales the AUGMENTED system (`X_Dummy <- scale(X_Dummy)`; centered
+ *  response over n + M entries). That convention divides data and penalty
+ *  rows by sqrt(||x_j||^2 + lambda2/p_m) — a per-column reweighting of
+ *  lambda1 that deviates from the IEN Lagrangian for heterogeneous group
+ *  sizes, and from raw-scale inputs shrinks the effective lambda2 by the
+ *  data-column norms. It also centers the B rows (structural zeros become
+ *  -mean, weakly coupling all groups). This wrapper deliberately uses the
+ *  exact pre-augmentation convention instead.
  *
  *  Degenerate case lambda2 == 0: the group penalty vanishes and the solver
  *  collapses to a plain TLASSO / TLARS on the ORIGINAL (X, D, y), forwarding
@@ -88,14 +96,24 @@ class TIENETAug_Solver : public TSolver_Base {
     // ========================================================================
     // Owned augmented data
     // ========================================================================
-    double lambda2_{0.0};      ///< Group-ridge parameter (>= 0).
 
-    Eigen::VectorXi groups_;   ///< 0-based group id per original variable (length p).
-    std::size_t     M_{0};     ///< Number of disjoint groups.
+    /** @brief Group-ridge regularisation parameter (>= 0). */
+    double lambda2_{0.0};
 
-    Eigen::MatrixXd X_aug_owned_;  ///< Augmented, normalised X  ((n+M) x p)
-    Eigen::MatrixXd D_aug_owned_;  ///< Augmented, normalised D  ((n+M) x L)
-    Eigen::VectorXd y_aug_owned_;  ///< Augmented, centred y     (n+M)
+    /** @brief 0-based group id per original variable (length p). */
+    Eigen::VectorXi groups_;
+
+    /** @brief Number of disjoint groups. */
+    std::size_t M_{0};
+
+    /** @brief Augmented, normalised X ((n+M) x p) */
+    Eigen::MatrixXd X_aug_owned_;
+
+    /** @brief Augmented, normalised D ((n+M) x L) */
+    Eigen::MatrixXd D_aug_owned_;
+
+    /** @brief Augmented, centred y (n+M) */
+    Eigen::VectorXd y_aug_owned_;
 
     // Maps pointing into the above buffers (heap-allocated so that
     // their addresses are stable after the constructor runs)
@@ -136,19 +154,23 @@ class TIENETAug_Solver : public TSolver_Base {
         double lambda2);
 
     /**
-     * @brief Center each column of `A` and rescale it in place.
+     * @brief Center and/or rescale each column of `A` in place.
      *
-     * Mirrors R's `scale()` on the augmented system: divide the centered
-     * column by its L2-norm (ScalingMode::L2) or by its sample SD
-     * (ScalingMode::ZSCORE). A degenerate column (scale below eps) keeps
-     * scale 1.0, consistent with the shared data-normalizer policy.
+     * Divide the centered column by its L2-norm (ScalingMode::L2) or by its
+     * sample SD (ScalingMode::ZSCORE). A degenerate column (scale below eps)
+     * keeps scale 1.0, consistent with the shared data-normalizer policy.
+     * Applied to the DATA blocks before augmentation (never to the appended
+     * group-ridge rows).
      *
      * @param A            Matrix to normalize in place.
      * @param eps          Numerical zero for the degenerate-column guard.
      * @param scaling_mode Column-scaling convention.
+     * @param center       Center the columns (intercept convention).
+     * @param scale        Rescale the columns (normalize convention).
      */
     static void centerAndScaleColumns(Eigen::MatrixXd& A, double eps,
-                                      ScalingMode scaling_mode);
+                                      ScalingMode scaling_mode,
+                                      bool center = true, bool scale = true);
 
     /** @brief Construct Eigen::Maps from the three owned buffers. */
     void buildMaps();
@@ -165,9 +187,9 @@ class TIENETAug_Solver : public TSolver_Base {
 
     /**
      * @brief Create the inner solver, forwarding preprocessing flags.
-     * @param normalize  Passed to the inner solver (L2-normalise columns).
-     * @param intercept  Passed to the inner solver (centre columns and y).
-     * @param verbose    Passed to the inner solver.
+     * @param normalize Passed to the inner solver (L2-normalise columns).
+     * @param intercept Passed to the inner solver (centre columns and y).
+     * @param verbose Passed to the inner solver.
      * @param scaling_mode Passed to the inner solver (L2 or z-score scaling).
      */
     void buildInnerSolver(bool normalize, bool intercept, bool verbose,
@@ -181,9 +203,9 @@ public:
     /**
      * @brief Construct a TIENETAug_Solver.
      *
-     * Builds the group-informed augmented system, applies the R-faithful
-     * post-augmentation preprocessing (column centering + rescaling of
-     * X_aug / D_aug, centering of y_aug), then creates the inner solver with
+     * Standardizes the DATA blocks per the caller's intercept/normalize
+     * flags (pre-augmentation family convention), appends the group-ridge
+     * rows un-normalized, then creates the inner solver with
      * `normalize = false, intercept = false`.
      *
      * @param X          Predictor matrix (n x p).
@@ -193,10 +215,12 @@ public:
      * @param y          Response vector (n).
      * @param lambda2    Group-ridge (L2) regularisation parameter (>= 0).
      * @param groups     0-based contiguous group ids in [0, M-1], length p.
-     * @param normalize  Only used for the degenerate lambda2 == 0 path,
-     *                   where it is forwarded to the inner solver. Default true.
-     * @param intercept  Only used for the degenerate lambda2 == 0 path.
-     *                   Default true.
+     * @param normalize  Rescale the DATA-block columns (unit L2 / unit SD per
+     *                   scaling_mode) before augmentation; for lambda2 == 0
+     *                   forwarded to the inner solver instead. Default true.
+     * @param intercept  Center the DATA-block columns and y before
+     *                   augmentation; for lambda2 == 0 forwarded to the
+     *                   inner solver instead. Default true.
      * @param verbose    Forwarded to the inner solver. Default false.
      * @param scaling_mode Column-scaling convention for the post-augmentation
      *                   preprocessing (and the lambda2 == 0 inner solver).
@@ -384,4 +408,4 @@ CEREAL_REGISTER_TYPE(trex::tsolvers::linear_model::lars_based::TIENETAug_Solver)
 CEREAL_REGISTER_POLYMORPHIC_RELATION(trex::tsolvers::TSolver_Base,
                                      trex::tsolvers::linear_model::lars_based::TIENETAug_Solver)
 
-#endif /* TSOLVERS_LINEAR_MODEL_LARS_BASED_TIENET_AUG_SOLVER_HPP */
+#endif /* End of TSOLVERS_LINEAR_MODEL_LARS_BASED_TIENET_AUG_SOLVER_HPP */

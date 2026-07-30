@@ -36,6 +36,19 @@ RSYNC_EXCLUDES=(
     --exclude 'main.cpp'
     --exclude '*.o'
     --exclude '*.so'
+    # Editor / OS clutter: rsync -a would otherwise carry it into the CRAN
+    # tarball. Gitignored in the C++ tree, so it is invisible to git review.
+    --exclude '.DS_Store'
+    # Research families with no R bindings yet. Vendoring them would add
+    # their translation units to OBJECTS — compiled into the shared object,
+    # lengthening every CRAN build, with nothing callable from R. These are
+    # no-ops on branches where the directories do not exist; drop the
+    # excludes when the corresponding Rcpp wrappers land.
+    --exclude 'vd_tsolvers'
+    --exclude 'vd_tsolvers.hpp'
+    --exclude 'sd_tsolvers'
+    --exclude 'trex_vd'
+    --exclude 'trex_sd'
 )
 
 # Regenerate the OBJECTS list from the .cpp files under a src directory.
@@ -50,10 +63,14 @@ if [ "${1:-}" = "--check" ]; then
     status=0
     for tree in "${SUBTREES[@]}"; do
         # -rlc compares content only (checksum; no perms/mtimes, which git
-        # does not preserve); itemized output is non-empty iff files differ,
-        # are missing, or would be deleted.
+        # does not preserve). Itemized lines starting with '.' are
+        # attribute-only entries (e.g. '.f..T....' after a branch switch or
+        # a fresh clone rewrites mtimes) with identical content — filter
+        # them, otherwise every CI checkout would report divergence. What
+        # remains is real: content changes ('>fc...'), new files/dirs
+        # ('>f+++++++' / 'cd+++++++'), and deletions ('*deleting').
         diff_out=$(rsync -rlci --delete --dry-run "${RSYNC_EXCLUDES[@]}" \
-            "$CPP_SRC/$tree/" "src/$tree/")
+            "$CPP_SRC/$tree/" "src/$tree/" | grep -v '^\.' || true)
         if [ -n "$diff_out" ]; then
             echo "DIVERGED: src/$tree/"
             echo "$diff_out" | sed 's/^/    /'
