@@ -30,6 +30,7 @@ using namespace trex::trex_selector_methods::trex_screening;
 using namespace trex::trex_selector_methods::trex_core;
 using namespace trex::utils::datageneration::datagen;
 namespace dn = trex::trex_selector_methods::utils::data_normalizer;
+namespace sd = trex::trex_selector_methods::utils::solver_dispatch;
 
 // ========================================================================================
 
@@ -52,14 +53,21 @@ protected:
 TEST_F(TRexScreeningTest, Validation_ThrowsOnInvalidLLoopStrategy) {
     ScreenTRexControlParameter screen_params;
 
-    // Supported
+    // Supported: STANDARD, SEEDED, PERMUTATION, PERMUTATION_SEEDED.
     screen_params.trex_ctrl.lloop_strategy = LLoopStrategy::STANDARD;
+    EXPECT_NO_THROW(ScreenTRexSelector(X_map, y_map, screen_params));
+
+    screen_params.trex_ctrl.lloop_strategy = LLoopStrategy::SEEDED;
     EXPECT_NO_THROW(ScreenTRexSelector(X_map, y_map, screen_params));
 
     screen_params.trex_ctrl.lloop_strategy = LLoopStrategy::PERMUTATION;
     EXPECT_NO_THROW(ScreenTRexSelector(X_map, y_map, screen_params));
 
-    // Unsupported: SKIPL, HCONCAT, DIRECT, etc.
+    screen_params.trex_ctrl.lloop_strategy =
+        LLoopStrategy::PERMUTATION_SEEDED;
+    EXPECT_NO_THROW(ScreenTRexSelector(X_map, y_map, screen_params));
+
+    // Unsupported: the L-loop growth strategies.
     screen_params.trex_ctrl.lloop_strategy = LLoopStrategy::SKIPL;
     EXPECT_THROW(ScreenTRexSelector(X_map, y_map, screen_params),
                                     std::invalid_argument);
@@ -67,6 +75,74 @@ TEST_F(TRexScreeningTest, Validation_ThrowsOnInvalidLLoopStrategy) {
     screen_params.trex_ctrl.lloop_strategy = LLoopStrategy::HCONCAT;
     EXPECT_THROW(ScreenTRexSelector(X_map, y_map, screen_params),
                  std::invalid_argument);
+}
+
+
+/** @brief PERMUTATION and PERMUTATION_SEEDED key their base off the same
+ *  resolved permutation_base_seed_, so for a fixed seed the stored and the
+ *  stateless variants must produce bit-identical screening results. */
+TEST_F(TRexScreeningTest, Equivalence_PermutationSeededMatchesPermutation) {
+
+    auto run_with = [&](LLoopStrategy strategy) {
+        Eigen::MatrixXd Xc = X;
+        Eigen::VectorXd yc = y;
+        Eigen::Map<Eigen::MatrixXd> Xm(Xc.data(), Xc.rows(), Xc.cols());
+        Eigen::Map<Eigen::VectorXd> ym(yc.data(), yc.size());
+
+        ScreenTRexControlParameter screen_params;
+        screen_params.trex_method = ScreenTRexMethod::TREX;
+        screen_params.use_bootstrap_CI = false;
+        screen_params.trex_ctrl.K = 5;
+        screen_params.trex_ctrl.lloop_strategy = strategy;
+
+        ScreenTRexSelector selector(Xm, ym, screen_params, /*seed=*/42);
+        return selector.select();
+    };
+
+    const auto res_perm = run_with(LLoopStrategy::PERMUTATION);
+    const auto res_pod  = run_with(LLoopStrategy::PERMUTATION_SEEDED);
+
+    ASSERT_EQ(res_perm.selected_var.size(), res_pod.selected_var.size());
+    EXPECT_TRUE((res_perm.selected_var.array()
+                 == res_pod.selected_var.array()).all())
+        << "PERMUTATION_SEEDED selection diverged from PERMUTATION.";
+    ASSERT_EQ(res_perm.Phi_prime.size(), res_pod.Phi_prime.size());
+    EXPECT_TRUE(res_perm.Phi_prime.isApprox(res_pod.Phi_prime, 1e-14))
+        << "PERMUTATION_SEEDED Phi diverged from PERMUTATION.";
+}
+
+
+/** @brief SEEDED regenerates the identical tag-0 draws STANDARD stores
+ *  (screening runs at exactly L = p), one D_k at a time — the two must
+ *  produce bit-identical screening results. */
+TEST_F(TRexScreeningTest, Equivalence_SeededMatchesStandard) {
+
+    auto run_with = [&](LLoopStrategy strategy) {
+        Eigen::MatrixXd Xc = X;
+        Eigen::VectorXd yc = y;
+        Eigen::Map<Eigen::MatrixXd> Xm(Xc.data(), Xc.rows(), Xc.cols());
+        Eigen::Map<Eigen::VectorXd> ym(yc.data(), yc.size());
+
+        ScreenTRexControlParameter screen_params;
+        screen_params.trex_method = ScreenTRexMethod::TREX;
+        screen_params.use_bootstrap_CI = false;
+        screen_params.trex_ctrl.K = 5;
+        screen_params.trex_ctrl.lloop_strategy = strategy;
+
+        ScreenTRexSelector selector(Xm, ym, screen_params, /*seed=*/42);
+        return selector.select();
+    };
+
+    const auto res_std = run_with(LLoopStrategy::STANDARD);
+    const auto res_sd  = run_with(LLoopStrategy::SEEDED);
+
+    ASSERT_EQ(res_std.selected_var.size(), res_sd.selected_var.size());
+    EXPECT_TRUE((res_std.selected_var.array()
+                 == res_sd.selected_var.array()).all())
+        << "SEEDED selection diverged from STANDARD.";
+    ASSERT_EQ(res_std.Phi_prime.size(), res_sd.Phi_prime.size());
+    EXPECT_TRUE(res_std.Phi_prime.isApprox(res_sd.Phi_prime, 1e-14))
+        << "SEEDED Phi diverged from STANDARD.";
 }
 
 
@@ -88,6 +164,29 @@ TEST_F(TRexScreeningTest, Execution_OrdinaryScreenTRexDoesNotThrow) {
         // num_dummies is locked to p
         EXPECT_EQ(result.num_dummies, 20);
     });
+}
+
+
+/** @brief Screening with the CD solvers (TCCD / TCENET): T is fixed at 1
+ *  and no warm start engages, so this exercises the plain fresh-construction
+ *  dispatch of the CD family under the screening loop. */
+TEST_F(TRexScreeningTest, Execution_CdFamilyDoesNotThrow) {
+    for (auto solver : {sd::SolverTypeForTRex::TCCD,
+                        sd::SolverTypeForTRex::TCENET}) {
+        ScreenTRexControlParameter screen_params;
+        screen_params.trex_method = ScreenTRexMethod::TREX;
+        screen_params.use_bootstrap_CI = false;
+        screen_params.trex_ctrl.K = 5;
+        screen_params.trex_ctrl.lloop_strategy = LLoopStrategy::STANDARD;
+        screen_params.trex_ctrl.solver_type = solver;
+
+        EXPECT_NO_THROW({
+            ScreenTRexSelector selector(X_map, y_map, screen_params);
+            auto result = selector.select();
+            EXPECT_EQ(result.T_stop, 1);
+            EXPECT_EQ(result.num_dummies, 20);
+        });
+    }
 }
 
 

@@ -148,11 +148,11 @@ public:
      *
      * @return Normalized dummy matrix (n × num_dummies).
      */
-    Eigen::MatrixXd generateDirect(std::size_t num_dummies,
+    Eigen::MatrixXd generateSeeded(std::size_t num_dummies,
                                     std::size_t experiment_id) const {
 
         Eigen::MatrixXd D(n_, num_dummies);
-        generateDirectInto(D, experiment_id);
+        generateSeededInto(D, experiment_id);
         return D;
     }
 
@@ -284,7 +284,7 @@ public:
      * @param target         Matrix to write into (n × num_dummies, pre-sized).
      * @param experiment_id  Experiment index k.
      */
-    void generateDirectInto(Eigen::Ref<Eigen::MatrixXd> target,
+    void generateSeededInto(Eigen::Ref<Eigen::MatrixXd> target,
                             std::size_t experiment_id) const {
 
         const std::uint64_t seed_k = deriveBlockSeed64(experiment_id, 0);
@@ -563,19 +563,19 @@ public:
 
 
     // ==========================================================================
-    // Permutation strategy — stateless (ONDEMAND) variants
+    // Permutation strategy — stateless (SEEDED) variants
     // ==========================================================================
 
     /**
      * @brief Row-permute a caller-supplied base matrix for experiment k.
      *
      * @details Stateless companion of getPermuted() for the
-     *          PERMUTATION_ONDEMAND strategy: the caller re-derives the base
+     *          PERMUTATION_SEEDED strategy: the caller re-derives the base
      *          from the seed (generate(num_dummies, base_id) is prefix-stable
      *          under l_tag = 0) and this method applies the SAME deterministic
      *          per-experiment row permutation as the stored path — engine
      *          seeded by mix_seed64(base_id, k). With identical base_id the
-     *          stored (PERMUTATION) and stateless (PERMUTATION_ONDEMAND)
+     *          stored (PERMUTATION) and stateless (PERMUTATION_SEEDED)
      *          strategies therefore produce bit-identical experiments.
      *
      * @param base     Base dummy matrix (n × num_dummies), already normalized.

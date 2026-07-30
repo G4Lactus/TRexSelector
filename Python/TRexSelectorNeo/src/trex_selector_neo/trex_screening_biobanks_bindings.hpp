@@ -132,7 +132,9 @@ inline void bind_trex_screening_biobanks(py::module& m) {
                        "fallback-T-Rex paths. Set the screening method via "
                        "trex_screen_ctrl.trex_method and the base algorithm (K, "
                        "solver_type, ...) via trex_screen_ctrl.trex_ctrl. Its "
-                       "lloop_strategy is forced to STANDARD by the default ctor.");
+                       "lloop_strategy defaults to STANDARD; accepted values are "
+                       "STANDARD, SEEDED, PERMUTATION, and PERMUTATION_SEEDED "
+                       "(validated at construction).");
 
     py::class_<BiobankScreenTRexResult>(m, "BiobankScreenTRexResult", "Result for a single phenotype returned by screenPhenotype() or screenPhenotypes().")
         .def_readonly("phenotype_index", &BiobankScreenTRexResult::phenotype_index, "0-based column index of the screened phenotype.")

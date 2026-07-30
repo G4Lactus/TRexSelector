@@ -6,6 +6,7 @@
 # ==============================================================================
 # 1. Append Source Files
 # ==============================================================================
+add_subdirectory(cd_based)
 add_subdirectory(lars_based)
 add_subdirectory(omp_based)
 add_subdirectory(afs_based)

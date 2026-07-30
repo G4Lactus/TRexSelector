@@ -82,7 +82,13 @@ inline constexpr bool isGreedySolver(
         case sdx::SolverTypeForTRex::TLASSO:
         case sdx::SolverTypeForTRex::TENET:
         case sdx::SolverTypeForTRex::TENET_AUG:
+        case sdx::SolverTypeForTRex::TIENET:
         case sdx::SolverTypeForTRex::TIENET_AUG:
+        // The CCD family records exact penalized-lasso minimizers per
+        // crossing — same termination behavior as the equiangular paths.
+        case sdx::SolverTypeForTRex::TCCD:
+        case sdx::SolverTypeForTRex::TCENET:
+        case sdx::SolverTypeForTRex::TCIENET:
             return false;
         default:
             return true;
@@ -98,10 +104,10 @@ inline constexpr bool isGreedySolver(
  *
  * @details Two orthogonal axes:
  *  - Dummy source: fresh INDEPENDENT draws per experiment (SKIPL / STANDARD /
- *    HCONCAT / ONDEMAND) vs one shared base matrix whose rows are permuted per
- *    experiment (PERMUTATION / PERMUTATION_ONDEMAND).
+ *    HCONCAT / SEEDED) vs one shared base matrix whose rows are permuted per
+ *    experiment (PERMUTATION / PERMUTATION_SEEDED).
  *  - Storage: STORED strategies keep matrices in the DummyGenerator for the
- *    whole run; ONDEMAND strategies re-derive everything from the seed at each
+ *    whole run; SEEDED strategies re-derive everything from the seed at each
  *    step (zero persistent state, prefix-stable via deriveBlockSeed64 l_tag=0).
  */
 enum class LLoopStrategy {
@@ -109,8 +115,8 @@ enum class LLoopStrategy {
     STANDARD,              // Stored, fresh dummies at each L-loop iteration (conservative).
     HCONCAT,               // Stored, horizontally expand dummy matrices (faster, same result).
     PERMUTATION,           // Stored base dummy matrix + deterministic row permutations per k.
-    PERMUTATION_ONDEMAND,  // Seed-derived base + row permutations per k; nothing stored.
-    ONDEMAND               // Seed-derived independent dummies per k; nothing stored.
+    PERMUTATION_SEEDED,  // Seed-derived base + row permutations per k; nothing stored.
+    SEEDED               // Seed-derived independent dummies per k; nothing stored.
 };
 
 
@@ -844,7 +850,7 @@ protected:
 
     /**
      * @brief Unified L-loop calibration driver shared by the four looping
-     *        strategies (STANDARD, HCONCAT, PERMUTATION, DIRECT).
+     *        strategies (STANDARD, HCONCAT, PERMUTATION, SEEDED).
      *
      * Implements the common while-loop skeleton:
      *   - guard `dummy_multiplier_LL_ <= max_dummy_multiplier &&
@@ -903,12 +909,12 @@ protected:
                                          er::ExperimentResults& exp_results);
 
     /**
-     * @brief Run L-loop calibration using the PERMUTATION_ONDEMAND strategy.
+     * @brief Run L-loop calibration using the PERMUTATION_SEEDED strategy.
      *
      * @param FDP_hat Current FDP estimates (updated in-place).
      * @param exp_results Current experiment results (updated in-place).
      */
-    void runLLoopCalibration_OnDemand(Eigen::VectorXd& FDP_hat, er::ExperimentResults& exp_results);
+    void runLLoopCalibration_Seeded(Eigen::VectorXd& FDP_hat, er::ExperimentResults& exp_results);
 
 
     // ============================================================
@@ -957,9 +963,13 @@ protected:
      * @param seed_factor L-loop iteration multiplier for seed mixing (default: 0).
      * @param existing_cols_on_disk Columns already on disk for HCONCAT memmap path (default: 0).
      *
+     * @note Virtual so selector variants can post-process the config
+     *       (TRexTikhonovSelector injects its Tikhonov matrix and the
+     *       CV-resolved lambda_2).
+     *
      * @return Populated ExperimentRunnerConfig.
      */
-    er::ExperimentRunnerConfig buildRunnerConfig(
+    virtual er::ExperimentRunnerConfig buildRunnerConfig(
         std::size_t num_dummies,
         std::size_t T_stop,
         bool use_warm_start,

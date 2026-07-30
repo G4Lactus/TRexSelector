@@ -31,5 +31,7 @@ target_sources(trex_ml_methods PRIVATE
 target_sources(trex_ml_methods PRIVATE
     ${CMAKE_CURRENT_LIST_DIR}/ridge_cv_svd.hpp
     ${CMAKE_CURRENT_LIST_DIR}/enet_cv_ccd.hpp
+    ${CMAKE_CURRENT_LIST_DIR}/ienet_cv_ccd.hpp
+    ${CMAKE_CURRENT_LIST_DIR}/tikhonov_cv_svd.hpp
 )
 # ==================================================================================

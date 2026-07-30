@@ -1,14 +1,14 @@
 // ========================================================================================
 /**
- * @file test_trex_lloop_ondemand.cpp
+ * @file test_trex_lloop_seeded.cpp
  *
- * @brief Tests for the ONDEMAND L-loop strategies (2026-07 rename/rework).
+ * @brief Tests for the SEEDED L-loop strategies (2026-07 rename/rework).
  *
- * @details PERMUTATION_ONDEMAND is the stateless twin of PERMUTATION: the base
+ * @details PERMUTATION_SEEDED is the stateless twin of PERMUTATION: the base
  * dummy matrix is re-derived from the seed instead of stored, and the same
  * per-experiment row-permutation engines are used (keyed on the identical
  * base id). For the same user seed the two strategies must therefore produce
- * BIT-IDENTICAL experiments and selections. ONDEMAND (former DIRECT) provides
+ * BIT-IDENTICAL experiments and selections. SEEDED (former DIRECT) provides
  * independent per-experiment dummies without storage.
  */
 // ========================================================================================
@@ -30,7 +30,7 @@
 // ========================================================================================
 
 // Embed into test namespace
-namespace trex::test::trex_selector_methods::lloop_ondemand {
+namespace trex::test::trex_selector_methods::lloop_seeded {
 
 namespace datagen = trex::utils::datageneration::datagen;
 namespace dummygen = trex::utils::datageneration::dummygen;
@@ -71,23 +71,23 @@ std::vector<std::size_t> runSelection(LLoopStrategy strategy, int seed) {
 
 // ========================================================================================
 
-/** @brief PERMUTATION_ONDEMAND must reproduce PERMUTATION bit-exactly for
+/** @brief PERMUTATION_SEEDED must reproduce PERMUTATION bit-exactly for
  *         the same seed (same base id, same permutation engines). */
-TEST(LLoopOnDemand, PermutationOnDemandMatchesStoredPermutation) {
+TEST(LLoopSeeded, PermutationSeededMatchesStoredPermutation) {
     for (int seed : {7, 42, 2026}) {
         const auto stored   = runSelection(LLoopStrategy::PERMUTATION, seed);
-        const auto ondemand = runSelection(LLoopStrategy::PERMUTATION_ONDEMAND, seed);
-        EXPECT_EQ(stored, ondemand)
-            << "PERMUTATION vs PERMUTATION_ONDEMAND diverged at seed " << seed;
+        const auto seeded = runSelection(LLoopStrategy::PERMUTATION_SEEDED, seed);
+        EXPECT_EQ(stored, seeded)
+            << "PERMUTATION vs PERMUTATION_SEEDED diverged at seed " << seed;
     }
 }
 
 
-/** @brief PERMUTATION_ONDEMAND must actually PERMUTE — its per-experiment
- *         dummies must differ from ONDEMAND's independent draws (this is the
+/** @brief PERMUTATION_SEEDED must actually PERMUTE — its per-experiment
+ *         dummies must differ from SEEDED's independent draws (this is the
  *         regression test for the old bug where PERMUTATION_DIRECT silently
  *         aliased DIRECT). Checked at the DummyGenerator level. */
-TEST(LLoopOnDemand, OnDemandPermutationsAreRowPermutationsNotFreshDraws) {
+TEST(LLoopSeeded, SeededPermutationsAreRowPermutationsNotFreshDraws) {
     const std::size_t n = 30, p = 20;
     DummyGenerator gen(n, dummygen::Distribution::Normal(), /*seed=*/55);
 
@@ -121,11 +121,11 @@ TEST(LLoopOnDemand, OnDemandPermutationsAreRowPermutationsNotFreshDraws) {
 
 
 /** @brief Deterministic reproducibility: the same seed must give the same
- *         selection twice for both ONDEMAND strategies (nothing stored means
+ *         selection twice for both SEEDED strategies (nothing stored means
  *         everything must be re-derivable). */
-TEST(LLoopOnDemand, OnDemandStrategiesAreSeedReproducible) {
-    for (auto strategy : {LLoopStrategy::ONDEMAND,
-                          LLoopStrategy::PERMUTATION_ONDEMAND}) {
+TEST(LLoopSeeded, SeededStrategiesAreSeedReproducible) {
+    for (auto strategy : {LLoopStrategy::SEEDED,
+                          LLoopStrategy::PERMUTATION_SEEDED}) {
         const auto first  = runSelection(strategy, 11);
         const auto second = runSelection(strategy, 11);
         EXPECT_EQ(first, second) << "strategy not seed-reproducible";
@@ -133,4 +133,4 @@ TEST(LLoopOnDemand, OnDemandStrategiesAreSeedReproducible) {
 }
 
 // ========================================================================================
-} /* End of namespace trex::test::trex_selector_methods::lloop_ondemand */
+} /* End of namespace trex::test::trex_selector_methods::lloop_seeded */

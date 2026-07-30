@@ -116,6 +116,18 @@ TEST(TRexCoreTest, Param_Solvers_TLASSO) {
 }
 
 
+/** @brief Test TRexSelector with the CCD lasso solver (TCCD). */
+TEST(TRexCoreTest, Param_Solvers_TCCD) {
+    run_trex_core_test(150, 200, sd::SolverTypeForTRex::TCCD);
+}
+
+
+/** @brief Test TRexSelector with the CCD elastic-net solver (TCENET). */
+TEST(TRexCoreTest, Param_Solvers_TCENET) {
+    run_trex_core_test(150, 200, sd::SolverTypeForTRex::TCENET);
+}
+
+
 /** @brief Test TRexSelector with SKIPL L loop strategy. */
 TEST(TRexCoreTest, Param_LStrategies_SKIPL) {
     run_trex_core_test(150, 200, sd::SolverTypeForTRex::TLARS,
@@ -259,6 +271,14 @@ TEST(TRexCoreTest, StagnationStop_AutoDefaultResolvesBySolverFamily) {
     EXPECT_TRUE(resolved_default(sd::SolverTypeForTRex::TSTEPWISE, std::nullopt));
     EXPECT_TRUE(resolved_default(sd::SolverTypeForTRex::TAFS,    std::nullopt));
 
+    // CCD family: currently classified non-greedy (exact penalized-lasso
+    // minimizers per crossing -> AUTO off, same as the equiangular paths).
+    // Whether CD paths can stagnate in the T-loop is an open question under
+    // investigation; these entries lock in the CURRENT default, not a
+    // settled answer.
+    EXPECT_FALSE(resolved_default(sd::SolverTypeForTRex::TCCD,   std::nullopt));
+    EXPECT_FALSE(resolved_default(sd::SolverTypeForTRex::TCENET, std::nullopt));
+
     // Explicit user choice overrides the family default in both directions.
     EXPECT_TRUE(resolved_default(sd::SolverTypeForTRex::TLARS, true));
     EXPECT_FALSE(resolved_default(sd::SolverTypeForTRex::TOMP, false));
@@ -375,7 +395,7 @@ TEST(TRexCoreTest, WarmStart_DirectStrategyContinuationMatchesCold) {
     er::ExperimentRunner runner(X_map, d.y, dummy_gen, warm_mgr, nullptr);
 
     auto cfg = make_runner_cfg(K, static_cast<std::size_t>(p),
-                               er::ExperimentStrategy::OnDemand);
+                               er::ExperimentStrategy::Seeded);
 
     runner.run(cfg);           // T = 1, retains solvers + dummy buffers
     cfg.T_stop = 2;
@@ -452,6 +472,60 @@ TEST(TRexCoreTest, WarmStart_MemoryMappedMatchesInMemory) {
 }
 
 
+/** @brief CD-family serialized warm start at the TRex level: memory-mapped
+ *         runs save/load TCCD / TCENET checkpoints per T-step, so the
+ *         continuation goes through ensureCdState()'s gram re-entry after
+ *         deserialization. The selection must reproduce the in-memory
+ *         (retention-based) run exactly. */
+TEST(TRexCoreTest, WarmStart_MemoryMappedMatchesInMemory_CdFamily) {
+    std::vector<std::size_t> support = {1, 2, 3};
+    std::vector<double> coefs = {5.0, -3.0, 2.0};
+
+    for (auto solver : {sd::SolverTypeForTRex::TCCD,
+                        sd::SolverTypeForTRex::TCENET}) {
+        SyntheticData data(200, 50, support, coefs, 1.0, 42);
+
+        auto X_mem = data.getX();
+        auto y_mem = data.getY();
+        auto X_map_data = X_mem;   // independent copies: X is normalized in-place
+        auto y_map_data = y_mem;
+
+        TRexControlParameter ctrl;
+        ctrl.K = 3;
+        ctrl.max_dummy_multiplier = 2;
+        ctrl.solver_type = solver;
+        const double tFDR = 0.2;   // keeps the T-loop past T = 1 (see above)
+
+        Eigen::Map<Eigen::MatrixXd> X1(X_mem.data(), X_mem.rows(), X_mem.cols());
+        Eigen::Map<Eigen::VectorXd> y1(y_mem.data(), y_mem.size());
+        TRexSelector trex_in_memory(X1, y1, tFDR, ctrl, 42, false);
+        auto res_in_memory = trex_in_memory.select();
+
+        ctrl.use_memory_mapping = true;
+        Eigen::Map<Eigen::MatrixXd> X2(X_map_data.data(),
+                                       X_map_data.rows(), X_map_data.cols());
+        Eigen::Map<Eigen::VectorXd> y2(y_map_data.data(), y_map_data.size());
+        TRexSelector trex_memmap(X2, y2, tFDR, ctrl, 42, false);
+        auto res_memmap = trex_memmap.select();
+
+        EXPECT_EQ(res_in_memory.T_stop, res_memmap.T_stop);
+        EXPECT_GT(res_in_memory.T_stop, 1u)
+            << "CD solver run ended at T = 1; the serialized "
+               "load-and-continue cycle is not being exercised.";
+        ASSERT_EQ(res_in_memory.selected_var.size(),
+                  res_memmap.selected_var.size());
+        EXPECT_TRUE((res_in_memory.selected_var.array()
+                     == res_memmap.selected_var.array()).all())
+            << "Memory-mapped CD selection differs from the in-memory one.";
+        if (res_in_memory.Phi_mat.size() > 0 &&
+            res_in_memory.Phi_mat.rows() == res_memmap.Phi_mat.rows()) {
+            EXPECT_LE((res_in_memory.Phi_mat - res_memmap.Phi_mat)
+                          .cwiseAbs().maxCoeff(), 1e-9);
+        }
+    }
+}
+
+
 // ========================================================================================
 // DIRECT dummy seeding (regression: the user seed was ignored — dummies were
 // derived from the PERMUTATION-only base seed, which is 0 for DIRECT — and
@@ -469,9 +543,9 @@ TEST(TRexCoreTest, DirectDummies_HonourUserSeedAndAreStableWithinRun) {
     dg::DummyGenerator g_seed2(n, dummygen::Distribution::Normal(), 2, false);
     dg::DummyGenerator g_seed1_again(n, dummygen::Distribution::Normal(), 1, false);
 
-    Eigen::MatrixXd D1  = g_seed1.generateDirect(num_dummies, 0);
-    Eigen::MatrixXd D2  = g_seed2.generateDirect(num_dummies, 0);
-    Eigen::MatrixXd D1b = g_seed1_again.generateDirect(num_dummies, 0);
+    Eigen::MatrixXd D1  = g_seed1.generateSeeded(num_dummies, 0);
+    Eigen::MatrixXd D2  = g_seed2.generateSeeded(num_dummies, 0);
+    Eigen::MatrixXd D1b = g_seed1_again.generateSeeded(num_dummies, 0);
 
     EXPECT_FALSE(D1.isApprox(D2, 1e-12))
         << "Different user seeds produced identical DIRECT dummies.";
@@ -482,8 +556,8 @@ TEST(TRexCoreTest, DirectDummies_HonourUserSeedAndAreStableWithinRun) {
     // repeated derivation of the same experiment's dummies must be identical
     // (the T-loop re-derives D_k at every step).
     dg::DummyGenerator g_random(n, dummygen::Distribution::Normal(), -1, false);
-    Eigen::MatrixXd Da = g_random.generateDirect(num_dummies, 3);
-    Eigen::MatrixXd Db = g_random.generateDirect(num_dummies, 3);
+    Eigen::MatrixXd Da = g_random.generateSeeded(num_dummies, 3);
+    Eigen::MatrixXd Db = g_random.generateSeeded(num_dummies, 3);
     EXPECT_TRUE(Da.isApprox(Db, 1e-12))
         << "Unseeded DIRECT dummies changed between calls within one run.";
 }

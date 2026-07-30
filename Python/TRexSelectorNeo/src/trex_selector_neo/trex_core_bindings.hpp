@@ -175,8 +175,8 @@ inline void bind_trex_core(py::module& m_tsm) {
         .value("STANDARD", LLoopStrategy::STANDARD, "Stored; fresh dummies at each L-loop iteration (conservative).")
         .value("HCONCAT", LLoopStrategy::HCONCAT, "Stored; horizontally expand dummy matrices across L (faster, same result).")
         .value("PERMUTATION", LLoopStrategy::PERMUTATION, "Stored base dummy matrix + deterministic row permutations per experiment.")
-        .value("PERMUTATION_ONDEMAND", LLoopStrategy::PERMUTATION_ONDEMAND, "Seed-derived base + row permutations per experiment; nothing stored.")
-        .value("ONDEMAND", LLoopStrategy::ONDEMAND, "Seed-derived independent dummies per experiment; nothing stored.")
+        .value("PERMUTATION_SEEDED", LLoopStrategy::PERMUTATION_SEEDED, "Seed-derived base + row permutations per experiment; nothing stored.")
+        .value("SEEDED", LLoopStrategy::SEEDED, "Seed-derived independent dummies per experiment; nothing stored.")
         .export_values();
 
     // Bind SolverTypeForTRex enum
