@@ -129,6 +129,16 @@ that entry; TRexSelectorNeo before).
 
 ### 2026-11-05
 
+#### The wheel workflow builds on macos-15 and ubuntu-24.04
+
+- GitHub retired the `macos-14` runner image on 2026-11-02 (actions/runner-images#13518), so the
+  macOS wheel job of the Python Wheels workflow failed before its first step with "The
+  configuration 'macos-14-arm64-us-default' is not supported". The job runs on `macos-15`, the
+  stable arm64 image below macOS 26 (whose image breaks delocate-wheel's repair step); the
+  deployment target 14.0 keeps the `macosx_14_0_arm64` wheel tag. The Linux jobs pin
+  `ubuntu-24.04` while `ubuntu-latest` migrates to Ubuntu 26.04 (actions/runner-images#14748,
+  until 2026-11-19); the manylinux build runs in its container either way.
+
 #### The C++ CI builds run one compile job per core
 
 - The Build steps of the C++ Tests workflow called `cmake --build --parallel` without a count,

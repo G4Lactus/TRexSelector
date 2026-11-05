@@ -22,11 +22,12 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # Pin macOS to a stable arm64 runner (macos-14) rather than macos-latest,
-        # which now points at the bleeding-edge macOS 26 image and
-        # breaks delocate-wheel's repair/arch step. macos-14 also yields wheels with
-        # a broader minimum-OS compatibility.
-        os: [ubuntu-latest, macos-14, windows-latest]
+        # Pinned labels: macos-latest points at the macOS 26 image, which breaks
+        # delocate-wheel's repair/arch step, and macos-14 was retired by GitHub
+        # (jobs fail with "configuration not supported"). macos-15 is the stable
+        # arm64 runner; the deployment target below keeps the macosx_14_0 tag.
+        # ubuntu-24.04 pins the manylinux host while ubuntu-latest moves to 26.04.
+        os: [ubuntu-24.04, macos-15, windows-latest]
 
     steps:
       - uses: actions/checkout@v5
@@ -150,7 +151,7 @@ jobs:
   publish:
     name: Publish to PyPI
     needs: [build_wheels]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     if: github.event_name == 'release'
     environment: pypi
     permissions:
