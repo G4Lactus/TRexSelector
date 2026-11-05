@@ -129,6 +129,21 @@ that entry; TRexSelectorNeo before).
 
 ### 2026-11-05
 
+#### The TIKNET rank-bound tests draw their design from a platform-independent stream
+
+- `TSolverTikTest.TiknetRankBoundDropContinuesPath` failed on every x86_64 CI job (Ubuntu with
+  and without OpenMP, Windows) with "rank bound not reached": the path on its design reached 21
+  degrees of freedom, one short of the bound 22. The design came from `std::srand` and Eigen's
+  `Random`, so it was a different matrix per C library, and the arm64 builds, which contract
+  into fused multiply-add, happened to saturate where the x86_64 builds, built for SSE2 without
+  FMA, stop one step short. The fixture now fills the design from a `std::mt19937_64` stream
+  with 53-bit uniforms assembled by hand, bit-identical everywhere, and the seeds were chosen
+  by a scan over 60 seeds on macOS arm64, Linux arm64 and Linux x86_64: seed 45 for the drop
+  test and the TIKNET/TIENET match at the bound, seed 12 for the terminal-step test. Both keep
+  their path under 40 perturbations of the design at 1e-10 and 1e-8 on FMA and non-FMA
+  arithmetic, while 44 of 119 seeds of this saturated 12 x 30 design change their path between
+  platforms. The other `srand` sites of the test tree are unchanged.
+
 #### The wheel workflow builds on macos-15 and ubuntu-24.04
 
 - GitHub retired the `macos-14` runner image on 2026-11-02 (actions/runner-images#13518), so the

@@ -19,8 +19,10 @@
 
 // std includes
 #include <algorithm>
+#include <cstdint>
 #include <filesystem>
 #include <limits>
+#include <random>
 #include <set>
 #include <string>
 #include <vector>
@@ -207,18 +209,30 @@ struct PortableDropDesign {
 struct RankBoundDesign {
     Eigen::MatrixXd X, D;
     Eigen::VectorXd y;
-    RankBoundDesign(unsigned seed, bool collinear_trio) {
-        std::srand(seed);
-        X = Eigen::MatrixXd::Random(12, 10);
-        D = Eigen::MatrixXd::Random(12, 20);
+    RankBoundDesign(std::uint64_t seed, bool collinear_trio) {
+        // One mt19937_64 stream, 53-bit uniforms in (-1, 1) assembled by hand
+        // and filled column by column: the design is bit-identical on every
+        // platform, which the C library rand behind Eigen's Random is not.
+        std::mt19937_64 gen(seed);
+        auto draw = [&gen]() {
+            return 2.0 * (static_cast<double>(gen() >> 11) * (1.0 / 9007199254740992.0)) - 1.0;
+        };
+        X.resize(12, 10);
+        D.resize(12, 20);
+        Eigen::VectorXd e(12);
+        for (Eigen::Index j = 0; j < X.cols(); ++j) {
+            for (Eigen::Index i = 0; i < X.rows(); ++i) { X(i, j) = draw(); }
+        }
+        for (Eigen::Index j = 0; j < D.cols(); ++j) {
+            for (Eigen::Index i = 0; i < D.rows(); ++i) { D(i, j) = draw(); }
+        }
+        for (Eigen::Index i = 0; i < e.size(); ++i) { e(i) = draw(); }
         if (collinear_trio) {
             X.col(1) = 0.8 * X.col(0) + 0.2 * X.col(1);
             X.col(2) = 0.7 * X.col(0) + 0.3 * X.col(2);
-            y = 5.0 * X.col(0) - 4.0 * X.col(1) + 2.0 * X.col(2) +
-                0.1 * Eigen::VectorXd::Random(12);
+            y = 5.0 * X.col(0) - 4.0 * X.col(1) + 2.0 * X.col(2) + 0.1 * e;
         } else {
-            y = 3.0 * X.col(0) - 2.0 * X.col(1) + X.col(2) +
-                0.1 * Eigen::VectorXd::Random(12);
+            y = 3.0 * X.col(0) - 2.0 * X.col(1) + X.col(2) + 0.1 * e;
         }
         for (Eigen::Index j = 0; j < X.cols(); ++j) {
             X.col(j) /= X.col(j).norm();
@@ -686,7 +700,7 @@ TEST_F(TSolverTikTest, TiknetExcludedCatchUpKeepsKnotsMonotone) {
  *  of exiting at a phantom joining breakpoint: the TIK-modified active
  *  correlations vanish at the end. */
 TEST_F(TSolverTikTest, TiknetRankBoundTakesTerminalStep) {
-    RankBoundDesign rb(2, false);
+    RankBoundDesign rb(12, false);
     const double lambda2 = 0.5;
 
     Mapped m(rb.X, rb.D, rb.y);
@@ -718,7 +732,7 @@ TEST_F(TSolverTikTest, TiknetRankBoundTakesTerminalStep) {
  *  saturating step, path continues) or the untruncated terminal step ends
  *  the path on the saturated LS solution. One of the two must happen. */
 TEST_F(TSolverTikTest, TiknetRankBoundDropContinuesPath) {
-    RankBoundDesign rb(14, true);
+    RankBoundDesign rb(45, true);
     const double lambda2 = 0.5;
 
     Mapped m(rb.X, rb.D, rb.y);
@@ -767,7 +781,7 @@ TEST_F(TSolverTikTest, TiknetRankBoundDropContinuesPath) {
  *  (TIKNET counts nonzero K columns = p, TIENET counts groups = p), so the
  *  saturated terminal/drop semantics must agree action for action. */
 TEST_F(TSolverTikTest, TiknetIdentityKMatchesTienetSingletonGroupsAtRankBound) {
-    RankBoundDesign rb(14, true);
+    RankBoundDesign rb(45, true);
     const double lambda2 = 0.5;
 
     Mapped mt(rb.X, rb.D, rb.y);
