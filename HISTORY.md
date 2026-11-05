@@ -129,6 +129,14 @@ that entry; TRexSelectorNeo before).
 
 ### 2026-11-05
 
+#### The clustering's verbose test flushes the C runtime on Windows
+
+- `test_verbose_default_is_silent` (Python) reads the backend's allocation line through
+  `capfd` after an `fflush` of the C stdio buffer, which it reached with `ctypes.CDLL(None)`,
+  the running process on POSIX. Windows has no such handle and raised a `TypeError`, the one
+  failure of the Windows wheel job. The test now loads the UCRT (`ucrtbase`) on Windows, the C
+  runtime CPython and the MSVC-built extension share, and the process handle elsewhere.
+
 #### The workflows can be started by hand
 
 - The four workflows (C++ Tests, R Package, Python Wheels, Line ruler) carry a `workflow_dispatch`

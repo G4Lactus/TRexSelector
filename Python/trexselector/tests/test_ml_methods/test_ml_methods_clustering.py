@@ -181,11 +181,15 @@ def test_cut_tree_rejects_malformed_linkage(cluster_data):
 def test_verbose_default_is_silent(cluster_data, capfd):
     """The backend's allocation line prints only on request."""
     import ctypes
+    import sys
     X, n, p = cluster_data
 
     def c_stdout():
-        # The line is written by the C++ backend; flush the C stdio buffer before reading
-        ctypes.CDLL(None).fflush(None)
+        # The line is written by the C++ backend; flush the C stdio buffer before reading.
+        # CDLL(None) is the running process on POSIX; Windows has no such handle, so the
+        # UCRT shared by CPython and the MSVC-built extension is loaded by name.
+        libc = ctypes.CDLL("ucrtbase" if sys.platform == "win32" else None)
+        libc.fflush(None)
         return capfd.readouterr().out
 
     agglomerative_cluster(X, LinkageMethod.Ward, DistanceMetric.Euclidean)
