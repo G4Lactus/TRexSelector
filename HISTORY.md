@@ -129,15 +129,25 @@ that entry; TRexSelectorNeo before).
 
 ### 2026-11-05
 
+#### The C++ CI builds run one compile job per core
+
+- The Build steps of the C++ Tests workflow called `cmake --build --parallel` without a count,
+  which hands GNU make an unlimited `-j`: every test unit (about 55 Eigen-heavy compiles)
+  started at once on hosted runners with 3 to 4 cores and 7 to 16 GB, and the macOS job of the
+  run of 35e3951 was terminated in that phase (exit 143, every compile `Terminated`). The two
+  Makefile builds now pass the online processor count (`getconf _NPROCESSORS_ONLN`); the
+  Windows build keeps `--parallel`, which MSBuild bounds by the core count itself.
+
 #### An empty coefficient lookup map counts no bucket array in memoryBytes()
 
 - `memoryBytes()` estimates the coefficient lookup map (an `std::unordered_map`) by its bucket
   array and its nodes. A default-constructed map owns no buckets with libc++ and one inside
   the object with libstdc++, but eight on the heap with MSVC's standard library, so the
-  Windows wheel and the Windows R package reported 64 bytes more than the hand counts of the
-  Python and R tests (3,512 instead of 3,448 for the TLARS reader at n = 20, P = 20). The
-  estimate counts the bucket array only while the map holds entries, so the construction
-  counts agree across standard libraries; filled maps are estimated as before.
+  Windows wheel reported 64 bytes more than the hand count of the Python test (3,512 instead
+  of 3,448 for the TLARS reader at n = 20, P = 20); the R package on Windows builds with
+  Rtools' GCC and libstdc++ and was never affected. The estimate counts the bucket array only
+  while the map holds entries, so the construction counts agree across standard libraries;
+  filled maps are estimated as before.
 
 #### The clustering's verbose test flushes the C runtime on Windows
 

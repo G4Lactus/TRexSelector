@@ -109,10 +109,13 @@ jobs:
       # Build + Test
       # -----------------------------------------------------------------------
       # --config / -C Release: needed for the multi-config VS generator on
-      # Windows; harmless no-ops for the single-config Makefile builds
+      # Windows; harmless no-ops for the single-config Makefile builds.
+      # --parallel without a count hands GNU make an unlimited -j, which starts
+      # every test unit at once and exhausts the hosted runner's memory (3 to 4
+      # cores, 7 to 16 GB); one compile job per core bounds the peak
       - name: Build
         if: runner.os != 'Windows'
-        run: cmake --build cpp/build/ci --config Release --parallel
+        run: cmake --build cpp/build/ci --config Release --parallel "$(getconf _NPROCESSORS_ONLN)"
 
       # Windows: MSBuild interleaves parallel output, so on failure extract the
       # actual error lines and surface them as ::error:: annotations
@@ -172,8 +175,9 @@ jobs:
             exit 1
           fi
 
+      # One compile job per core, see the Build step of the test matrix
       - name: Build
-        run: cmake --build cpp/build/ci-no-openmp --parallel
+        run: cmake --build cpp/build/ci-no-openmp --parallel "$(getconf _NPROCESSORS_ONLN)"
 
       - name: Test
         run: ctest --test-dir cpp/build/ci-no-openmp --output-on-failure
