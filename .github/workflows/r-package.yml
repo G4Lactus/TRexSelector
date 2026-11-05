@@ -1,0 +1,109 @@
+name: R Package
+
+on:
+  push:
+    paths:
+      - 'R/**'
+      - 'cpp/src/**'
+      - '.github/workflows/r-package.yml'
+  pull_request:
+    paths:
+      - 'R/**'
+      - 'cpp/src/**'
+      - '.github/workflows/r-package.yml'
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Guard: the vendored C++ sources under R/TRexSelector/src/ must match
+  # cpp/src/ (content-based). This is the check bundle_for_cran.sh documents
+  # as "run it in CI" — it goes red the moment a cpp/src change lands without
+  # a re-vendor, which is exactly how the tree silently drifted before.
+  # Pure rsync, no R toolchain needed, so it runs in seconds.
+  # ---------------------------------------------------------------------------
+  vendor-check:
+    name: vendored sources in sync
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+      - name: bundle_for_cran.sh --check
+        run: bash R/TRexSelector/tools/bundle_for_cran.sh --check
+
+  # ---------------------------------------------------------------------------
+  # Build the package from the vendored sources and run the testthat suite.
+  # ---------------------------------------------------------------------------
+  test:
+    name: R ${{ matrix.os }}${{ matrix.openmp == 'no' && ' (no OpenMP)' || '' }}
+    needs: vendor-check
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-latest, windows-latest]
+        openmp: ["yes"]
+        include:
+          # The sequential build: what configure falls back to without an
+          # omp.h (CRAN's macOS R has no OpenMP flags). Every pragma is
+          # ignored and the stubs report one thread; the suite must pass.
+          - os: ubuntu-24.04
+            openmp: "no"
+    # configure reads TREX_OPENMP=no; any other value leaves the probes on.
+    env:
+      TREX_OPENMP: ${{ matrix.openmp }}
+    # Windows runners default to PowerShell; the multi-line Rscript steps
+    # below are written for a POSIX shell (Rtools ships bash).
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          use-public-rspm: true
+
+      # Reads DESCRIPTION and installs Depends/Imports/LinkingTo/Suggests
+      # (with caching) — never hand-list the dependencies here: a stale list
+      # fails the moment DESCRIPTION gains a LinkingTo entry.
+      - uses: r-lib/actions/setup-r-dependencies@v2
+        with:
+          working-directory: R/TRexSelector
+
+      - name: Install package
+        run: R CMD INSTALL --no-docs R/TRexSelector 2>&1 | tee install.log
+
+      # The switch must reach every object: configure reports the sequential
+      # build and no compile line carries an OpenMP flag.
+      - name: Check that the sequential build compiles without OpenMP
+        if: matrix.openmp == 'no'
+        run: |
+          grep -q 'compiling sequentially' install.log
+          if grep -q -e '-fopenmp' install.log; then
+            echo "::error::TREX_OPENMP=no, but a compile line still carries -fopenmp"
+            exit 1
+          fi
+
+      - name: Run testthat suite
+        working-directory: R/TRexSelector
+        run: |
+          Rscript -e 'library(TRexSelector)
+                      res <- testthat::test_dir("tests/testthat", stop_on_failure = TRUE)
+                      df <- as.data.frame(res)
+                      cat(sprintf("TOTAL: %d passed, %d failed, %d skipped\n",
+                          sum(df$passed), sum(df$failed), sum(df$skipped)))'
+
+      # R CMD check on the built tarball. The --no-docs install above never
+      # parses the Rd pages, so an unparseable page would go unnoticed
+      # without this step. Vignettes are skipped (the
+      # usage-and-simulations vignette is a long run) and the manual needs
+      # no LaTeX. A WARNING in the check status fails the job; NOTEs do not.
+      - name: R CMD check
+        env:
+          _R_CHECK_CRAN_INCOMING_: "false"
+          _R_CHECK_FORCE_SUGGESTS_: "false"
+        run: |
+          R CMD build --no-build-vignettes --no-manual R/TRexSelector
+          R CMD check --no-manual --ignore-vignettes --no-build-vignettes TRexSelector_*.tar.gz
+          if grep -Eq '^Status: .*(WARNING|ERROR)' TRexSelector.Rcheck/00check.log; then
+            echo "::error::R CMD check reported warnings or errors (see 00check.log above)"
+            exit 1
+          fi

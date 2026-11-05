@@ -1,0 +1,294 @@
+# =============================================================================
+# Unit tests for TRexSPCASelector (trex_spca_selector.R + rcpp_trex_spca.cpp)
+#
+# Test groups:
+#   1. trex_spca_control — default and custom construction
+#   2. TRexSPCASelector  — basic execution (modes / GVS variants)
+#   3. TRexSPCASelector  — output dimensions
+#   4. TRexSPCASelector  — active set bounds
+#   5. TRexSPCASelector  — explained variance properties
+#   6. TRexSPCASelector  — data integrity (X is restored after select())
+#   7. TRexSPCASelector  — input validation
+# =============================================================================
+
+library(TRexSelector)
+
+# Shared fixture: small reproducible dataset (kept small for speed)
+local_fixture <- function() {
+  set.seed(42)
+  n <- 30L; p <- 10L
+  list(
+    X = matrix(rnorm(n * p), n, p),
+    n = n, p = p
+  )
+}
+
+M     <- 2L
+tFDR  <- 0.2
+ctrl  <- trex_spca_control(K = 3L, max_dummy_multiplier = 3L)
+
+
+# =============================================================================
+# Group 1: trex_spca_control — constructor
+# =============================================================================
+
+test_that("trex_spca_control returns a named list with correct defaults", {
+  ctrl_def <- trex_spca_control()
+  expect_named(ctrl_def, c("mode", "lambda2_ridge_loadings", "gvs_type",
+                            "lambda_2", "lambda2_method",
+                            "en_solver", "tenet_aug_use_lars", "K",
+                            "max_dummy_multiplier"))
+  expect_equal(ctrl_def$mode,                   "ActiveSet")
+  expect_equal(ctrl_def$lambda2_ridge_loadings,  1e-6)
+  expect_equal(ctrl_def$gvs_type,               "EN")
+  expect_equal(ctrl_def$lambda_2,            -1.0)
+  expect_equal(ctrl_def$lambda2_method,          "CV_1SE_CCD")
+  expect_equal(ctrl_def$en_solver,              "TENET_AUG")
+  expect_false(ctrl_def$tenet_aug_use_lars)
+  expect_equal(ctrl_def$K,                       20L)
+  expect_equal(ctrl_def$max_dummy_multiplier,    10L)
+})
+
+test_that("trex_spca_control rejects invalid mode", {
+  expect_error(trex_spca_control(mode = "unknown"))
+})
+
+test_that("trex_spca_control rejects invalid gvs_type", {
+  expect_error(trex_spca_control(gvs_type = "unknown"))
+})
+
+test_that("trex_spca_control rejects IEN (T-Rex SPCA is EN only)", {
+  expect_error(trex_spca_control(gvs_type = "IEN"), "must be \"EN\"")
+})
+
+test_that("trex_spca_control rejects negative lambda2_ridge_loadings", {
+  expect_error(trex_spca_control(lambda2_ridge_loadings = -1))
+})
+
+test_that("trex_spca_control rejects invalid lambda2_method", {
+  expect_error(trex_spca_control(lambda2_method = "unknown"))
+})
+
+
+# =============================================================================
+# Group 2: TRexSPCASelector — basic execution (modes / GVS variants)
+# =============================================================================
+
+test_that("TRexSPCASelector select() runs to completion (ActiveSet + EN)", {
+  d <- local_fixture()
+  sel <- TRexSPCASelector$new(d$X, M, tFDR, control = trex_spca_control(
+    mode = "ActiveSet", gvs_type = "EN", K = 3L, max_dummy_multiplier = 3L),
+    seed = 1L)
+  expect_no_error(sel$select())
+})
+
+test_that("TRexSPCASelector select() runs to completion (Thresholded + EN)", {
+  d <- local_fixture()
+  sel <- TRexSPCASelector$new(d$X, M, tFDR, control = trex_spca_control(
+    mode = "Thresholded", gvs_type = "EN", K = 3L, max_dummy_multiplier = 3L),
+    seed = 1L)
+  expect_no_error(sel$select())
+})
+
+test_that("TRexSPCASelector rejects IEN in a hand-built control list", {
+  # T-Rex SPCA is EN only; the C++ constructor guards a list that bypasses
+  # trex_spca_control()
+  d <- local_fixture()
+  ctrl <- trex_spca_control(mode = "ActiveSet", K = 3L, max_dummy_multiplier = 3L)
+  ctrl$gvs_type <- "IEN"
+  expect_error({
+    sel <- TRexSPCASelector$new(d$X, M, tFDR, control = ctrl, seed = 1L)
+    sel$select()
+  }, "gvs_type must be EN")
+})
+
+test_that("TRexSPCASelector select() accepts a fixed lambda_2 bypass value", {
+  d <- local_fixture()
+  sel <- TRexSPCASelector$new(d$X, M, tFDR, control = trex_spca_control(
+    gvs_type = "EN", lambda_2 = 0.01, K = 3L, max_dummy_multiplier = 3L),
+    seed = 1L)
+  expect_no_error(sel$select())
+})
+
+
+# =============================================================================
+# Group 3: TRexSPCASelector — output dimensions
+# =============================================================================
+
+test_that("TRexSPCASelector: score matrix Z has correct dimensions", {
+  d <- local_fixture()
+  sel <- TRexSPCASelector$new(d$X, M, tFDR, control = ctrl, seed = 1L)
+  sel$select()
+  expect_equal(dim(sel$Z), c(d$n, M))
+})
+
+test_that("TRexSPCASelector: loading matrix V has correct dimensions", {
+  d <- local_fixture()
+  sel <- TRexSPCASelector$new(d$X, M, tFDR, control = ctrl, seed = 1L)
+  sel$select()
+  expect_equal(dim(sel$V), c(d$p, M))
+})
+
+test_that("TRexSPCASelector: adjusted_ev and cumulative_ev have length M", {
+  d <- local_fixture()
+  sel <- TRexSPCASelector$new(d$X, M, tFDR, control = ctrl, seed = 1L)
+  sel$select()
+  expect_equal(length(sel$adjusted_ev),  M)
+  expect_equal(length(sel$cumulative_ev), M)
+})
+
+test_that("TRexSPCASelector: active_sets is a list of length M", {
+  d <- local_fixture()
+  sel <- TRexSPCASelector$new(d$X, M, tFDR, control = ctrl, seed = 1L)
+  sel$select()
+  expect_type(sel$active_sets, "list")
+  expect_equal(length(sel$active_sets), M)
+})
+
+test_that("TRexSPCASelector: M = 1 returns correct output shapes", {
+  d <- local_fixture()
+  sel <- TRexSPCASelector$new(d$X, 1L, tFDR, control = ctrl, seed = 1L)
+  sel$select()
+  expect_equal(dim(sel$Z), c(d$n, 1L))
+  expect_equal(dim(sel$V), c(d$p, 1L))
+  expect_equal(length(sel$active_sets), 1L)
+  expect_equal(length(sel$adjusted_ev), 1L)
+})
+
+
+# =============================================================================
+# Group 4: TRexSPCASelector — active set bounds
+# =============================================================================
+
+test_that("TRexSPCASelector: active set indices are within [1, p]", {
+  d <- local_fixture()
+  sel <- TRexSPCASelector$new(d$X, M, tFDR, control = ctrl, seed = 1L)
+  sel$select()
+  for (as_m in sel$active_sets) {
+    # An empty active set is a valid FDR-conservative outcome.
+    expect_true(length(as_m) >= 0)
+    expect_true(all(as_m >= 1L))
+    expect_true(all(as_m <= d$p))
+  }
+})
+
+test_that("TRexSPCASelector: active set indices are integers", {
+  d <- local_fixture()
+  sel <- TRexSPCASelector$new(d$X, M, tFDR, control = ctrl, seed = 1L)
+  sel$select()
+  for (as_m in sel$active_sets) {
+    expect_type(as_m, "integer")
+  }
+})
+
+
+# =============================================================================
+# Group 5: TRexSPCASelector — explained variance properties
+# =============================================================================
+
+test_that("TRexSPCASelector: adjusted_ev is non-negative", {
+  d <- local_fixture()
+  sel <- TRexSPCASelector$new(d$X, M, tFDR, control = ctrl, seed = 1L)
+  sel$select()
+  expect_true(all(sel$adjusted_ev >= 0))
+})
+
+test_that("TRexSPCASelector: cumulative_ev is non-decreasing and in [0, 1]", {
+  d <- local_fixture()
+  sel <- TRexSPCASelector$new(d$X, M, tFDR, control = ctrl, seed = 1L)
+  sel$select()
+  ev <- sel$cumulative_ev
+  expect_true(all(diff(ev) >= -1e-10))
+  expect_true(all(ev >= 0))
+  expect_true(all(ev <= 1 + 1e-10))
+})
+
+
+# =============================================================================
+# Group 6: TRexSPCASelector — data integrity
+# =============================================================================
+
+test_that("TRexSPCASelector: X is restored after select()", {
+  d <- local_fixture()
+  # `d$X * 1.0` forces a deep copy; R's COW does not protect against direct
+  # Rcpp/Eigen writes to the underlying SEXP memory.
+  X_orig <- d$X * 1.0
+  sel <- TRexSPCASelector$new(d$X, M, tFDR, control = ctrl, seed = 1L)
+  sel$select()
+  # The C++ layer centers X in-place and restores it on return
+  expect_equal(d$X, X_orig, tolerance = 1e-12)
+})
+
+
+# =============================================================================
+# Group 7: TRexSPCASelector — input validation
+# =============================================================================
+
+test_that("TRexSPCASelector rejects M < 1 at construction", {
+  d <- local_fixture()
+  expect_error(TRexSPCASelector$new(d$X, 0L, tFDR, control = ctrl, seed = 1L))
+})
+
+test_that("TRexSPCASelector rejects tFDR out of (0, 1) at construction", {
+  d <- local_fixture()
+  expect_error(TRexSPCASelector$new(d$X, M, tFDR = 0, control = ctrl, seed = 1L))
+  expect_error(TRexSPCASelector$new(d$X, M, tFDR = 1, control = ctrl, seed = 1L))
+})
+
+test_that("TRexSPCASelector warns when lambda_2 == 0 (degenerate no-ridge)", {
+  d <- local_fixture()
+  ctrl0 <- trex_spca_control(K = 3L, max_dummy_multiplier = 3L, lambda_2 = 0)
+  expect_warning(
+    TRexSPCASelector$new(d$X, M, tFDR, control = ctrl0, seed = 1L),
+    "degenerate no-ridge"
+  )
+  # Auto (-1) and fixed positive must not warn
+  ctrl_auto <- trex_spca_control(K = 3L, max_dummy_multiplier = 3L, lambda_2 = -1)
+  ctrl_pos  <- trex_spca_control(K = 3L, max_dummy_multiplier = 3L, lambda_2 = 0.05)
+  expect_no_warning(TRexSPCASelector$new(d$X, M, tFDR, control = ctrl_auto, seed = 1L))
+  expect_no_warning(TRexSPCASelector$new(d$X, M, tFDR, control = ctrl_pos,  seed = 1L))
+})
+
+
+test_that("TRexSPCASelector accepts tenet_aug_use_lars (LARS vs LASSO inner path)", {
+  d <- local_fixture()
+  M <- 2L; tFDR <- 0.3
+  # tenet_aug_use_lars flows through the per-PC TENET_AUG sub-selector.
+  ctrl_lasso <- trex_spca_control(K = 3L, max_dummy_multiplier = 3L,
+                                  tenet_aug_use_lars = FALSE)
+  ctrl_lars  <- trex_spca_control(K = 3L, max_dummy_multiplier = 3L,
+                                  tenet_aug_use_lars = TRUE)
+  expect_false(ctrl_lasso$tenet_aug_use_lars)
+  expect_true(ctrl_lars$tenet_aug_use_lars)
+  expect_no_error(
+    r1 <- TRexSPCASelector$new(d$X, M, tFDR, control = ctrl_lasso, seed = 1L)$select())
+  expect_no_error(
+    r2 <- TRexSPCASelector$new(d$X, M, tFDR, control = ctrl_lars, seed = 1L)$select())
+  expect_equal(dim(r1$V), c(d$p, M))
+  expect_equal(dim(r2$V), c(d$p, M))
+})
+
+
+# =============================================================================
+# Memory-mapped X: the file is centered in
+# place during select() and restored; results equal the in-memory path.
+# =============================================================================
+
+test_that("TRexSPCASelector on a readwrite mmap_matrix equals the in-memory selection", {
+  set.seed(61)
+  n <- 60; p <- 25
+  X <- matrix(rnorm(n * p), n, p)
+  X[, 1:3] <- X[, 1:3] + matrix(rnorm(n), n, 3) * 3
+  f <- tempfile(fileext = ".bin")
+  on.exit(unlink(f), add = TRUE)
+  rw <- mem_matrix_from(X, f)
+  X0 <- X + 0
+
+  a <- TRexSPCASelector$new(X, M = 2, tFDR = 0.2, seed = 5, verbose = FALSE); a$select()
+  b <- TRexSPCASelector$new(rw, M = 2, tFDR = 0.2, seed = 5, verbose = FALSE); b$select()
+  expect_identical(b$active_sets, a$active_sets)
+  expect_identical(b$adjusted_ev, a$adjusted_ev)
+  expect_identical(b$V, a$V)
+  expect_equal(as.matrix(rw), X0, tolerance = 1e-12)   # restored in the file
+  expect_equal(X, X0, tolerance = 1e-12)               # and in memory
+})

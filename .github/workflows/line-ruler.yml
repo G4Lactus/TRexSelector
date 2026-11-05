@@ -1,0 +1,16 @@
+name: Line ruler
+
+# The project's line ruler: every tracked text line stays within 120 characters.
+# tools/check_line_length.py lists the exemptions, prints every hit as
+# path:line: length and exits 1 when it finds one. No path filter: the ruler
+# holds in every folder, so every push and pull request runs it.
+on: [push, pull_request]
+
+jobs:
+  ruler:
+    name: 120 characters
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+      - name: Check line lengths
+        run: python3 tools/check_line_length.py

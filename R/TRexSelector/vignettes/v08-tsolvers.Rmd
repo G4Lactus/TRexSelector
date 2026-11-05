@@ -1,0 +1,224 @@
+---
+title: "The T-solvers"
+output:
+  rmarkdown::html_vignette:
+    toc: true
+    css: vignette_styles.css
+bibliography: references.bib
+csl: ieee.csl
+link-citations: true
+vignette: >
+  %\VignetteIndexEntry{The T-solvers}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(collapse = TRUE, comment = "#>", fig.align = "center",
+                      fig.width = 6, fig.height = 4)
+options(width = 80)
+library(TRexSelector)
+old_threads <- trex_set_num_threads(min(2L, trex_get_max_threads()))
+```
+
+# Terminating forward selection
+
+A T-solver is a forward selection algorithm on the enlarged design $[\boldsymbol X, \boldsymbol D]$ of
+predictors and dummies that stops as soon as `T_stop` dummies are active. The T-Rex selectors run one
+inside every random experiment, and every T-solver is available as a class of its own, for a single
+terminated path, for a study of the solvers, or as a building block. The terminated form of each
+algorithm follows the T-Rex paper [@machkour2025trex], the greedy family the terminating greedy pursuits
+[@scheidt2026greedy].
+
+| Family | Classes | Algorithm |
+| --- | --- | --- |
+| LARS | `TLARS_Solver`, `TLASSO_Solver`, `TSTEPWISE_Solver` | least angle regression and its lasso and stepwise modifications [@efron2004lars; @tibshirani1996lasso] |
+| LARS | `TSTAGEWISE_Solver` | forward stagewise [@hastie2007stagewise; @tibshirani2015stagewise] |
+| LARS | `TENET_Solver`, `TENETAug_Solver` | the elastic net [@zou2005elasticnet], Gram based and row augmented |
+| LARS | `TIENET_Solver`, `TIENETAug_Solver` | the informed elastic net [@machkour2023ien], pathwise and row augmented |
+| LARS | `TIKNET_Solver` | the Tikhonov net, pathwise |
+| OMP | `TOMP_Solver`, `TOOLS_Solver` | orthogonal matching pursuit and orthogonal least squares [@pati1993omp; @chen1989ols; @blumensath2007ompols] |
+| OMP | `TGP_Solver`, `TACGP_Solver` | gradient and approximate conjugate gradient pursuit [@blumensath2008gp] |
+| OMP | `TMP_Solver`, `TNCGMP_Solver` | matching pursuit [@mallat1993mp] and non-negative constrained generalized matching pursuit [@locatello2017mpfw] |
+| AFS | `TAFS_Solver` | adaptive forward stepwise [@zhang2026afs] |
+| CD | `TCDLASSO_Solver`, `TCDENET_Solver`, `TCDIENET_Solver`, `TCDTIKNET_Solver` | pathwise coordinate descent [@friedman2007pathwise; @friedman2010glmnet] with exact minimizers at every dummy crossing |
+
+The path solvers (LARS and CD families) walk a regularization path, the greedy solvers (OMP and AFS
+families) add one variable per step. The informed solvers take a `groups` vector, the Tikhonov solvers
+a penalty matrix `tikhonov_K`.
+
+# One terminated path
+
+```{r data}
+set.seed(31)
+n <- 100
+p <- 50
+L <- 50
+true_support <- c(2, 9, 17, 33)
+beta <- numeric(p)
+beta[true_support] <- c(2, -2, 1.5, -1.5)
+X <- matrix(rnorm(n * p), n, p)
+D <- matrix(rnorm(n * L), n, L)
+y <- as.numeric(X %*% beta + rnorm(n))
+```
+
+A solver is constructed on `X`, `D`, `y` and an options list, and `execute_step()` runs the path until
+`T_stop` dummies are active. The path can be continued by calling `execute_step()` again with a larger
+`T_stop`.
+
+```{r tlars}
+solver <- TLARS_Solver$new(X, D, y)
+solver$execute_step(T_stop = 3)
+solver$get_num_steps()
+solver$get_active_predictor_indices()
+solver$get_active_dummy_indices()
+```
+
+Indices are 1-based and the dummies continue after the predictors, so the active set of the enlarged
+design runs from 1 to $p + L$.
+
+```{r actives}
+solver$get_actives()
+solver$get_dummy_start_index()
+solver$get_actions()[1:4]
+```
+
+`get_actions()` records the path as signed codes per step, `+j` for an addition and `-j` for a removal.
+`get_beta()` is the coefficient vector of the last step and `get_beta_path()` the whole path, one column
+per step with the all-zero start.
+
+```{r path}
+dim(solver$get_beta_path())
+round(solver$get_beta()[true_support], 3)
+path_diag <- data.frame(lambda = solver$get_lambda(), rss = solver$get_rss(),
+                        r2 = solver$get_r2(), cp = solver$get_cp(), dof = solver$get_dof())
+round(head(path_diag, 5), 3)
+solver$restore()    # give X and D back before the next solver claims them
+```
+
+# The options
+
+`tsolver_options()` holds every input except the data, the same list for every solver. A solver reads
+the fields it needs and ignores the rest.
+
+| Field | Meaning |
+| --- | --- |
+| `normalize`, `intercept`, `scaling_mode` | center and scale the columns of `X` and `D` in place (`"L2"` or `"ZSCORE"`) and center `y` |
+| `precentered` | the caller centered the data: the active set is capped at $n - 1$ and the intercept counts in the degrees of freedom |
+| `tol` | the numerical tolerance of the comparisons (machine epsilon by default) |
+| `tie_seed` | the seed of the tie-break engine (0 by default, so exact ties resolve reproducibly) |
+| `n_threads` | the thread budget of the solver's own passes (1 serial, at least 1; a pass splits only above about a million entries of the design) |
+| `exch_tie_alpha`, `exch_tie_floor` | the exchangeable-tie band of the greedy solvers |
+| `lambda2` | the quadratic penalty of the elastic nets (0 by default) |
+| `rho_afs`, `ncgmp_variant`, `tenet_aug_use_lars` | solver-specific switches |
+| `verbose` | print the steps |
+
+```{r tenet}
+en <- TENET_Solver$new(X, D, y, options = tsolver_options(lambda2 = 0.5))
+en$execute_step(T_stop = 3)
+en$get_active_predictor_indices()
+en$get_num_removals()
+en$restore()
+```
+
+# Writers and readers
+
+With `normalize = TRUE` or `intercept = TRUE` (the defaults) a solver is a writer. It centers and scales
+the columns of `X` and `D` in place, holds the statistics, and writes the original values back when
+`restore()` is called or when the object is garbage collected. A second writer on a claimed matrix is an
+error, because a second in-place transformation would move the data by rounding. `y` is never written.
+
+```{r writer}
+X_before <- X + 0
+w <- TLASSO_Solver$new(X, D, y)
+max(abs(X - X_before))      # the scaled columns
+w$restore()
+max(abs(X - X_before))      # the original values
+```
+
+A pipeline that runs several solvers on one design scales the data once in front with a scaler and
+constructs readers, solvers with `normalize = FALSE` and `intercept = FALSE` that never write.
+
+```{r readers}
+sx <- MLLpNormScaler$new(norm_type = 2, center = TRUE)
+invisible(sx$fit_transform_inplace(X))
+sd <- MLLpNormScaler$new(norm_type = 2, center = TRUE)
+invisible(sd$fit_transform_inplace(D))
+y_c <- y - mean(y)
+reader_opts <- tsolver_options(normalize = FALSE, intercept = FALSE, precentered = TRUE)
+```
+
+With the data pre-scaled, every family runs on the same design.
+
+```{r families}
+constructors <- list(
+  TLARS = TLARS_Solver, TLASSO = TLASSO_Solver, TSTEPWISE = TSTEPWISE_Solver,
+  TSTAGEWISE = TSTAGEWISE_Solver, TENET = TENET_Solver, TENETAug = TENETAug_Solver,
+  TOMP = TOMP_Solver, TOOLS = TOOLS_Solver, TGP = TGP_Solver, TACGP = TACGP_Solver,
+  TMP = TMP_Solver, TNCGMP = TNCGMP_Solver, TAFS = TAFS_Solver,
+  TCDLASSO = TCDLASSO_Solver, TCDENET = TCDENET_Solver)
+rows <- lapply(names(constructors), function(nm) {
+  s <- constructors[[nm]]$new(X, D, y_c, options = reader_opts)
+  s$execute_step(T_stop = 3)
+  data.frame(solver = nm, steps = s$get_num_steps(),
+             predictors = paste(s$get_active_predictor_indices(), collapse = " "))
+})
+do.call(rbind, rows)
+```
+
+The informed solvers and the Tikhonov solvers take their structure as an extra argument.
+
+```{r structured}
+groups <- rep(1:5, each = 10)
+ien <- TIENET_Solver$new(X, D, y_c, groups = groups,
+                         options = tsolver_options(normalize = FALSE, intercept = FALSE,
+                                                   precentered = TRUE, lambda2 = 0.5))
+ien$execute_step(T_stop = 3)
+ien$get_active_predictor_indices()
+tik <- TCDTIKNET_Solver$new(X, D, y_c, tikhonov_K = diag(p),
+                            options = tsolver_options(normalize = FALSE, intercept = FALSE,
+                                                      precentered = TRUE, lambda2 = 0.5))
+tik$execute_step(T_stop = 3)
+tik$get_active_predictor_indices()
+```
+
+# Saving and loading
+
+`save()` serializes the state of a solver to a file and `load()` restores it into a solver constructed
+on the same data in the same state. The loaded solver is a reader and continues the path where it was
+saved.
+
+```{r save-load}
+f <- tempfile(fileext = ".bin")
+a <- TLARS_Solver$new(X, D, y_c, options = reader_opts)
+a$execute_step(T_stop = 2)
+a$save(f)
+b <- TLARS_Solver$new(X, D, y_c, options = reader_opts)
+b$load(f)
+b$get_num_steps()
+b$execute_step(T_stop = 4)
+c <- TLARS_Solver$new(X, D, y_c, options = reader_opts)
+c$execute_step(T_stop = 4)
+identical(b$get_actives(), c$get_actives())
+unlink(f)
+```
+
+# Memory
+
+`get_memory_bytes()` reports the heap bytes a solver holds (its copy of `y`, the residual, the
+correlations, the Cholesky factor, the coefficient path). `X` and `D` are borrowed and not counted.
+
+```{r memory}
+a$get_memory_bytes()
+```
+
+```{r restore-data, include = FALSE}
+invisible(sx$inverse_transform_inplace(X))
+invisible(sd$inverse_transform_inplace(D))
+```
+
+```{r teardown, include = FALSE}
+trex_set_num_threads(old_threads)
+```
+
+# References

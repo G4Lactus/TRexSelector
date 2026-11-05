@@ -1,0 +1,14 @@
+CompileFlags:
+  # Drops the macOS-specific OpenMP flag from the background linter
+  # so it stops complaining about 'libomp', but keeps OpenMP support.
+  Remove: [-fopenmp=libomp]
+
+Diagnostics:
+  ClangTidy:
+    Remove:
+      # --- Bugprone Checks ---
+      - bugprone-easily-swappable-parameters
+
+      # --- Performance Checks ---
+      # Already excluded in .clang-tidy; suppress here too so IDE stays quiet
+      - performance-enum-size

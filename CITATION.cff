@@ -1,0 +1,184 @@
+# Citation metadata for GitHub's "Cite this repository" (Citation File Format 1.2.0).
+# The version is the one of the C++ library and the Python package; the R package carries its own
+# version in R/TRexSelector/DESCRIPTION. The method papers are listed as references; the master
+# list with every reference of the class documentation is references.bib at the repository root.
+cff-version: 1.2.0
+message: "If you use this software, please cite the package and the paper of the method you used."
+type: software
+title: "TRexSelector"
+abstract: >-
+  High-dimensional variable selection with false discovery rate (FDR) control through terminating
+  random experiments (the T-Rex selector) in C++, R and Python.
+authors:
+  - name: "TRexSelector Team"
+version: 1.0.0
+repository-code: "https://github.com/trexselector/TRexSelector"
+license: GPL-3.0-or-later
+keywords:
+  - false discovery rate
+  - variable selection
+  - high-dimensional statistics
+  - T-Rex selector
+preferred-citation:
+  type: article
+  title: >-
+    The Terminating-Random Experiments Selector: Fast High-Dimensional Variable Selection with False
+    Discovery Rate Control
+  authors:
+    - family-names: Machkour
+      given-names: Jasin
+    - family-names: Muma
+      given-names: Michael
+    - family-names: Palomar
+      given-names: Daniel P.
+  journal: "Signal Processing"
+  volume: 231
+  year: 2025
+  doi: 10.1016/j.sigpro.2025.109894
+references:
+  - type: article
+    title: "High-Dimensional False Discovery Rate Control for Dependent Variables"
+    authors:
+      - family-names: Machkour
+        given-names: Jasin
+      - family-names: Muma
+        given-names: Michael
+      - family-names: Palomar
+        given-names: Daniel P.
+    journal: "Signal Processing"
+    volume: 234
+    year: 2025
+    doi: 10.1016/j.sigpro.2025.109990
+  - type: conference-paper
+    title: >-
+      False Discovery Rate Control for Grouped Variable Selection in High-Dimensional Linear Models Using
+      the T-Knock Filter
+    authors:
+      - family-names: Machkour
+        given-names: Jasin
+      - family-names: Muma
+        given-names: Michael
+      - family-names: Palomar
+        given-names: Daniel P.
+    collection-title: "Proc. 30th Eur. Signal Process. Conf. (EUSIPCO)"
+    start: 892
+    end: 896
+    year: 2022
+  - type: conference-paper
+    title: "The Informed Elastic Net for Fast Grouped Variable Selection and FDR Control in Genomics Research"
+    authors:
+      - family-names: Machkour
+        given-names: Jasin
+      - family-names: Muma
+        given-names: Michael
+      - family-names: Palomar
+        given-names: Daniel P.
+    collection-title: "Proc. IEEE 9th Int. Workshop Comput. Adv. Multi-Sensor Adapt. Process. (CAMSAP)"
+    start: 466
+    end: 470
+    year: 2023
+  - type: conference-paper
+    title: "False Discovery Rate Control for Fast Screening of Large-Scale Genomics Biobanks"
+    authors:
+      - family-names: Machkour
+        given-names: Jasin
+      - family-names: Muma
+        given-names: Michael
+      - family-names: Palomar
+        given-names: Daniel P.
+    collection-title: "Proc. 22nd IEEE Statist. Signal Process. Workshop (SSP)"
+    start: 666
+    end: 670
+    year: 2023
+  - type: conference-paper
+    title: "Sparse PCA with False Discovery Rate Controlled Variable Selection"
+    authors:
+      - family-names: Machkour
+        given-names: Jasin
+      - family-names: Breloy
+        given-names: Arnaud
+      - family-names: Muma
+        given-names: Michael
+      - family-names: Palomar
+        given-names: Daniel P.
+      - family-names: Pascal
+        given-names: Frédéric
+    collection-title: "Proc. IEEE 49th Int. Conf. Acoust., Speech, Signal Process. (ICASSP)"
+    start: 9716
+    end: 9720
+    year: 2024
+  - type: conference-paper
+    title: "Solving FDR-Controlled Sparse Regression Problems with Five Million Variables on a Laptop"
+    authors:
+      - family-names: Scheidt
+        given-names: Fabian
+      - family-names: Machkour
+        given-names: Jasin
+      - family-names: Muma
+        given-names: Michael
+    collection-title: "Proc. IEEE 9th Int. Workshop Comput. Adv. Multi-Sensor Adapt. Process. (CAMSAP)"
+    start: 116
+    end: 120
+    year: 2023
+  - type: conference-paper
+    title: "Terminating Greedy Pursuits for High-Dimensional False Discovery Rate Control"
+    authors:
+      - family-names: Scheidt
+        given-names: Fabian
+      - family-names: Muma
+        given-names: Michael
+    collection-title: "Proc. Eur. Signal Process. Conf. (EUSIPCO)"
+    start: 2511
+    end: 2515
+    year: 2026
+  - type: article
+    title: >-
+      Virtual Dummies: Enabling Scalable FDR-Controlled Variable Selection via Sequential Sampling of Null
+      Features
+    authors:
+      - family-names: Koka
+        given-names: Taulant
+      - family-names: Machkour
+        given-names: Jasin
+      - family-names: Palomar
+        given-names: Daniel P.
+      - family-names: Muma
+        given-names: Michael
+    journal: "arXiv preprint"
+    notes: "arXiv:2604.07464"
+    year: 2026
+  - type: conference-paper
+    title: "FDR-Controlled Portfolio Optimization for Sparse Financial Index Tracking"
+    authors:
+      - family-names: Machkour
+        given-names: Jasin
+      - family-names: Palomar
+        given-names: Daniel P.
+      - family-names: Muma
+        given-names: Michael
+    collection-title: "Proc. IEEE Int. Conf. Acoust., Speech, Signal Process. (ICASSP)"
+    year: 2025
+    doi: 10.1109/ICASSP49660.2025.10890629
+  - type: conference-paper
+    title: "FDR-Controlled Sparse Index Tracking with Autoregressive Stock Dependency Models"
+    authors:
+      - family-names: Machkour
+        given-names: Jasin
+      - family-names: Muma
+        given-names: Michael
+      - family-names: Palomar
+        given-names: Daniel P.
+    collection-title: "Proc. Eur. Signal Process. Conf. (EUSIPCO)"
+    start: 2662
+    end: 2666
+    year: 2024
+  - type: software
+    title: "Eigen v3"
+    authors:
+      - family-names: Guennebaud
+        given-names: Gaël
+      - family-names: Jacob
+        given-names: Benoît
+      - name: "the Eigen contributors"
+    url: "https://libeigen.gitlab.io/"
+    year: 2010

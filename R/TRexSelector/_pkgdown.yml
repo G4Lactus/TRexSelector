@@ -1,0 +1,47 @@
+url: https://github.com/trexselector/TRexSelector
+template:
+  bootstrap: 5
+
+reference:
+- title: T-Rex selectors and controls
+  desc: The R6 selectors, their control lists, helpers and evaluation metrics.
+  contents:
+  - has_concept("T-Rex selectors and controls")
+- title: T-solvers
+  desc: The terminating solvers as R6 classes and their options.
+  contents:
+  - has_concept("T-solvers")
+- title: ML methods
+  desc: Scalers, regressions, decompositions and hierarchical clustering.
+  contents:
+  - has_concept("ML methods")
+- title: Memory-mapped matrices
+  desc: Disk-backed matrices accepted everywhere a matrix is.
+  contents:
+  - has_concept("memory-mapped matrices")
+
+articles:
+- title: Get started
+  navbar: Get started
+  contents:
+  - v01-getting-started
+  - v02-trex-selector
+- title: The T-Rex selectors
+  navbar: Selectors
+  contents:
+  - v03-trex-da
+  - v04-trex-gvs
+  - v05-screening
+  - v06-trex-spca
+  - v07-trex-tikhonov
+- title: Solvers and methods
+  navbar: Solvers and methods
+  contents:
+  - v08-tsolvers
+  - v09-ml-methods
+- title: Memory and threads
+  navbar: Memory and threads
+  contents:
+  - v10-memory-mapping
+  - v11-no-copies
+  - v12-parallelism

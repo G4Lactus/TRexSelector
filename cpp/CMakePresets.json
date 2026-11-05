@@ -1,0 +1,158 @@
+{
+    "version": 6,
+    "configurePresets": [
+        {
+            "name": "debug",
+            "displayName": "Debug",
+            "description": "Debug build with lowercase directory name",
+            "binaryDir": "${sourceDir}/build/debug",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Debug",
+                "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
+            }
+        },
+        {
+            "name": "release",
+            "displayName": "Release",
+            "description": "Release build with lowercase directory name",
+            "binaryDir": "${sourceDir}/build/release",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Release",
+                "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
+                "TREX_PORTABLE_BUILD": "OFF"
+            }
+        },
+        {
+            "name": "release-libs",
+            "displayName": "Release (libraries only, portable)",
+            "description": "Release build used for packaging and installation (portable, no -march=native)",
+            "binaryDir": "${sourceDir}/build/release-portable",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Release",
+                "CMAKE_EXPORT_COMPILE_COMMANDS": "ON",
+                "TREX_PORTABLE_BUILD": "ON"
+            }
+        },
+        {
+            "name": "local-install",
+            "displayName": "Release (install to project-local install/)",
+            "description": "release-libs with the install prefix preset to ${sourceDir}/install",
+            "inherits": "release-libs",
+            "cacheVariables": {
+                "CMAKE_INSTALL_PREFIX": "${sourceDir}/install"
+            }
+        },
+        {
+            "name": "vcpkg-release",
+            "displayName": "Release with vcpkg dependencies",
+            "description": "Release build with the vcpkg toolchain (dependencies auto-installed; needs VCPKG_ROOT)",
+            "binaryDir": "${sourceDir}/build/vcpkg-release",
+            "toolchainFile": "$env{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake",
+            "cacheVariables": {
+                "CMAKE_BUILD_TYPE": "Release",
+                "CMAKE_EXPORT_COMPILE_COMMANDS": "ON"
+            }
+        },
+        {
+            "name": "asan-ubsan",
+            "displayName": "Debug + ASan/UBSan",
+            "description": "Debug build with the Address and UB sanitizers (needs Homebrew LLVM, not Apple Clang)",
+            "inherits": "debug",
+            "binaryDir": "${sourceDir}/build/asan-ubsan",
+            "cacheVariables": {
+                "CMAKE_CXX_FLAGS": "-fsanitize=address,undefined -fno-omit-frame-pointer -fno-optimize-sibling-calls",
+                "CMAKE_EXE_LINKER_FLAGS": "-fsanitize=address,undefined",
+                "CMAKE_SHARED_LINKER_FLAGS": "-fsanitize=address,undefined"
+            }
+        },
+        {
+            "name": "tidy",
+            "displayName": "Debug + clang-tidy",
+            "description": "Debug build with clang-tidy running during compilation (needs Homebrew LLVM)",
+            "inherits": "debug",
+            "binaryDir": "${sourceDir}/build/tidy",
+            "cacheVariables": {
+                "CMAKE_CXX_CLANG_TIDY": "$env{HOMEBREW_PREFIX}/opt/llvm/bin/clang-tidy"
+            }
+        }
+    ],
+    "buildPresets": [
+        {
+            "name": "debug-build",
+            "displayName": "Debug Build",
+            "configurePreset": "debug"
+        },
+        {
+            "name": "release-build",
+            "displayName": "Release Build",
+            "configurePreset": "release"
+        },
+        {
+            "name": "release-build-libs",
+            "displayName": "Release Build (libraries only, portable)",
+            "configurePreset": "release-libs"
+        },
+        {
+            "name": "local-install-build",
+            "displayName": "Release Build (local install)",
+            "configurePreset": "local-install"
+        },
+        {
+            "name": "vcpkg-release-build",
+            "displayName": "Release Build (vcpkg)",
+            "configurePreset": "vcpkg-release"
+        },
+        {
+            "name": "asan-ubsan-build",
+            "displayName": "ASan/UBSan Build",
+            "configurePreset": "asan-ubsan"
+        },
+        {
+            "name": "tidy-build",
+            "displayName": "Clang-Tidy Build",
+            "configurePreset": "tidy"
+        }
+    ],
+    "workflowPresets": [
+        {
+            "name": "release-libs",
+            "displayName": "Configure + Build libraries only (portable)",
+            "steps": [
+                { "type": "configure", "name": "release-libs" },
+                { "type": "build",     "name": "release-build-libs" }
+            ]
+        },
+        {
+            "name": "local-install",
+            "displayName": "Configure + Build + (ready to install locally)",
+            "steps": [
+                { "type": "configure", "name": "local-install" },
+                { "type": "build",     "name": "local-install-build" }
+            ]
+        },
+        {
+            "name": "vcpkg-release",
+            "displayName": "Configure + Build with vcpkg dependencies",
+            "steps": [
+                { "type": "configure", "name": "vcpkg-release" },
+                { "type": "build",     "name": "vcpkg-release-build" }
+            ]
+        },
+        {
+            "name": "asan-ubsan",
+            "displayName": "Configure + Build with ASan/UBSan",
+            "steps": [
+                { "type": "configure", "name": "asan-ubsan" },
+                { "type": "build",     "name": "asan-ubsan-build" }
+            ]
+        },
+        {
+            "name": "tidy",
+            "displayName": "Configure + Build with clang-tidy",
+            "steps": [
+                { "type": "configure", "name": "tidy" },
+                { "type": "build",     "name": "tidy-build" }
+            ]
+        }
+    ]
+}

@@ -1,0 +1,68 @@
+{
+  "_comment": [
+    "Which bibliography keys each documented class cites, in citation order. The first keys are the",
+    "origin papers of the method, the T-Rex paper (or the greedy-pursuits paper for the greedy solvers)",
+    "gives the terminating form. Names are the C++ class names; the R and Python names map onto them."
+  ],
+  "TRexSelector": ["machkour2025trex"],
+  "TRexDASelector": ["machkour2025datrex", "machkour2025indextracking", "machkour2024ar1", "machkour2025trex"],
+  "TRexGVSSelector": ["machkour2022gvs", "machkour2023ien", "zou2005elasticnet", "machkour2025trex"],
+  "ScreenTRexSelector": ["machkour2023screen", "machkour2025trex"],
+  "BiobankScreenTRex": ["machkour2023screen", "scheidt2023bigtrex", "machkour2025trex"],
+  "TRexSPCA": ["machkour2024spca", "machkour2025trex"],
+  "TRexTikhonovSelector": [
+    "tikhonov1963regularization", "park2018tikhonov", "smola2003graphkernels", "chung1997spectral",
+    "hoerl2000ridge", "machkour2025trex"
+  ],
+  "MemoryMappedMatrix": ["scheidt2023bigtrex"],
+  "TLARS": ["efron2004lars", "machkour2025trex"],
+  "TLASSO": ["tibshirani1996lasso", "efron2004lars", "osborne2000lassodual", "machkour2025trex"],
+  "TSTEPWISE": ["efron2004lars", "machkour2025trex"],
+  "TSTAGEWISE": ["efron2004lars", "hastie2007stagewise", "tibshirani2015stagewise", "machkour2025trex"],
+  "TENET": ["zou2005elasticnet", "efron2004lars", "machkour2025trex"],
+  "TENETAug": ["zou2005elasticnet", "efron2004lars", "machkour2022gvs", "machkour2025trex"],
+  "TIENET": ["machkour2023ien", "zou2005elasticnet", "efron2004lars", "machkour2025trex"],
+  "TIENETAug": ["machkour2023ien", "zou2005elasticnet", "efron2004lars", "machkour2025trex"],
+  "TIKNET": [
+    "tikhonov1963regularization", "park2018tikhonov", "hoerl2000ridge", "miche2011tropelm", "efron2004lars",
+    "machkour2025trex"
+  ],
+  "TCDLASSO": ["tibshirani1996lasso", "friedman2007pathwise", "friedman2010glmnet", "fu1998bridge", "machkour2025trex"],
+  "TCDENET": ["zou2005elasticnet", "friedman2007pathwise", "friedman2010glmnet", "machkour2025trex"],
+  "TCDIENET": [
+    "machkour2023ien", "zou2005elasticnet", "friedman2007pathwise", "friedman2010glmnet", "machkour2025trex"
+  ],
+  "TCDTIKNET": [
+    "tikhonov1963regularization", "park2018tikhonov", "friedman2007pathwise", "friedman2010glmnet",
+    "machkour2025trex"
+  ],
+  "TOMP": ["pati1993omp", "tropp2004greed", "blumensath2007ompols", "scheidt2026greedy"],
+  "TMP": ["mallat1993mp", "scheidt2026greedy"],
+  "TOOLS": ["chen1989ols", "blumensath2007ompols", "scheidt2026greedy"],
+  "TGP": ["blumensath2008gp", "scheidt2026greedy"],
+  "TACGP": ["blumensath2008gp", "scheidt2026greedy"],
+  "TNCGMP": ["locatello2017mpfw", "scheidt2026greedy"],
+  "TAFS": ["zhang2026afs", "scheidt2026greedy"],
+  "SLINK": ["sibson1973slink", "muellner2011modern"],
+  "NNChain": [
+    "benzecri1982nnchain", "juan1982nnchain", "murtagh2012overview", "murtagh2017overview2", "muellner2011modern"
+  ],
+  "GenericLinkage": ["lance1967linkage", "muellner2011modern"],
+  "AgglomerativeClustering": [
+    "sibson1973slink", "benzecri1982nnchain", "juan1982nnchain", "lance1967linkage", "muellner2011modern",
+    "murtagh2012overview", "murtagh2017overview2"
+  ],
+  "LanceWilliams": ["lance1967linkage"],
+  "DistancePolicy": ["charikar2002simhash", "indyk1998lsh", "li2006sparseprojections"],
+  "ProjectedGeometricUpdatePolicy": ["charikar2002simhash"],
+  "ElasticNetCV": ["zou2005elasticnet", "friedman2010glmnet", "tibshirani2012strong", "breiman1984cart"],
+  "ElasticNet": ["zou2005elasticnet", "friedman2010glmnet"],
+  "IENetCV": ["machkour2023ien", "friedman2010glmnet", "tibshirani2012strong", "breiman1984cart"],
+  "RidgeCV": ["hoerl2000ridge", "guennebaud2010eigen"],
+  "Ridge": ["hoerl2000ridge"],
+  "TikhonovCV": ["tikhonov1963regularization", "park2018tikhonov", "hoerl2000ridge", "guennebaud2010eigen"],
+  "EBIC": ["chen2008ebic"],
+  "SVDSolver": ["guennebaud2010eigen"],
+  "PCA": ["guennebaud2010eigen"],
+  "DummyDistribution": ["machkour2025trex", "mammen1993bootstrap"]
+}

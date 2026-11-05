@@ -1,0 +1,118 @@
+---
+title: "T-Rex SPCA: sparse principal components under FDR control"
+output:
+  rmarkdown::html_vignette:
+    toc: true
+    css: vignette_styles.css
+bibliography: references.bib
+csl: ieee.csl
+link-citations: true
+vignette: >
+  %\VignetteIndexEntry{T-Rex SPCA: sparse principal components under FDR control}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(collapse = TRUE, comment = "#>", fig.align = "center",
+                      fig.width = 6, fig.height = 4)
+options(width = 80)
+library(TRexSelector)
+old_threads <- trex_set_num_threads(min(2L, trex_get_max_threads()))
+```
+
+# Sparse loadings with a guarantee
+
+Principal component analysis (PCA) finds the directions of largest variance, and every variable
+contributes to every loading vector. Sparse PCA asks for loadings with few non-zero entries, so that a
+component can be read as a small set of variables. The T-Rex sparse PCA (T-Rex SPCA)
+[@machkour2024spca] decides which variables enter a loading vector with the T-Rex selector. For each of
+the $M$ components, ordinary PCA gives the component as a response, the T-Rex selector selects the
+variables for it at the target FDR, and a sparse loading vector is assembled from the selected set. The
+selected set of every component is FDR-controlled.
+
+# Data with two sparse factors
+
+Two latent factors, the first loading on variables 1 to 10 and the second on variables 31 to 40, plus
+noise.
+
+```{r data}
+set.seed(77)
+n <- 200
+p <- 60
+Z <- matrix(rnorm(n * 2), n, 2)
+V <- matrix(0, p, 2)
+V[1:10, 1] <- 1 / sqrt(10)
+V[31:40, 2] <- 1 / sqrt(10)
+X <- 6 * Z[, 1] %*% t(V[, 1]) + 3 * Z[, 2] %*% t(V[, 2]) + matrix(rnorm(n * p), n, p)
+```
+
+# Running the selector
+
+`TRexSPCASelector$new(X, M, tFDR, control, seed, verbose)` extracts `M` components. The elastic-net
+penalty of the inner selector is chosen by cross-validation by default. `X` is centered in place during
+`select()` and restored on return.
+
+```{r run}
+spca <- TRexSPCASelector$new(X, M = 2, tFDR = 0.1, seed = 9, verbose = FALSE,
+                             control = trex_spca_control(K = 10))
+spca$select()
+spca$active_sets
+```
+
+The results are the scores `Z` ($n \times M$), the sparse loadings `V` ($p \times M$), the selected
+sets, and the explained variance.
+
+```{r fields}
+dim(spca$Z)
+dim(spca$V)
+round(spca$adjusted_ev, 3)
+round(spca$cumulative_ev, 3)
+```
+
+```{r loadings, fig.cap = "The two sparse loading vectors. The true supports are variables 1 to 10 and 31 to 40."}
+op <- par(mfrow = c(1, 2), mar = c(4, 4, 2, 1))
+for (m in 1:2) {
+  plot(spca$V[, m], type = "h", lwd = 2, col = "#336C68", xlab = "variable",
+       ylab = sprintf("loading %d", m))
+}
+par(op)
+```
+
+Sparse components are not orthogonal in general, so the explained variance is adjusted for the
+non-orthogonality by a QR decomposition of the scores. `adjusted_ev` is the marginal share per
+component and `cumulative_ev` the cumulative percentage.
+
+# The control
+
+`trex_spca_control()` sets the inner machinery.
+
+- `mode`: `"ActiveSet"` (default) assembles the loading by a ridge regression of the component on the
+  selected variables with penalty `lambda2_ridge_loadings`, `"Thresholded"` keeps the top $|A|$
+  ordinary loadings and normalizes them.
+- `lambda_2` and `lambda2_method`: the elastic-net penalty of the inner group selector, fixed or chosen
+  by ridge cross-validation (`"CV_1SE_CCD"` by default when `lambda_2 < 0`). A value of 0 is the
+  degenerate lasso case and gives a warning.
+- `en_solver`: `"TENET_AUG"` (default) or `"TENET"`, two forms of the same elastic net.
+- `K` and `max_dummy_multiplier`: the random experiments and the dummy cap of the inner selector.
+
+T-Rex SPCA is defined on the elastic net, and `gvs_type = "IEN"` is rejected.
+
+```{r thresholded}
+thr <- TRexSPCASelector$new(X, M = 2, tFDR = 0.1, seed = 9, verbose = FALSE,
+                            control = trex_spca_control(mode = "Thresholded", K = 10))
+thr$select()
+thr$active_sets
+round(thr$cumulative_ev, 3)
+```
+
+# Memory-mapped data
+
+`X` may be a memory-mapped matrix opened in `"readwrite"` mode (see the memory-mapping page). It is
+centered in the file during `select()` and restored.
+
+```{r teardown, include = FALSE}
+trex_set_num_threads(old_threads)
+```
+
+# References

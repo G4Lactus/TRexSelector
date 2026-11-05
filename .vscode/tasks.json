@@ -1,0 +1,202 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        // -----------------------------------------------------------------------
+        // C++ Executable (CMake build)
+        // -----------------------------------------------------------------------
+        // Debug profile: Configure and build in separate debug directory
+        {
+            "type": "shell",
+            "label": "CMake Full Build (Debug)",
+            "command": "cmake",
+            "args": [
+                "-S", ".",
+                "-B", "build/debug",
+                "-DCMAKE_BUILD_TYPE=Debug",
+                "&&", // Unix/macOS
+                "cmake",
+                "--build", "build/debug"
+            ],
+            "windows": {
+                "args": [
+                    "-S", ".",
+                    "-B", "build/debug",
+                    "-DCMAKE_BUILD_TYPE=Debug",
+                    ";", // Windows
+                    "cmake",
+                    "--build", "build/debug"
+                ]
+            },
+            "options": {"cwd": "${workspaceFolder}/cpp"},
+            "group": {"kind": "build"},
+            "problemMatcher": ["$gcc"],
+            "detail": "CMake configure and build (Debug, separate directory)"
+        },
+        // Release profile: Single command for configure and build
+        {
+            "type": "shell",
+            "label": "CMake Full Build (Release)",
+            "command": "cmake",
+            "args": [
+                "-S", ".",
+                "-B", "build/release",
+                "-DCMAKE_BUILD_TYPE=Release",
+                "&&", // Unix/macOS
+                "cmake",
+                "--build", "build/release"
+            ],
+            "windows": {
+                "args": [
+                    "-S", ".",
+                    "-B", "build/release",
+                    "-DCMAKE_BUILD_TYPE=Release",
+                    ";", // Windows
+                    "cmake",
+                    "--build", "build/release"
+                ]
+            },
+            "options": {"cwd": "${workspaceFolder}/cpp"},
+            "group": {"kind": "build"},
+            "problemMatcher": ["$gcc"],
+            "detail": "CMake configure and build (Release, separate directory)"
+        },
+
+        // -----------------------------------------------------------------------
+        // C++ Install (cmake --install)
+        // -----------------------------------------------------------------------
+
+        // Build release-portable (prerequisite for both install tasks)
+        {
+            "type": "shell",
+            "label": "CMake Full Build (release-portable)",
+            "command": "cmake",
+            "args": ["--workflow", "--preset", "local-install"],
+            "options": {"cwd": "${workspaceFolder}/cpp"},
+            "group": {"kind": "build"},
+            "problemMatcher": ["$gcc"],
+            "detail": "Configure + build portable release (build/release-portable) ready for install"
+        },
+        // Install to project-local install/ directory (uses local-install preset which pre-sets prefix)
+        {
+            "type": "shell",
+            "label": "CMake Install (local → install/)",
+            "command": "cmake",
+            "args": ["--install", "build/release-portable"],
+            "options": {"cwd": "${workspaceFolder}/cpp"},
+            "group": {"kind": "build"},
+            "dependsOn": ["CMake Full Build (release-portable)"],
+            "dependsOrder": "sequence",
+            "problemMatcher": [],
+            "detail": "Build release-portable, then install headers + libs to install/"
+        },
+        // Install to system /usr/local — requires "sudo" on macOS !!!
+        //{
+        //    "type": "shell",
+        //    "label": "CMake Install (system → /usr/local)",
+        //    "command": "cmake",
+        //    "args": ["--install", "build/release-portable", "--prefix", "/usr/local"],
+        //    "options": {"cwd": "${workspaceFolder}"},
+        //    "group": {"kind": "build"},
+        //    "dependsOn": ["CMake Full Build (release-portable)"],
+        //    "dependsOrder": "sequence",
+        //    "problemMatcher": [],
+        //    "detail": "Build release-portable, then install headers + libs to /usr/local (may require sudo on macOS)"
+        //},
+
+        // -----------------------------------------------------------------------
+        // R Package (R/TRexSelector/)
+        // -----------------------------------------------------------------------
+
+        // Regenerate NAMESPACE and man/ from roxygen2 comments
+        {
+            "type": "shell",
+            "label": "R: Document",
+            "command": "Rscript",
+            "args": ["-e", "devtools::document()"],
+            "options": {"cwd": "${workspaceFolder}/R/TRexSelector"},
+            "group": {"kind": "build"},
+            "problemMatcher": [],
+            "detail": "Regenerate NAMESPACE and man/ via devtools::document()"
+        },
+        // Install package locally (triggers configure + Rcpp compilation)
+        {
+            "type": "shell",
+            "label": "R: Install",
+            "command": "R",
+            "args": ["CMD", "INSTALL", "."],
+            "options": {"cwd": "${workspaceFolder}/R/TRexSelector"},
+            "group": {"kind": "build"},
+            "problemMatcher": [],
+            "detail": "Install R package locally (R CMD INSTALL)"
+        },
+        // Full CRAN-style check (skips PDF manual generation)
+        // cwd is R/ so TRexSelector.Rcheck lands at R/TRexSelector.Rcheck — outside the source tree
+        {
+            "type": "shell",
+            "label": "R: Check",
+            "command": "R",
+            "args": ["CMD", "check", "--no-manual", "TRexSelector"],
+            "options": {"cwd": "${workspaceFolder}/R"},
+            "group": {"kind": "test"},
+            "problemMatcher": [],
+            "detail": "Run CRAN check (R CMD check --no-manual); output goes to R/TRexSelector.Rcheck"
+        },
+        // Run testthat suite via devtools
+        {
+            "type": "shell",
+            "label": "R: Test",
+            "command": "Rscript",
+            "args": ["-e", "devtools::test()"],
+            "options": {"cwd": "${workspaceFolder}/R/TRexSelector"},
+            "group": {"kind": "test"},
+            "problemMatcher": [],
+            "detail": "Run testthat suite via devtools::test()"
+        },
+
+        // -----------------------------------------------------------------------
+        // Python Package (Python/trexselector/)
+        // -----------------------------------------------------------------------
+
+        // Editable install: builds the pybind11/CMake C++ extension in-place
+        {
+            "type": "shell",
+            "label": "Python: Install (Editable)",
+            "command": "conda run --no-capture-output -n trex-dev pip install -e '.[dev]'",
+            "options": {"cwd": "${workspaceFolder}/Python/trexselector"},
+            "group": {"kind": "build"},
+            "problemMatcher": [],
+            "detail": "Editable install in the trex-dev env (scikit-build-core); the extras are quoted for zsh."
+        },
+        // Build a distributable wheel (Release, via scikit-build-core)
+        {
+            "type": "shell",
+            "label": "Python: Build (Wheel)",
+            "command": "conda run --no-capture-output -n trex-dev pip wheel . -w dist/",
+            "options": {"cwd": "${workspaceFolder}/Python/trexselector"},
+            "group": {"kind": "build"},
+            "problemMatcher": [],
+            "detail": "Build distributable wheel in the trex-dev env (pip wheel . -w dist/)"
+        },
+        // Run pytest suite
+        {
+            "type": "shell",
+            "label": "Python: Test",
+            "command": "conda run --no-capture-output -n trex-dev pytest tests/ -v",
+            "options": {"cwd": "${workspaceFolder}/Python/trexselector"},
+            "group": {"kind": "test"},
+            "problemMatcher": [],
+            "detail": "Run pytest test suite in the trex-dev env"
+        },
+        // Compound macro: editable rebuild of the C++ extension, then run tests.
+        // Runs the two tasks above in sequence; stops if the build fails.
+        // Requires the trex-dev conda env to be active in the integrated terminal.
+        {
+            "label": "Python: Rebuild & Test",
+            "dependsOrder": "sequence",
+            "dependsOn": ["Python: Install (Editable)", "Python: Test"],
+            "group": {"kind": "build"},
+            "problemMatcher": [],
+            "detail": "scikit-build-core editable rebuild, then pytest (sequential; aborts on build failure)"
+        }
+    ]
+}

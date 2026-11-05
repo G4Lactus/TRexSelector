@@ -1,0 +1,267 @@
+// [[Rcpp::depends(RcppEigen)]]
+#include <RcppEigen.h>
+#include "rcpp_trex_gvs.h"
+
+using namespace Rcpp;
+using namespace trex::trex_selector_methods::ad::trex_gvs;
+using namespace trex::trex_selector_methods::ad::trex_core;
+
+// From rcpp_trex_selector.cpp
+extern TRexControlParameter parse_control_parameter(const Rcpp::List& control);
+
+/**
+ * @brief Parses an R list into a TRexGVSControlParameter C++ struct.
+ *
+ * Maps parameters such as grouping correlation thresholds, linkage methods,
+ * and lambda penalties associated with the Group Variable Selection variant.
+ *
+ * @param control List of parameters passed from R.
+ * @return Populated TRexGVSControlParameter instance.
+ */
+TRexGVSControlParameter parse_gvs_parameter(const Rcpp::List& control) {
+    TRexGVSControlParameter params;
+
+    if (control.containsElementNamed("gvs_type")) {
+        std::string method = control["gvs_type"];
+        if (method == "EN") params.gvs_type = GVSType::EN;
+        else if (method == "IEN") params.gvs_type = GVSType::IEN;
+        else Rcpp::stop("Unknown GVSType: " + method);
+    }
+
+    if (control.containsElementNamed("en_solver")) {
+        std::string solver = control["en_solver"];
+        if (solver == "TENET") params.en_solver = ENSolverType::TENET;
+        else if (solver == "TENET_AUG") params.en_solver = ENSolverType::TENET_AUG;
+        else if (solver == "TCDENET") params.en_solver = ENSolverType::TCDENET;
+        else Rcpp::stop("Unknown ENSolverType: '" + solver +
+                        "'. Use 'TENET', 'TENET_AUG', or 'TCDENET'.");
+    }
+
+    if (control.containsElementNamed("tenet_aug_use_lars")) {
+        params.tenet_aug_use_lars = Rcpp::as<bool>(control["tenet_aug_use_lars"]);
+    }
+
+    if (control.containsElementNamed("corr_max")) params.corr_max = control["corr_max"];
+
+    if (control.containsElementNamed("hc_linkage")) {
+        std::string linkage = control["hc_linkage"];
+        if (linkage == "Single")
+            params.hc_linkage = trex::ml_methods::clustering::hierarchical::agglomerative::LinkageMethod::Single;
+        else if (linkage == "Complete")
+            params.hc_linkage = trex::ml_methods::clustering::hierarchical::agglomerative::LinkageMethod::Complete;
+        else if (linkage == "Average")
+            params.hc_linkage = trex::ml_methods::clustering::hierarchical::agglomerative::LinkageMethod::Average;
+        else if (linkage == "WPGMA")
+            params.hc_linkage = trex::ml_methods::clustering::hierarchical::agglomerative::LinkageMethod::WPGMA;
+        else
+            Rcpp::stop("Unsupported linkage method for GVS: " + linkage +
+                       "\nSupported: Single, Complete, Average, WPGMA.");
+    }
+
+    if (control.containsElementNamed("lambda_2")) params.lambda_2 = control["lambda_2"];
+
+    if (control.containsElementNamed("lambda2_method")) {
+        std::string method_str = control["lambda2_method"];
+        if (method_str == "CV_1SE_SVD") {
+            params.lambda2_method = LambdaSelectionMethod::CV_1SE_SVD;
+        } else if (method_str == "CV_MIN_SVD") {
+            params.lambda2_method = LambdaSelectionMethod::CV_MIN_SVD;
+        } else if (method_str == "CV_1SE_CCD") {
+            params.lambda2_method = LambdaSelectionMethod::CV_1SE_CCD;
+        } else if (method_str == "CV_MIN_CCD") {
+            params.lambda2_method = LambdaSelectionMethod::CV_MIN_CCD;
+        } else if (method_str == "CV_1SE_IEN_CCD") {
+            params.lambda2_method = LambdaSelectionMethod::CV_1SE_IEN_CCD;
+        } else if (method_str == "CV_MIN_IEN_CCD") {
+            params.lambda2_method = LambdaSelectionMethod::CV_MIN_IEN_CCD;
+        } else if (method_str == "CV_1SE_TIK_SVD") {
+            params.lambda2_method = LambdaSelectionMethod::CV_1SE_TIK_SVD;
+        } else if (method_str == "CV_MIN_TIK_SVD") {
+            params.lambda2_method = LambdaSelectionMethod::CV_MIN_TIK_SVD;
+        } else {
+            Rcpp::stop("Unknown lambda2_method: '" + method_str +
+                       "'. Use 'CV_1SE_SVD', 'CV_MIN_SVD', 'CV_1SE_CCD', "
+                       "'CV_MIN_CCD', 'CV_1SE_IEN_CCD', 'CV_MIN_IEN_CCD', "
+                       "'CV_1SE_TIK_SVD', or 'CV_MIN_TIK_SVD'.");
+        }
+    }
+
+    if (control.containsElementNamed("groups") && !Rf_isNull(control["groups"])) {
+        IntegerVector r_groups = control["groups"];
+        params.prior_groups = std::vector<Eigen::Index>(r_groups.size());
+        for(int i=0; i<r_groups.size(); ++i) params.prior_groups[i] = r_groups[i] - 1;
+    }
+
+    // Cross-validation controls for the CV lambda2_method paths (ignored when
+    // lambda_2 >= 0). cv_seed enables per-trial fold reproducibility.
+    if (control.containsElementNamed("cv_n_folds")) {
+        params.cv_n_folds = Rcpp::as<int>(control["cv_n_folds"]);
+    }
+    if (control.containsElementNamed("cv_n_lambda")) {
+        params.cv_n_lambda =
+            static_cast<Eigen::Index>(Rcpp::as<int>(control["cv_n_lambda"]));
+    }
+    // IEN-geometry coordinate-descent tuner grids (CV_*_IEN_CCD).
+    if (control.containsElementNamed("cv_n_lambda1")) {
+        params.cv_n_lambda1 =
+            static_cast<Eigen::Index>(Rcpp::as<int>(control["cv_n_lambda1"]));
+    }
+    if (control.containsElementNamed("cv_n_lambda2")) {
+        params.cv_n_lambda2 =
+            static_cast<Eigen::Index>(Rcpp::as<int>(control["cv_n_lambda2"]));
+    }
+    if (control.containsElementNamed("cv_dfmax_ratio")) {
+        params.cv_dfmax_ratio = Rcpp::as<double>(control["cv_dfmax_ratio"]);
+    }
+    if (control.containsElementNamed("cv_seed")) {
+        params.cv_seed = Rcpp::as<int>(control["cv_seed"]);
+    }
+
+    return params;
+}
+
+
+/**
+ * @brief The lambda_2 tuner health record as an R list. Shared with the
+ *        Tikhonov glue (declared extern there).
+ */
+Rcpp::List lambda2_cv_diagnostics_to_list(
+    const trex::ml_methods::model_selection::lambda2_cv_diagnostics& d) {
+    return Rcpp::List::create(
+        Rcpp::Named("ran")               = d.ran,
+        Rcpp::Named("seconds")           = d.seconds,
+        Rcpp::Named("n_profile_at_edge") = static_cast<int>(d.n_profile_at_edge),
+        Rcpp::Named("support_cap")       = static_cast<int>(d.support_cap),
+        Rcpp::Named("dfmax_ratio")       = d.dfmax_ratio,
+        Rcpp::Named("low_dimensional")   = d.low_dimensional,
+        // Boundary-pick guard: the chosen pick on its grid.
+        Rcpp::Named("grid_index")        = static_cast<int>(d.grid_index),
+        Rcpp::Named("grid_size")         = static_cast<int>(d.grid_size),
+        Rcpp::Named("at_grid_edge")      = d.at_grid_edge,
+        Rcpp::Named("profile_at_edge")   = d.profile_at_edge,
+        Rcpp::Named("profile_at_support_cap") = d.profile_at_support_cap,
+        Rcpp::Named("boundary_pick")     = d.boundary_pick
+    );
+}
+
+//' @title Create TRexGVSSelector
+//' @noRd
+// [[Rcpp::export]]
+XPtr<RTRexGVSSelector> trex_gvs_create(
+    Rcpp::NumericMatrix X,
+    Rcpp::NumericVector y,
+    double tFDR,
+    Rcpp::List gvs_control_list,
+    Rcpp::List trex_control_list,
+    int seed,
+    bool verbose
+) {
+    Eigen::Map<Eigen::MatrixXd> X_map(X.begin(), X.nrow(), X.ncol());
+    Eigen::Map<Eigen::VectorXd> y_map(y.begin(), y.size());
+    TRexGVSControlParameter gvs_control = parse_gvs_parameter(gvs_control_list);
+    TRexControlParameter trex_control = parse_control_parameter(trex_control_list);
+    // Pin X and y until the finalizer has run: the base destructor writes the
+    // de-normalized X back through the stored map (GC order is unspecified).
+    return XPtr<RTRexGVSSelector>(new RTRexGVSSelector(X_map, y_map, tFDR, gvs_control, trex_control, seed, verbose),
+                                  true, R_NilValue, Rcpp::List::create(X, y));
+}
+
+//' @title Create TRexGVSSelector from MemoryMappedMatrix
+//' @noRd
+// [[Rcpp::export]]
+XPtr<RTRexGVSSelector> trex_gvs_mmap_create(
+    XPtr<trex::utils::memmap::MemoryMappedMatrix<double>> X_ptr,
+    Rcpp::NumericVector y,
+    double tFDR,
+    Rcpp::List gvs_control_list,
+    Rcpp::List trex_control_list,
+    int seed,
+    bool verbose
+) {
+    Eigen::Map<Eigen::VectorXd> y_map(y.begin(), y.size());
+    TRexGVSControlParameter gvs_control = parse_gvs_parameter(gvs_control_list);
+    TRexControlParameter trex_control = parse_control_parameter(trex_control_list);
+    // Pin the mmap holder and y until the finalizer has run (see above).
+    return XPtr<RTRexGVSSelector>(new RTRexGVSSelector(X_ptr->getMap(), y_map, tFDR, gvs_control, trex_control, seed,
+        verbose),
+                                  true, R_NilValue, Rcpp::List::create(X_ptr, y));
+}
+
+//' @title Run TRexGVSSelector
+//' @noRd
+// [[Rcpp::export]]
+void trex_gvs_select(XPtr<RTRexGVSSelector> r_ptr) {
+    r_ptr->select();
+}
+
+//' @title Get lambda2_used
+//' @noRd
+// [[Rcpp::export]]
+double trex_gvs_get_lambda2_used(XPtr<RTRexGVSSelector> r_ptr) {
+    return r_ptr->get()->getGVSResult().lambda2_used;
+}
+
+//' @title Get the lambda_2 tuner diagnostics
+//' @noRd
+// [[Rcpp::export]]
+Rcpp::List trex_gvs_get_lambda2_cv_diagnostics(XPtr<RTRexGVSSelector> r_ptr) {
+    return lambda2_cv_diagnostics_to_list(
+        r_ptr->get()->getLambda2CVDiagnostics());
+}
+
+//' @title Get gvs_type
+//' @noRd
+// [[Rcpp::export]]
+std::string trex_gvs_get_gvs_type(XPtr<RTRexGVSSelector> r_ptr) {
+    switch(r_ptr->get()->getGVSResult().gvs_type) {
+        case GVSType::EN: return "EN";
+        case GVSType::IEN: return "IEN";
+    }
+    return "UNKNOWN";
+}
+
+//' @title Get max_clusters
+//' @noRd
+// [[Rcpp::export]]
+int trex_gvs_get_max_clusters(XPtr<RTRexGVSSelector> r_ptr) {
+    return static_cast<int>(r_ptr->get()->getGVSResult().max_clusters);
+}
+
+//' @title Get Selected Indices
+//' @noRd
+// [[Rcpp::export]]
+IntegerVector trex_gvs_get_selected_indices(XPtr<RTRexGVSSelector> r_ptr) {
+    const auto& indices = r_ptr->get()->getSelectedIndices();
+    IntegerVector r_indices(indices.size());
+    for (size_t i = 0; i < indices.size(); ++i) {
+        r_indices[i] = indices[i] + 1; // 1-based indexing for R
+    }
+    return r_indices;
+}
+
+//' @title Get per-variable cluster labels
+//' @noRd
+// [[Rcpp::export]]
+IntegerVector trex_gvs_get_groups(XPtr<RTRexGVSSelector> r_ptr) {
+    const Eigen::VectorXi& g = r_ptr->get()->getGVSResult().groups_vec;
+    IntegerVector r_groups(g.size());
+    for (Eigen::Index i = 0; i < g.size(); ++i) {
+        r_groups[i] = g[i] + 1; // 0-based cluster IDs -> 1-based for R
+    }
+    return r_groups;
+}
+
+//' @title Get cluster labels (names)
+//' @noRd
+// [[Rcpp::export]]
+CharacterVector trex_gvs_get_group_labels(XPtr<RTRexGVSSelector> r_ptr) {
+    const std::vector<std::string>& labels =
+        r_ptr->get()->getGVSResult().group_labels;
+    return CharacterVector(labels.begin(), labels.end());
+}
+
+//' @noRd
+// [[Rcpp::export]]
+std::string trex_gvs_get_hc_method_used(XPtr<RTRexGVSSelector> r_ptr) { // NOLINT(performance-unnecessary-value-param)
+    return r_ptr->get()->getGVSResult().hc_method_used;
+}

@@ -1,0 +1,141 @@
+---
+title: "Screening: Screen-T-Rex and the biobank screening"
+output:
+  rmarkdown::html_vignette:
+    toc: true
+    css: vignette_styles.css
+bibliography: references.bib
+csl: ieee.csl
+link-citations: true
+vignette: >
+  %\VignetteIndexEntry{Screening: Screen-T-Rex and the biobank screening}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(collapse = TRUE, comment = "#>", fig.align = "center",
+                      fig.width = 6, fig.height = 4)
+options(width = 80)
+library(TRexSelector)
+old_threads <- trex_set_num_threads(min(2L, trex_get_max_threads()))
+```
+
+# Screening before selecting
+
+A genomics biobank holds hundreds of thousands of variables and hundreds of phenotypes. Running the full
+T-Rex calibration on every phenotype is costly, and for most phenotypes the answer is that nothing is
+selected. Screen-T-Rex [@machkour2023screen] is a single-pass version of the random experiments without
+the L-loop and the T-loop: $K$ experiments with $p$ dummies each, stopped at the first dummy, and an FDR
+estimate read off the vote. It reports an estimated FDR instead of controlling a target, so it is a fast
+first pass. The biobank screening wraps it in a decision rule per phenotype: when the estimated FDR of the
+screening falls into an acceptance window, the screening result is kept, otherwise the full T-Rex selector
+runs as a fallback.
+
+# Screen-T-Rex
+
+The screening selector takes no target FDR.
+
+```{r data}
+set.seed(2024)
+n <- 100
+p <- 300
+true_support <- c(3, 50, 120, 200, 280)
+beta <- numeric(p)
+beta[true_support] <- 2
+X <- matrix(rnorm(n * p), n, p)
+y <- as.numeric(X %*% beta + rnorm(n))
+```
+
+```{r screen}
+scr <- TRexScreeningSelector$new(X, y, seed = 3, verbose = FALSE,
+                                 control = trex_control(K = 20))
+scr$select()
+scr$selected_indices
+scr$estimated_FDR
+```
+
+`beta_mat` holds the coefficients of the original variables at the stop of each experiment (one column
+per experiment) and `dummy_betas` those of the dummies, the material the estimate is read off. The
+L-loop strategy is forced to `"STANDARD"` here, fresh dummies per experiment.
+
+```{r mats}
+dim(scr$beta_mat)
+dim(scr$dummy_betas)
+```
+
+## A bootstrap confidence interval
+
+`use_bootstrap_CI = TRUE` resamples the experiments `R_boot` times and reports the upper confidence bound
+of the estimated FDR instead of the point estimate, at `confidence_level`. `ci_grid_step` is the
+resolution of the bound.
+
+```{r boot}
+boot <- TRexScreeningSelector$new(X, y, seed = 3, verbose = FALSE,
+                                  screen_control = trex_screen_control(use_bootstrap_CI = TRUE,
+                                                                       R_boot = 200),
+                                  control = trex_control(K = 20))
+boot$select()
+boot$used_bootstrap
+boot$confidence_level
+boot$estimated_FDR
+boot$selected_indices
+```
+
+## Dependent variables
+
+`trex_method` switches the screening to dependency-aware dummies: `"TREX_DA_AR1"`, `"TREX_DA_EQUI"`
+and `"TREX_DA_BLOCK_EQUI"` draw autoregressive, equi-correlated and block equi-correlated dummies.
+`estimated_correlation` reports the correlation the dummies were drawn with.
+
+```{r da}
+ar <- TRexScreeningSelector$new(X, y, seed = 3, verbose = FALSE,
+                                screen_control = trex_screen_control(trex_method = "TREX_DA_AR1"),
+                                control = trex_control(K = 20))
+ar$select()
+round(ar$estimated_correlation, 3)
+```
+
+# The biobank screening
+
+`TRexBiobankScreeningSelector` screens one or many phenotypes against one genotype matrix. `Y` is a
+vector for one phenotype or a matrix with one column per phenotype. The acceptance window of the
+estimated FDR is `trex_biobank_control(lower_bound_FDR, upper_bound_FDR)`, and `tFDR` is the target
+of the fallback selector.
+
+```{r biobank}
+Y <- cbind(y, as.numeric(X %*% (0.5 * beta) + rnorm(n)), rnorm(n))
+colnames(Y) <- c("strong", "weak", "null")
+bio <- TRexBiobankScreeningSelector$new(X, Y, tFDR = 0.1, seed = 3, verbose = FALSE,
+                                        biobank_control = trex_biobank_control(0.05, 0.15),
+                                        control = trex_control(K = 20))
+res <- bio$select()
+length(res)
+```
+
+Each record names the phenotype, the method that produced the result and whether the fallback ran.
+
+```{r records}
+summary_tab <- do.call(rbind, lapply(res, function(r)
+  data.frame(phenotype = r$phenotype_index, selected = length(r$selected_indices),
+             estimated_FDR = round(r$estimated_FDR, 3), method = r$method_used,
+             fallback = r$used_fallback_trex)))
+summary_tab
+res[[1]]$selected_indices
+```
+
+The record also keeps the ordinary and the bootstrap screening results
+(`selected_indices_screen_ordinary`, `estimated_FDR_screen_bootstrap`, ...), so the decision can be
+audited. For a single phenotype `select()` returns one record instead of a list.
+
+# Large designs
+
+Both screening selectors accept a memory-mapped design (`mem_matrix()`), which the memory-mapping page
+describes. The combination of the screening and a mapped design is what solved sparse regression
+problems with five million variables on a laptop [@scheidt2023bigtrex].
+
+```{r teardown, include = FALSE}
+trex_set_num_threads(old_threads)
+```
+
+# References

@@ -1,0 +1,126 @@
+---
+title: "T-Rex GVS: grouped variable selection"
+output:
+  rmarkdown::html_vignette:
+    toc: true
+    css: vignette_styles.css
+bibliography: references.bib
+csl: ieee.csl
+link-citations: true
+vignette: >
+  %\VignetteIndexEntry{T-Rex GVS: grouped variable selection}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(collapse = TRUE, comment = "#>", fig.align = "center",
+                      fig.width = 6, fig.height = 4)
+options(width = 80)
+library(TRexSelector)
+old_threads <- trex_set_num_threads(min(2L, trex_get_max_threads()))
+```
+
+# Groups of correlated variables
+
+In genomics and finance, variables come in groups of highly correlated members that carry the same
+signal. The lasso picks one member of a group and drops the others, while the elastic net
+[@zou2005elasticnet] spreads the coefficient over the group and lets the members enter together. The
+T-Rex selector for grouped variable selection (GVS) [@machkour2022gvs] runs the terminating elastic net
+(T-ENET) inside the random experiments and draws its dummies in groups too, so that the dummies mirror the
+group structure of the null variables. The informed elastic net (IEN) [@machkour2023ien] goes one step
+further and encodes the known or estimated groups in the penalty, so that the members of a group share a
+coefficient.
+
+# Data with groups
+
+Twenty groups of five variables, each group driven by one latent factor. The first two groups are active.
+
+```{r data}
+set.seed(11)
+n <- 100
+p <- 100
+group_size <- 5
+groups <- rep(seq_len(p / group_size), each = group_size)
+latent <- matrix(rnorm(n * max(groups)), n, max(groups))
+X <- 0.9 * latent[, groups] + sqrt(1 - 0.9^2) * matrix(rnorm(n * p), n, p)
+true_support <- which(groups %in% 1:2)
+beta <- numeric(p)
+beta[true_support] <- 1
+y <- as.numeric(X %*% beta + rnorm(n))
+```
+
+# The elastic net policy
+
+`gvs_type = "EN"` is the default. The selector clusters the variables by correlation (single linkage,
+cut at `corr_max`), draws its dummies per cluster and runs the T-ENET solver chosen by `en_solver`
+(`"TENET"` by default, `"TENET_AUG"` the row-augmented form and `"TCDENET"` the coordinate descent
+form, which select the same variables). The elastic-net penalty $\lambda_2$ is fixed here.
+
+```{r en}
+gvs <- TRexGVSSelector$new(X, y, tFDR = 0.1, seed = 5, verbose = FALSE,
+                           gvs_control = trex_gvs_control(gvs_type = "EN", lambda_2 = 1),
+                           control = trex_control(K = 10))
+gvs$select()
+sort(gvs$selected_indices)
+trex_fdp(gvs$selected_indices, true_support)
+trex_tpp(gvs$selected_indices, true_support)
+```
+
+The fields record the clustering and the penalty.
+
+```{r fields}
+gvs$gvs_type
+gvs$max_clusters
+gvs$hc_method_used
+gvs$lambda2_used
+table(gvs$groups)[1:5]
+```
+
+# Choosing lambda_2
+
+A negative `lambda_2` (the default `-1`) lets the selector determine the penalty. `lambda2_method`
+names the rule. For the elastic net the default is `"CV_1SE_CCD"`, a ridge cross-validation by
+coordinate descent read with the one-standard-error rule, with `"CV_MIN_CCD"`, `"CV_1SE_SVD"` and
+`"CV_MIN_SVD"` as alternatives. The one-standard-error rule is preferred because the minimum rule tends to
+pin the penalty to the floor of the grid. `cv_n_folds`, `cv_n_lambda` and `cv_seed` control the
+cross-validation. `lambda2_cv_diagnostics` is the health record of the tuner: whether it ran, its
+seconds, and `n_profile_at_edge`, the number of $\lambda_2$ values whose profiled $\lambda_1$ optimum
+sat on a truncation edge of the path (0 is healthy).
+
+```{r cv}
+cv <- TRexGVSSelector$new(X, y, tFDR = 0.1, seed = 5, verbose = FALSE,
+                          gvs_control = trex_gvs_control(gvs_type = "EN", cv_n_lambda = 100),
+                          control = trex_control(K = 10))
+cv$select()
+cv$lambda2_used
+str(cv$lambda2_cv_diagnostics)
+```
+
+# The informed elastic net
+
+`gvs_type = "IEN"` encodes the groups in the penalty. The groups come from `groups` in the control
+(1-based labels of length $p$) or from the correlation clustering. The solver is set in
+`trex_control(solver = )`: `"TIENET"` (default, the native pathwise form), `"TIENET_AUG"` (row
+augmented) or `"TCDIENET"` (coordinate descent). The IEN rules of `lambda2_method`
+(`"CV_1SE_IEN_CCD"`, the default on this track, `"CV_MIN_IEN_CCD"`, `"CV_1SE_TIK_SVD"`,
+`"CV_MIN_TIK_SVD"`) consume the group structure and return $\lambda_2$ on the solver scale.
+
+```{r ien}
+ien <- TRexGVSSelector$new(X, y, tFDR = 0.1, seed = 5, verbose = FALSE,
+                           gvs_control = trex_gvs_control(gvs_type = "IEN", groups = groups,
+                                                          lambda_2 = 1),
+                           control = trex_control(solver = "TIENET", K = 10))
+ien$select()
+sort(ien$selected_indices)
+trex_fdp(ien$selected_indices, true_support)
+trex_tpp(ien$selected_indices, true_support)
+```
+
+With the groups known and the penalty informed, the active groups enter complete.
+
+```{r teardown, include = FALSE}
+trex_set_num_threads(old_threads)
+```
+
+# References

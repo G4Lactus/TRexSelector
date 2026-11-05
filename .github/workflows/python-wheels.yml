@@ -1,0 +1,167 @@
+name: Python Wheels
+
+on:
+  push:
+    paths:
+      - 'Python/**'
+      - 'cpp/**'
+      - '.github/workflows/python-wheels.yml'
+  pull_request:
+    paths:
+      - 'Python/**'
+      - 'cpp/**'
+      - '.github/workflows/python-wheels.yml'
+  release:
+    types: [published]
+
+jobs:
+  build_wheels:
+    name: Build wheels (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        # Pin macOS to a stable arm64 runner (macos-14) rather than macos-latest,
+        # which now points at the bleeding-edge macOS 26 image and
+        # breaks delocate-wheel's repair/arch step. macos-14 also yields wheels with
+        # a broader minimum-OS compatibility.
+        os: [ubuntu-latest, macos-14, windows-latest]
+
+    steps:
+      - uses: actions/checkout@v5
+
+      # -----------------------------------------------------------------------
+      # Windows: header-only C++ deps via vcpkg (classic mode; the Python
+      # CMake source dir has no vcpkg.json, so the toolchain uses the
+      # packages installed here). gtest is not needed (TREX_BUILD_TESTS=OFF).
+      # -----------------------------------------------------------------------
+      - name: Cache vcpkg binary archives (Windows)
+        if: runner.os == 'Windows'
+        uses: actions/cache@v6
+        with:
+          path: ~\AppData\Local\vcpkg\archives
+          key: vcpkg-wheels-${{ runner.os }}-${{ hashFiles('.github/workflows/python-wheels.yml') }}
+          restore-keys: vcpkg-wheels-${{ runner.os }}-
+
+      - name: Install C++ dependencies (Windows)
+        if: runner.os == 'Windows'
+        run: vcpkg install eigen3 cereal boost-interprocess boost-math boost-random --triplet x64-windows
+
+      # The LLVM OpenMP runtime (libomp140.x86_64.dll) ships with Visual
+      # Studio; stage it at a fixed path so delvewheel can find and bundle it.
+      - name: Stage LLVM OpenMP runtime (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          $pattern = "C:\Program Files\Microsoft Visual Studio\*\*\VC\Redist\MSVC\*\x64\*OpenMP*\libomp140*.dll"
+          $dll = Get-Item $pattern -ErrorAction SilentlyContinue | Select-Object -First 1
+          if (-not $dll) {
+            $dll = Get-ChildItem "C:\Program Files\Microsoft Visual Studio" -Recurse `
+              -Filter "libomp140.x86_64.dll" -ErrorAction SilentlyContinue | Select-Object -First 1
+          }
+          if (-not $dll) { throw "libomp140.x86_64.dll not found in the Visual Studio installation" }
+          New-Item -ItemType Directory -Force -Path C:\libomp | Out-Null
+          Copy-Item $dll.FullName -Destination C:\libomp\
+          Write-Host "Staged $($dll.FullName)"
+
+      - name: Build wheels
+        uses: pypa/cibuildwheel@v2.21.3
+        with:
+          package-dir: Python/trexselector
+          output-dir: wheelhouse
+        env:
+          # Build CPython 3.10–3.13 (matches requires-python >= 3.10); skip
+          # PyPy and musl-based Linux
+          CIBW_BUILD: "cp310-* cp311-* cp312-* cp313-*"
+          CIBW_SKIP: "*-musllinux_*"
+
+          # Run the package test suite against every built wheel so an
+          # unimportable or broken wheel can never reach PyPI. faulthandler
+          # prints the exact test and native stack on a hard crash (SIGSEGV),
+          # and -x stops at the first failure so the culprit is unambiguous.
+          CIBW_TEST_REQUIRES: "pytest"
+          CIBW_TEST_COMMAND: "python -X faulthandler -m pytest {package}/tests -x -q"
+
+          # Surface the compiler/CMake output so build failures are diagnosable
+          CIBW_BUILD_VERBOSITY: "1"
+
+          # -----------------------------------------------------------------------
+          # Linux (manylinux_2_28 = AlmaLinux 8). Its distro packages are too old
+          # (Boost 1.66 < required 1.80; old Eigen), so build all header-only deps
+          # from source into /usr/local. Eigen 5.0.1 matches the Homebrew Eigen used
+          # for local/macOS builds. OpenMP uses GCC's bundled libgomp (no package).
+          # This exact recipe was validated in the manylinux container.
+          # -----------------------------------------------------------------------
+          # 64-bit only (mirrors CIBW_ARCHS_WINDOWS): numpy ships no i686
+          # wheels for cp310+, so the 32-bit test environments cannot even be
+          # installed — and there is no 32-bit audience for this package.
+          CIBW_ARCHS_LINUX: x86_64
+          CIBW_MANYLINUX_X86_64_IMAGE: manylinux_2_28
+          CIBW_BEFORE_ALL_LINUX: |
+            set -e
+            # Eigen 5.0.1 (installs Eigen3Config.cmake for find_package(Eigen3 NO_MODULE)).
+            # Disable Eigen's optional BLAS/LAPACK builds: the container has gfortran, so
+            # Eigen would add install rules for libeigen_blas_static.a etc., which the
+            # (non-building) `cmake --install` step then can't find.
+            curl -fsSL https://gitlab.com/libeigen/eigen/-/archive/5.0.1/eigen-5.0.1.tar.gz | tar xz -C /tmp
+            cmake -S /tmp/eigen-5.0.1 -B /tmp/eigen-build -DEIGEN_BUILD_BLAS=OFF -DEIGEN_BUILD_LAPACK=OFF \
+              -DEIGEN_BUILD_DOC=OFF -DEIGEN_BUILD_TESTING=OFF -DCMAKE_INSTALL_PREFIX=/usr/local
+            cmake --install /tmp/eigen-build
+            # cereal — install via its CMake so cerealConfig.cmake exists for find_package(cereal).
+            curl -fsSL https://github.com/USCiLab/cereal/archive/refs/tags/v1.3.2.tar.gz | tar xz -C /tmp
+            cmake -S /tmp/cereal-1.3.2 -B /tmp/cereal-build -DJUST_INSTALL_CEREAL=ON -DCMAKE_INSTALL_PREFIX=/usr/local
+            cmake --install /tmp/cereal-build
+            # Boost >= 1.80 (header-only usage); drop headers into /usr/local/include.
+            curl -fsSL https://archives.boost.io/release/1.85.0/source/boost_1_85_0.tar.gz | tar xz -C /tmp
+            cp -r /tmp/boost_1_85_0/boost /usr/local/include/boost
+
+          # -----------------------------------------------------------------------
+          # macOS — Homebrew LLVM required for OpenMP
+          # -----------------------------------------------------------------------
+          CIBW_BEFORE_ALL_MACOS: brew install eigen boost cereal llvm libomp
+
+          CIBW_ENVIRONMENT_MACOS: >
+            CMAKE_C_COMPILER=$(brew --prefix llvm)/bin/clang
+            CMAKE_CXX_COMPILER=$(brew --prefix llvm)/bin/clang++
+            MACOSX_DEPLOYMENT_TARGET=14.0
+
+          # -----------------------------------------------------------------------
+          # Windows — MSVC toolchain; deps come from the vcpkg classic install
+          # above. delvewheel bundles gtest-free runtime DLLs (only the LLVM
+          # OpenMP runtime staged at C:\libomp) into the wheel.
+          # -----------------------------------------------------------------------
+          # 64-bit only: the vcpkg deps use the x64-windows triplet and there
+          # is no 32-bit audience for this package
+          CIBW_ARCHS_WINDOWS: AMD64
+          CIBW_ENVIRONMENT_WINDOWS: >
+            CMAKE_ARGS="-DCMAKE_TOOLCHAIN_FILE=C:/vcpkg/scripts/buildsystems/vcpkg.cmake"
+          CIBW_BEFORE_BUILD_WINDOWS: pip install delvewheel
+          CIBW_REPAIR_WHEEL_COMMAND_WINDOWS: delvewheel repair --add-path C:/libomp -w {dest_dir} {wheel}
+
+      - name: Upload wheel artifacts
+        uses: actions/upload-artifact@v7
+        with:
+          name: wheels-${{ matrix.os }}
+          path: ./wheelhouse/*.whl
+
+  # ---------------------------------------------------------------------------
+  # Publish to PyPI — only on GitHub Release events
+  # ---------------------------------------------------------------------------
+  publish:
+    name: Publish to PyPI
+    needs: [build_wheels]
+    runs-on: ubuntu-latest
+    if: github.event_name == 'release'
+    environment: pypi
+    permissions:
+      id-token: write   # required for OIDC trusted publishing
+
+    steps:
+      - name: Download all wheel artifacts
+        uses: actions/download-artifact@v8
+        with:
+          pattern: wheels-*
+          merge-multiple: true
+          path: dist/
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1

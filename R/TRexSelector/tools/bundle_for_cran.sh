@@ -1,0 +1,149 @@
+#!/bin/bash
+set -euo pipefail
+# =============================================================================
+# bundle_for_cran.sh — vendor the C++ backend into the R package.
+#
+# CRAN tarballs must be self-contained, so the canonical C++ sources under
+# cpp/src/ are copied into src/ here. Run this script whenever the C++ core
+# changes, before R CMD build.
+#
+# It only (re)generates the vendored subtrees and the OBJECTS list inside
+# src/Makevars.in and src/Makevars.win. Compiler flags in those templates are
+# CRAN-compliant: no -O overrides, no absolute local paths (OpenMP is resolved
+# by configure on unix and SHLIB_OPENMP_CXXFLAGS on Windows).
+#
+# The vendored copies are committed to git so every commit records the exact
+# C++ state the package was built against. `--check` verifies (content-based,
+# no writes) that they have not silently diverged from cpp/src — run it in CI
+# or before a release; it exits non-zero and lists the differences if stale.
+# =============================================================================
+
+# Always run relative to the package root (R/TRexSelector/, one level
+# above this script), regardless of where it is invoked from.
+cd "$(dirname "$0")/.."
+
+CPP_SRC="../../cpp/src"
+SUBTREES=(ml_methods trex_selector_methods tsolvers utils)
+
+if [ ! -d "$CPP_SRC" ]; then
+    echo "ERROR: $CPP_SRC not found — expected the C++ tree under cpp/src/." >&2
+    exit 1
+fi
+
+RSYNC_EXCLUDES=(
+    --exclude 'CMakeLists.txt'
+    --exclude '*demo*'
+    --exclude 'main.cpp'
+    --exclude '*.o'
+    --exclude '*.so'
+    # Editor / OS clutter: rsync -a would otherwise carry it into the CRAN
+    # tarball. Gitignored in the C++ tree, so it is invisible to git review.
+    --exclude '.DS_Store'
+    # Research families with no R bindings yet: the virtual-dummy (vd/) and
+    # sparse-dummy (sd/) trees under cpp/src/tsolvers and
+    # cpp/src/trex_selector_methods, plus their umbrellas tsolvers/vd.hpp and
+    # tsolvers/sd.hpp. Vendoring them would add their translation units to
+    # OBJECTS — compiled into the shared object, lengthening every CRAN build,
+    # with nothing callable from R. These are no-ops on branches where the
+    # directories do not exist; drop the excludes when the corresponding Rcpp
+    # wrappers land.
+    --exclude 'vd'
+    --exclude 'sd'
+    --exclude 'vd.hpp'
+    --exclude 'sd.hpp'
+)
+
+# Regenerate the OBJECTS list from the .cpp files under a src directory.
+# R does not recurse into src subdirectories, so every .cpp must be listed
+# explicitly (CRAN discourages GNU-make wildcards).
+list_objects() {
+    (cd "$1" && find . -type f -name '*.cpp' | sed 's|^\./||; s|\.cpp$|.o|' | sort | tr '\n' ' ')
+}
+
+if [ "${1:-}" = "--check" ]; then
+    echo "=== Checking vendored copies against $CPP_SRC (content-based) ==="
+    status=0
+    for tree in "${SUBTREES[@]}"; do
+        # -rlc compares content only (checksum; no perms/mtimes, which git
+        # does not preserve). Itemized lines starting with '.' are
+        # attribute-only entries (e.g. '.f..T....' after a branch switch or
+        # a fresh clone rewrites mtimes) with identical content — filter
+        # them, otherwise every CI checkout would report divergence. What
+        # remains is real: content changes ('>fc...'), new files/dirs
+        # ('>f+++++++' / 'cd+++++++'), and deletions ('*deleting').
+        # --prune-empty-dirs: a directory whose entire content is excluded
+        # (e.g. a CMakeLists.txt-only stub) vendors to empty, and git does
+        # not track empty directories — without pruning, the check demands
+        # a directory a fresh checkout can never contain.
+        diff_out=$(rsync -rlci --prune-empty-dirs --delete --dry-run "${RSYNC_EXCLUDES[@]}" \
+            "$CPP_SRC/$tree/" "src/$tree/" | grep -v '^\.' || true)
+        if [ -n "$diff_out" ]; then
+            echo "DIVERGED: src/$tree/"
+            echo "$diff_out" | sed 's/^/    /'
+            status=1
+        fi
+    done
+    expected_objects=$(list_objects src)
+    for mv in src/Makevars.in src/Makevars.win; do
+        current_objects=$(grep '^OBJECTS = ' "$mv" | sed 's/^OBJECTS = //')
+        if [ "$current_objects" != "$expected_objects" ]; then
+            echo "DIVERGED: OBJECTS list in $mv is stale."
+            status=1
+        fi
+    done
+    if [ $status -eq 0 ]; then
+        echo "OK: vendored sources and OBJECTS lists match cpp/src."
+    else
+        echo "Run $0 (no args) to refresh, then commit the changes." >&2
+    fi
+    exit $status
+fi
+
+echo "=== Vendoring C++ backend from $CPP_SRC ==="
+for tree in "${SUBTREES[@]}"; do
+    # --prune-empty-dirs mirrors the check: never create directories that
+    # would be empty after the excludes (git cannot commit them anyway).
+    rsync -a --prune-empty-dirs --delete "${RSYNC_EXCLUDES[@]}" "$CPP_SRC/$tree/" "src/$tree/"
+done
+
+echo "=== Regenerating OBJECTS list ==="
+CPP_OBJECTS=$(list_objects src)
+
+write_makevars() {
+    local file="$1" cxxflags="$2" libs="$3" strip="$4"
+    cat > "$file" << EOF
+# Generated by bundle_for_cran.sh - edit the templates there, not this file.
+CXX_STD = CXX20
+PKG_CPPFLAGS = -I. -DCRAN_BUILD=1
+PKG_CXXFLAGS = $cxxflags
+PKG_LIBS = $libs \$(LAPACK_LIBS) \$(BLAS_LIBS) \$(FLIBS)
+OBJECTS = $CPP_OBJECTS
+EOF
+    if [ "$strip" = "strip" ]; then
+        cat >> "$file" << 'EOF'
+
+# Debug symbols: R compiles with -g on every platform, and on ELF platforms
+# the DWARF of 48 Eigen-templated translation units is linked INTO the shared
+# object (292 MB on Ubuntu; macOS keeps it in the object files, the .so is
+# 7 MB). Strip it after linking - the CRAN-accepted idiom (rstan, prophet,
+# ...); no compiler flag is overridden. A no-op where strip or uname is absent.
+all: $(SHLIB) strippedLib
+
+strippedLib: $(SHLIB)
+	if test -e "/usr/bin/strip" && test -e "/bin/uname" && [ "`/bin/uname`" = "Linux" ]; then \
+	  /usr/bin/strip --strip-debug $(SHLIB); fi
+
+.PHONY: strippedLib
+EOF
+    fi
+}
+
+# unix: configure substitutes the OpenMP flags and produces src/Makevars;
+# the shared object is stripped of debug symbols on Linux after linking
+write_makevars src/Makevars.in  '@OPENMP_CXXFLAGS@'        '@OPENMP_LIBS@'        strip
+# Windows: Rtools provides OpenMP via SHLIB_OPENMP_CXXFLAGS (CRAN strips its
+# Windows binaries itself)
+write_makevars src/Makevars.win '$(SHLIB_OPENMP_CXXFLAGS)' '$(SHLIB_OPENMP_CXXFLAGS)' nostrip
+
+echo "Vendored $(find src -name '*.cpp' | wc -l | tr -d ' ') .cpp files."
+echo "Ready for Rcpp::compileAttributes() and R CMD build."

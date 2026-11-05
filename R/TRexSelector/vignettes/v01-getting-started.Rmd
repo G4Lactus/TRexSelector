@@ -1,0 +1,188 @@
+---
+title: "Getting started with TRexSelector"
+output:
+  rmarkdown::html_vignette:
+    toc: true
+    css: vignette_styles.css
+bibliography: references.bib
+csl: ieee.csl
+link-citations: true
+vignette: >
+  %\VignetteIndexEntry{Getting started with TRexSelector}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(collapse = TRUE, comment = "#>", fig.align = "center",
+                      fig.width = 6, fig.height = 4)
+options(width = 80)
+library(TRexSelector)
+# Vignettes build on at most two threads (the CRAN rule)
+old_threads <- trex_set_num_threads(min(2L, trex_get_max_threads()))
+```
+
+# What the package does
+
+The T-Rex selector (terminating-random experiments) selects variables in high-dimensional linear models
+while controlling the false discovery rate (FDR) at a target level chosen by the user, and it does so
+with a high true positive rate (TPR) [@machkour2025trex]. It runs $K$ random experiments. In each
+experiment the design matrix $\boldsymbol{X}$ is enlarged by random dummy variables, a forward selection
+solver walks its path and stops as soon as $T$ dummies have entered the model, and the active sets of
+the $K$ experiments are fused by a vote. A calibration over the number of dummies and the stopping time
+guarantees the FDR level.
+
+The R package is the R interface to the TRexSelector C++ library. The same library drives the Python
+package and the C++ software development kit, so the three surfaces select the same variables on the
+same data. Version 2.0.0 replaces the pure-R implementation of the 1.x releases under the same package
+name.
+
+The package has four groups of tools.
+
+- **T-Rex selectors.** The core `TRexSelector` and its variants for dependent variables
+  (`TRexDASelector`), grouped variables (`TRexGVSSelector`), fast screening (`TRexScreeningSelector`,
+  `TRexBiobankScreeningSelector`), sparse principal component analysis (PCA) (`TRexSPCASelector`) and a
+  general Tikhonov penalty (`TRexTikhonovSelector`).
+- **T-solvers.** The twenty terminating forward selection solvers the selectors run inside their random
+  experiments, available as classes of their own.
+- **Machine learning (ML) methods.** Scalers, ridge and elastic-net regression with cross-validation,
+  singular value decomposition (SVD), PCA and hierarchical clustering.
+- **Memory-mapped matrices.** Disk-backed designs accepted everywhere a matrix is, so a design larger than
+  the memory of the machine can be processed.
+
+# Installation
+
+The package compiles its C++ backend on installation, so a C++20 compiler is required (GCC 10, Clang 12,
+Apple Clang 14, Rtools on Windows, or newer) together with R 4.3 or newer. First install the R-side
+prerequisites once.
+
+```{r, eval = FALSE}
+install.packages(c("Rcpp", "RcppEigen", "BH", "Rcereal", "R6"))
+```
+
+CRAN still carries the pure-R 1.x release, so until version 2.0.0 is accepted there, install it from
+GitHub. It lives in the `R/TRexSelector/` subdirectory of the repository.
+
+```{r, eval = FALSE}
+install.packages("remotes")
+remotes::install_github("trexselector/TRexSelector", subdir = "R/TRexSelector")
+```
+
+OpenMP is optional. On Linux and Windows R supplies the OpenMP flags. CRAN's R for macOS has none, so
+the configure script uses the `omp.h` header of Homebrew's libomp (`brew install libomp`) together with
+the OpenMP runtime that R itself ships. Without a header the package compiles single-threaded and
+`trex_get_max_threads()` returns 1. The parallelism page explains what the threads are used for.
+
+# A first run
+
+The package ships a small Gaussian data set with $n = 50$ observations, $p = 100$ variables and three
+active variables.
+
+```{r first-run}
+data(Gauss_data)
+X <- Gauss_data$X
+y <- Gauss_data$y
+true_support <- which(Gauss_data$support)
+true_support
+```
+
+The selectors are R6 classes. Construct one with `$new()`, run it with `$select()` and read the results
+from its fields. A fixed `seed` makes the dummy draws reproducible. The default `seed = -1` draws them
+from the hardware entropy source, which is the right choice for Monte Carlo studies, see the T-Rex
+selector page.
+
+```{r first-select}
+sel <- TRexSelector$new(X, y, tFDR = 0.1, seed = 1234, verbose = FALSE)
+sel$select()
+sel$selected_indices
+```
+
+The two metrics of variable selection compare the selection with the true support. The false discovery
+proportion (FDP) is the share of false positives among the selected variables and the true positive
+proportion (TPP) is the share of the true support that was found. Their expectations are the FDR and the
+TPR.
+
+```{r metrics}
+trex_fdp(sel$selected_indices, true_support)
+trex_tpp(sel$selected_indices, true_support)
+```
+
+# The result fields
+
+Every selector exposes the calibration it arrived at.
+
+```{r fields}
+sel$num_selected   # number of selected variables
+sel$T_stop         # stopping time: dummies included when the T-loop stopped
+sel$L              # calibrated dummy multiplier, the selector used L * p dummies
+sel$v_thresh       # voting level the selection was read at
+sel$K              # random experiments
+```
+
+`fdp_hat_mat` holds the FDP estimate per stopping time (rows) and voting level (columns), `phi_mat` the
+relative occurrence of every variable over the $K$ experiments after each stopping time, and
+`voting_grid` the voting levels. The T-Rex selector page walks through them.
+
+```{r matrices}
+dim(sel$fdp_hat_mat)
+head(sel$voting_grid)
+round(sel$fdp_hat_mat[sel$T_stop, ], 3)
+```
+
+# Choosing a selector and a solver
+
+| Situation | Selector | Page |
+| --- | --- | --- |
+| Independent or weakly dependent variables | `TRexSelector` | T-Rex selector |
+| Strongly dependent variables (autoregressive, equi-correlated, clustered) | `TRexDASelector` | T-Rex+DA |
+| Groups of correlated variables that should enter together | `TRexGVSSelector` | T-Rex GVS |
+| Very large $p$, a fast first pass before the full selector | `TRexScreeningSelector` | Screening |
+| Many phenotypes against one genotype matrix | `TRexBiobankScreeningSelector` | Screening |
+| Sparse principal components | `TRexSPCASelector` | T-Rex SPCA |
+| A structured penalty (smoothness, graph Laplacian, groups) | `TRexTikhonovSelector` | T-Rex Tikhonov |
+
+The solver inside the random experiments is set in `trex_control(solver = )`. T-LARS (terminating least
+angle regression) is the default and the solver of the T-Rex paper. T-LASSO adds the lasso
+modification, T-ENET the elastic net, the orthogonal matching pursuit (OMP) family and the adaptive
+forward stepwise family are greedy and faster per step, and the coordinate descent (CD) family computes
+exact penalized minimizers at every dummy crossing. The T-solvers page describes the families, and every
+solver can be run on its own.
+
+```{r solver-choice}
+ctrl <- trex_control(solver = "TLASSO", K = 10)
+sel2 <- TRexSelector$new(X, y, tFDR = 0.1, seed = 1234, verbose = FALSE, control = ctrl)
+sel2$select()
+sel2$selected_indices
+```
+
+# Map of the pages
+
+1. Getting started (this page).
+2. The T-Rex selector: the framework, the control parameters and the result fields.
+3. T-Rex+DA: dependency-aware dummies.
+4. T-Rex GVS: grouped variable selection with the elastic net and the informed elastic net.
+5. Screening: Screen-T-Rex and the biobank screening.
+6. T-Rex SPCA: sparse PCA under FDR control.
+7. T-Rex Tikhonov: a general penalty matrix.
+8. The T-solvers: the twenty solvers and their options.
+9. The ML methods: scalers, regressions, decompositions and clustering.
+10. Memory mapping: disk-backed designs.
+11. Working without data copies: the in-place contract.
+12. Parallelism: who owns the cores.
+
+# Citing the package
+
+```{r, eval = FALSE}
+citation("TRexSelector")
+```
+
+The methods are published in [@machkour2025trex] (T-Rex), [@machkour2025datrex] (T-Rex+DA),
+[@machkour2022gvs; @machkour2023ien] (T-Rex GVS), [@machkour2023screen] (Screen-T-Rex),
+[@machkour2024spca] (T-Rex SPCA), [@scheidt2023bigtrex] (memory mapping) and [@scheidt2026greedy]
+(the terminating greedy pursuits).
+
+```{r teardown, include = FALSE}
+trex_set_num_threads(old_threads)
+```
+
+# References

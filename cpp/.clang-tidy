@@ -1,0 +1,14 @@
+---
+# 1. Start by turning EVERYTHING off (-*)
+# 2. Turn on the actual bug catchers (clang-analyzer, bugprone)
+# 3. Turn on performance checks, but mute the annoying enum size one
+Checks: >
+  -*,
+  clang-analyzer-*,
+  bugprone-*,
+  performance-*,
+  -performance-enum-size,
+  -performance-unnecessary-value-param
+
+WarningsAsErrors: ''
+HeaderFilterRegex: '^.*/src/.*'

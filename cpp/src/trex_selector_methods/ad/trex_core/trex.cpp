@@ -1,0 +1,1442 @@
+// ===================================================================================
+// trex.cpp
+// ===================================================================================
+/**
+ * @file trex.cpp
+ *
+ * @brief Implementation of core TRexSelector variable selection algorithm.
+ */
+// ===================================================================================
+
+// std includes
+#include <utils/logging/logger.hpp>
+#include <cmath>
+#include <cstddef>
+#include <iomanip>
+#include <iostream>
+#include <random>
+#include <sstream>
+#include <string>
+
+// T-Rex header
+#include <trex_selector_methods/ad/trex_core/trex.hpp>
+
+// utils includes
+#include <utils/fp_classify/fp_classify.hpp>
+#include <tsolvers/ad/solver_utils/buffer_registry.hpp>
+
+// ===================================================================================
+
+// Embedded into namespace trex::trex_selector_methods::ad::trex_core
+namespace trex::trex_selector_methods::ad::trex_core {
+
+// Namespace aliases
+namespace dn = trex::trex_selector_methods::ad::utils::data_normalizer;
+namespace dg = trex::trex_selector_methods::ad::utils::dummy_generator;
+namespace fpc = trex::utils::fp_classify;
+namespace wsm = trex::trex_selector_methods::ad::utils::warm_start_manager;
+namespace mm = trex::trex_selector_methods::ad::utils::memmap_manager;
+namespace disp = trex::trex_selector_methods::ad::utils::solver_dispatch;
+namespace er = trex::trex_selector_methods::ad::utils::experiment_runner;
+
+// ===================================================================================
+
+// ---------------------------------------------------------------------------
+// Shared-buffer claim registry
+// ---------------------------------------------------------------------------
+// TRexSelector normalizes X in place (via an Eigen::Map into caller memory)
+// at construction and restores it when select() finishes or on destruction.
+// Two selectors mapped onto the SAME buffer therefore corrupt each other: the
+// first to restore leaves the buffer raw, so the second silently runs on
+// unnormalized data. The claim turns the silent corruption into a clear,
+// immediate error: at most one live writer may hold a given buffer in its
+// preprocessed state. The registry itself lives in the T-solver utilities
+// (mutex-guarded, keyed on the buffer base pointer) and is shared with the
+// T-solvers that preprocess in place, so a live writer solver and a live
+// selector can never both hold the same X.
+namespace {
+
+namespace bufreg = trex::tsolvers::ad::solver_utils::buffer_registry;
+
+void claimBufferOrThrow(const void* ptr) {
+    bufreg::claimOrThrow(ptr,
+        "TRexSelector: the input matrix X is already held by another live "
+        "T-Rex selector or T-solver, which preprocesses X in place. Constructing "
+        "a second one on the same matrix would corrupt both. Give each its own "
+        "copy of X, restore() the solver first, or run them one at a time "
+        "(construct, select, and let each go out of scope before creating the "
+        "next).");
+}
+
+void releaseBuffer(const void* ptr) { bufreg::release(ptr); }
+
+} // namespace
+
+
+// ===================================================================================
+
+// Debug macro (NDEBUG builds compile this to a no-op)
+#ifndef NDEBUG
+    #define TREX_DEBUG_PRINT(msg) \
+      do { \
+        if (verbose_) { \
+            TREX_INFO( "T-Rex Selector: [DEBUG]" << (msg) ); \
+        } \
+      } while (0)
+#else
+    #define TREX_DEBUG_PRINT(msg) ((void)0)
+#endif
+
+
+// ===================================================================================
+// Constructor
+// ===================================================================================
+
+TRexSelector::TRexSelector(
+    Eigen::Map<Eigen::MatrixXd>& X,
+    Eigen::Map<Eigen::VectorXd>& y,
+    double tFDR,
+    TRexControlParameter trex_control,
+    int seed,
+    bool verbose
+) :
+    X_(&X),
+    y_(y),
+    n_(static_cast<std::size_t>(X_->rows())),
+    p_(static_cast<std::size_t>(X_->cols())),
+    tFDR_(tFDR),
+    trex_ctrl_([&]() {
+        auto ctrl = trex_control;
+        // values below 1 throw, the outer count is capped at K
+        ctrl.resolveThreadOptions();
+        // Resolve the AUTO stagnation default by solver family: greedy
+        // solvers need the noise-trap guard; equiangular LARS-path solvers
+        // terminate properly on their own (R reference / paper behavior).
+        if (!ctrl.tloop_stagnation_stop.has_value()) {
+            ctrl.tloop_stagnation_stop = isGreedySolver(ctrl.solver_type);
+        }
+        return ctrl;
+    }()),
+    seed_(seed),
+    verbose_(verbose),
+
+    // --- Helper modules ---
+    dummy_gen_(n_,
+               trex_ctrl_.dummy_distribution,
+               seed_,
+               verbose_,
+               trex_ctrl_.scaling_mode),
+    warm_start_mgr_(trex_ctrl_.K,
+                    trex_ctrl_.use_memory_mapping
+                        ? wsm::WarmStartMode::SERIALIZED
+                        : wsm::WarmStartMode::IN_MEMORY,
+                    verbose_)
+{
+    // 1. Validate
+    // -----------------------------------------------------
+    validateTRexParameters();
+
+    // 2. Data Preprocessing: Normalize X, center y
+    // -----------------------------------------------------
+    // Claim X's buffer BEFORE mutating it: throws if another live selector
+    // already holds this matrix normalized. Released when X is denormalized
+    // (end of select() or destructor). The scope guard releases the claim if
+    // any later construction step throws, so a failed constructor never leaks.
+    claimBufferOrThrow(X_->data());
+    struct ClaimGuard {
+        const void* ptr;
+        bool armed = true;
+        ~ClaimGuard() { if (armed) { releaseBuffer(ptr); } }
+    } claim_guard{X_->data()};
+
+    eps_ = (trex_ctrl_.solver_params.tol > 0.0) ?
+            trex_ctrl_.solver_params.tol : std::numeric_limits<double>::epsilon();
+    // Under ScalingMode::NONE both calls leave the data untouched and store
+    // the identity parameters (user-managed design); X and y are still
+    // validated (non-finite entries and dead columns throw). The buffer
+    // claim is kept in every mode: one live selector per X buffer.
+    dn::centerY(y_, norm_params_, trex_ctrl_.scaling_mode);
+    dn::centerAndL2NormalizeX(*X_, norm_params_, eps_,
+                             verbose_, trex_ctrl_.scaling_mode,
+                             trex_ctrl_.max_inner_threads);
+    X_is_normalized_ = true;
+
+    // The dummy generator's regions run on the selector's inner budget
+    // (serial inside a parallel K-loop, see threads_for()).
+    dummy_gen_.setNumThreads(trex_ctrl_.max_inner_threads);
+
+    // 3. Initialize memory-mapped D manager (if requested)
+    // -----------------------------------------------------
+    if (trex_ctrl_.use_memory_mapping) {
+        const std::size_t max_dummies = trex_ctrl_.max_dummy_multiplier * p_;
+        const bool shared = (trex_ctrl_.lloop_strategy == LLoopStrategy::PERMUTATION
+                          || trex_ctrl_.lloop_strategy == LLoopStrategy::PERMUTATION_SEEDED
+                          || trex_ctrl_.lloop_strategy == LLoopStrategy::SEEDED);
+        memmap_mgr_ = std::make_unique<mm::MemmapManager>(
+            n_, max_dummies, trex_ctrl_.K, shared, verbose_);
+        memmap_mgr_->initialize();
+    }
+
+    // 4. Create experiment runner
+    // -----------------------------------------------------
+    experiment_runner_ = std::make_unique<er::ExperimentRunner>(
+        *X_, y_, dummy_gen_, warm_start_mgr_,
+        memmap_mgr_.get()  // nullptr if not using memmap
+    );
+
+    // 5. Initialize containers
+    // -----------------------------------------------------
+    selected_var_.resize(0);
+    selected_indices_.clear();
+    voting_grid_.resize(0);
+    FDP_hat_mat_.resize(0, 0);
+    Phi_mat_.resize(0, 0);
+    R_mat_.resize(0, 0);
+    Phi_prime_.resize(0);
+
+    // 6. Resolve cached permutation base seed (used only by the PERMUTATION
+    //    L-loop strategy, but resolved unconditionally for simplicity).
+    // -----------------------------------------------------
+    permutation_base_seed_ = (seed_ >= 0)
+        ? static_cast<std::uint64_t>(seed_)
+        : ((static_cast<std::uint64_t>(std::random_device{}()) << 32)
+           | static_cast<std::uint64_t>(std::random_device{}()));
+
+    // Construction succeeded: keep the buffer claim (released on denormalize).
+    claim_guard.armed = false;
+}
+
+
+// ===================================================================================
+// Destructor
+// ===================================================================================
+
+TRexSelector::~TRexSelector() {
+    // Helper modules clean up via their own destructors.
+
+    // Restore X to original scale (necessary since we use a Map).
+    denormalizeAndReleaseX();
+}
+
+
+// ===================================================================================
+// Denormalize + release the shared-buffer claim (single source of truth)
+// ===================================================================================
+
+void TRexSelector::denormalizeAndReleaseX() {
+    if (X_is_normalized_) {
+        dn::denormalizeX(*X_, norm_params_, trex_ctrl_.max_inner_threads);
+        X_is_normalized_ = false;
+        releaseBuffer(X_->data());
+    }
+}
+
+
+void TRexSelector::restore() {
+    if (X_is_normalized_) {
+        denormalizeAndReleaseX();
+        released_ = true;   // the normalized view is gone: select() must refuse
+    }
+}
+
+
+void TRexSelector::ensureNotReleased() const {
+    if (released_) {
+        throw std::runtime_error(
+            "TRexSelector::select(): restore() gave X back before select() ran; "
+            "this selector can no longer run, construct a new one.");
+    }
+}
+
+
+ // ===================================================================================
+ // Validation
+ // ===================================================================================
+
+void TRexSelector::validateTRexParameters() const {
+
+    if (n_ == 0 || p_ == 0) {
+        throw std::invalid_argument("Feature matrix X must have non-zero dimensions.");
+    }
+
+    if (static_cast<std::size_t>(y_.size()) != n_) {
+        throw std::invalid_argument(
+            "Response vector y must have length equal to the number of rows in X. "
+            "Got y.size() = " + std::to_string(y_.size()) +
+            ", X.rows() = " + std::to_string(n_));
+    }
+
+    if (!fpc::allFinite(y_)) {
+        throw std::invalid_argument("Response vector y contains NaN or Inf values.");
+    }
+
+    if (tFDR_ < 0.0 || tFDR_ > 1.0) {
+        throw std::invalid_argument(
+            "Target FDR tFDR must be in [0, 1]. Got: " + std::to_string(tFDR_));
+    }
+
+    if (trex_ctrl_.K < 2) {
+        throw std::invalid_argument(
+            "Number of random experiments K must be >= 2. Got: "
+            + std::to_string(trex_ctrl_.K));
+    }
+
+    if (trex_ctrl_.max_dummy_multiplier == 0) {
+        throw std::invalid_argument(
+            "max_dummy_multiplier must be >= 1. Got: "
+            + std::to_string(trex_ctrl_.max_dummy_multiplier));
+    }
+
+    if (trex_ctrl_.opt_threshold < 0.0 || trex_ctrl_.opt_threshold > 1.0) {
+        throw std::invalid_argument(
+            "Optimization threshold opt_threshold must be in [0, 1]. Got: "
+            + std::to_string(trex_ctrl_.opt_threshold));
+    }
+
+    // Only strictly validate solver params if present
+    // (Assuming lambda2, rho_afs, and ncgmp_variant are inside trex_ctrl_.solver_params)
+    if (trex_ctrl_.solver_params.lambda2 < 0.0) {
+        throw std::invalid_argument(
+            "lambda2 must be >= 0.0. Got: "
+            + std::to_string(trex_ctrl_.solver_params.lambda2));
+    }
+
+    if (trex_ctrl_.solver_params.rho_afs < 0.0 || trex_ctrl_.solver_params.rho_afs > 1.0) {
+        throw std::invalid_argument(
+            "rho_afs must be in [0, 1]. Got: "
+            + std::to_string(trex_ctrl_.solver_params.rho_afs));
+    }
+
+    if (trex_ctrl_.solver_params.ncgmp_variant != 0 &&
+        trex_ctrl_.solver_params.ncgmp_variant != 1) {
+        throw std::invalid_argument(
+            "ncgmp_variant must be 0 or 1. Got: "
+            + std::to_string(trex_ctrl_.solver_params.ncgmp_variant));
+    }
+
+    // Warn when stagnation detection is (explicitly) disabled for greedy
+    // solvers. The AUTO default never triggers this: it resolves to enabled
+    // for exactly the solvers isGreedySolver() flags.
+    if (!trex_ctrl_.tloop_stagnation_stop.value_or(false) &&
+        isGreedySolver(trex_ctrl_.solver_type)) {
+        TREX_WARN( "[TRexSelector Warning] tloop_stagnation_stop is disabled "
+                     "for a greedy solver. Greedy solvers tend to run into a noise trap "
+                     "and select until all allowed dummies are selected. "
+                     "Convergence without stagnation detection is not guaranteed. Consider "
+                     "re-enabling it." );
+    }
+
+    // A fixed L of 10 p or more shrinks the expected null inflow per T-step, so a path
+    // solver without the stagnation stop runs deep into the T-loop. There the null mass
+    // above Phi = 0.5 exceeds what FDP_hat books (T-LARS at tFDR 0.1: FDR 0.09-0.10 at
+    // 10 p, 0.11-0.14 at 20 p). Greedy solvers are covered by the warning above.
+    if (trex_ctrl_.lloop_strategy == LLoopStrategy::SKIPL &&
+        trex_ctrl_.max_dummy_multiplier >= 10 &&
+        !trex_ctrl_.tloop_stagnation_stop.value_or(false) &&
+        !isGreedySolver(trex_ctrl_.solver_type)) {
+        TREX_WARN( "[TRexSelector Warning] lloop_strategy SKIPL with max_dummy_multiplier >= 10 "
+                     "and tloop_stagnation_stop disabled can exceed the target FDR, because the "
+                     "T-loop runs deep and FDP_hat falls below the realized FDP. Consider "
+                     "tloop_stagnation_stop = true or a calibrated L-loop strategy." );
+    }
+}
+
+
+// ===================================================================================
+// Main T-Rex algorithm: select() method
+// ===================================================================================
+
+TRexSelector::SelectionResult TRexSelector::select() {
+
+    ensureNotReleased();
+
+    // 1. Voting grid and optimization point
+    // -----------------------------------------------------
+    voting_grid_ = createVotingGrid();
+    const std::size_t v_len = voting_grid_.size();
+    setPercentOptPoint(v_len, trex_ctrl_.opt_threshold);
+
+    // 1a. Variant-specific lifecycle hook (default: no-op).
+    // -----------------------------------------------------
+    onSelectBegin();
+
+    // 2. L-Loop: calibrate num_dummies_ with T_stop = 1
+    // -----------------------------------------------------
+    if (verbose_) { printProgress("L-loop: Calibrating number of dummies..."); }
+
+    Eigen::VectorXd FDP_hat;
+    er::ExperimentResults exp_results;
+    runLLoop(FDP_hat, exp_results);
+
+    if (verbose_) {
+        printProgress("L-loop: converged with " +
+                      std::to_string(num_dummies_) + " dummies.\n");
+    }
+
+    // 3. T-Loop: calibrate T_stop >= 1
+    // -----------------------------------------------------
+    runTLoop(FDP_hat, exp_results);
+
+    // 4. Final phi_T_mat and Phi_prime
+    // -----------------------------------------------------
+    Phi_prime_ = computePhiPrime(exp_results.phi_T_mat,
+                                 exp_results.Phi,
+                                 num_dummies_);
+
+    // 5. Variable selection & Store results
+    // -----------------------------------------------------
+    SelectionResult result = selectedVariables(
+        FDP_hat_mat_,
+        Phi_mat_,
+        voting_grid_,
+        T_stop_
+    );
+
+    result.T_stop = T_stop_;
+    result.num_dummies = num_dummies_;
+    result.dummy_factor_L = dummy_multiplier_LL_;
+    result.FDP_hat_mat = FDP_hat_mat_;
+    result.Phi_mat = Phi_mat_;
+    result.Phi_prime = Phi_prime_;
+    result.voting_grid = voting_grid_;
+
+    storeResults(result);
+    if (verbose_) {
+        printProgress("Selection complete. Selected "
+                      + std::to_string(getNumSelected()) + " variables.");
+    }
+
+    // 5a. Variant-specific result widening / cleanup hook (default: returns
+    //     `result` unchanged). Fires while X is still normalized so subclasses
+    //     can rely on `*X_` reflecting the operating data.
+    // -----------------------------------------------------
+    result = finalizeSelectionResult(std::move(result));
+
+    // 6. Cleanup helpers
+    // -----------------------------------------------------
+    warm_start_mgr_.cleanup();
+    if (memmap_mgr_) { memmap_mgr_->cleanup(); }
+
+    // 7. Restore X to original scale
+    // -----------------------------------------------------
+    if (verbose_) { printProgress("Denormalizing X to original scale.\n"); }
+    denormalizeAndReleaseX();
+
+    return result;
+}
+
+
+// ===================================================================================
+// buildRunnerConfig — populates ExperimentRunnerConfig
+// ===================================================================================
+
+er::ExperimentRunnerConfig TRexSelector::buildRunnerConfig(
+    std::size_t num_dummies,
+    std::size_t T_stop,
+    bool use_warm_start,
+    er::ExperimentStrategy strategy,
+    std::size_t seed_factor,
+    std::size_t existing_cols_on_disk) const
+{
+    er::ExperimentRunnerConfig cfg;
+    cfg.K                     = trex_ctrl_.K;
+    cfg.num_dummies           = num_dummies;
+    cfg.T_stop                = T_stop;
+    cfg.p                     = p_;
+    cfg.strategy              = strategy;
+    cfg.seed_factor           = seed_factor;
+    cfg.existing_cols_on_disk = existing_cols_on_disk;
+    cfg.solver_type           = trex_ctrl_.solver_type;
+    cfg.solver_params         = trex_ctrl_.solver_params;
+    // Solver-side convention. The solvers receive pre-scaled X / D
+    // (normalize = false, intercept = false), so this only governs internal
+    // augmented-column handling. NONE maps to L2: the user-managed design is
+    // unit-L2-commensurate by contract (see dn::ScalingMode).
+    cfg.scaling_mode          = (trex_ctrl_.scaling_mode == dn::ScalingMode::ZSCORE)
+                                    ? trex::tsolvers::ad::ScalingMode::ZSCORE
+                                    : trex::tsolvers::ad::ScalingMode::L2;
+    // The constructor centered X and y in every mode except NONE (the
+    // user-managed design is left untouched): the solvers then run on
+    // centered data of rank n - 1.
+    cfg.precentered           = (trex_ctrl_.scaling_mode != dn::ScalingMode::NONE);
+    cfg.use_warm_start        = use_warm_start;
+    cfg.use_memory_mapping    = trex_ctrl_.use_memory_mapping;
+    // The K-loop runs on max_outer_threads threads only when the experiments
+    // are parallel; the solvers' budget is max_inner_threads in both modes
+    // (inert inside a parallel K-loop, where the solvers stay serial).
+    cfg.max_outer_threads     = trex_ctrl_.parallel_rnd_experiments
+                                    ? trex_ctrl_.max_outer_threads : 1;
+    cfg.max_inner_threads     = trex_ctrl_.max_inner_threads;
+    cfg.verbose               = verbose_;
+    // Deterministic tie-break shuffles for user-seeded runs: experiment k
+    // derives mix_seed64(seed_, k) in the runner. seed_ < 0 seeds the
+    // solvers' tie-break engines from random_device (nondeterministic).
+    cfg.tie_seed_base         = static_cast<long long>(seed_);
+    // Base id for the stateless permutation strategy (same id as the stored
+    // PERMUTATION path, so both variants produce bit-identical experiments).
+    cfg.permutation_base_id   = permutation_base_seed_;
+    // Coefficient-activeness threshold for the beta paths. This must match the
+    // R reference (random_experiments uses eps = .Machine$double.eps), NOT the
+    // solver convergence tolerance (solver_params.tol, default 1e-6). Using the
+    // larger solver tol here delays detection of a freshly-entered dummy whose
+    // coefficient is still below 1e-6, shifting the "T-th dummy entered"
+    // milestone to a later LARS step where extra original predictors have
+    // entered. That systematically inflates phi_T_mat and causes over-selection
+    // (higher FDR) relative to the R reference.
+    cfg.eps                   = std::numeric_limits<double>::epsilon();
+
+    return cfg;
+}
+
+
+// ===================================================================================
+// Voting grid helpers
+// ===================================================================================
+
+Eigen::VectorXd TRexSelector::createVotingGrid() const {
+    return createVotingGrid(trex_ctrl_.K);
+}
+
+Eigen::VectorXd TRexSelector::createVotingGrid(std::size_t K) const {
+    // Machine epsilon on purpose (not eps_ = solver tolerance): the sentinel
+    // must stay above the last regular grid point 1 - 1/K for any K, which a
+    // large user-supplied solver tol (e.g. 1e-2 with K >= 100) would violate,
+    // making the grid non-monotone. This also matches the R reference
+    // (V = seq(0.5, 1 - .Machine$double.eps, by = 1/K)).
+    const double v_end   = 1.0 - std::numeric_limits<double>::epsilon();
+
+    // Regular grid points: 0.5, 0.5 + 1/K, ... strictly below 1.0, each one
+    // computed as ONE correctly rounded division (K + 2i) / (2K). Phi is the
+    // correctly rounded m / K (ExperimentRunner::aggregateResults), so a
+    // mathematical tie m / K == 0.5 + i / K yields the identical double and
+    // the strict `Phi > v` excludes it, as the definition and R do; distinct
+    // rationals with these denominators are never rounded together. The
+    // former v_start + i * v_step (two roundings) could sit one ulp off the
+    // lattice for odd K.
+    std::vector<double> v;
+    v.reserve(K / 2 + 2);
+    for (std::size_t i = 0;; ++i) {
+        const double vi = static_cast<double>(K + 2 * i)
+                        / static_cast<double>(2 * K);
+        if (vi >= 1.0) { break; }
+        v.push_back(vi);
+    }
+
+    // Floating-point-robust sentinel for "selected in all K experiments".
+    // Avoid reliance on bit-exact agreement between grid's arithmetic and
+    // independently-accumulated Phi values in the experiment runner.
+    v.push_back(v_end);
+
+    Eigen::VectorXd grid(static_cast<Eigen::Index>(v.size()));
+    for (Eigen::Index i = 0; i < static_cast<Eigen::Index>(v.size()); ++i) {
+        grid(i) = v[static_cast<std::size_t>(i)];
+    }
+    return grid;
+}
+
+
+void TRexSelector::setPercentOptPoint(std::size_t v_len, double threshold) {
+    opt_point_ = 0;
+    for (Eigen::Index i = 0; i < static_cast<Eigen::Index>(v_len); ++i) {
+        if (voting_grid_(i) <= threshold) { opt_point_ = i; }
+        else { break; }
+    }
+}
+
+
+// ===================================================================================
+// FDP Computation
+// ===================================================================================
+
+Eigen::VectorXd TRexSelector::computeFDPHat(
+    const Eigen::VectorXd& voting_grid,
+    const Eigen::VectorXd& Phi,
+    const Eigen::VectorXd& Phi_prime) const
+{
+    const std::size_t v_len = voting_grid.size();
+    const std::size_t p = static_cast<std::size_t>(Phi.size());
+
+    Eigen::VectorXd fdp_hat = Eigen::VectorXd::Zero(static_cast<Eigen::Index>(v_len));
+
+    const Eigen::VectorXd one_minus_phi_prime =
+        Eigen::VectorXd::Ones(static_cast<Eigen::Index>(p)) - Phi_prime;
+
+    for (Eigen::Index i = 0; i < static_cast<Eigen::Index>(v_len); ++i) {
+        const double threshold = voting_grid(i);
+
+        const Eigen::Array<bool, Eigen::Dynamic, 1> selected_mask =
+            (Phi.array() > threshold);
+
+        const std::size_t num_sel_var = selected_mask.count();
+
+        if (num_sel_var == 0) {
+            fdp_hat(i) = 0.0;
+            continue;
+        }
+
+        const double sum_deflated =
+            selected_mask.select(one_minus_phi_prime.array(), 0.0).sum();
+
+        // Clamp to [0, 1]: guards against negative FDP estimates (which arise
+        // when Phi_prime > 1). Selection-neutral (the rules only test
+        // FDP_hat <= tFDR, tFDR > 0) but keeps the reported estimate sane.
+        fdp_hat(i) = std::max(
+            0.0, std::min(1.0, sum_deflated / static_cast<double>(num_sel_var)));
+
+    }
+
+    return fdp_hat;
+}
+
+
+// ===================================================================================
+// Phi Prime Computation
+// ===================================================================================
+
+Eigen::VectorXd TRexSelector::computePhiPrime(
+    const Eigen::MatrixXd& phi_T_mat,
+    const Eigen::VectorXd& Phi,
+    std::size_t num_dummies) const
+{
+    std::size_t current_T = phi_T_mat.cols();
+
+    Eigen::VectorXd av_num_var_sel = phi_T_mat.colwise().sum();
+
+    // Filter: keep only rows where Phi > 0.5
+    std::vector<std::size_t> phi_geg_fifty_indices;
+    phi_geg_fifty_indices.reserve(p_);
+    for (Eigen::Index j = 0; j < static_cast<Eigen::Index>(p_); ++j) {
+        if (Phi(j) > 0.5) {
+            phi_geg_fifty_indices.push_back(j);
+        }
+    }
+
+    Eigen::VectorXd delta_av_num_var_sel = Eigen::VectorXd::Zero(
+        static_cast<Eigen::Index>(current_T));
+    for (const auto idx : phi_geg_fifty_indices) {
+        delta_av_num_var_sel += phi_T_mat.row(static_cast<Eigen::Index>(idx)).transpose();
+    }
+
+    Eigen::MatrixXd phi_T_mat_mod = phi_T_mat;
+    if (current_T > 1) {
+        for (Eigen::Index t = static_cast<Eigen::Index>(current_T) - 1; t > 0; --t) {
+            delta_av_num_var_sel(t) -= delta_av_num_var_sel(t - 1);
+            phi_T_mat_mod.col(t) -= phi_T_mat_mod.col(t - 1);
+        }
+    }
+
+    Eigen::VectorXd phi_scale = Eigen::VectorXd::Zero(static_cast<Eigen::Index>(current_T));
+    for (Eigen::Index t = 0; t < static_cast<Eigen::Index>(current_T); ++t) {
+        if (delta_av_num_var_sel(t) > eps_) {
+            double num_remaining_orig = static_cast<double>(p_) - av_num_var_sel(t);
+            double num_remaining_dummies = static_cast<double>(num_dummies)
+                                           - static_cast<double>(t);
+            double ratio_remaining = num_remaining_orig / num_remaining_dummies;
+            phi_scale(t) = 1.0 - (ratio_remaining / delta_av_num_var_sel(t));
+        }
+    }
+
+    // Upper clamp only (Phi' > 1 -> 1): a deviation from the R reference and
+    // the T-Rex paper that prevents negative false-discovery mass and can only
+    // raise FDP_hat (conservative). Phi' < 0 stays, as in the paper: a variable
+    // then carries more than one expected false discovery. A lower clamp at 0
+    // made FDP_hat anti-conservative in long T-loops (TLARS at large tFDR).
+    return (phi_T_mat_mod * phi_scale).cwiseMin(1.0);
+}
+
+
+// ===================================================================================
+// Variable Selection
+// ===================================================================================
+
+TRexSelector::SelectionResult TRexSelector::selectedVariables(
+    const Eigen::MatrixXd& FDP_hat_mat,
+    const Eigen::MatrixXd& Phi_mat,
+    const Eigen::VectorXd& voting_grid,
+    std::size_t T_stop,
+    bool drop_last_row) const
+{
+    if (FDP_hat_mat.rows() == 0 || Phi_mat.rows() == 0) {
+        if (verbose_) {
+            printProgress(
+                "Warning: No valid T-steps recorded. Returning empty selection."
+            );
+        }
+        SelectionResult result;
+        result.selected_var = Eigen::VectorXi::Zero(static_cast<Eigen::Index>(p_));
+        result.v_thresh = 1.0;
+        result.R_mat = Eigen::MatrixXd::Zero(0, 0);
+        return result;
+    }
+
+    std::size_t safe_T = std::min(T_stop, static_cast<std::size_t>(FDP_hat_mat.rows()));
+    if (safe_T == 0) {
+        SelectionResult result;
+        result.selected_var = Eigen::VectorXi::Zero(static_cast<Eigen::Index>(p_));
+        result.v_thresh = 1.0;
+        result.R_mat = Eigen::MatrixXd::Zero(0, 0);
+        return result;
+    }
+
+    // Drop the last T-row (the stopping-criterion boundary step) when T > 1.
+    // Matches R reference: FDP_hat_mat[-T_stop, , drop = FALSE]. A fixed-T
+    // budget (lambda_2 pilot) has no boundary step and keeps every row.
+    if (safe_T > 1 && drop_last_row) { --safe_T; }
+
+    Eigen::MatrixXd FDP_use = FDP_hat_mat.topRows(safe_T);
+    Eigen::MatrixXd Phi_use = Phi_mat.topRows(safe_T);
+    const std::size_t n_rows = FDP_use.rows();
+    const std::size_t n_cols = FDP_use.cols();
+
+    // Build R_mat (consensus size matrix)
+    Eigen::MatrixXd R_mat = Eigen::MatrixXd::Zero(
+        static_cast<Eigen::Index>(n_rows), static_cast<Eigen::Index>(n_cols));
+    for (Eigen::Index VV = 0; VV < static_cast<Eigen::Index>(n_cols); ++VV) {
+        const double threshold = voting_grid(VV);
+        for (Eigen::Index TT = 0; TT < static_cast<Eigen::Index>(n_rows); ++TT) {
+            R_mat(TT, VV) = static_cast<double>(
+                (Phi_use.row(TT).array() > threshold).count()
+            );
+        }
+    }
+
+    // Find max in R_mat where FDP <= tFDR
+    double val_max = -1.0;
+    Eigen::Index ind_max_row = 0;
+    Eigen::Index ind_max_col = 0;
+
+    for (Eigen::Index j = 0; j < static_cast<Eigen::Index>(n_cols); ++j) {
+        for (Eigen::Index i = 0; i < static_cast<Eigen::Index>(n_rows); ++i) {
+            if (FDP_use(i, j) <= tFDR_ && R_mat(i, j) >= val_max) {
+                val_max = R_mat(i, j);
+                ind_max_row = i;
+                ind_max_col = j;
+            }
+        }
+    }
+
+    // val_max < 0 means no cell satisfied FDP_hat <= tFDR (it keeps its
+    // -1.0 initialisation): return an empty selection.
+    if (val_max < 0) {
+        SelectionResult result;
+        result.selected_var = Eigen::VectorXi::Zero(static_cast<Eigen::Index>(p_));
+        result.v_thresh = 1.0;
+        result.R_mat = R_mat;
+        return result;
+    }
+
+    double best_threshold = voting_grid(ind_max_col);
+    Eigen::VectorXi selected_var = Eigen::VectorXi::Zero(static_cast<Eigen::Index>(p_));
+    for (Eigen::Index j = 0; j < static_cast<Eigen::Index>(p_); ++j) {
+        if (Phi_use(ind_max_row, j) > best_threshold) {
+            selected_var(j) = 1;
+        }
+    }
+
+    SelectionResult result;
+    result.selected_var = selected_var;
+    result.v_thresh = best_threshold;
+    result.R_mat = R_mat;
+    return result;
+}
+
+
+TRexSelector::SelectionResult TRexSelector::selectFromPhiT(
+    const Eigen::MatrixXd& phi_T_mat,
+    std::size_t num_dummies,
+    const Eigen::VectorXd& voting_grid,
+    bool drop_last_row) const
+{
+    const Eigen::Index T = phi_T_mat.cols();
+    Eigen::MatrixXd Phi_mat(T, static_cast<Eigen::Index>(p_));
+    Eigen::MatrixXd FDP_mat(T, voting_grid.size());
+    for (Eigen::Index t = 0; t < T; ++t) {
+        const Eigen::VectorXd Phi_t       = phi_T_mat.col(t);
+        const Eigen::VectorXd Phi_prime_t = computePhiPrime(
+            phi_T_mat.leftCols(t + 1), Phi_t, num_dummies);
+        Phi_mat.row(t) = Phi_t.transpose();
+        FDP_mat.row(t) = computeFDPHat(voting_grid, Phi_t, Phi_prime_t).transpose();
+    }
+    return selectedVariables(FDP_mat, Phi_mat, voting_grid,
+                             static_cast<std::size_t>(T), drop_last_row);
+}
+
+
+// ===================================================================================
+// Per-Iteration Step + Accumulator Hooks (overridable)
+// ===================================================================================
+
+TRexSelector::StepView TRexSelector::evaluateStep(
+    std::size_t num_dummies,
+    std::size_t T_stop,
+    bool use_warm_start,
+    er::ExperimentStrategy strategy,
+    std::size_t seed_factor,
+    std::size_t existing_on_disk)
+{
+    auto cfg = buildRunnerConfig(
+        num_dummies, T_stop, use_warm_start, strategy,
+        seed_factor, existing_on_disk);
+
+    StepView view;
+    view.exp_results = experiment_runner_->run(cfg);
+    view.Phi         = view.exp_results.Phi;
+    view.Phi_prime   = computePhiPrime(view.exp_results.phi_T_mat,
+                                       view.exp_results.Phi,
+                                       num_dummies);
+    view.FDP_hat     = computeFDPHat(voting_grid_, view.Phi, view.Phi_prime);
+    return view;
+}
+
+
+void TRexSelector::initTAccumulators(std::size_t capacity, std::size_t v_len) {
+    Phi_mat_     = Eigen::MatrixXd::Zero(static_cast<Eigen::Index>(capacity),
+                                         static_cast<Eigen::Index>(p_));
+    FDP_hat_mat_ = Eigen::MatrixXd::Zero(static_cast<Eigen::Index>(capacity),
+                                         static_cast<Eigen::Index>(v_len));
+}
+
+
+void TRexSelector::growTAccumulators(std::size_t old_capacity,
+                                     std::size_t new_capacity)
+{
+    const auto old_cap = static_cast<Eigen::Index>(old_capacity);
+    const auto new_cap = static_cast<Eigen::Index>(new_capacity);
+    Phi_mat_.conservativeResize(new_cap, Eigen::NoChange);
+    FDP_hat_mat_.conservativeResize(new_cap, Eigen::NoChange);
+    Phi_mat_.bottomRows(new_cap - old_cap).setZero();
+    FDP_hat_mat_.bottomRows(new_cap - old_cap).setZero();
+}
+
+
+void TRexSelector::appendTRow(Eigen::Index row_idx, const StepView& view) {
+    Phi_mat_.row(row_idx)     = view.Phi;
+    FDP_hat_mat_.row(row_idx) = view.FDP_hat;
+}
+
+
+void TRexSelector::trimTAccumulators(Eigen::Index n_rows) {
+    Phi_mat_.conservativeResize(n_rows, Eigen::NoChange);
+    FDP_hat_mat_.conservativeResize(n_rows, Eigen::NoChange);
+}
+
+
+// ===================================================================================
+// Variant Hooks (default implementations)
+// ===================================================================================
+
+void TRexSelector::onSelectBegin() {
+    // Default: no-op. Subclasses (e.g. GVS) may override to perform one-shot
+    // setup before the L-loop runs.
+}
+
+
+void TRexSelector::prepareDummiesForLStep(LStepContext& ctx) {
+    // Default: dispatch on strategy and perform the canonical T-Rex dummy
+    // work via `dummy_gen_`. Whenever fresh dummy data is produced we
+    // invalidate `warm_start_mgr_` so the experiment runner builds new
+    // solver state for this iteration.
+    ctx.existing_on_disk = 0;
+
+    // In memory-mapped mode the runner writes the dummies straight into the
+    // mmap regions by seeded regeneration (generateInto / expandInto) — the
+    // in-RAM copies below would never be read, yet cost K * n * num_dummies
+    // doubles of heap (~75 GiB at n=5000, p=100000, K=20: a jetsam kill).
+    // Skip the stores; only bookkeeping (invalidation, existing_on_disk)
+    // remains. PERMUTATION is the exception: permuteInto reads the single
+    // stored base matrix.
+    const bool mmap_mode = trex_ctrl_.use_memory_mapping;
+
+    switch (ctx.strategy) {
+        case LLoopStrategy::SKIPL:
+        case LLoopStrategy::STANDARD: {
+            // STANDARD: fresh dummies each iteration (l_tag = L_iter).
+            // SKIPL: one-shot at L_max * p; ctx.L_iter equals
+            // max_dummy_multiplier, so seeding is equivalent to a STANDARD
+            // run at the same LL level (deriveBlockSeed64(k, L) packs both
+            // into disjoint bit fields) — the two branches are the same
+            // call, SKIPL just fires it once.
+            // Invalidate BEFORE mutating the stored matrices: retained
+            // solvers hold non-owning views into them, and dropping the
+            // solvers first guarantees no dangling view exists even
+            // transiently.
+            warm_start_mgr_.invalidate();
+            if (!mmap_mode) {
+                dummy_gen_.generateAndStore(trex_ctrl_.K,
+                                            ctx.num_dummies,
+                                            /*l_tag=*/ctx.L_iter);
+            }
+            break;
+        }
+        case LLoopStrategy::HCONCAT: {
+            if (ctx.L_iter == 1) {
+                // Initial dummies: K matrices of size n x p (prefix-stable
+                // l_tag = 0; expansions continue the same seed domain).
+                if (!mmap_mode) {
+                    dummy_gen_.generateAndStore(trex_ctrl_.K,
+                                                p_,
+                                                /*l_tag=*/0);
+                }
+                ctx.existing_on_disk = 0;
+            } else {
+                // Append p new columns to each stored matrix:
+                // [D_k_old | D_k_new]. Invalidate BEFORE expandStored: the
+                // resize reallocates the buffers that retained solvers view.
+                // New columns are seeded under the same per-experiment base
+                // with global column offsets — no cross-block collisions.
+                warm_start_mgr_.invalidate();
+                if (!mmap_mode) {
+                    dummy_gen_.expandStored(p_);
+                }
+                ctx.existing_on_disk = (ctx.L_iter - 1) * p_;
+            }
+            break;
+        }
+        case LLoopStrategy::PERMUTATION: {
+            if (ctx.L_iter == 1) {
+                Eigen::MatrixXd base = dummy_gen_.generate(p_, permutation_base_seed_);
+                dummy_gen_.storeBaseDummies(std::move(base), permutation_base_seed_);
+            } else {
+                // Expand: append p new columns to the stored base, generated
+                // under the SAME base id with global column offsets — the
+                // grown base stays in one injective seed domain (no duplicate
+                // columns between initial base and expansions by construction).
+                dummy_gen_.expandBaseDummies(p_);
+            }
+            warm_start_mgr_.invalidate();
+            break;
+        }
+        case LLoopStrategy::SEEDED:
+        case LLoopStrategy::PERMUTATION_SEEDED: {
+            // Seed-based, on-the-fly: nothing to pre-generate.
+            warm_start_mgr_.invalidate();
+            break;
+        }
+        default: {
+            throw std::invalid_argument(
+                "TRexSelector::prepareDummiesForLStep: unsupported L-loop strategy.");
+        }
+    }
+}
+
+
+TRexSelector::SelectionResult TRexSelector::finalizeSelectionResult(
+    SelectionResult&& base_result)
+{
+    // Default: pass-through. Subclasses (e.g. GVS) may override to widen
+    // into a derived result struct and to release variant-specific
+    // resources allocated in `onSelectBegin()` / the L-loop.
+    return base_result;
+}
+
+
+// ===================================================================================
+// L-Loop Strategy Dispatcher
+// ===================================================================================
+
+void TRexSelector::runLLoop(
+    Eigen::VectorXd& FDP_hat,
+    er::ExperimentResults& exp_results)
+{
+    switch (trex_ctrl_.lloop_strategy) {
+        case LLoopStrategy::SKIPL: {
+            runLLoopCalibration_SKIPL(FDP_hat, exp_results);
+            break;
+        }
+        case LLoopStrategy::STANDARD: {
+            runLLoopCalibration_Standard(FDP_hat, exp_results);
+            break;
+        }
+        case LLoopStrategy::HCONCAT: {
+            runLLoopCalibration_HCONCAT(FDP_hat, exp_results);
+            break;
+        }
+        case LLoopStrategy::PERMUTATION: {
+            runLLoopCalibration_Permutation(FDP_hat, exp_results);
+            break;
+        }
+        case LLoopStrategy::SEEDED:              // independent dummies, seed-derived
+        case LLoopStrategy::PERMUTATION_SEEDED: {
+            runLLoopCalibration_Seeded(FDP_hat, exp_results);
+            break;
+        }
+        default: {
+            throw std::invalid_argument("Invalid L-loop strategy.");
+        }
+    }
+}
+
+
+// ===================================================================================
+// L-Loop: SKIPL
+// ===================================================================================
+
+void TRexSelector::runLLoopCalibration_SKIPL(
+    Eigen::VectorXd& FDP_hat,
+    er::ExperimentResults& exp_results)
+{
+    num_dummies_ = trex_ctrl_.max_dummy_multiplier * p_;
+    T_stop_ = 1;
+
+    if (verbose_) {
+        printProgress("L-Loop: SKIPL strategy. Fixed dummies = "
+                      + std::to_string(num_dummies_));
+    }
+
+    // Per-step dummy work via virtual hook (subclasses may override; default
+    // generates K dummy matrices sized num_dummies via dummy_gen_).
+    LStepContext lctx;
+    lctx.L_iter      = trex_ctrl_.max_dummy_multiplier;
+    lctx.num_dummies = num_dummies_;
+    lctx.strategy    = LLoopStrategy::SKIPL;
+    prepareDummiesForLStep(lctx);
+
+    // Per-step body via virtual hook (subclasses may inject deflation).
+    StepView view = evaluateStep(num_dummies_, T_stop_,
+                                 /*use_warm_start=*/false,
+                                 er::ExperimentStrategy::Standard,
+                                 /*seed_factor=*/trex_ctrl_.max_dummy_multiplier,
+                                 /*existing_on_disk=*/0);
+    lloop_last_Phi_ = view.Phi;
+    exp_results = std::move(view.exp_results);
+    FDP_hat     = std::move(view.FDP_hat);
+
+    // Set dummy_multiplier_LL_ so the T-loop uses the same seed_factor as the
+    // initial generation (rather than inheriting the 0-initialised default).
+    dummy_multiplier_LL_ = trex_ctrl_.max_dummy_multiplier;
+}
+
+
+// ===================================================================================
+// L-Loop: Unified driver
+// ===================================================================================
+
+void TRexSelector::runLLoopCalibration(
+    const LLoopPolicyContext& ctx,
+    Eigen::VectorXd& FDP_hat,
+    er::ExperimentResults& exp_results)
+{
+    while (dummy_multiplier_LL_ <= trex_ctrl_.max_dummy_multiplier &&
+          (FDP_hat.size() == 0 ||
+           FDP_hat(static_cast<Eigen::Index>(opt_point_)) > tFDR_)) {
+
+        num_dummies_ = dummy_multiplier_LL_ * p_;
+
+        std::size_t existing_on_disk = 0;
+        ctx.policy(dummy_multiplier_LL_, num_dummies_, existing_on_disk);
+
+        const std::size_t seed_factor =
+            ctx.seed_factor_uses_LL ? dummy_multiplier_LL_ : 0;
+
+        // Per-step body via virtual hook (subclasses may inject deflation).
+        StepView view = evaluateStep(num_dummies_, T_stop_,
+                                     /*use_warm_start=*/false,
+                                     ctx.strategy, seed_factor, existing_on_disk);
+        lloop_last_Phi_ = view.Phi;
+        exp_results = std::move(view.exp_results);
+        FDP_hat     = std::move(view.FDP_hat);
+
+        if (verbose_) {
+            std::ostringstream oss;
+            oss << "Appended dummies: " << num_dummies_
+                << " | FDP_hat(T = 1) = "
+                << FDP_hat(static_cast<Eigen::Index>(opt_point_));
+            printProgress(oss.str());
+        }
+
+        ++dummy_multiplier_LL_;
+    }
+
+    dummy_multiplier_LL_ =
+        (dummy_multiplier_LL_ > 1) ? (dummy_multiplier_LL_ - 1) : 1;
+}
+
+
+// ===================================================================================
+// L-Loop: STANDARD
+// ===================================================================================
+
+void TRexSelector::runLLoopCalibration_Standard(
+    Eigen::VectorXd& FDP_hat,
+    er::ExperimentResults& exp_results
+    )
+{
+    T_stop_ = 1;
+    dummy_multiplier_LL_ = 1;
+    FDP_hat.resize(0);
+
+    LLoopPolicyContext ctx;
+    ctx.strategy            = er::ExperimentStrategy::Standard;
+    ctx.seed_factor_uses_LL = true;
+    ctx.policy = [this](std::size_t LL,
+                        std::size_t num_dummies,
+                        std::size_t& existing_on_disk_out) {
+        // Per-iteration dummy work via virtual hook (subclasses may override).
+        LStepContext lctx;
+        lctx.L_iter      = LL;
+        lctx.num_dummies = num_dummies;
+        lctx.strategy    = LLoopStrategy::STANDARD;
+        prepareDummiesForLStep(lctx);
+        existing_on_disk_out = lctx.existing_on_disk;
+    };
+
+    runLLoopCalibration(ctx, FDP_hat, exp_results);
+}
+
+
+// ===================================================================================
+// L-Loop: HCONCAT
+// ===================================================================================
+
+void TRexSelector::runLLoopCalibration_HCONCAT(
+    Eigen::VectorXd& FDP_hat,
+    er::ExperimentResults& exp_results
+    )
+{
+    T_stop_ = 1;
+    dummy_multiplier_LL_ = 1;
+    FDP_hat.resize(0);
+
+    LLoopPolicyContext ctx;
+    ctx.strategy            = er::ExperimentStrategy::Standard;
+    // HCONCAT is prefix-stable: all blocks live under the l_tag = 0 seed
+    // domain (distinguished by global column offset), so the mmap path's
+    // full regeneration must NOT vary the tag with LL.
+    ctx.seed_factor_uses_LL = false;
+    ctx.policy = [this](std::size_t LL,
+                        std::size_t num_dummies,
+                        std::size_t& existing_on_disk_out) {
+        // Per-iteration dummy work via virtual hook (subclasses may override).
+        // The default impl performs the L=1 initial generation and the
+        // L>1 horizontal expansion internally.
+        LStepContext lctx;
+        lctx.L_iter      = LL;
+        lctx.num_dummies = num_dummies;
+        lctx.strategy    = LLoopStrategy::HCONCAT;
+        prepareDummiesForLStep(lctx);
+        existing_on_disk_out = lctx.existing_on_disk;
+    };
+
+    runLLoopCalibration(ctx, FDP_hat, exp_results);
+}
+
+
+// ===================================================================================
+// L-Loop: PERMUTATION
+// ===================================================================================
+
+void TRexSelector::runLLoopCalibration_Permutation(
+    Eigen::VectorXd& FDP_hat,
+    er::ExperimentResults& exp_results
+    )
+{
+    T_stop_ = 1;
+    dummy_multiplier_LL_ = 1;
+    FDP_hat.resize(0);
+
+    LLoopPolicyContext ctx;
+    ctx.strategy            = er::ExperimentStrategy::Permutation;
+    ctx.seed_factor_uses_LL = false;
+    ctx.policy = [this](std::size_t LL,
+                        std::size_t num_dummies,
+                        std::size_t& existing_on_disk_out) {
+        // Per-iteration dummy work via virtual hook (subclasses may override).
+        // The default impl uses `permutation_base_seed_` (resolved in the
+        // constructor) to generate or expand the base dummy matrix.
+        LStepContext lctx;
+        lctx.L_iter      = LL;
+        lctx.num_dummies = num_dummies;
+        lctx.strategy    = LLoopStrategy::PERMUTATION;
+        prepareDummiesForLStep(lctx);
+        existing_on_disk_out = lctx.existing_on_disk;
+    };
+
+    runLLoopCalibration(ctx, FDP_hat, exp_results);
+
+    if (verbose_) {
+        printProgress("L-loop converged: " + std::to_string(num_dummies_)
+                      + " dummies (base stored, K permutations on-demand).");
+    }
+}
+
+
+// ===================================================================================
+// L-Loop: SEEDED / PERMUTATION_SEEDED
+// ===================================================================================
+
+void TRexSelector::runLLoopCalibration_Seeded(
+    Eigen::VectorXd& FDP_hat,
+    er::ExperimentResults& exp_results)
+{
+    T_stop_ = 1;
+    dummy_multiplier_LL_ = 1;
+    FDP_hat.resize(0);
+
+    // The L-loop dispatcher routes both SEEDED and PERMUTATION_SEEDED to
+    // this method; mirror that disambiguation when forwarding to the hook and
+    // when choosing the runner strategy.
+    const bool independent =
+        (trex_ctrl_.lloop_strategy == LLoopStrategy::SEEDED);
+    const LLoopStrategy hook_strategy = independent
+            ? LLoopStrategy::SEEDED
+            : LLoopStrategy::PERMUTATION_SEEDED;
+
+    LLoopPolicyContext ctx;
+    ctx.strategy            = independent
+            ? er::ExperimentStrategy::Seeded
+            : er::ExperimentStrategy::PermutationSeeded;
+    // SEEDED keys its draws on the L step like STANDARD (its storage-free
+    // twin); PERMUTATION_SEEDED re-derives its base prefix-stable (tag 0).
+    ctx.seed_factor_uses_LL = independent;
+    ctx.policy = [this, hook_strategy](std::size_t LL,
+                                       std::size_t num_dummies,
+                                       std::size_t& existing_on_disk_out) {
+        // Per-iteration dummy work via virtual hook (subclasses may override).
+        LStepContext lctx;
+        lctx.L_iter      = LL;
+        lctx.num_dummies = num_dummies;
+        lctx.strategy    = hook_strategy;
+        prepareDummiesForLStep(lctx);
+        existing_on_disk_out = lctx.existing_on_disk;
+    };
+
+    runLLoopCalibration(ctx, FDP_hat, exp_results);
+
+    if (verbose_) {
+        printProgress("L-loop converged: " + std::to_string(num_dummies_)
+                      + " dummies (seeded regeneration).");
+    }
+}
+
+
+// ===================================================================================
+// T-Loop Calibration
+// ===================================================================================
+
+void TRexSelector::runTLoop(
+    Eigen::VectorXd& FDP_hat,
+    er::ExperimentResults& exp_results
+    )
+{
+    if (verbose_) {
+        printProgress("T-loop: Calibrating stopping threshold (T_stop)...");
+    }
+
+    const Eigen::Index v_len = static_cast<Eigen::Index>(voting_grid_.size());
+
+    std::size_t max_T = trex_ctrl_.use_max_T_stop
+        ? std::min(
+            num_dummies_,
+            static_cast<std::size_t>(std::ceil(static_cast<double>(n_) / 2.0))
+          )
+        : num_dummies_;
+
+    // Capacity-doubling accumulators (delegated to virtual hooks so subclasses
+    // can grow side accumulators in lock-step).
+    std::size_t capacity = std::min<std::size_t>(20, max_T);
+    initTAccumulators(capacity, static_cast<std::size_t>(v_len));
+
+    std::size_t prev_num_selected = 0;
+    std::size_t stagnant_iterations = 0;
+
+    // Determine L-loop strategy
+    er::ExperimentStrategy exp_strategy;
+    switch (trex_ctrl_.lloop_strategy) {
+        case LLoopStrategy::PERMUTATION:
+            exp_strategy = er::ExperimentStrategy::Permutation;
+            break;
+        case LLoopStrategy::PERMUTATION_SEEDED:
+            exp_strategy = er::ExperimentStrategy::PermutationSeeded;
+            break;
+        case LLoopStrategy::SEEDED:
+            exp_strategy = er::ExperimentStrategy::Seeded;
+            break;
+        default:
+            exp_strategy = er::ExperimentStrategy::Standard;
+            break;
+    }
+
+    // Seed row 0 with the L-loop result (T = 1) to mirror R's
+    // `acc <- list(FDP = matrix(FDP_hat, nrow=1), Phi = matrix(step$Phi, nrow=1))`
+    // before the T-loop. This avoids re-running the (expensive) T = 1
+    // experiment as the first T-loop iteration and guarantees a valid row
+    // exists even when the while-guard rejects the first check.
+    StepView seed;
+    seed.exp_results = exp_results;
+    seed.Phi         = lloop_last_Phi_;
+    seed.FDP_hat     = FDP_hat;
+    appendTRow(0, seed);
+    Eigen::Index row_idx = 1;
+
+    // Initialise stagnation baseline from the seed row so the first body
+    // iteration's comparison matches the pre-refactor behaviour.
+    {
+        Eigen::Index v_star_idx = 0;
+        for (Eigen::Index i = 0; i < v_len; ++i) {
+            if (FDP_hat(i) <= tFDR_) v_star_idx = i;
+        }
+        const double v_star = (v_star_idx < v_len) ? voting_grid_(v_star_idx) : 0.0;
+        if (v_star > eps_) {
+            prev_num_selected =
+                static_cast<std::size_t>((lloop_last_Phi_.array() > v_star).count());
+        }
+    }
+
+    while (FDP_hat(v_len - 1) <= tFDR_ && T_stop_ < max_T) {
+
+        ++T_stop_;
+
+        // Per-step body via virtual hook (subclasses may inject deflation).
+        // HCONCAT lives in the prefix-stable l_tag = 0 seed domain; the other
+        // stored strategies re-derive with the final L-loop multiplier.
+        // existing_on_disk = num_dummies_: the L-loop's accepted iteration
+        // already wrote the full dummy width to the memory-mapped files, and
+        // generation is deterministic per (k, L) — the memory-mapped runner
+        // therefore skips the per-T-step rewrite of identical content
+        // (ignored by the in-memory strategies).
+        //
+        // EXCEPTION — shared-file strategies (SEEDED / PERMUTATION /
+        // PERMUTATION_SEEDED, see the `shared` flag in the constructor):
+        // the single on-disk D region is overwritten per experiment, so
+        // after the L-loop it holds only the LAST experiment's dummies.
+        // The skip would silently run every experiment of every T-step
+        // against D_{K-1}; force the per-k rewrite instead (deterministic
+        // regeneration, so content is exact).
+        const bool shared_dummy_file =
+            (trex_ctrl_.lloop_strategy == LLoopStrategy::SEEDED
+             || trex_ctrl_.lloop_strategy == LLoopStrategy::PERMUTATION
+             || trex_ctrl_.lloop_strategy == LLoopStrategy::PERMUTATION_SEEDED);
+        const std::size_t tloop_seed_factor =
+            (trex_ctrl_.lloop_strategy == LLoopStrategy::HCONCAT)
+                ? 0
+                : dummy_multiplier_LL_;
+        // Warm starts across T-steps retain each experiment's dummy matrix
+        // in RAM (the retained solver holds a non-owning view into it, see
+        // runWithTemporaryDummies). For the seeded / permutation family
+        // in IN_MEMORY mode that would silently keep K matrices resident —
+        // exactly the footprint those strategies exist to avoid (SEEDED:
+        // one matrix at a time; PERMUTATION: base + one working copy).
+        // Honor the memory contract instead: rebuild per T-step (dummy
+        // regeneration is deterministic, results are unchanged; the cost is
+        // CPU). Memory-mapped runs use SERIALIZED warm starts — no in-RAM
+        // dummy retention — and keep the continuation.
+        const bool tloop_warm_start =
+            !(shared_dummy_file && !trex_ctrl_.use_memory_mapping);
+        StepView view = evaluateStep(num_dummies_, T_stop_, tloop_warm_start,
+                                     exp_strategy,
+                                     /*seed_factor=*/tloop_seed_factor,
+                                     /*existing_on_disk=*/
+                                     shared_dummy_file ? 0 : num_dummies_);
+        exp_results = view.exp_results;
+        FDP_hat     = view.FDP_hat;
+
+        // Stagnation metric: v* is the LARGEST feasible voting level (inside
+        // the loop that is usually the top grid point, since the while-guard
+        // requires FDP at the top level <= tFDR). num_selected below is thus
+        // the most conservative selection count (~ #{Phi = 1}), a diagnostic
+        // for the greedy-solver noise trap — NOT the argmax-R operating point
+        // used by the final selection. If no level is feasible, v_star_idx
+        // falls back to index 0 (v = 0.5); the count is then only used for
+        // the stagnation comparison, never for selection.
+        Eigen::Index v_star_idx = 0;
+        for (Eigen::Index i = 0; i < v_len; ++i) {
+            if (FDP_hat(i) <= tFDR_) v_star_idx = i;
+        }
+        double v_star = (v_star_idx < v_len) ? voting_grid_(v_star_idx) : 0.0;
+
+        std::size_t num_selected = 0;
+        if (v_star > eps_) {
+            num_selected = (view.Phi.array() > v_star).count();
+        }
+
+        // Dynamic capacity growth + accumulate row BEFORE stagnation check
+        // so that Phi_mat_.rows() == T_stop_ even when an early-stop break fires.
+        if (static_cast<std::size_t>(row_idx) >= capacity) {
+            const std::size_t new_capacity =
+                std::min(capacity * 2, max_T);
+            growTAccumulators(capacity, new_capacity);
+            capacity = new_capacity;
+        }
+
+        appendTRow(row_idx, view);
+        ++row_idx;
+
+        // Stagnation check (AUTO already resolved by solver family in the
+        // constructor)
+        if (trex_ctrl_.tloop_stagnation_stop.value_or(false) && T_stop_ > 1) {
+            if (num_selected <= prev_num_selected) {
+                ++stagnant_iterations;
+                if (stagnant_iterations >= trex_ctrl_.tloop_max_stagnant_steps) {
+                    if (verbose_) {
+                        printProgress("T-loop EARLY STOP: Stagnation detected");
+                    }
+                    break;
+                }
+            } else {
+                stagnant_iterations = 0;
+            }
+        }
+        prev_num_selected = num_selected;
+
+        // Diagnostic output
+        if (verbose_) {
+            std::ostringstream oss;
+            oss << "T = " << std::setw(3) << T_stop_
+                << " | v* = " << v_star
+                << ", R = " << num_selected
+                << ", FDP in [" << FDP_hat.minCoeff() << ", " << FDP_hat.maxCoeff() << "]";
+            if (stagnant_iterations > 0) {
+                oss << " (stagnant: " << stagnant_iterations << ")";
+            }
+            printProgress(oss.str());
+        }
+    }
+
+    // Trim
+    trimTAccumulators(row_idx);
+
+    if (verbose_) {
+        std::string reason;
+        if (stagnant_iterations >= trex_ctrl_.tloop_max_stagnant_steps) {
+            reason = " (early stop: stagnation)";
+        }
+        else if (T_stop_ >= max_T) { reason = " (reached max_T)"; }
+        else { reason = " (FDP > target FDR)"; }
+        printProgress(
+            "T-loop converged at T_stop = " +
+            std::to_string(T_stop_) + reason + "\n"
+        );
+    }
+}
+
+
+// ===================================================================================
+// Utility methods
+// ===================================================================================
+
+void TRexSelector::storeResults(const SelectionResult& result) {
+    selected_var_ = result.selected_var;
+    voting_threshold_ = result.v_thresh;
+    R_mat_ = result.R_mat;
+    updateSelectedIndices();
+}
+
+
+void TRexSelector::updateSelectedIndices() {
+    selected_indices_.clear();
+    for (Eigen::Index j = 0; j < selected_var_.size(); ++j) {
+        if (selected_var_(j) == 1) {
+            selected_indices_.push_back(j);
+        }
+    }
+}
+
+
+void TRexSelector::printProgress(const std::string& message) const {
+    if (verbose_) {
+        TREX_INFO( "[T-Rex Selector] " << message << "\n");
+    }
+}
+
+
+}

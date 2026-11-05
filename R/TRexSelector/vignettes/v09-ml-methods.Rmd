@@ -1,0 +1,188 @@
+---
+title: "The ML methods"
+output:
+  rmarkdown::html_vignette:
+    toc: true
+    css: vignette_styles.css
+bibliography: references.bib
+csl: ieee.csl
+link-citations: true
+vignette: >
+  %\VignetteIndexEntry{The ML methods}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(collapse = TRUE, comment = "#>", fig.align = "center",
+                      fig.width = 6, fig.height = 4)
+options(width = 80)
+library(TRexSelector)
+old_threads <- trex_set_num_threads(min(2L, trex_get_max_threads()))
+```
+
+# The building blocks
+
+The machine learning (ML) methods are the numerical building blocks the selectors use: scalers, ridge
+and elastic-net regression with cross-validation (the $\lambda_2$ tuners), the singular value
+decomposition (SVD) and principal component analysis (PCA) behind the sparse PCA selector, and the
+hierarchical clustering behind the dependency-aware and the grouped selectors. They are exposed as classes
+and functions of their own, built on Eigen [@guennebaud2010eigen].
+
+```{r data}
+set.seed(8)
+n <- 120
+p <- 30
+X <- matrix(rnorm(n * p), n, p)
+beta <- c(2, -1.5, 0, 0, 1, rep(0, p - 5))
+y <- as.numeric(X %*% beta + rnorm(n))
+```
+
+# Scalers
+
+`MLZScoreScaler` centers and divides by the sample standard deviation, `MLLpNormScaler` centers and
+divides by the L1 or L2 norm. Both work in place on a double matrix (or a memory-mapped one) and can undo
+their transformation.
+
+```{r scalers}
+z <- MLZScoreScaler$new()
+z$fit(X)
+round(z$get_centers()[1:3], 3)
+round(z$get_scales()[1:3], 3)
+X_before <- X + 0
+invisible(z$transform_inplace(X))
+round(colMeans(X)[1:3], 12)
+round(apply(X, 2, sd)[1:3], 12)
+invisible(z$inverse_transform_inplace(X))
+max(abs(X - X_before))
+```
+
+`fit_transform_inplace()` does both in one call, `get_dropped_indices()` names constant columns, and
+`save()` / `load()` persist the statistics.
+
+```{r lp}
+l2 <- MLLpNormScaler$new(norm_type = 2, center = TRUE)
+invisible(l2$fit_transform_inplace(X))
+sqrt(colSums(X^2))[1:3]
+invisible(l2$inverse_transform_inplace(X))
+```
+
+# Ridge regression
+
+`MLRidge` solves $\min_{\boldsymbol\beta} \|\boldsymbol y - \boldsymbol X \boldsymbol\beta\|_2^2 +
+\lambda \|\boldsymbol\beta\|_2^2$ for one penalty [@hoerl2000ridge], by the primal or the dual Cholesky
+path depending on the shape of `X`. `MLRidgeCV` chooses the penalty by $K$-fold cross-validation over a
+geometric grid and reports the minimum and the one-standard-error rule.
+
+```{r ridge}
+ridge <- MLRidge$new()
+round(ridge$solve(X, y, lambda = 1)[1:5], 3)
+cv <- MLRidgeCV$new()
+cv$fit(X, y, n_folds = 5, n_lambda = 50)
+c(lambda_min = cv$cv_min(), lambda_1se = cv$cv_1se())
+```
+
+```{r ridge-plot}
+#| fig.cap: "Cross-validation error of the ridge penalty with the minimum and the one-standard-error choice."
+plot(cv$get_lambdas(), cv$get_cv_errors(), log = "x", type = "l", col = "#336C68", lwd = 2,
+     xlab = "lambda", ylab = "CV error")
+abline(v = c(cv$cv_min(), cv$cv_1se()), lty = c(1, 2), col = "red")
+```
+
+`MLRidgeCV$new(low_memory = TRUE)` runs the dual (kernel) form on column blocks of `X` read in place,
+with memory $O(n^2)$ instead of $O(np)$, the route for $p \gg n$.
+
+# The elastic net
+
+`MLElasticNet` fits the elastic-net path [@zou2005elasticnet] by coordinate descent over a glmnet-style
+grid [@friedman2010glmnet]. `alpha = 1` is the lasso, `alpha = 0` the ridge. The coefficients are
+reported on the original scale.
+
+```{r enet}
+en <- MLElasticNet$new()
+en$fit(X, y, alpha = 0.5, n_lambda = 50)
+dim(en$get_coef())
+length(en$get_lambdas())
+en$converged()
+B <- en$get_coef()               # the path can stop before n_lambda points
+round(B[1:5, ncol(B)], 3)
+round(en$predict(X[1:3, ])[, ncol(B)], 3)
+```
+
+`MLElasticNetCV` selects the penalty by cross-validation on a shared grid. The strong rules
+[@tibshirani2012strong] speed up the sweeps.
+
+```{r enet-cv}
+encv <- MLElasticNetCV$new()
+encv$fit(X, y, alpha = 0.5, n_folds = 5, n_lambda = 50)
+c(lambda_min = encv$cv_min(), lambda_1se = encv$cv_1se())
+```
+
+Both classes accept `low_memory = TRUE` and then run on `X` itself, a memory-mapped matrix included,
+without an allocation of the size of `X`.
+
+# SVD and PCA
+
+`MLSVD$new()$compute(X, M)` returns the top-$M$ truncated SVD, by a direct, a Gram or a randomized
+path depending on the shape of `X`.
+
+```{r svd}
+svd_res <- MLSVD$new()$compute(X, M = 3)
+names(svd_res)
+dim(svd_res$U)
+round(svd_res$S, 3)
+```
+
+`MLPCA` fits the top-$M$ components. It centers and normalizes `X` in place at construction, the same
+rule as the T-solvers, and `restore()` undoes it.
+
+```{r pca}
+X_before <- X + 0
+pca <- MLPCA$new(X, M = 3, center = TRUE, normalize = TRUE)
+pca$fit()
+dim(pca$get_scores())
+dim(pca$get_loadings())
+round(pca$get_explained_variance(), 3)
+round(pca$transform(X_before[1:2, ]), 3)
+pca$restore()
+max(abs(X - X_before))
+```
+
+# Hierarchical clustering
+
+`ml_agglomerative_cluster()` runs agglomerative clustering on the rows of a matrix with a linkage from
+`ml_linkage_method` (Ward, average, complete, single, WPGMA, median, centroid) and a metric from
+`ml_distance_metric` (Euclidean, correlation, Manhattan, and two locality-sensitive hashing (LSH)
+variants of the correlation distance for very wide data). Single linkage runs the SLINK algorithm
+[@sibson1973slink], the other linkages the nearest-neighbour chain [@benzecri1982nnchain;
+@murtagh2012overview] with the Lance-Williams update [@lance1967linkage]. The result is a linkage
+matrix, and `ml_cut_tree()` cuts it into a given number of clusters.
+
+```{r hac}
+set.seed(9)
+centers <- rep(c(-3, 0, 3), each = 20)
+Z <- centers + matrix(rnorm(60 * 4), 60, 4)
+linkage <- ml_agglomerative_cluster(Z, method = ml_linkage_method$Ward,
+                                    metric = ml_distance_metric$Euclidean)
+dim(linkage)
+labels <- ml_cut_tree(linkage, num_orig_objs = 60, num_clusters = 3)
+table(labels, rep(1:3, each = 20))
+```
+
+To cluster variables instead of observations, cluster the transposed design with the correlation
+distance, which is what the grouped and the dependency-aware selectors do.
+
+```{r hac-vars}
+link_vars <- ml_agglomerative_cluster(t(X), method = ml_linkage_method$Single,
+                                      metric = ml_distance_metric$Correlation)
+head(ml_cut_tree(link_vars, num_orig_objs = p, num_clusters = 5))
+```
+
+`use_mmap = TRUE` keeps the intermediate distances in memory-mapped files, and a memory-mapped `data`
+matrix is clustered in place.
+
+```{r teardown, include = FALSE}
+trex_set_num_threads(old_threads)
+```
+
+# References

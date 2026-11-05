@@ -1,0 +1,139 @@
+citHeader("To cite 'TRexSelector' in publications, please use the package entry and the
+          paper of the method you used:")
+
+bibentry("Manual",
+  title       = "{TRexSelector: T-Rex Selector: High-Dimensional Variable Selection & FDR Control}",
+  author      = person(given = "TRexSelector Team"),
+  note        = "R package version 2.0.0",
+  year        = "2026",
+  url         = "https://github.com/trexselector/TRexSelector",
+  textVersion = "TRexSelector Team, \"TRexSelector: T-Rex Selector: High-Dimensional Variable Selection & FDR Control,\" 2026, R package version 2.0.0. [Online]. Available: https://github.com/trexselector/TRexSelector"
+)
+
+bibentry("Article",
+  title       = "The Terminating-Random Experiments Selector: Fast High-Dimensional Variable Selection with False Discovery Rate Control",
+  author      = c(as.person("Jasin Machkour"),
+                   as.person("Michael Muma"),
+                   as.person("Daniel P. Palomar")),
+  journal     = "Signal Process.",
+  volume      = "231",
+  pages       = "109894",
+  year        = "2025",
+  doi         = "10.1016/j.sigpro.2025.109894",
+  textVersion = "J. Machkour, M. Muma, and D. P. Palomar, \"The Terminating-Random Experiments Selector: Fast High-Dimensional Variable Selection with False Discovery Rate Control,\" Signal Process., vol. 231, Art. no. 109894, 2025, doi: 10.1016/j.sigpro.2025.109894."
+)
+
+bibentry("Article",
+  title       = "High-Dimensional False Discovery Rate Control for Dependent Variables",
+  author      = c(as.person("Jasin Machkour"),
+                   as.person("Michael Muma"),
+                   as.person("Daniel P. Palomar")),
+  journal     = "Signal Process.",
+  volume      = "234",
+  pages       = "109990",
+  year        = "2025",
+  doi         = "10.1016/j.sigpro.2025.109990",
+  textVersion = "J. Machkour, M. Muma, and D. P. Palomar, \"High-Dimensional False Discovery Rate Control for Dependent Variables,\" Signal Process., vol. 234, Art. no. 109990, 2025, doi: 10.1016/j.sigpro.2025.109990."
+)
+
+bibentry("InProceedings",
+  title       = "False Discovery Rate Control for Grouped Variable Selection in High-Dimensional Linear Models Using the T-Knock Filter",
+  author      = c(as.person("Jasin Machkour"),
+                   as.person("Michael Muma"),
+                   as.person("Daniel P. Palomar")),
+  booktitle   = "Proc. 30th Eur. Signal Process. Conf. (EUSIPCO)",
+  pages       = "892-896",
+  year        = "2022",
+  textVersion = "J. Machkour, M. Muma, and D. P. Palomar, \"False Discovery Rate Control for Grouped Variable Selection in High-Dimensional Linear Models Using the T-Knock Filter,\" in Proc. 30th Eur. Signal Process. Conf. (EUSIPCO), 2022, pp. 892-896."
+)
+
+bibentry("InProceedings",
+  title       = "The Informed Elastic Net for Fast Grouped Variable Selection and FDR Control in Genomics Research",
+  author      = c(as.person("Jasin Machkour"),
+                   as.person("Michael Muma"),
+                   as.person("Daniel P. Palomar")),
+  booktitle   = "Proc. IEEE 9th Int. Workshop Comput. Adv. Multi-Sensor Adapt. Process. (CAMSAP)",
+  pages       = "466-470",
+  year        = "2023",
+  textVersion = "J. Machkour, M. Muma, and D. P. Palomar, \"The Informed Elastic Net for Fast Grouped Variable Selection and FDR Control in Genomics Research,\" in Proc. IEEE 9th Int. Workshop Comput. Adv. Multi-Sensor Adapt. Process. (CAMSAP), 2023, pp. 466-470."
+)
+
+bibentry("InProceedings",
+  title       = "False Discovery Rate Control for Fast Screening of Large-Scale Genomics Biobanks",
+  author      = c(as.person("Jasin Machkour"),
+                   as.person("Michael Muma"),
+                   as.person("Daniel P. Palomar")),
+  booktitle   = "Proc. 22nd IEEE Statist. Signal Process. Workshop (SSP)",
+  pages       = "666-670",
+  year        = "2023",
+  textVersion = "J. Machkour, M. Muma, and D. P. Palomar, \"False Discovery Rate Control for Fast Screening of Large-Scale Genomics Biobanks,\" in Proc. 22nd IEEE Statist. Signal Process. Workshop (SSP), 2023, pp. 666-670."
+)
+
+bibentry("InProceedings",
+  title       = "Sparse PCA with False Discovery Rate Controlled Variable Selection",
+  author      = c(as.person("Jasin Machkour"),
+                   as.person("Arnaud Breloy"),
+                   as.person("Michael Muma"),
+                   as.person("Daniel P. Palomar"),
+                   as.person("Frédéric Pascal")),
+  booktitle   = "Proc. IEEE 49th Int. Conf. Acoust., Speech, Signal Process. (ICASSP)",
+  pages       = "9716-9720",
+  year        = "2024",
+  textVersion = "J. Machkour, A. Breloy, M. Muma, D. P. Palomar, and F. Pascal, \"Sparse PCA with False Discovery Rate Controlled Variable Selection,\" in Proc. IEEE 49th Int. Conf. Acoust., Speech, Signal Process. (ICASSP), 2024, pp. 9716-9720."
+)
+
+bibentry("InProceedings",
+  title       = "Solving FDR-Controlled Sparse Regression Problems with Five Million Variables on a Laptop",
+  author      = c(as.person("Fabian Scheidt"),
+                   as.person("Jasin Machkour"),
+                   as.person("Michael Muma")),
+  booktitle   = "Proc. IEEE 9th Int. Workshop Comput. Adv. Multi-Sensor Adapt. Process. (CAMSAP)",
+  pages       = "116-120",
+  year        = "2023",
+  textVersion = "F. Scheidt, J. Machkour, and M. Muma, \"Solving FDR-Controlled Sparse Regression Problems with Five Million Variables on a Laptop,\" in Proc. IEEE 9th Int. Workshop Comput. Adv. Multi-Sensor Adapt. Process. (CAMSAP), 2023, pp. 116-120."
+)
+
+bibentry("InProceedings",
+  title       = "Terminating Greedy Pursuits for High-Dimensional False Discovery Rate Control",
+  author      = c(as.person("Fabian Scheidt"),
+                   as.person("Michael Muma")),
+  booktitle   = "Proc. Eur. Signal Process. Conf. (EUSIPCO)",
+  pages       = "2511-2515",
+  year        = "2026",
+  textVersion = "F. Scheidt and M. Muma, \"Terminating Greedy Pursuits for High-Dimensional False Discovery Rate Control,\" in Proc. Eur. Signal Process. Conf. (EUSIPCO), 2026, pp. 2511-2515."
+)
+
+bibentry("Misc",
+  title       = "Virtual Dummies: Enabling Scalable FDR-Controlled Variable Selection via Sequential Sampling of Null Features",
+  author      = c(as.person("Taulant Koka"),
+                   as.person("Jasin Machkour"),
+                   as.person("Daniel P. Palomar"),
+                   as.person("Michael Muma")),
+  note        = "arXiv:2604.07464",
+  year        = "2026",
+  textVersion = "T. Koka, J. Machkour, D. P. Palomar, and M. Muma, \"Virtual Dummies: Enabling Scalable FDR-Controlled Variable Selection via Sequential Sampling of Null Features,\" arXiv:2604.07464, 2026 (Submitted to J. Mach. Learn. Res.)."
+)
+
+bibentry("InProceedings",
+  title       = "FDR-Controlled Portfolio Optimization for Sparse Financial Index Tracking",
+  author      = c(as.person("Jasin Machkour"),
+                   as.person("Daniel P. Palomar"),
+                   as.person("Michael Muma")),
+  booktitle   = "Proc. IEEE Int. Conf. Acoust., Speech, Signal Process. (ICASSP)",
+  year        = "2025",
+  doi         = "10.1109/ICASSP49660.2025.10890629",
+  textVersion = "J. Machkour, D. P. Palomar, and M. Muma, \"FDR-Controlled Portfolio Optimization for Sparse Financial Index Tracking,\" in Proc. IEEE Int. Conf. Acoust., Speech, Signal Process. (ICASSP), 2025, doi: 10.1109/ICASSP49660.2025.10890629."
+)
+
+bibentry("InProceedings",
+  title       = "FDR-Controlled Sparse Index Tracking with Autoregressive Stock Dependency Models",
+  author      = c(as.person("Jasin Machkour"),
+                   as.person("Michael Muma"),
+                   as.person("Daniel P. Palomar")),
+  booktitle   = "Proc. Eur. Signal Process. Conf. (EUSIPCO)",
+  pages       = "2662-2666",
+  year        = "2024",
+  textVersion = "J. Machkour, M. Muma, and D. P. Palomar, \"FDR-Controlled Sparse Index Tracking with Autoregressive Stock Dependency Models,\" in Proc. Eur. Signal Process. Conf. (EUSIPCO), 2024, pp. 2662-2666."
+)
+
+citFooter("The library builds on Eigen: G. Guennebaud, B. Jacob et al., Eigen v3, https://libeigen.gitlab.io/, 2010.")

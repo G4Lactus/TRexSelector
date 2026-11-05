@@ -1,0 +1,147 @@
+---
+title: "T-Rex+DA: dependency-aware dummies"
+output:
+  rmarkdown::html_vignette:
+    toc: true
+    css: vignette_styles.css
+bibliography: references.bib
+csl: ieee.csl
+link-citations: true
+vignette: >
+  %\VignetteIndexEntry{T-Rex+DA: dependency-aware dummies}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(collapse = TRUE, comment = "#>", fig.align = "center",
+                      fig.width = 6, fig.height = 4)
+options(width = 80)
+library(TRexSelector)
+old_threads <- trex_set_num_threads(min(2L, trex_get_max_threads()))
+```
+
+# Why dependent variables need their own dummies
+
+The FDR guarantee of the T-Rex selector rests on the exchangeability of the null variables and the
+dummies along the solution path. Independent dummies are exchangeable with independent null variables.
+When the variables are strongly dependent, a null variable that is correlated with an active one enters
+the path earlier than an independent dummy would, so the dummies no longer mirror the nulls and the FDP
+estimate becomes anti-conservative. The dependency-aware T-Rex selector (T-Rex+DA) [@machkour2025datrex]
+restores the control by estimating the dependency structure and by deflating the vote within groups of
+dependent variables. It has been applied to sparse index tracking with autoregressive and
+nearest-neighbour stock dependency models [@machkour2025indextracking; @machkour2024ar1].
+
+# An autoregressive design
+
+The variables follow a first-order autoregressive (AR(1)) process across the columns with coefficient
+0.7, and five of them are active.
+
+```{r data}
+set.seed(321)
+n <- 100
+p <- 100
+rho <- 0.7
+X <- matrix(0, n, p)
+X[, 1] <- rnorm(n)
+for (j in 2:p) X[, j] <- rho * X[, j - 1] + sqrt(1 - rho^2) * rnorm(n)
+true_support <- c(10, 30, 50, 70, 90)
+beta <- numeric(p)
+beta[true_support] <- 2
+y <- as.numeric(X %*% beta + rnorm(n))
+```
+
+The plain selector and the dependency-aware selector on the same data and the same seed.
+
+```{r compare}
+plain <- TRexSelector$new(X, y, tFDR = 0.1, seed = 7, verbose = FALSE,
+                          control = trex_control(K = 10))
+plain$select()
+da <- TRexDASelector$new(X, y, tFDR = 0.1, seed = 7, verbose = FALSE,
+                         da_control = trex_da_control(da_method = "BT"),
+                         control = trex_control(K = 10))
+da$select()
+data.frame(selector = c("T-Rex", "T-Rex+DA"),
+           selected = c(length(plain$selected_indices), length(da$selected_indices)),
+           FDP = c(trex_fdp(plain$selected_indices, true_support),
+                   trex_fdp(da$selected_indices, true_support)),
+           TPP = c(trex_tpp(plain$selected_indices, true_support),
+                   trex_tpp(da$selected_indices, true_support)))
+```
+
+`TRexDASelector` inherits the fields of `TRexSelector` (`selected_indices`, `fdp_hat_mat`, `T_stop`,
+`L`, ...) and adds the record of the dependency estimation.
+
+```{r fields}
+da$da_method_used
+da$rho_thresh
+round(da$rho_grid, 3)
+```
+
+# The dependency methods
+
+`trex_da_control(da_method = )` chooses how the dependency is handled.
+
+| Method | Dependency model | Parameters |
+| --- | --- | --- |
+| `"BT"` (default) | binary tree: hierarchical clustering of the variables at correlation thresholds, the threshold is calibrated on a grid | `hc_linkage`, `hc_grid_length` |
+| `"NN"` | nearest neighbours: a correlation-threshold sweep of the same form | `hc_grid_length` |
+| `"AR1"` | first-order autoregressive dummies | `cor_coef` (estimated when `-2`) |
+| `"EQUI"` | equi-correlated dummies | `cor_coef`, `rho_thr_DA` |
+
+The binary tree method clusters the variables by correlation distance with the linkage `hc_linkage`
+(single by default), evaluates the FDP estimate at `hc_grid_length` correlation thresholds (the default
+`0` lets the core take $\min(20, p)$ points) and keeps the threshold `rho_thresh`. The autoregressive and
+equi-correlated methods draw dummies with the dependency of the data. `cor_coef = -2` estimates the
+coefficient from the data and `rho_thr_DA` is the correlation below which the equi-correlated model is
+skipped.
+
+```{r ar1}
+ar1 <- TRexDASelector$new(X, y, tFDR = 0.1, seed = 7, verbose = FALSE,
+                          da_control = trex_da_control(da_method = "AR1"),
+                          control = trex_control(K = 10))
+ar1$select()
+ar1$selected_indices
+round(ar1$cor_coef, 3)
+```
+
+# Prior groups
+
+When the groups of dependent variables are known, pass them as `prior_groups`, a list of integer
+vectors of length $p$ with a group label per variable. The dependency estimation then runs within the
+given groups: hierarchical clustering inside each group, and the calibration grid is built from the
+within-group dendrogram heights. The deflation acts on data-driven neighbourhoods inside the known
+groups, never on the raw groups themselves. Several levels can be supplied, and their finest common
+refinement is the constraint.
+
+```{r prior}
+blocks <- rep(1:10, each = 10)
+pg <- TRexDASelector$new(X, y, tFDR = 0.1, seed = 7, verbose = FALSE,
+                         da_control = trex_da_control(prior_groups = list(blocks)),
+                         control = trex_control(K = 10))
+pg$select()
+pg$selected_indices
+```
+
+# Greedy solvers under T-Rex+DA
+
+The deflation relies on the spread of occurrences within a group of dependent variables. A greedy
+solver (the orthogonal matching pursuit family, T-AFS) picks the top candidate of a tie deterministically
+and removes that spread. `exch_tie_alpha` in `trex_control()` restores it: statistically
+indistinguishable top candidates within a correlated cluster are picked uniformly at random per step.
+The recommended value for greedy solvers under T-Rex+DA is 0.25. The path solvers ignore the option.
+
+```{r greedy}
+greedy <- TRexDASelector$new(X, y, tFDR = 0.1, seed = 7, verbose = FALSE,
+                             da_control = trex_da_control(da_method = "BT"),
+                             control = trex_control(solver = "TOMP", K = 10,
+                                                    exch_tie_alpha = 0.25))
+greedy$select()
+greedy$selected_indices
+```
+
+```{r teardown, include = FALSE}
+trex_set_num_threads(old_threads)
+```
+
+# References

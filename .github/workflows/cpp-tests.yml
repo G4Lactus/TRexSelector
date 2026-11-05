@@ -1,0 +1,185 @@
+name: C++ Tests
+
+on:
+  push:
+    paths:
+      - 'cpp/**'
+      - '.github/workflows/cpp-tests.yml'
+  pull_request:
+    paths:
+      - 'cpp/**'
+      - '.github/workflows/cpp-tests.yml'
+
+jobs:
+  test:
+    name: ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-24.04, macos-latest, windows-latest]
+
+    steps:
+      - uses: actions/checkout@v5
+
+      # -----------------------------------------------------------------------
+      # Ubuntu: install all C++ dependencies via apt
+      # -----------------------------------------------------------------------
+      - name: Install dependencies (Ubuntu)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libeigen3-dev \
+            libboost-all-dev \
+            libcereal-dev \
+            libgtest-dev \
+            libomp-dev \
+            libopenblas-dev \
+            liblapack-dev
+
+      # -----------------------------------------------------------------------
+      # macOS: install via Homebrew; use Homebrew LLVM for OpenMP support
+      # -----------------------------------------------------------------------
+      - name: Install dependencies (macOS)
+        if: runner.os == 'macOS'
+        run: brew install eigen boost cereal googletest llvm libomp
+
+      # -----------------------------------------------------------------------
+      # Windows: dependencies come from vcpkg (manifest cpp/vcpkg.json) during
+      # configure; cache the vcpkg binary archives to keep reruns fast
+      # -----------------------------------------------------------------------
+      - name: Cache vcpkg binary archives (Windows)
+        if: runner.os == 'Windows'
+        uses: actions/cache@v6
+        with:
+          path: ~\AppData\Local\vcpkg\archives
+          key: vcpkg-${{ runner.os }}-${{ hashFiles('cpp/vcpkg.json') }}
+          restore-keys: vcpkg-${{ runner.os }}-
+
+      # -----------------------------------------------------------------------
+      # Configure
+      # -----------------------------------------------------------------------
+      - name: Configure (Ubuntu)
+        if: runner.os == 'Linux'
+        run: |
+          cmake -S cpp -B cpp/build/ci \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DTREX_PORTABLE_BUILD=ON
+
+      - name: Configure (macOS)
+        if: runner.os == 'macOS'
+        run: |
+          cmake -S cpp -B cpp/build/ci \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_C_COMPILER="$(brew --prefix llvm)/bin/clang" \
+            -DCMAKE_CXX_COMPILER="$(brew --prefix llvm)/bin/clang++" \
+            -DTREX_PORTABLE_BUILD=ON
+
+      # The LLVM OpenMP runtime (libomp140.x86_64.dll) ships with Visual Studio
+      # but is not on PATH and is not deployed by vcpkg; test executables need
+      # it at gtest discovery time (post-build) and when ctest runs them.
+      # Copy it next to the future test executables (exe dir beats PATH in the
+      # DLL search order) and add it to PATH as well.
+      - name: Stage LLVM OpenMP runtime (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          $pattern = "C:\Program Files\Microsoft Visual Studio\*\*\VC\Redist\MSVC\*\x64\*OpenMP*\libomp140*.dll"
+          $dll = Get-Item $pattern -ErrorAction SilentlyContinue | Select-Object -First 1
+          if (-not $dll) {
+            $dll = Get-ChildItem "C:\Program Files\Microsoft Visual Studio" -Recurse `
+              -Filter "libomp140.x86_64.dll" -ErrorAction SilentlyContinue | Select-Object -First 1
+          }
+          if (-not $dll) { throw "libomp140.x86_64.dll not found in the Visual Studio installation" }
+          Write-Host "Found OpenMP runtime: $($dll.FullName)"
+          New-Item -ItemType Directory -Force -Path cpp\build\ci\bin\Release | Out-Null
+          Copy-Item $dll.FullName -Destination cpp\build\ci\bin\Release\
+          Add-Content -Path $env:GITHUB_PATH -Value $dll.DirectoryName
+
+      - name: Configure (Windows)
+        if: runner.os == 'Windows'
+        run: >
+          cmake -S cpp -B cpp/build/ci
+          -DCMAKE_TOOLCHAIN_FILE="$env:VCPKG_INSTALLATION_ROOT/scripts/buildsystems/vcpkg.cmake"
+          -DTREX_PORTABLE_BUILD=ON
+          -DTREX_USE_BLAS_LAPACK=OFF
+
+      # -----------------------------------------------------------------------
+      # Build + Test
+      # -----------------------------------------------------------------------
+      # --config / -C Release: needed for the multi-config VS generator on
+      # Windows; harmless no-ops for the single-config Makefile builds
+      - name: Build
+        if: runner.os != 'Windows'
+        run: cmake --build cpp/build/ci --config Release --parallel
+
+      # Windows: MSBuild interleaves parallel output, so on failure extract the
+      # actual error lines and surface them as ::error:: annotations
+      - name: Build (Windows)
+        if: runner.os == 'Windows'
+        run: |
+          cmake --build cpp/build/ci --config Release --parallel 2>&1 | Tee-Object -FilePath build.log
+          $code = $LASTEXITCODE
+          if ($code -ne 0) {
+            $pattern = 'error [A-Z]+[0-9]+|Error running|CMake Error|0xc[0-9a-f]{7}'
+            $hits = Select-String -Path build.log -Pattern $pattern | Select-Object -First 10
+            foreach ($h in $hits) { Write-Host "::error::$($h.Line.Trim())" }
+            Write-Host "`n===== ERROR CONTEXT ====="
+            Select-String -Path build.log -Pattern 'error [A-Z]+[0-9]+|Error running|CMake Error' -Context 3,15 |
+              Out-String | Write-Host
+            exit $code
+          }
+
+      - name: Test
+        run: ctest --test-dir cpp/build/ci -C Release --output-on-failure
+
+  # ---------------------------------------------------------------------------
+  # Single-threaded build: TREX_WITH_OPENMP=OFF keeps the path without OpenMP
+  # (utils_openmp.hpp stubs, ignored pragmas) compilable and tested. Tests
+  # that need several threads skip themselves.
+  # ---------------------------------------------------------------------------
+  test-no-openmp:
+    name: ubuntu-24.04 (no OpenMP)
+    runs-on: ubuntu-24.04
+
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libeigen3-dev \
+            libboost-all-dev \
+            libcereal-dev \
+            libgtest-dev \
+            libopenblas-dev \
+            liblapack-dev
+
+      - name: Configure
+        run: |
+          cmake -S cpp -B cpp/build/ci-no-openmp \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DTREX_PORTABLE_BUILD=ON \
+            -DTREX_WITH_OPENMP=OFF
+
+      # The switch must reach every target: no OpenMP flag in any compile command
+      - name: Check that no target compiles with OpenMP
+        run: |
+          if grep -q -e '-fopenmp' cpp/build/ci-no-openmp/compile_commands.json; then
+            echo "::error::TREX_WITH_OPENMP=OFF, but a target still compiles with -fopenmp"
+            exit 1
+          fi
+
+      - name: Build
+        run: cmake --build cpp/build/ci-no-openmp --parallel
+
+      - name: Test
+        run: ctest --test-dir cpp/build/ci-no-openmp --output-on-failure
+
+      # The installed package config of a single-threaded build must not ask
+      # for OpenMP: the consumer configures with OpenMP disabled
+      - name: Install smoke test without OpenMP
+        env:
+          TREX_SMOKE_CONSUMER_ARGS: -DCMAKE_DISABLE_FIND_PACKAGE_OpenMP=ON
+        run: bash cpp/tests/install_smoke/run_install_smoke.sh cpp/build/ci-no-openmp

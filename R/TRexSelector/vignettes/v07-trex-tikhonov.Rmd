@@ -1,0 +1,182 @@
+---
+title: "T-Rex Tikhonov: a general penalty matrix"
+output:
+  rmarkdown::html_vignette:
+    toc: true
+    css: vignette_styles.css
+bibliography: references.bib
+csl: ieee.csl
+link-citations: true
+vignette: >
+  %\VignetteIndexEntry{T-Rex Tikhonov: a general penalty matrix}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(collapse = TRUE, comment = "#>", fig.align = "center",
+                      fig.width = 6, fig.height = 4)
+options(width = 80)
+library(TRexSelector)
+old_threads <- trex_set_num_threads(min(2L, trex_get_max_threads()))
+```
+
+# From the elastic net to a penalty matrix
+
+The elastic net adds the ridge penalty $\lambda_2 \|\boldsymbol\beta\|_2^2$ to the lasso. Tikhonov
+regularization in general form [@tikhonov1963regularization; @park2018tikhonov] replaces it by
+$\lambda_2 \|\boldsymbol\Gamma \boldsymbol\beta\|_2^2 = \lambda_2 \boldsymbol\beta^\top \boldsymbol K
+\boldsymbol\beta$ with $\boldsymbol K = \boldsymbol\Gamma^\top \boldsymbol\Gamma$. The matrix encodes
+what the analyst knows about the coefficients. $\boldsymbol K = \boldsymbol I$ is the elastic net, a
+first-difference operator $\boldsymbol\Gamma$ gives the graph Laplacian of a chain and asks neighbouring
+coefficients to be equal (smoothness), a graph Laplacian in general [@smola2003graphkernels;
+@chung1997spectral] couples the variables along the edges of a graph, and a block-diagonal centering
+matrix reproduces the penalty of the informed elastic net. The Tikhonov T-Rex selector runs the
+terminating Tikhonov-net solvers (TCDTIKNET by coordinate descent, TIKNET by the pathwise algorithm) with
+such a matrix inside the random experiments.
+
+# A smooth coefficient profile
+
+The active variables are a contiguous block with equal coefficients, the case a chain Laplacian is made
+for.
+
+```{r data}
+set.seed(2718)
+n <- 120
+p <- 60
+true_support <- 21:30
+beta <- numeric(p)
+beta[true_support] <- 1
+X <- matrix(rnorm(n * p), n, p)
+y <- as.numeric(X %*% beta + rnorm(n))
+```
+
+`trex_gamma_to_k()` builds $\boldsymbol K$ from an operator $\boldsymbol\Gamma$ and returns a sparse
+matrix of the Matrix package. A dense base matrix is accepted everywhere a penalty matrix is.
+
+```{r K}
+gamma <- diff(diag(p))                # first differences, (p - 1) x p
+if (requireNamespace("Matrix", quietly = TRUE)) {
+  K <- trex_gamma_to_k(gamma)
+  class(K)
+} else {
+  K <- crossprod(gamma)
+}
+K[1:4, 1:4]
+```
+
+# Running the selector
+
+The Tikhonov control is required, because it carries $\boldsymbol K$. The penalty weight is fixed here.
+
+```{r run}
+tik <- TRexTikhonovSelector$new(X, y, tFDR = 0.1, seed = 4, verbose = FALSE,
+                                tik_control = trex_tikhonov_control(tikhonov_K = K, lambda_2 = 1),
+                                control = trex_control(K = 10))
+tik$select()
+tik$selected_indices
+trex_fdp(tik$selected_indices, true_support)
+trex_tpp(tik$selected_indices, true_support)
+tik$lambda2_used
+```
+
+`TRexTikhonovSelector` inherits the fields of `TRexSelector` and adds `lambda2_used`,
+`lambda2_cv_diagnostics` and `lambda2_pilot`.
+
+# Choosing lambda_2
+
+`lambda_2 < 0` (the default) hands the choice to `lambda2_method`. Three rules exist.
+
+- `"PILOT_KNEE"` (the default) reads $\lambda_2$ off a few random experiments per candidate of `pilot_grid`,
+  by the selector's own principle: the smallest $\lambda_2$ whose pilot selection count is within
+  `pilot_knee_tolerance` of the largest, the knee of the profile. `pilot_K`, `pilot_T` and
+  `pilot_L_multiplier` size the pilot, `pilot_statistic` names the count (`"MAJORITY"`, `"CALIBRATED"`,
+  `"GROUP_MAJORITY"`).
+- The k-fold cross-validation rules consume $\boldsymbol K$ and return $\lambda_2$ on the solver scale:
+  `"CV_1SE_IEN_CCD"`, `"CV_MIN_IEN_CCD"`, `"CV_1SE_TIK_SVD"` and `"CV_MIN_TIK_SVD"`. `cv_n_folds`,
+  `cv_n_lambda1`, `cv_n_lambda2`, `cv_dfmax_ratio` and `cv_seed` control them. They judge a fitted
+  estimate, so on structured designs they tend to pick the edges of their grid.
+- `trex_tikhonov_lambda2_power_rule()` runs one full selection per grid value with common dummies and takes
+  the knee of that profile. It is the reference rule behind the pilot, at the cost of one selection per
+  grid value, and it returns every probe's selection.
+
+```{r pilot}
+pilot <- TRexTikhonovSelector$new(X, y, tFDR = 0.1, seed = 4, verbose = FALSE,
+                                  tik_control = trex_tikhonov_control(
+                                    tikhonov_K = K,
+                                    pilot_grid = c(0, 1, 10), pilot_K = 4, pilot_T = 2),
+                                  control = trex_control(K = 10))
+pilot$select()
+pilot$lambda2_used
+pilot$lambda2_pilot$grid
+pilot$lambda2_pilot$counts
+```
+
+```{r power-rule}
+profile <- trex_tikhonov_lambda2_power_rule(X, y, tFDR = 0.1, seed = 4,
+                                            tik_control = trex_tikhonov_control(tikhonov_K = K),
+                                            control = trex_control(K = 10), grid = c(0, 1, 10))
+profile$lambda2
+profile$counts
+```
+
+# Dummies for a structured penalty
+
+The FDR guarantee needs dummies that are exchangeable with the null variables under the penalty. Two
+defaults take care of that. `cluster_dummies = TRUE` draws the dummies as per-cluster coloured layers
+on a correlation clustering of the variables (`prior_groups`, or hierarchical clustering with
+`corr_max` and `hc_linkage`), and `fold_dummy_coupling = TRUE` lets every dummy join the
+$\boldsymbol K$-coupling of the variable it mirrors (the FOLDED coupling, available with TCDTIKNET). Both
+switches exist for validation runs. With $\boldsymbol K = \boldsymbol I$, independent dummies and the
+decoupled dummy block, the selector reduces to the plain elastic net.
+
+```{r anchor}
+en <- TRexTikhonovSelector$new(X, y, tFDR = 0.1, seed = 4, verbose = FALSE,
+                               tik_control = trex_tikhonov_control(
+                                 tikhonov_K = diag(p), lambda_2 = 1,
+                                 cluster_dummies = FALSE, fold_dummy_coupling = FALSE),
+                               control = trex_control(K = 10))
+en$select()
+en$selected_indices
+```
+
+# Group centering
+
+`penalty_structure = "GROUP_CENTERING"` lets the selector build $\boldsymbol K$ itself as the
+block-diagonal centering penalty $\boldsymbol I - \boldsymbol J / p_m$ over the dummy clusters, so the
+members of a group share a coefficient, the penalty of the informed elastic net. The groups come from
+`prior_groups` or from the clustering. An all-singleton partition is legitimate, the penalty vanishes
+and the path is the lasso on per-variable cluster dummies. On this path the TCDTIKNET solver runs
+through the group-centering hooks of TCDIENET, so its warnings (sweep budget, certification fallback)
+carry the tag `[TCDIENET]`.
+
+```{r centering}
+groups <- rep(1:6, each = 10)
+gc <- TRexTikhonovSelector$new(X, y, tFDR = 0.1, seed = 4, verbose = FALSE,
+                               tik_control = trex_tikhonov_control(
+                                 penalty_structure = "GROUP_CENTERING", prior_groups = groups,
+                                 lambda_2 = 1),
+                               control = trex_control(K = 10))
+gc$select()
+gc$selected_indices
+```
+
+# The solver
+
+`trex_control(solver = )` picks the Tikhonov-family solver: `"TCDTIKNET"` (default, the neutral
+`"TLARS"` of `trex_control()` maps to it) or `"TIKNET"`, the pathwise algorithm. Both solve the same
+problem.
+
+```{r tiknet}
+pw <- TRexTikhonovSelector$new(X, y, tFDR = 0.1, seed = 4, verbose = FALSE,
+                               tik_control = trex_tikhonov_control(tikhonov_K = K, lambda_2 = 1),
+                               control = trex_control(solver = "TIKNET", K = 10))
+pw$select()
+pw$selected_indices
+```
+
+```{r teardown, include = FALSE}
+trex_set_num_threads(old_threads)
+```
+
+# References

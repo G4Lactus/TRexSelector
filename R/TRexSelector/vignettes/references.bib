@@ -1,0 +1,530 @@
+% Master bibliography of the TRexSelector library
+% ============================================================
+% Conventions (IEEE reference style via biblatex-ieee):
+%   - Titles of articles, proceedings papers and online sources are written as published, in single
+%     braces:
+%     biblatex-ieee converts them to sentence case itself. Protect proper nouns and acronyms with
+%     inner braces,
+%     e.g. {FDR}, {T-Rex}, {PCA}. Double braces {{...}} would switch that conversion off.
+%   - Book titles stay in title case.
+%   - Journal and proceedings names are abbreviated as in IEEE reference lists.
+%   - Article numbers go into eid, DOIs into doi.
+%   - Every field of an entry with a local PDF was read from that PDF. Entries without a local PDF
+%     are skeletons plus a TODO note. A field that neither the PDF nor the plan shows is left out.
+
+
+% ------------------------------------------------------------
+% T-Rex framework
+% ------------------------------------------------------------
+
+@article{machkour2025trex,
+title   = {The Terminating-Random Experiments Selector: Fast High-Dimensional Variable Selection
+           with False Discovery Rate Control},
+author  = {Machkour, Jasin and Muma, Michael and Palomar, Daniel P.},
+journal = {Signal Process.},
+volume  = {231},
+eid     = {109894},
+year    = {2025},
+doi     = {10.1016/j.sigpro.2025.109894}
+}
+
+@article{machkour2025datrex,
+title   = {High-Dimensional False Discovery Rate Control for Dependent Variables},
+author  = {Machkour, Jasin and Muma, Michael and Palomar, Daniel P.},
+journal = {Signal Process.},
+volume  = {234},
+eid     = {109990},
+year    = {2025},
+doi     = {10.1016/j.sigpro.2025.109990}
+}
+
+@inproceedings{machkour2025indextracking,
+title     = {{FDR}-Controlled Portfolio Optimization for Sparse Financial Index Tracking},
+author    = {Machkour, Jasin and Palomar, Daniel P. and Muma, Michael},
+booktitle = {Proc. IEEE Int. Conf. Acoust., Speech, Signal Process. (ICASSP)},
+year      = {2025},
+doi       = {10.1109/ICASSP49660.2025.10890629}
+}
+
+@inproceedings{machkour2024ar1,
+title     = {{FDR}-Controlled Sparse Index Tracking with Autoregressive Stock Dependency Models},
+author    = {Machkour, Jasin and Muma, Michael and Palomar, Daniel P.},
+booktitle = {Proc. Eur. Signal Process. Conf. (EUSIPCO)},
+pages     = {2662--2666},
+year      = {2024}
+}
+
+@inproceedings{machkour2022gvs,
+title     = {False Discovery Rate Control for Grouped Variable Selection in High-Dimensional Linear
+             Models Using the {T-Knock} Filter},
+author    = {Machkour, Jasin and Muma, Michael and Palomar, Daniel P.},
+booktitle = {Proc. 30th Eur. Signal Process. Conf. (EUSIPCO)},
+pages     = {892--896},
+year      = {2022}
+}
+
+@inproceedings{machkour2023ien,
+title     = {The Informed Elastic Net for Fast Grouped Variable Selection and {FDR} Control in
+             Genomics Research},
+author    = {Machkour, Jasin and Muma, Michael and Palomar, Daniel P.},
+booktitle = {Proc. IEEE 9th Int. Workshop Comput. Adv. Multi-Sensor Adapt. Process. (CAMSAP)},
+pages     = {466--470},
+year      = {2023}
+}
+
+% Venue and pages per the reference list of the T-Rex paper (local PDF); the local copy of this
+% paper is an author version without a footer
+@inproceedings{machkour2023screen,
+title     = {False Discovery Rate Control for Fast Screening of Large-Scale Genomics Biobanks},
+author    = {Machkour, Jasin and Muma, Michael and Palomar, Daniel P.},
+booktitle = {Proc. 22nd IEEE Statist. Signal Process. Workshop (SSP)},
+pages     = {666--670},
+year      = {2023}
+}
+
+% Venue and pages per the reference list of the T-Rex paper (local PDF); the local copy of this
+% paper is an author version without a footer
+@inproceedings{machkour2024spca,
+title     = {Sparse {PCA} with False Discovery Rate Controlled Variable Selection},
+author    = {Machkour, Jasin and Breloy, Arnaud and Muma, Michael and Palomar, Daniel P. and Pascal,
+             Fr{\'e}d{\'e}ric},
+booktitle = {Proc. IEEE 49th Int. Conf. Acoust., Speech, Signal Process. (ICASSP)},
+pages     = {9716--9720},
+year      = {2024}
+}
+
+@inproceedings{scheidt2023bigtrex,
+title     = {Solving {FDR}-Controlled Sparse Regression Problems with Five Million Variables on
+             a Laptop},
+author    = {Scheidt, Fabian and Machkour, Jasin and Muma, Michael},
+booktitle = {Proc. IEEE 9th Int. Workshop Comput. Adv. Multi-Sensor Adapt. Process. (CAMSAP)},
+pages     = {116--120},
+year      = {2023}
+}
+
+@inproceedings{scheidt2026greedy,
+title     = {Terminating Greedy Pursuits for High-Dimensional False Discovery Rate Control},
+author    = {Scheidt, Fabian and Muma, Michael},
+booktitle = {Proc. Eur. Signal Process. Conf. (EUSIPCO)},
+pages     = {2511--2515},
+year      = {2026}
+}
+
+@online{koka2026vdtrex,
+title      = {Virtual Dummies: Enabling Scalable {FDR}-Controlled Variable Selection via Sequential
+              Sampling of Null Features},
+author     = {Koka, Taulant and Machkour, Jasin and Palomar, Daniel P. and Muma, Michael},
+eprinttype = {arxiv},
+eprint     = {2604.07464},
+year       = {2026},
+note       = {Submitted to \emph{J. Mach. Learn. Res.}}
+}
+
+
+% ------------------------------------------------------------
+% Solver origins
+% ------------------------------------------------------------
+
+@article{efron2004lars,
+title   = {Least Angle Regression},
+author  = {Efron, Bradley and Hastie, Trevor and Johnstone, Iain and Tibshirani, Robert},
+journal = {Ann. Statist.},
+volume  = {32},
+number  = {2},
+pages   = {407--499},
+year    = {2004}
+}
+
+@article{tibshirani1996lasso,
+title   = {Regression Shrinkage and Selection via the Lasso},
+author  = {Tibshirani, Robert},
+journal = {J. R. Stat. Soc. Ser. B Stat. Methodol.},
+volume  = {58},
+number  = {1},
+pages   = {267--288},
+year    = {1996}
+}
+
+@article{osborne2000lassodual,
+title   = {On the {LASSO} and Its Dual},
+author  = {Osborne, Michael R. and Presnell, Brett and Turlach, Berwin A.},
+journal = {J. Comput. Graph. Statist.},
+volume  = {9},
+number  = {2},
+pages   = {319--337},
+year    = {2000}
+}
+
+@article{hastie2007stagewise,
+title   = {Forward Stagewise Regression and the Monotone Lasso},
+author  = {Hastie, Trevor and Taylor, Jonathan and Tibshirani, Robert and Walther, Guenther},
+journal = {Electron. J. Stat.},
+volume  = {1},
+pages   = {1--29},
+year    = {2007},
+doi     = {10.1214/07-EJS004}
+}
+
+@article{tibshirani2015stagewise,
+title   = {A General Framework for Fast Stagewise Algorithms},
+author  = {Tibshirani, Ryan J.},
+journal = {J. Mach. Learn. Res.},
+volume  = {16},
+pages   = {2543--2588},
+year    = {2015}
+}
+
+@article{zou2005elasticnet,
+title   = {Regularization and Variable Selection via the Elastic Net},
+author  = {Zou, Hui and Hastie, Trevor},
+journal = {J. R. Stat. Soc. Ser. B Stat. Methodol.},
+volume  = {67},
+number  = {2},
+pages   = {301--320},
+year    = {2005}
+}
+
+% Entered without a local PDF; to be checked against the official record.
+@article{tikhonov1963regularization,
+title   = {Solution of Incorrectly Formulated Problems and the Regularization Method},
+author  = {Tikhonov, Andrey N.},
+journal = {Soviet Math. Dokl.},
+volume  = {4},
+pages   = {1035--1038},
+year    = {1963},
+note    = {English translation of Dokl. Akad. Nauk SSSR 151 (1963), no. 3, 501--504}
+}
+
+@article{park2018tikhonov,
+title   = {Parameter Determination for {Tikhonov} Regularization Problems in General Form},
+author  = {Park, Y. and Reichel, L. and Rodriguez, G. and Yu, X.},
+journal = {J. Comput. Appl. Math.},
+volume  = {343},
+pages   = {12--25},
+year    = {2018},
+doi     = {10.1016/j.cam.2018.04.049}
+}
+
+@inproceedings{smola2003graphkernels,
+title     = {Kernels and Regularization on Graphs},
+author    = {Smola, Alexander J. and Kondor, Risi},
+booktitle = {Learning Theory and Kernel Machines (COLT/Kernel 2003)},
+series    = {Lecture Notes in Artificial Intelligence},
+volume    = {2777},
+pages     = {144--158},
+publisher = {Springer},
+year      = {2003}
+}
+
+% Book data per the reference list of Smola and Kondor 2003 (local PDF); the local copy is the
+% lecture-notes version ``Lectures on Spectral Graph Theory''
+@book{chung1997spectral,
+title     = {Spectral Graph Theory},
+author    = {Chung, Fan R. K.},
+series    = {CBMS Regional Conference Series in Mathematics},
+number    = {92},
+publisher = {American Mathematical Society},
+year      = {1997}
+}
+
+@article{miche2011tropelm,
+title   = {{TROP-ELM}: A Double-Regularized {ELM} Using {LARS} and {Tikhonov} Regularization},
+author  = {Miche, Yoan and van Heeswijk, Mark and Bas, Patrick and Simula, Olli and Lendasse, Amaury},
+journal = {Neurocomputing},
+volume  = {74},
+pages   = {2413--2421},
+year    = {2011},
+doi     = {10.1016/j.neucom.2010.12.042}
+}
+
+% The reprint is the version relied on (the 1970 original is not local).
+@article{hoerl2000ridge,
+title   = {Ridge Regression: Biased Estimation for Nonorthogonal Problems},
+author  = {Hoerl, Arthur E. and Kennard, Robert W.},
+journal = {Technometrics},
+volume  = {42},
+number  = {1},
+pages   = {80--86},
+year    = {2000},
+note    = {Reprint of the 1970 article in the Special 40th Anniversary Issue}
+}
+
+% TODO verify: pages taken from a handwritten annotation on the local preprint
+@inproceedings{pati1993omp,
+title     = {Orthogonal Matching Pursuit: Recursive Function Approximation with Applications to
+             Wavelet Decomposition},
+author    = {Pati, Y. C. and Rezaiifar, R. and Krishnaprasad, P. S.},
+booktitle = {Proc. 27th Asilomar Conf. Signals, Syst., Comput.},
+pages     = {40--44},
+year      = {1993}
+}
+
+@unpublished{blumensath2007ompols,
+title  = {On the Difference Between Orthogonal Matching Pursuit and Orthogonal Least Squares},
+author = {Blumensath, Thomas and Davies, Mike E.},
+year   = {2007},
+month  = mar,
+note   = {Unpublished note, draft of March 29, 2007}
+}
+
+@article{tropp2004greed,
+title   = {Greed is Good: Algorithmic Results for Sparse Approximation},
+author  = {Tropp, Joel A.},
+journal = {IEEE Trans. Inf. Theory},
+volume  = {50},
+number  = {10},
+pages   = {2231--2242},
+year    = {2004},
+doi     = {10.1109/TIT.2004.834793}
+}
+
+@article{mallat1993mp,
+title   = {Matching Pursuits with Time-Frequency Dictionaries},
+author  = {Mallat, St{\'e}phane G. and Zhang, Zhifeng},
+journal = {IEEE Trans. Signal Process.},
+volume  = {41},
+number  = {12},
+pages   = {3397--3415},
+year    = {1993},
+doi     = {10.1109/78.258082}
+}
+
+@article{chen1989ols,
+title   = {Orthogonal Least Squares Methods and Their Application to Non-Linear System
+            Identification},
+author  = {Chen, S. and Billings, S. A. and Luo, W.},
+journal = {Int. J. Control},
+volume  = {50},
+number  = {5},
+pages   = {1873--1896},
+year    = {1989},
+doi     = {10.1080/00207178908953472}
+}
+
+@article{blumensath2008gp,
+title   = {Gradient Pursuits},
+author  = {Blumensath, Thomas and Davies, Mike E.},
+journal = {IEEE Trans. Signal Process.},
+volume  = {56},
+number  = {6},
+pages   = {2370--2382},
+year    = {2008}
+}
+
+@inproceedings{locatello2017mpfw,
+title     = {A Unified Optimization View on Generalized Matching Pursuit and {Frank-Wolfe}},
+author    = {Locatello, Francesco and Khanna, Rajiv and Tschannen, Michael and Jaggi, Martin},
+booktitle = {Proc. 20th Int. Conf. Artif. Intell. Statist. (AISTATS)},
+series    = {JMLR: W\&CP},
+volume    = {54},
+year      = {2017}
+}
+
+@article{zhang2026afs,
+title   = {Adaptive Forward Stepwise: A Method for High Sparsity Regression},
+author  = {Zhang, Ivy and Tibshirani, Robert},
+journal = {J. Mach. Learn. Res.},
+volume  = {27},
+pages   = {1--24},
+year    = {2026},
+url     = {http://jmlr.org/papers/v27/25-0151.html}
+}
+
+@article{friedman2007pathwise,
+title   = {Pathwise Coordinate Optimization},
+author  = {Friedman, Jerome and Hastie, Trevor and H{\"o}fling, Holger and Tibshirani, Robert},
+journal = {Ann. Appl. Stat.},
+volume  = {1},
+number  = {2},
+pages   = {302--332},
+year    = {2007},
+doi     = {10.1214/07-AOAS131}
+}
+
+% No local PDF; fields verified against the Crossref record.
+@article{friedman2010glmnet,
+title   = {Regularization Paths for Generalized Linear Models via Coordinate Descent},
+author  = {Friedman, Jerome and Hastie, Trevor and Tibshirani, Robert},
+journal = {J. Stat. Softw.},
+volume  = {33},
+number  = {1},
+pages   = {1--22},
+year    = {2010},
+doi     = {10.18637/jss.v033.i01}
+}
+
+% Fields per the reference list of Osborne et al. 2000 (local PDF); no local copy of this paper
+@article{fu1998bridge,
+title   = {Penalized Regression: The Bridge Versus the Lasso},
+author  = {Fu, W. J.},
+journal = {J. Comput. Graph. Statist.},
+volume  = {7},
+pages   = {397--416},
+year    = {1998}
+}
+
+
+% ------------------------------------------------------------
+% ML methods
+% ------------------------------------------------------------
+
+% Received January 1972
+@article{sibson1973slink,
+title   = {{SLINK}: An Optimally Efficient Algorithm for the Single-Link Cluster Method},
+author  = {Sibson, R.},
+journal = {Comput. J.},
+volume  = {16},
+number  = {1},
+pages   = {30--34},
+year    = {1973}
+}
+
+% No local PDF; fields verified against the Numdam record.
+@article{benzecri1982nnchain,
+title   = {Construction d'une classification ascendante hi{\'e}rarchique par la recherche en
+           cha{\^i}ne des voisins r{\'e}ciproques},
+author  = {Benz{\'e}cri, J.-P.},
+journal = {Les Cahiers de l'Analyse des Donn{\'e}es},
+volume  = {7},
+number  = {2},
+pages   = {209--218},
+year    = {1982}
+}
+
+% No local PDF; fields verified against the Numdam record.
+@article{juan1982nnchain,
+title   = {Programme de classification hi{\'e}rarchique par l'algorithme de la recherche en
+           cha{\^i}ne des voisins r{\'e}ciproques},
+author  = {Juan, J.},
+journal = {Les Cahiers de l'Analyse des Donn{\'e}es},
+volume  = {7},
+number  = {2},
+pages   = {219--225},
+year    = {1982}
+}
+
+% Volume, pages and year per the reference list of the overview II paper (local PDF); the local
+% copy of this paper is the 2011 early view without them
+@article{murtagh2012overview,
+title   = {Algorithms for Hierarchical Clustering: An Overview},
+author  = {Murtagh, Fionn and Contreras, Pedro},
+journal = {Wiley Interdiscip. Rev. Data Min. Knowl. Discov.},
+volume  = {2},
+number  = {1},
+pages   = {86--97},
+year    = {2012},
+doi     = {10.1002/widm.53}
+}
+
+@article{murtagh2017overview2,
+title   = {Algorithms for Hierarchical Clustering: An Overview, {II}},
+author  = {Murtagh, Fionn and Contreras, Pedro},
+journal = {Wiley Interdiscip. Rev. Data Min. Knowl. Discov.},
+volume  = {7},
+number  = {6},
+eid     = {e1219},
+year    = {2017},
+doi     = {10.1002/widm.1219}
+}
+
+@online{muellner2011modern,
+title      = {Modern Hierarchical, Agglomerative Clustering Algorithms},
+author     = {M{\"u}llner, Daniel},
+eprinttype = {arxiv},
+eprint     = {1109.2378},
+year       = {2011}
+}
+
+% Fields per the reference list of the {SLINK} paper (local PDF); no local copy of this paper
+@article{lance1967linkage,
+title   = {A General Theory of Classificatory Sorting Strategies: {I}. Hierarchical Systems},
+author  = {Lance, G. N. and Williams, W. T.},
+journal = {Comput. J.},
+volume  = {9},
+pages   = {373--380},
+year    = {1967}
+}
+
+% Pages not printed in the local author version
+@inproceedings{charikar2002simhash,
+title     = {Similarity Estimation Techniques from Rounding Algorithms},
+author    = {Charikar, Moses S.},
+booktitle = {Proc. ACM Symp. Theory Comput. (STOC)},
+year      = {2002}
+}
+
+% Conference ordinal and pages per the reference list of Charikar 2002 (local PDF)
+@inproceedings{indyk1998lsh,
+title     = {Approximate Nearest Neighbors: Towards Removing the Curse of Dimensionality},
+author    = {Indyk, Piotr and Motwani, Rajeev},
+booktitle = {Proc. 30th ACM Symp. Theory Comput. (STOC)},
+pages     = {604--613},
+year      = {1998}
+}
+
+% Pages not printed in the local author version
+@inproceedings{li2006sparseprojections,
+title     = {Very Sparse Random Projections},
+author    = {Li, Ping and Hastie, Trevor J. and Church, Kenneth W.},
+booktitle = {Proc. ACM SIGKDD Int. Conf. Knowl. Discovery Data Mining (KDD)},
+year      = {2006}
+}
+
+% No local PDF; fields verified against the Crossref record (online-first 2011, print issue 2012).
+@article{tibshirani2012strong,
+title   = {Strong Rules for Discarding Predictors in Lasso-Type Problems},
+author  = {Tibshirani, Robert and Bien, Jacob and Friedman, Jerome and Hastie, Trevor and Simon,
+           Noah and Taylor, Jonathan and Tibshirani, Ryan J.},
+journal = {J. R. Stat. Soc. Ser. B Stat. Methodol.},
+volume  = {74},
+number  = {2},
+pages   = {245--266},
+year    = {2012},
+doi     = {10.1111/j.1467-9868.2011.01004.x}
+}
+
+% Entered without a local PDF; to be checked against the official record.
+@book{breiman1984cart,
+title     = {Classification and Regression Trees},
+author    = {Breiman, Leo and Friedman, Jerome H. and Olshen, Richard A. and Stone, Charles J.},
+publisher = {Wadsworth},
+address   = {Belmont, CA},
+year      = {1984}
+}
+
+% No local PDF; fields verified against the Crossref record (which prints the given names as initials).
+@article{chen2008ebic,
+title   = {Extended {Bayesian} Information Criteria for Model Selection with Large Model Spaces},
+author  = {Chen, Jiahua and Chen, Zehua},
+journal = {Biometrika},
+volume  = {95},
+number  = {3},
+pages   = {759--771},
+year    = {2008},
+doi     = {10.1093/biomet/asn034}
+}
+
+% No local PDF; fields verified against the Crossref record (which carries no page field).
+@article{mammen1993bootstrap,
+title   = {Bootstrap and Wild Bootstrap for High Dimensional Linear Models},
+author  = {Mammen, Enno},
+journal = {Ann. Statist.},
+volume  = {21},
+number  = {1},
+pages   = {255--285},
+year    = {1993},
+doi     = {10.1214/aos/1176349025}
+}
+
+
+% ------------------------------------------------------------
+% Dependencies
+% ------------------------------------------------------------
+
+% The citation the Eigen project hands out on its website.
+@misc{guennebaud2010eigen,
+title  = {{Eigen} v3},
+author = {Guennebaud, Ga{\"e}l and Jacob, Beno{\^i}t and others},
+url    = {https://libeigen.gitlab.io/},
+year   = {2010}
+}

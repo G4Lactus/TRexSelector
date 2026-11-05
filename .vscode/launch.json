@@ -1,0 +1,88 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    // -----------------------------------------------------------------------
+    // C++ Executable (CMake build)
+    // -----------------------------------------------------------------------
+    // Setup profile for debugging: replace XXX with your executable name
+    {
+        "name": "Debug",
+        "type": "cppdbg",
+        "request": "launch",
+        // Adjust the path to your built executable for debug
+        "program": "${workspaceFolder}/cpp/build/debug/bin/XXX",
+        "args": [],
+        "cwd": "${workspaceFolder}",
+        "preLaunchTask": "CMake Full Build (Debug)",
+        "osx": {
+            "MIMode": "lldb"
+        },
+        "linux": {
+            "MIMode": "gdb"
+        },
+        "windows": {
+            "MIMode": "gdb"
+        }
+    },
+    // Setup profile for debugging release builds: replace XXX with your executable name
+    {
+        "name": "Release",
+        "type": "cppdbg",
+        "request": "launch",
+        // Adjust the path to your built executable for release
+        "program": "${workspaceFolder}/cpp/build/release/bin/XXX",
+        "args": [],
+        "cwd": "${workspaceFolder}",
+        "preLaunchTask": "CMake Full Build (Release)",
+        "osx": {
+            "MIMode": "lldb"
+        },
+        "linux": {
+            "MIMode": "gdb"
+        },
+        "windows": {
+            "MIMode": "gdb"
+        }
+    },
+
+    // -----------------------------------------------------------------------
+    // Python Package (Python/trexselector/)
+    // -----------------------------------------------------------------------
+
+    // Debug the full pytest suite (requires Python: Install (Editable) first)
+    {
+        "name": "Python: Debug pytest",
+        "type": "debugpy",
+        "request": "launch",
+        "module": "pytest",
+        "args": ["tests/", "-v"],
+        "cwd": "${workspaceFolder}/Python/trexselector",
+        // Set false to step into C extension / pybind11 code via mixed-mode debugging
+        "justMyCode": true
+    },
+
+    // -----------------------------------------------------------------------
+    // R Package (R/TRexSelector/)
+    // Requires the "vscode-r-debugger" VS Code extension (RDebugger)
+    // -----------------------------------------------------------------------
+
+    // Debug the currently active R file
+    {
+        "name": "R: Debug Active File",
+        "type": "R-Debugger",
+        "request": "launch",
+        "debugMode": "file",
+        "workingDirectory": "${workspaceFolder}/R/TRexSelector",
+        "file": "${file}"
+    },
+    // Run the testthat suite under the R debugger
+    {
+        "name": "R: Debug Tests",
+        "type": "R-Debugger",
+        "request": "launch",
+        "debugMode": "testthat",
+        "workingDirectory": "${workspaceFolder}/R/TRexSelector",
+        "packagePath": "${workspaceFolder}/R/TRexSelector"
+    }
+  ]
+}

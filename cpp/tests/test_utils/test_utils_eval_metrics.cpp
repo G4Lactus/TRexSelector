@@ -1,0 +1,136 @@
+// ========================================================================================
+/**
+ * @file test_utils_eval_metrics.cpp
+ *
+ * @brief Unit tests for evaluation metrics in utils_eval_metrics.hpp
+ */
+// ========================================================================================
+
+// google test includes
+#include <gtest/gtest.h>
+
+// std includes
+#include <vector>
+
+// project utils includes
+#include <utils/eval_metrics/utils_eval_counts.hpp>
+#include <utils/eval_metrics/utils_eval_rates.hpp>
+#include <utils/eval_metrics/utils_eval_composites.hpp>
+#include <utils/eval_metrics/utils_eval_cdiagnostics.hpp>
+
+// ========================================================================================
+
+// Embed into test namespace
+namespace trex::test::utils::eval {
+
+// Namespace aliases for convenience
+namespace counts = trex::utils::eval::counts;
+namespace rates = trex::utils::eval::rates;
+namespace composites = trex::utils::eval::composites;
+namespace cdiagnostics = trex::utils::eval::cdiagnostics;
+
+// ========================================================================================
+
+/** @brief Test for true positives count. */
+TEST(EvalMetricsTest, TruePositivesCount) {
+    std::vector<std::size_t> truth = {1, 3, 5};
+    std::vector<std::size_t> pred = {1, 2, 5};
+
+    EXPECT_EQ(counts::true_positives_count(pred, truth), 2);
+    EXPECT_EQ(counts::true_positives_count({}, truth), 0);
+    EXPECT_EQ(counts::true_positives_count(pred, {}), 0);
+}
+
+
+/** @brief Test for false positives count. */
+TEST(EvalMetricsTest, FalsePositivesCount) {
+    std::vector<std::size_t> truth = {1, 3, 5};
+    std::vector<std::size_t> pred = {1, 2, 5};
+
+    EXPECT_EQ(counts::false_positives_count(pred, truth), 1);
+    EXPECT_EQ(counts::false_positives_count({}, truth), 0);
+    EXPECT_EQ(counts::false_positives_count(pred, {}), 3);
+}
+
+
+/** @brief Test for false negatives count. */
+TEST(EvalMetricsTest, ComputeFDP) {
+    std::vector<std::size_t> truth = {1, 3, 5};
+    std::vector<std::size_t> pred = {1, 2, 5};
+
+    // FDP = FP / max(|selected|, 1) => 1 / 3
+    EXPECT_DOUBLE_EQ(rates::compute_fdp(pred,
+                                                   truth),
+                                                   1.0 / 3.0);
+
+    // Empty selections should have 0 FDP
+    EXPECT_DOUBLE_EQ(rates::compute_fdp({},
+                                                   truth), 0.0);
+
+    // Null model: with no true actives, every selection is a false positive
+    EXPECT_DOUBLE_EQ(rates::compute_fdp(pred, {}), 1.0);
+
+    // Null model with no selections: FDP defined as 0
+    EXPECT_DOUBLE_EQ(rates::compute_fdp({}, {}), 0.0);
+}
+
+
+/** @brief Test for true positive proportion (TPP). */
+TEST(EvalMetricsTest, ComputeTPP) {
+    std::vector<std::size_t> truth = {1, 3, 5};
+    std::vector<std::size_t> pred = {1, 2, 5};
+
+    // TPP = TP / max(|truth|, 1) => 2 / 3
+    EXPECT_DOUBLE_EQ(rates::compute_tpp(pred, truth),
+                     2.0 / 3.0);
+
+    // Empty prediction gives 0 TPP
+    EXPECT_DOUBLE_EQ(rates::compute_tpp({}, truth),
+                     0.0);
+}
+
+
+/** @brief Test for F1 score. */
+TEST(EvalMetricsTest, F1Score) {
+    // Formula: 2 * (precision * recall) / (precision + recall)
+    EXPECT_DOUBLE_EQ(composites::f1_score(1.0, 1.0), 1.0);
+    EXPECT_DOUBLE_EQ(composites::f1_score(0.0, 1.0), 0.0);
+    EXPECT_DOUBLE_EQ(composites::f1_score(1.0, 0.0), 0.0);
+    EXPECT_DOUBLE_EQ(composites::f1_score(0.5, 0.5), 0.5);
+}
+
+/** @brief Minimal solver surface for cdiagnostics::selected_variables(): a
+ *  last recorded step, an active set and the dummy start index. */
+struct SelectionProbe {
+    struct Step { std::vector<std::size_t> idx; std::vector<double> val; };
+    struct Path { std::vector<Step> steps; };
+    Path path;
+    std::vector<std::size_t> actives;
+    std::size_t dummy_start = 10;
+    Path getBetaPathSparse() const { return path; }
+    const std::vector<std::size_t>& getActives() const { return actives; }
+    std::size_t getDummyStartIndex() const { return dummy_start; }
+};
+
+/** @brief The selection is the support of the last recorded step
+ *  (|beta_j| > machine epsilon): active variables in active-set order, then
+ *  the frozen ones (a coefficient outside the active set) in ascending order;
+ *  active variables without a coefficient are not selected. */
+TEST(EvalMetricsTest, SelectedVariablesReadTheCoefficientPath) {
+    SelectionProbe s;
+    s.path.steps.push_back({{}, {}});  // step 0
+    // 7 and 12 frozen (outside the active set), 4 below machine epsilon
+    s.path.steps.push_back({{3, 12, 1, 7, 4, 11}, {0.5, -0.2, 1.5, 0.3, 1e-20, 0.1}});
+    s.actives = {11, 3, 1, 4, 5};
+    const auto sel = cdiagnostics::selected_variables(s);
+    EXPECT_EQ(sel.predictors, (std::vector<std::size_t>{3, 1, 7}));
+    EXPECT_EQ(sel.dummies, (std::vector<std::size_t>{11, 12}));
+    EXPECT_EQ(sel.frozen, (std::vector<std::size_t>{7, 12}));
+
+    SelectionProbe empty;
+    const auto none = cdiagnostics::selected_variables(empty);
+    EXPECT_TRUE(none.predictors.empty() && none.dummies.empty() && none.frozen.empty());
+}
+
+// ========================================================================================
+} /* End ofnamespace trex::test::utils::eval */
