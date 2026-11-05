@@ -129,6 +129,13 @@ that entry; TRexSelectorNeo before).
 
 ### 2026-11-05
 
+#### The workflows can be started by hand
+
+- The four workflows (C++ Tests, R Package, Python Wheels, Line ruler) carry a `workflow_dispatch`
+  trigger next to push and pull request, so a run can be started from the Actions tab for any
+  branch, for example after the repository's Actions were switched on later than a push. Jobs
+  and path filters are unchanged.
+
 #### The repository addresses point at the GitHub organization trexselector (D15)
 
 - The repository moves from the account G4Lactus to the organization trexselector with its
