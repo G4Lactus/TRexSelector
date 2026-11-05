@@ -117,7 +117,8 @@ SolverOptions readerOptions() {
 }
 
 /** @brief The estimate for a never-filled coefficient lookup map, as the solver
- *  holds it after construction (0 with libc++ and libstdc++). */
+ *  holds it after construction (0 with every standard library: an empty map
+ *  counts no bucket array). */
 std::size_t emptyLookupBytes() {
     std::unordered_map<std::size_t, std::size_t> lookup;
     lookup.clear();

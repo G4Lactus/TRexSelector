@@ -84,11 +84,14 @@ std::size_t bytesOf(const Eigen::SparseMatrix<Scalar, Options, StorageIndex>& K)
 /** @brief Estimated heap bytes of a node-based hash map: one pointer per
  *  bucket and a node of two words plus the entry per element (libc++ and
  *  MSVC nodes; libstdc++ saves one word). A single bucket lives in the
- *  object (libstdc++); libc++ never has exactly one. */
+ *  object (libstdc++); libc++ never has exactly one. An empty map counts no
+ *  bucket array: a default-constructed map owns none (libc++), one inside the
+ *  object (libstdc++) or eight on the heap (MSVC), so the estimate of a
+ *  never-filled map agrees across standard libraries. */
 template <class K, class V, class H, class E, class A>
 std::size_t bytesOf(const std::unordered_map<K, V, H, E, A>& m) noexcept {
-    const std::size_t buckets =
-        m.bucket_count() > 1 ? heapProduct(m.bucket_count(), 1, sizeof(void*)) : 0;
+    const std::size_t buckets = (m.empty() || m.bucket_count() <= 1)
+        ? 0 : heapProduct(m.bucket_count(), 1, sizeof(void*));
     const std::size_t node = 2 * sizeof(void*) + sizeof(std::pair<const K, V>);
     return buckets + heapProduct(m.size(), 1, node);
 }

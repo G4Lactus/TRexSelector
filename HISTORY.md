@@ -129,6 +129,16 @@ that entry; TRexSelectorNeo before).
 
 ### 2026-11-05
 
+#### An empty coefficient lookup map counts no bucket array in memoryBytes()
+
+- `memoryBytes()` estimates the coefficient lookup map (an `std::unordered_map`) by its bucket
+  array and its nodes. A default-constructed map owns no buckets with libc++ and one inside
+  the object with libstdc++, but eight on the heap with MSVC's standard library, so the
+  Windows wheel and the Windows R package reported 64 bytes more than the hand counts of the
+  Python and R tests (3,512 instead of 3,448 for the TLARS reader at n = 20, P = 20). The
+  estimate counts the bucket array only while the map holds entries, so the construction
+  counts agree across standard libraries; filled maps are estimated as before.
+
 #### The clustering's verbose test flushes the C runtime on Windows
 
 - `test_verbose_default_is_silent` (Python) reads the backend's allocation line through
