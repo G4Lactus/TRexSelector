@@ -129,6 +129,13 @@ that entry; TRexSelectorNeo before).
 
 ### 2026-11-06
 
+#### The Python package declares itself stable
+
+- The Development Status classifier of pyproject.toml still said "4 - Beta" from the first
+  TRexSelectorNeo wheels, while the package ships as 1.0.0 with the full test suite, the wheels of
+  three operating systems and the sdist. The classifier says "5 - Production/Stable", the state
+  the version number claims. Nothing else changes.
+
 #### The sdist carries the C++ library
 
 - A source distribution of the Python package could not build, because its CMake reached the
