@@ -129,6 +129,15 @@ that entry; TRexSelectorNeo before).
 
 ### 2026-11-06
 
+#### The publish job checks the release tag against the artifacts
+
+- The publish job of the Python Wheels workflow uploaded whatever the build jobs produced as soon
+  as a GitHub release was published, so a release under a mistyped tag or on a commit whose
+  pyproject.toml still carried an older version would have reached PyPI. A step before the upload
+  derives the version from the release tag, which has the form `v<version>`, and requires every
+  wheel and exactly one sdist in `dist/` to carry that version. Any other tag or file fails the
+  job and nothing is uploaded.
+
 #### The Python package declares itself stable
 
 - The Development Status classifier of pyproject.toml still said "4 - Beta" from the first

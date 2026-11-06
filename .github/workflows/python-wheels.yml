@@ -212,5 +212,34 @@ jobs:
           name: sdist
           path: dist/
 
+      # The upload needs a release tag of the form v<version> that names the
+      # version every wheel and the sdist carry (v1.0.0 for trexselector-1.0.0);
+      # a mistyped tag or a stale artifact stops here, before anything reaches
+      # PyPI.
+      - name: Check the release tag against the artifacts
+        env:
+          TAG: ${{ github.event.release.tag_name }}
+        run: |
+          version="${TAG#v}"
+          if [ -z "$TAG" ] || [ "$version" = "$TAG" ]; then
+            echo "::error::release tag '$TAG' is not of the form v<version>"
+            exit 1
+          fi
+          wheels=0 sdists=0 status=0
+          for file in dist/*; do
+            name=$(basename "$file")
+            case "$name" in
+              trexselector-"$version"-*.whl) wheels=$((wheels + 1)) ;;
+              trexselector-"$version".tar.gz) sdists=$((sdists + 1)) ;;
+              *) echo "::error::$name does not carry version $version of tag $TAG"; status=1 ;;
+            esac
+          done
+          if [ "$wheels" -eq 0 ] || [ "$sdists" -ne 1 ]; then
+            echo "::error::dist/ holds $wheels wheels and $sdists sdists for version $version"
+            status=1
+          fi
+          ls -l dist
+          exit "$status"
+
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
