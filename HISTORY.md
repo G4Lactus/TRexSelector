@@ -129,6 +129,16 @@ that entry; TRexSelectorNeo before).
 
 ### 2026-11-06
 
+#### The workflow uploads to TestPyPI on request
+
+- The Python Wheels workflow had no way to rehearse a release: the publish job runs on a GitHub
+  release alone, and that upload is final. The manual trigger of the workflow gains a `target`
+  input with the choices `none` (the default, a build without upload) and `testpypi`. With
+  `testpypi` chosen, a job after the build jobs uploads the same wheels and the sdist to TestPyPI
+  through the `testpypi` environment with OIDC trusted publishing, the same mechanism the PyPI job
+  uses. No release tag exists in a manual run, so that job skips the tag check and uploads the
+  version pyproject.toml carries, which TestPyPI accepts once per version.
+
 #### The publish job checks the release tag against the artifacts
 
 - The publish job of the Python Wheels workflow uploaded whatever the build jobs produced as soon

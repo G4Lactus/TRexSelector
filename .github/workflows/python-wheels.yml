@@ -14,6 +14,12 @@ on:
   release:
     types: [published]
   workflow_dispatch:
+    inputs:
+      target:
+        description: "Upload the wheels and the sdist to TestPyPI (the dry run of a release)"
+        type: choice
+        options: [none, testpypi]
+        default: none
 
 jobs:
   build_wheels:
@@ -243,3 +249,35 @@ jobs:
 
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
+
+  # The dry run of a release: a manual run with target = testpypi uploads
+  # the same artifacts to TestPyPI through the testpypi environment. No
+  # release tag exists here, so the version is the one pyproject.toml
+  # carries, and TestPyPI refuses a version it already holds.
+  publish_testpypi:
+    name: Publish to TestPyPI
+    needs: [build_wheels, build_sdist]
+    runs-on: ubuntu-24.04
+    if: github.event_name == 'workflow_dispatch' && inputs.target == 'testpypi'
+    environment: testpypi
+    permissions:
+      id-token: write   # required for OIDC trusted publishing
+
+    steps:
+      - name: Download all wheel artifacts
+        uses: actions/download-artifact@v8
+        with:
+          pattern: wheels-*
+          merge-multiple: true
+          path: dist/
+
+      - name: Download the sdist artifact
+        uses: actions/download-artifact@v8
+        with:
+          name: sdist
+          path: dist/
+
+      - name: Publish to TestPyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          repository-url: https://test.pypi.org/legacy/
