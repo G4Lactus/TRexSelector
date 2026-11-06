@@ -129,6 +129,25 @@ that entry; TRexSelectorNeo before).
 
 ### 2026-11-06
 
+#### The READMEs link the GNU page of the GPL
+
+- win-builder's incoming check of the R package flagged "(possibly) invalid file URI: ../../LICENSE"
+  from README.md: the package README linked the repository's LICENSE two directories up, a file the
+  tarball does not contain, and the Python README carried the same link, which an sdist cannot
+  resolve either. Every README now names the GNU page of GPL-3 next to the local LICENSE where the
+  package ships one (root, cpp, Python); the R README and its README.Rmd link the GNU page alone,
+  since CRAN packages do not ship the GPL text.
+
+#### The C++ SDK carries its license
+
+- `cmake --install` wrote headers, libraries and the CMake package files and no license text, and
+  the CPack packages named the repository's LICENSE as a resource file only, which the TGZ and ZIP
+  generators never copy, so the source package held the cpp tree without a license. The cpp tree
+  has its own LICENSE (the GPL-3 text, as the Python package has), the SDK install and the binary
+  package place it with README.md under `share/doc/TRexSelector`, the CPack resource files point
+  at the cpp copies, and the source package leaves the editor and tooling caches out (`.cache`,
+  `.clangd`, `.clang-tidy`, `compile_commands.json`).
+
 #### The example of trex_gamma_to_k() runs only with Matrix installed
 
 - Matrix is a suggested package and `trex_gamma_to_k()` stops without it, but its example called

@@ -306,6 +306,9 @@ if(TREX_INSTALL_CPP_SDK)
         endif()
     ]])
     install(FILES "${_trex_install_stamp}" DESTINATION "${TREX_INSTALL_INCLUDE_ROOT}")
+    # The license text and the README travel with the SDK (share/doc/TRexSelector).
+    install(FILES "${PROJECT_SOURCE_DIR}/LICENSE" "${PROJECT_SOURCE_DIR}/README.md"
+            DESTINATION "${CMAKE_INSTALL_DOCDIR}")
 endif()
 
 
@@ -397,17 +400,20 @@ if(CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)
     set(CPACK_PACKAGE_VERSION_MAJOR        ${PROJECT_VERSION_MAJOR})
     set(CPACK_PACKAGE_VERSION_MINOR        ${PROJECT_VERSION_MINOR})
     set(CPACK_PACKAGE_VERSION_PATCH        ${PROJECT_VERSION_PATCH})
-    set(CPACK_RESOURCE_FILE_LICENSE        "${PROJECT_SOURCE_DIR}/../LICENSE")
-    set(CPACK_RESOURCE_FILE_README         "${PROJECT_SOURCE_DIR}/../README.md")
+    set(CPACK_RESOURCE_FILE_LICENSE        "${PROJECT_SOURCE_DIR}/LICENSE")
+    set(CPACK_RESOURCE_FILE_README         "${PROJECT_SOURCE_DIR}/README.md")
 
     # Binary package  (cmake --build <dir> --target package)
     # Produces TRexSelector-<version>-<system>.tar.gz and .zip
-    # Contains: compiled libs, headers, CMake package config files
+    # Contains: compiled libs, headers, CMake package config files, and
+    # LICENSE with README.md under share/doc/TRexSelector
     set(CPACK_GENERATOR "TGZ;ZIP")
 
     # Source package  (cmake --build <dir> --target package_source)
-    # Contains: src/, cmake/, CMakeLists.txt, CMakePresets.json, LICENSE, README.md
-    # Excludes: build artefacts, simulation outputs, R/Python tooling, notes
+    # Contains: src/, cmake/, CMakeLists.txt, CMakePresets.json, vcpkg.json,
+    # LICENSE, README.md
+    # Excludes: build artefacts, editor and tooling caches, simulation
+    # outputs, R/Python tooling, notes
     set(CPACK_SOURCE_GENERATOR          "TGZ;ZIP")
     set(CPACK_SOURCE_PACKAGE_FILE_NAME  "${CPACK_PACKAGE_NAME}-${PROJECT_VERSION}-src")
     set(CPACK_SOURCE_IGNORE_FILES
@@ -419,6 +425,10 @@ if(CMAKE_PROJECT_NAME STREQUAL PROJECT_NAME)
         "/Python/"
         "/notes/"
         "/tests/"
+        "/\\.cache/"
+        "/\\.clangd"
+        "\\.clang-tidy"
+        "compile_commands\\.json"
         "\\.DS_Store"
     )
 

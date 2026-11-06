@@ -167,7 +167,7 @@ BLAS/LAPACK backend.
 
 ## License
 
-GPL ≥ 3 — see [LICENSE](../../LICENSE).
+GPL ≥ 3 — see [LICENSE](LICENSE) or the [GNU General Public License v3](https://www.gnu.org/licenses/gpl-3.0.html).
 
 This program is free software: you can redistribute it and/or modify it under the
 terms of the GNU General Public License as published by the Free Software
