@@ -151,11 +151,47 @@ jobs:
           path: ./wheelhouse/*.whl
 
   # ---------------------------------------------------------------------------
-  # Publish to PyPI — only on GitHub Release events
+  # Source distribution. The archive carries the C++ library under cpp/
+  # (pyproject.toml, sdist.force-include), so a build from it needs no
+  # checkout. Installing it on a plain Ubuntu with the header-only
+  # dependencies from apt and running the tests proves the archive is
+  # complete; no wheel is involved.
+  # ---------------------------------------------------------------------------
+  build_sdist:
+    name: Build and test the sdist
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Install the C++ dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libeigen3-dev libboost-dev libcereal-dev
+
+      - name: Build the sdist
+        run: |
+          python3 -m venv .venv
+          .venv/bin/python -m pip install --upgrade pip build
+          .venv/bin/python -m build --sdist --outdir dist Python/trexselector
+          ls -l dist
+
+      - name: Install from the sdist and run the tests
+        run: |
+          .venv/bin/python -m pip install dist/trexselector-*.tar.gz pytest
+          .venv/bin/python -X faulthandler -m pytest Python/trexselector/tests -x -q
+
+      - name: Upload sdist artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: sdist
+          path: dist/*.tar.gz
+
+  # ---------------------------------------------------------------------------
+  # Publish to PyPI — only on GitHub Release events; the wheels and the sdist
   # ---------------------------------------------------------------------------
   publish:
     name: Publish to PyPI
-    needs: [build_wheels]
+    needs: [build_wheels, build_sdist]
     runs-on: ubuntu-24.04
     if: github.event_name == 'release'
     environment: pypi
@@ -168,6 +204,12 @@ jobs:
         with:
           pattern: wheels-*
           merge-multiple: true
+          path: dist/
+
+      - name: Download the sdist artifact
+        uses: actions/download-artifact@v8
+        with:
+          name: sdist
           path: dist/
 
       - name: Publish to PyPI

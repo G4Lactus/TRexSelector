@@ -129,6 +129,18 @@ that entry; TRexSelectorNeo before).
 
 ### 2026-11-06
 
+#### The sdist carries the C++ library
+
+- A source distribution of the Python package could not build, because its CMake reached the
+  library through `../../cpp`, which an archive does not contain, so PyPI could have held wheels
+  only. The sdist takes `cpp/CMakeLists.txt`, `cpp/cmake`, `cpp/src`, `cpp/LICENSE` and
+  `cpp/README.md` from the repository through scikit-build-core's `sdist.force-include` (1.0 is
+  the lower bound of the build requirement now) and places them under `cpp/` in the archive; the
+  Python CMakeLists.txt uses that copy when present and `../../cpp` otherwise. The Python Wheels
+  workflow gains a job that builds the sdist, installs it from source on Ubuntu with the
+  header-only dependencies from apt, runs the tests and uploads the archive, and the publish job
+  uploads the sdist with the wheels.
+
 #### The Description field cites the journal articles
 
 - The Description field of the R package named no method paper, while 1.0.0 cited the T-Rex

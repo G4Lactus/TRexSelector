@@ -31,8 +31,14 @@ set(TREX_INSTALL_CPP_SDK OFF CACHE BOOL "No C++ SDK in the wheel" FORCE)
 # default, so this only bites the manylinux wheel build.)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
-# Add the cpp/ directory containing the core TRexSelector C++ library
-add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/../../cpp ${CMAKE_CURRENT_BINARY_DIR}/trex_core)
+# The core TRexSelector C++ library: an sdist carries it under cpp/ (see
+# pyproject.toml), a repository checkout reaches it two levels up.
+if(EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/cpp/CMakeLists.txt")
+    set(TREX_CPP_DIR "${CMAKE_CURRENT_SOURCE_DIR}/cpp")
+else()
+    set(TREX_CPP_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../../cpp")
+endif()
+add_subdirectory(${TREX_CPP_DIR} ${CMAKE_CURRENT_BINARY_DIR}/trex_core)
 
 # Create the Python extension module mapped to _core
 pybind11_add_module(_core src/trexselector/bindings.cpp)

@@ -1,5 +1,5 @@
 [build-system]
-requires = ["scikit-build-core>=0.10", "pybind11"]
+requires = ["scikit-build-core>=1.0", "pybind11"]
 build-backend = "scikit_build_core.build"
 
 [project]
@@ -48,9 +48,18 @@ dev = ["pytest"]
 [tool.scikit-build]
 wheel.packages = ["src/trexselector"]
 wheel.exclude = ["**/__pycache__", "**/*.pyc"]
-sdist.exclude = ["build", "dist", "wheelhouse", "**/__pycache__", "**/*.pyc", "*.whl"]
+sdist.exclude = ["build", "dist", "wheelhouse", "**/__pycache__", "**/*.pyc", "*.whl", "**/.DS_Store"]
 cmake.source-dir = "."
 cmake.build-type = "Release"
+
+# The sdist carries the C++ library from the repository two levels up under cpp/, so a build
+# from the archive needs no checkout; CMakeLists.txt uses that copy when it is present.
+[tool.scikit-build.sdist.force-include]
+"../../cpp/CMakeLists.txt" = "cpp/CMakeLists.txt"
+"../../cpp/cmake" = "cpp/cmake"
+"../../cpp/src" = "cpp/src"
+"../../cpp/LICENSE" = "cpp/LICENSE"
+"../../cpp/README.md" = "cpp/README.md"
 
 [tool.scikit-build.cmake.define]
 TREX_PORTABLE_BUILD = "ON"
