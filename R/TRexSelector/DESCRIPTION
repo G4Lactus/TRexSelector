@@ -2,10 +2,13 @@ Package: TRexSelector
 Type: Package
 Title: T-Rex Selector: High-Dimensional Variable Selection & FDR Control
 Version: 2.0.0
-Description: FDR-controlled variable selection for regression and classification in
- high-dimensional settings while controlling the false discovery rate (FDR) at a user-specified
- target level. Since version 2.0.0 the package comes as R bindings to the 'TRexSelector' C++
- library, which replaces the pure-R implementation of the 1.x releases.
+Description: Variable selection for regression and classification in high-dimensional
+ settings with control of the false discovery rate (FDR) at a user-specified target level.
+ The implementations are primarily based on the T-Rex selector of Machkour, Muma and
+ Palomar (2025) <doi:10.1016/j.sigpro.2025.109894> and its dependency-aware extension for
+ correlated variables by Machkour, Muma and Palomar (2025) <doi:10.1016/j.sigpro.2025.109990>.
+ Since version 2.0.0 the package comes as R bindings to the 'TRexSelector' C++ library, which
+ replaces the pure-R implementation of the 1.x releases.
 Authors@R:
     c(
       person(given = "Jasin", family = "Machkour", email = "jasin.machkour@tu-darmstadt.de", role = c("aut", "cre")),

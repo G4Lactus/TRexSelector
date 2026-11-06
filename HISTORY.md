@@ -129,6 +129,15 @@ that entry; TRexSelectorNeo before).
 
 ### 2026-11-06
 
+#### The Description field cites the journal articles
+
+- The Description field of the R package named no method paper, while 1.0.0 cited the T-Rex
+  arXiv preprint, and CRAN's daily check of 1.0.0 now flags that preprint form and asks for a DOI.
+  The field names the two Signal Processing articles of 2025, the T-Rex selector and its
+  dependency-aware extension, in CRAN's form "Authors (year) <doi:...>", as `inst/CITATION` and
+  CITATION.cff already do, and its first sentence no longer says "FDR-controlled" and "controlling
+  the FDR" at once.
+
 #### The wheels cover Python 3.14 and 3.15
 
 - The Python Wheels workflow built CPython 3.10 to 3.13 with cibuildwheel 2.21.3 of 2024, while 3.14
