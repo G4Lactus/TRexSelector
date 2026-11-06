@@ -129,6 +129,15 @@ that entry; TRexSelectorNeo before).
 
 ### 2026-11-06
 
+#### The wheels cover Python 3.14 and 3.15
+
+- The Python Wheels workflow built CPython 3.10 to 3.13 with cibuildwheel 2.21.3 of 2024, while 3.14
+  and 3.15 are the current releases and numpy ships wheels for both. The workflow runs cibuildwheel
+  4.3.5, builds 3.10 to 3.15, and skips the free-threaded interpreters, which cibuildwheel builds by
+  default from 3.14 on and the bindings do not support. cibuildwheel 4 also makes delvewheel the
+  default Windows repair, and the explicit repair command with the staged OpenMP runtime overrides
+  it as before. The classifiers of pyproject.toml list 3.14 and 3.15.
+
 #### The submission comments carry the R-devel and win-builder results
 
 - `cran-comments.md` of the R package lists the test environments of the 2.0.0 submission: the

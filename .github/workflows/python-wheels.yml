@@ -66,15 +66,17 @@ jobs:
           Write-Host "Staged $($dll.FullName)"
 
       - name: Build wheels
-        uses: pypa/cibuildwheel@v2.21.3
+        uses: pypa/cibuildwheel@v4.3.5
         with:
           package-dir: Python/trexselector
           output-dir: wheelhouse
         env:
-          # Build CPython 3.10–3.13 (matches requires-python >= 3.10); skip
-          # PyPy and musl-based Linux
-          CIBW_BUILD: "cp310-* cp311-* cp312-* cp313-*"
-          CIBW_SKIP: "*-musllinux_*"
+          # Build CPython 3.10–3.15 (matches requires-python >= 3.10); skip
+          # PyPy, musl-based Linux and the free-threaded interpreters, which
+          # cibuildwheel builds by default for 3.14+ and the bindings do not
+          # support.
+          CIBW_BUILD: "cp310-* cp311-* cp312-* cp313-* cp314-* cp315-*"
+          CIBW_SKIP: "*-musllinux_* cp31?t-*"
 
           # Run the package test suite against every built wheel so an
           # unimportable or broken wheel can never reach PyPI. faulthandler
