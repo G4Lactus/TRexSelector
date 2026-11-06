@@ -129,6 +129,13 @@ that entry; TRexSelectorNeo before).
 
 ### 2026-11-06
 
+#### The Python README links work on PyPI
+
+- The README of the Python package is the project page on PyPI, where its three relative links to
+  the C++ core README, to CITATION.cff and to the package's LICENSE pointed into nothing. They now
+  carry the GitHub URLs of those files on the main branch, which work on PyPI and in the
+  repository alike.
+
 #### The workflow uploads to TestPyPI on request
 
 - The Python Wheels workflow had no way to rehearse a release: the publish job runs on a GitHub

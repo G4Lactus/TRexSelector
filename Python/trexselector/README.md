@@ -29,8 +29,9 @@ pip install trexselector
 Requirements: Python ≥ 3.10 and NumPy ≥ 1.26 (installed automatically).
 
 **From source (GitHub)** — builds the C++ backend on your machine; requires a C++20 compiler, CMake ≥ 3.24, and the C++
-dependencies Eigen3, Boost ≥ 1.80 and Cereal, with OpenMP optional (see the [C++ core README](../../cpp/README.md) for
-how to install them per platform):
+dependencies Eigen3, Boost ≥ 1.80 and Cereal, with OpenMP optional (see the
+[C++ core README](https://github.com/trexselector/TRexSelector/blob/main/cpp/README.md) for how to install them per
+platform):
 
 ```bash
 pip install git+https://github.com/trexselector/TRexSelector.git#subdirectory=Python/trexselector
@@ -155,8 +156,9 @@ TRexSelector package: [GitHub](https://github.com/trexselector/TRexSelector)
 
 Bug reports: [GitHub Issues](https://github.com/trexselector/TRexSelector/issues)
 
-Citation metadata: [CITATION.cff](../../CITATION.cff) at the repository root. The docstring of every selector,
-T-solver and machine learning class ends with the papers it builds on.
+Citation metadata: [CITATION.cff](https://github.com/trexselector/TRexSelector/blob/main/CITATION.cff) at the
+repository root. The docstring of every selector, T-solver and machine learning class ends with the papers it
+builds on.
 
 ## Acknowledgements
 
@@ -167,7 +169,8 @@ BLAS/LAPACK backend.
 
 ## License
 
-GPL ≥ 3 — see [LICENSE](LICENSE) or the [GNU General Public License v3](https://www.gnu.org/licenses/gpl-3.0.html).
+GPL ≥ 3 — see [LICENSE](https://github.com/trexselector/TRexSelector/blob/main/Python/trexselector/LICENSE) or the
+[GNU General Public License v3](https://www.gnu.org/licenses/gpl-3.0.html).
 
 This program is free software: you can redistribute it and/or modify it under the
 terms of the GNU General Public License as published by the Free Software
