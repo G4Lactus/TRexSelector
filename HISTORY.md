@@ -129,6 +129,14 @@ that entry; TRexSelectorNeo before).
 
 ### 2026-11-06
 
+#### The submission comments carry the R-devel and win-builder results
+
+- `cran-comments.md` of the R package lists the test environments of the 2.0.0 submission: the
+  R-devel container (Debian, two NOTEs of the container itself, the hardening flags of its
+  Makeconf and the missing V8), win-builder on R-release 4.6.2 (the maintainer NOTE alone), and
+  the Windows R-devel job of the workflow. win-builder's R-devel instance returned no result on
+  two uploads, which the comments say.
+
 #### The R Package workflow checks the daily R-devel snapshot on Windows
 
 - win-builder's R-devel field stalled twice at "checking CRAN incoming feasibility", with the

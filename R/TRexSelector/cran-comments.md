@@ -19,13 +19,27 @@ dependencies on CRAN.
 * macOS 27.2 (Apple silicon), R 4.6.1: `R CMD check --as-cran`, also with the CPU-to-elapsed
   thresholds CRAN applies (`_R_CHECK_*_TIMING_CPU_TO_ELAPSED_THRESHOLD_` at 2.5).
 * Ubuntu 24.04 (arm64 container), R 4.3.3, with and without OpenMP.
+* R-devel (2026-11-01 r90825) in a rocker/r-devel container (Debian, x86_64): `R CMD check --as-cran`.
+* win-builder, R-release (R 4.6.2): `R CMD check --as-cran`.
 * The package's GitHub Actions jobs: install, the testthat suite and `R CMD check` without vignettes
-  on Ubuntu, macOS and Windows (R release), and the sequential build without OpenMP on Ubuntu.
-* win-builder (R-devel): pending, to be added before the upload.
+  on Ubuntu, macOS and Windows (R release), the sequential build without OpenMP on Ubuntu, and
+  Windows with the daily R-devel snapshot.
+
+win-builder's R-devel instance returned no result for this package, as its check stopped at the
+incoming-feasibility step on two uploads. The container and the Windows R-devel job cover R-devel
+instead.
 
 ## R CMD check results
 
-0 errors | 0 warnings | 0 notes on macOS.
+0 errors | 0 warnings | 0 notes on macOS. win-builder (R-release) reports the incoming-feasibility
+NOTE that names the maintainer and nothing else.
+
+Two NOTEs in the R-devel container, both from the container itself:
+
+* checking compilation flags used ... NOTE: non-portable flags `-Wdate-time`,
+  `-Werror=format-security` and `-Wformat`. They come from the Makeconf of Debian's R-devel build,
+  not from the package's configure or Makevars.
+* checking HTML version of manual ... NOTE: math rendering skipped, as V8 is unavailable there.
 
 Two NOTEs on Ubuntu:
 
