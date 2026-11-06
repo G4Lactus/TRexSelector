@@ -129,6 +129,16 @@ that entry; TRexSelectorNeo before).
 
 ### 2026-11-06
 
+#### The example of trex_gamma_to_k() runs only with Matrix installed
+
+- Matrix is a suggested package and `trex_gamma_to_k()` stops without it, but its example called
+  the function unconditionally, so `R CMD check` fails wherever its example run cannot see Matrix
+  (seen under R-devel in a container that hands its libraries to R through `R_LIBS`, which the
+  check replaces: two ERRORs, the example and its `--run-donttest` repeat, while tests, vignettes
+  and the manual passed). CRAN's machines carry Matrix as a recommended package, and CRAN's policy
+  asks for conditional use of suggested packages all the same. The example is wrapped in
+  `requireNamespace("Matrix", quietly = TRUE)`, as the vignette and the tests already do.
+
 #### The macOS wheel targets macOS 15
 
 - The macos-15 job of the Python Wheels workflow, the first run after the move from the retired

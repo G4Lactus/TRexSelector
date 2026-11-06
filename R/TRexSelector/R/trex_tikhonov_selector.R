@@ -290,9 +290,11 @@ trex_tikhonov_lambda2_power_rule <- function(X, y,
 #'
 #' @examples
 #' # First-difference operator over 5 variables -> chain Laplacian
-#' p <- 5
-#' gamma <- diff(diag(p))
-#' K <- trex_gamma_to_k(gamma)
+#' if (requireNamespace("Matrix", quietly = TRUE)) {
+#'   p <- 5
+#'   gamma <- diff(diag(p))
+#'   K <- trex_gamma_to_k(gamma)
+#' }
 #'
 #' @family T-Rex selectors and controls
 #' @export
