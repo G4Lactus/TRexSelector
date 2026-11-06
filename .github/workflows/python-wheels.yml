@@ -22,11 +22,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # Pinned labels: macos-latest points at the macOS 26 image, which breaks
-        # delocate-wheel's repair/arch step, and macos-14 was retired by GitHub
-        # (jobs fail with "configuration not supported"). macos-15 is the stable
-        # arm64 runner; the deployment target below keeps the macosx_14_0 tag.
-        # ubuntu-24.04 pins the manylinux host while ubuntu-latest moves to 26.04.
+        # macos-14 was retired by GitHub ("configuration not supported"), and
+        # macos-15 is the oldest arm64 image left. Homebrew bottles carry the
+        # runner's macOS as their minimum, so the deployment target below must
+        # equal the runner's version (15.0) or delocate refuses the bundled
+        # OpenMP runtime. ubuntu-24.04 pins the manylinux host.
         os: [ubuntu-24.04, macos-15, windows-latest]
 
     steps:
@@ -121,10 +121,13 @@ jobs:
           # -----------------------------------------------------------------------
           CIBW_BEFORE_ALL_MACOS: brew install eigen boost cereal llvm libomp
 
+          # The deployment target equals the runner's macOS (see the matrix):
+          # delocate reads it as the wheel's floor and tags the repaired wheel
+          # macosx_15_0_arm64.
           CIBW_ENVIRONMENT_MACOS: >
             CMAKE_C_COMPILER=$(brew --prefix llvm)/bin/clang
             CMAKE_CXX_COMPILER=$(brew --prefix llvm)/bin/clang++
-            MACOSX_DEPLOYMENT_TARGET=14.0
+            MACOSX_DEPLOYMENT_TARGET=15.0
 
           # -----------------------------------------------------------------------
           # Windows — MSVC toolchain; deps come from the vcpkg classic install

@@ -127,6 +127,19 @@ that entry; TRexSelectorNeo before).
   `MAX_SELECTION` is gone; the knee with tolerance 0 is the largest
   selection. See the 2026-10-28 entry.
 
+### 2026-11-06
+
+#### The macOS wheel targets macOS 15
+
+- The macos-15 job of the Python Wheels workflow, the first run after the move from the retired
+  macos-14 image, failed in delocate's repair of the cp310 wheel. Homebrew bottles carry the
+  runner's macOS as their minimum version, and delocate takes the wheel's floor from
+  `MACOSX_DEPLOYMENT_TARGET`, so the image's OpenMP runtime (minimum 15.0) cannot be bundled
+  into a wheel for 14.0; the same rule explains the failed repair on the macOS 26 image before.
+  The deployment target of the macOS build follows the runner (15.0), the wheel is tagged
+  `macosx_15_0_arm64`, and macOS 14 users build from source. A lower floor needs an OpenMP
+  runtime built for that version, which Homebrew does not provide.
+
 ### 2026-11-05
 
 #### The TIKNET rank-bound tests draw their design from a platform-independent stream
@@ -150,7 +163,7 @@ that entry; TRexSelectorNeo before).
   macOS wheel job of the Python Wheels workflow failed before its first step with "The
   configuration 'macos-14-arm64-us-default' is not supported". The job runs on `macos-15`, the
   stable arm64 image below macOS 26 (whose image breaks delocate-wheel's repair step); the
-  deployment target 14.0 keeps the `macosx_14_0_arm64` wheel tag. The Linux jobs pin
+  deployment target 14.0 was kept, which the next day's entry corrects. The Linux jobs pin
   `ubuntu-24.04` while `ubuntu-latest` migrates to Ubuntu 26.04 (actions/runner-images#14748,
   until 2026-11-19); the manylinux build runs in its container either way.
 
