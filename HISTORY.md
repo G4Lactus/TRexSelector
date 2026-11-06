@@ -129,6 +129,18 @@ that entry; TRexSelectorNeo before).
 
 ### 2026-11-06
 
+#### The R Package workflow checks the daily R-devel snapshot on Windows
+
+- win-builder's R-devel field stalled twice at "checking CRAN incoming feasibility", with the
+  morning's tarball and with the fixed one, while its R-release field passed that step in 28 s, so
+  the Windows R-devel half of the CRAN preparation had no result. The R Package workflow gains the
+  matrix entry `R windows-latest (R-devel)`: the existing job (install, testthat suite, R CMD check)
+  on the daily R-devel snapshot that r-lib's setup-r installs, with the latest Rtools. That is the
+  win-builder run without its incoming step, which is platform-independent and passed on
+  R-release. Posit's package manager has no R-devel binaries, so that job compiles its dependencies
+  from source. R-hub's checks were the alternative and need the package at the root of a GitHub
+  repository, which R/TRexSelector is not.
+
 #### The READMEs link the GNU page of the GPL
 
 - win-builder's incoming check of the R package flagged "(possibly) invalid file URI: ../../LICENSE"
