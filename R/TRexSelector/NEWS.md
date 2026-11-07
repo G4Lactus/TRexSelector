@@ -1,3 +1,5 @@
+# TRexSelector (development version)
+
 # TRexSelector 2.0.0
 
 The package is rewritten as R bindings to the TRexSelector C++ library. The pure-R implementation of

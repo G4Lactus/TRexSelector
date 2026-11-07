@@ -4,7 +4,7 @@ build-backend = "scikit_build_core.build"
 
 [project]
 name = "trexselector"
-version = "1.0.0"
+version = "1.0.1.dev0"
 description = "Python API for the TRexSelector C++ library (T-Rex selector with FDR control)"
 readme = "README.md"
 license = "GPL-3.0-or-later"

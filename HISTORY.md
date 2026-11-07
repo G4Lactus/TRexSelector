@@ -129,6 +129,16 @@ that entry; TRexSelectorNeo before).
 
 ### 2026-11-07
 
+#### The development versions follow the release
+
+- With TRexSelector 2.0.0 on CRAN and trexselector 1.0.0 on PyPI, the sources carried the released
+  version numbers, so an install from the repository called itself the released package. The R
+  package is 2.0.0.9000 in DESCRIPTION with a "development version" heading at the top of
+  NEWS.md, the R convention after a CRAN release, and the Python package is 1.0.1.dev0 in
+  pyproject.toml. Both sort after the released versions and before the next release, whose
+  commit sets the final numbers. The C++ SDK version, inst/CITATION and CITATION.cff keep the
+  released numbers, since they name what is published.
+
 #### The R README installs from CRAN first
 
 - The installation section of the R package's README opened with the compiler requirement and
