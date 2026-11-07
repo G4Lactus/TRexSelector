@@ -56,7 +56,7 @@ documentation:
   `trexselector`.
 * **R package** — [`R/TRexSelector/`](R/TRexSelector/), documented in
   [R/TRexSelector/README.md](R/TRexSelector/README.md): installation, quick start, and
-  the twelve vignettes.
+  the twelve vignettes. Distributed on CRAN as `TRexSelector`.
 
 ---
 

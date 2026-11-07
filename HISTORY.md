@@ -127,6 +127,19 @@ that entry; TRexSelectorNeo before).
   `MAX_SELECTION` is gone; the knee with tolerance 0 is the largest
   selection. See the 2026-10-28 entry.
 
+### 2026-11-07
+
+#### The R README installs from CRAN first
+
+- The installation section of the R package's README opened with the compiler requirement and
+  the GitHub route, and closed with a note that CRAN still carried the pure-R 1.x release while
+  the 2.0.0 submission was in progress. With 2.0.0 on CRAN the section opens with
+  `install.packages("TRexSelector")`, states that CRAN provides the Windows and macOS binaries
+  while Linux and every source install compile the C++ backend, and presents the GitHub route as
+  the development version. The current version number stays out of the text, so the section
+  needs no edit per release. README.md is knit from README.Rmd again, and the root README notes
+  that the R package is distributed on CRAN.
+
 ### 2026-11-06
 
 #### The Python README links work on PyPI

@@ -40,9 +40,17 @@ package.
 
 ## Installation
 
-The package compiles its C++ backend on installation, so a C++20-capable
-compiler is required (GCC ≥ 10, Clang ≥ 12, Apple Clang ≥ 14, or Rtools
-on Windows), together with R ≥ 4.3.
+The released package is on the Comprehensive R Archive Network (CRAN).
+Install it from an R session:
+
+``` r
+install.packages("TRexSelector")
+```
+
+CRAN provides binaries for Windows and macOS. On Linux, and for every
+install from source, the package compiles its C++ backend, so a
+C++20-capable compiler is required (GCC ≥ 10, Clang ≥ 12, Apple Clang ≥
+14, or Rtools on Windows), together with R ≥ 4.3.
 
 OpenMP is optional. Without it the package compiles single-threaded and
 `trex_get_max_threads()` returns 1. On Linux and Windows, R supplies the
@@ -53,15 +61,15 @@ other packages load), or Homebrew’s runtime when R ships none. Setting
 `TREX_OPENMP=no` forces the single-threaded build, for example
 `TREX_OPENMP=no R CMD INSTALL R/TRexSelector`.
 
+The development version lives in the `R/TRexSelector/` subdirectory of
+the [GitHub repository](https://github.com/trexselector/TRexSelector).
 First install the R-side prerequisites (once, from an R session):
 
 ``` r
 install.packages(c("Rcpp", "RcppEigen", "BH", "Rcereal", "R6"))
 ```
 
-Then install ‘TRexSelector’ from
-[GitHub](https://github.com/trexselector/TRexSelector) — the package
-lives in the `R/TRexSelector/` subdirectory of the repository:
+Then install the package from GitHub or from a local clone:
 
 ``` r
 # Option 1: Install directly from GitHub
@@ -72,10 +80,6 @@ remotes::install_github("trexselector/TRexSelector", subdir = "R/TRexSelector")
 # (from the shell, at the repository root)
 # R CMD INSTALL R/TRexSelector
 ```
-
-*(CRAN still carries the pure-R 1.x release. The submission of version
-2.0.0 is in progress, and once it is accepted,
-`install.packages("TRexSelector")` provides the C++-backed package.)*
 
 You can open the help pages with:
 
@@ -257,7 +261,8 @@ with OpenMP for the threads where the toolchain provides it.
 
 ## License
 
-GPL ≥ 3 — see the [GNU General Public License v3](https://www.gnu.org/licenses/gpl-3.0.html).
+GPL ≥ 3 — see the [GNU General Public License
+v3](https://www.gnu.org/licenses/gpl-3.0.html).
 
 This program is free software: you can redistribute it and/or modify it
 under the terms of the GNU General Public License as published by the
