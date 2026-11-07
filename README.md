@@ -36,7 +36,8 @@ experiments, a voting threshold is derived that provably bounds the FDR.
 | `TRexGVSSelector`              | Grouped variable selection                                |
 | `TRexScreeningSelector`        | Fast FDR-controlled variable pre-screening for large *p*  |
 | `TRexBiobankScreeningSelector` | High-throughput genomic / biobank screening               |
-| `TRexSPCA`                     | FDR-controlled sparse principal component analysis        |
+| `TRexSPCASelector`             | FDR-controlled sparse principal component analysis        |
+| `TRexTikhonovSelector`         | Selection with a general Tikhonov penalty matrix          |
 
 ---
 
@@ -90,8 +91,10 @@ The library builds on the Eigen linear algebra library: G. Guennebaud, B. Jacob 
 
 GPL ≥ 3 — see [LICENSE](LICENSE) or the [GNU General Public License v3](https://www.gnu.org/licenses/gpl-3.0.html).
 
+```text
 This program is free software: you can redistribute it and/or modify it under the
 terms of the GNU General Public License as published by the Free Software
 Foundation, either version 3 of the License, or (at your option) any later
 version. It is distributed WITHOUT ANY WARRANTY; without even the implied
 warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+```

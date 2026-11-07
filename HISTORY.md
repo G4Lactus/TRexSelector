@@ -10,6 +10,12 @@ changes. Versions: C++ SDK 1.0.1, R TRexSelector 2.0.1, Python trexselector 1.0.
 
 ### 2026-11-07
 
+#### The repository README names every selector and fences the license
+
+- The "Implemented Variants" table of the repository README named `TRexSPCA` for the class every
+  surface calls `TRexSPCASelector` and lacked `TRexTikhonovSelector`. Both rows are right now, and
+  the GPL paragraph sits in a text fence, as in the three package READMEs.
+
 #### The C++ README describes the library
 
 - The C++ README kept its developer sections (dependencies, building, installing and consuming) and
