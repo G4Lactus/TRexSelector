@@ -1,4 +1,11 @@
-# TRexSelector (development version)
+# TRexSelector 2.0.1
+
+A patch release. CRAN's daily checks of 2.0.0 reported "Installation failed" on the macOS builders for
+R-release (x86_64) and R-oldrel (arm64 and x86_64), which compile with Apple clang 14.0.3. That compiler
+accepts C++20 but its standard library has no ranges algorithms, and the backend used `std::ranges::find`
+and `std::ranges::sort` at three places. The three calls are `std::find` and `std::sort` now, with identical
+results. The installation section of the README and of the getting-started vignette points to CRAN first.
+Nothing else changes.
 
 # TRexSelector 2.0.0
 

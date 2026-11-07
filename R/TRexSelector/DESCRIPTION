@@ -1,7 +1,7 @@
 Package: TRexSelector
 Type: Package
 Title: T-Rex Selector: High-Dimensional Variable Selection & FDR Control
-Version: 2.0.0.9000
+Version: 2.0.1
 Description: Variable selection for regression and classification in high-dimensional
  settings with control of the false discovery rate (FDR) at a user-specified target level.
  The implementations are primarily based on the T-Rex selector of Machkour, Muma and

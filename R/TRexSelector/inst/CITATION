@@ -4,10 +4,10 @@ citHeader("To cite 'TRexSelector' in publications, please use the package entry 
 bibentry("Manual",
   title       = "{TRexSelector: T-Rex Selector: High-Dimensional Variable Selection & FDR Control}",
   author      = person(given = "TRexSelector Team"),
-  note        = "R package version 2.0.0",
+  note        = "R package version 2.0.1",
   year        = "2026",
   url         = "https://github.com/trexselector/TRexSelector",
-  textVersion = "TRexSelector Team, \"TRexSelector: T-Rex Selector: High-Dimensional Variable Selection & FDR Control,\" 2026, R package version 2.0.0. [Online]. Available: https://github.com/trexselector/TRexSelector"
+  textVersion = "TRexSelector Team, \"TRexSelector: T-Rex Selector: High-Dimensional Variable Selection & FDR Control,\" 2026, R package version 2.0.1. [Online]. Available: https://github.com/trexselector/TRexSelector"
 )
 
 bibentry("Article",

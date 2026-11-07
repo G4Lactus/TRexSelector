@@ -1,38 +1,30 @@
-# TRexSelector 2.0.0
+# TRexSelector 2.0.1
 
 ## Summary of the update
 
-This is a major update of TRexSelector (1.0.0 on CRAN since 2024-02-23). The package is rewritten as
-R bindings to the TRexSelector C++ library. The pure-R implementation of 1.0.0 and its dependencies
-(tlars, MASS, glmnet, boot, parallel, doParallel, foreach, doRNG) are gone and the compiled backend
-takes their place; the package now links to Rcpp, RcppEigen, BH and Rcereal and imports R6.
-
-The user interface changes with it. The functional interface of 1.0.0 (`trex()`, `FDP()`, `TPP()`,
-`add_dummies_GVS()` and the other helpers) is replaced by R6 classes (`TRexSelector`,
-`TRexDASelector`, `TRexGVSSelector`, `TRexScreeningSelector`, `TRexBiobankScreeningSelector`,
-`TRexSPCASelector`, `TRexTikhonovSelector`) with control lists (`trex_control()` and its siblings)
-and the metrics `trex_fdp()` and `trex_tpp()`. NEWS.md lists the changes. The package has no reverse
-dependencies on CRAN.
+A patch release of 2.0.0, which is on CRAN since 2026-11-06. CRAN's daily checks of 2.0.0 report
+"Installation failed" on r-release-macos-x86_64, r-oldrel-macos-arm64 and r-oldrel-macos-x86_64. Those
+builders compile with Apple clang 14.0.3, whose standard library accepts `-std=gnu++20` but has no
+ranges algorithms, and the compiled backend used `std::ranges::find` and `std::ranges::sort` at three
+places. The three calls are `std::find` and `std::sort` now, with identical results. The installation
+section of the README and of the getting-started vignette points to CRAN first. Nothing else changes in
+the package's code or interface. The package has no reverse dependencies on CRAN.
 
 ## Test environments
 
 * macOS 27.2 (Apple silicon), R 4.6.1: `R CMD check --as-cran`, also with the CPU-to-elapsed
   thresholds CRAN applies (`_R_CHECK_*_TIMING_CPU_TO_ELAPSED_THRESHOLD_` at 2.5).
-* Ubuntu 24.04 (arm64 container), R 4.3.3, with and without OpenMP.
-* R-devel (2026-11-01 r90825) in a rocker/r-devel container (Debian, x86_64): `R CMD check --as-cran`.
-* win-builder, R-release (R 4.6.2): `R CMD check --as-cran`.
+* clang 14 with libc++ 14 (Ubuntu 24.04 container), the closest available match to the failing CRAN
+  builders: the compiled backend builds without a warning, while the 2.0.0 sources fail there on the
+  same `std::ranges` call.
+* R-devel in a rocker/r-devel container (Debian, x86_64): `R CMD check --as-cran`.
 * The package's GitHub Actions jobs: install, the testthat suite and `R CMD check` without vignettes
   on Ubuntu, macOS and Windows (R release), the sequential build without OpenMP on Ubuntu, and
   Windows with the daily R-devel snapshot.
 
-win-builder's R-devel instance returned no result for this package, as its check stopped at the
-incoming-feasibility step on two uploads. The container and the Windows R-devel job cover R-devel
-instead.
-
 ## R CMD check results
 
-0 errors | 0 warnings | 0 notes on macOS. win-builder (R-release) reports the incoming-feasibility
-NOTE that names the maintainer and nothing else.
+0 errors | 0 warnings | 0 notes on macOS.
 
 Two NOTEs in the R-devel container, both from the container itself:
 

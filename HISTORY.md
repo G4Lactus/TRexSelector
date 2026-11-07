@@ -129,6 +129,14 @@ that entry; TRexSelectorNeo before).
 
 ### 2026-11-07
 
+#### The R package is 2.0.1
+
+- The ranges fix reaches CRAN as a patch release, since CRAN takes no second upload of a version
+  it holds. DESCRIPTION carries 2.0.1, NEWS.md describes the release, inst/CITATION names the
+  version, and cran-comments.md states the reason for the update, the test environments, with the
+  clang 14 and libc++ 14 container as the closest match to the failing builders, and the check
+  results.
+
 #### The solvers compile without the ranges library
 
 - CRAN's daily checks of TRexSelector 2.0.0 reported "Installation failed" on three macOS flavors
