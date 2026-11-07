@@ -129,6 +129,14 @@ that entry; TRexSelectorNeo before).
 
 ### 2026-11-07
 
+#### The getting-started vignette installs from CRAN first
+
+- The installation passage of the getting-started vignette still said that CRAN carried the pure-R
+  1.x release and sent the reader to GitHub until 2.0.0 was accepted. Like the README since the
+  previous commit, it opens with `install.packages("TRexSelector")`, states that CRAN provides the
+  Windows and macOS binaries while Linux and every source install compile the C++ backend, and
+  presents the GitHub route as the development version, without a current version number.
+
 #### The development versions follow the release
 
 - With TRexSelector 2.0.0 on CRAN and trexselector 1.0.0 on PyPI, the sources carried the released

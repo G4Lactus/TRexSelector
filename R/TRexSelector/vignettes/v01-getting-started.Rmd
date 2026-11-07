@@ -52,19 +52,21 @@ The package has four groups of tools.
 
 # Installation
 
-The package compiles its C++ backend on installation, so a C++20 compiler is required (GCC 10, Clang 12,
-Apple Clang 14, Rtools on Windows, or newer) together with R 4.3 or newer. First install the R-side
-prerequisites once.
+The released package is on the Comprehensive R Archive Network (CRAN). Install it from an R session.
 
 ```{r, eval = FALSE}
-install.packages(c("Rcpp", "RcppEigen", "BH", "Rcereal", "R6"))
+install.packages("TRexSelector")
 ```
 
-CRAN still carries the pure-R 1.x release, so until version 2.0.0 is accepted there, install it from
-GitHub. It lives in the `R/TRexSelector/` subdirectory of the repository.
+CRAN provides binaries for Windows and macOS. On Linux, and for every install from source, the package
+compiles its C++ backend, so a C++20 compiler is required (GCC 10, Clang 12, Apple Clang 14, Rtools on
+Windows, or newer) together with R 4.3 or newer.
+
+The development version lives in the `R/TRexSelector/` subdirectory of the repository. Install the
+R-side prerequisites once, then the package from GitHub.
 
 ```{r, eval = FALSE}
-install.packages("remotes")
+install.packages(c("Rcpp", "RcppEigen", "BH", "Rcereal", "R6", "remotes"))
 remotes::install_github("trexselector/TRexSelector", subdir = "R/TRexSelector")
 ```
 
