@@ -10,6 +10,14 @@ and the READMEs install from CRAN and PyPI first. No interface or result changes
 
 ### 2026-11-07
 
+#### The Python package is 1.0.1
+
+- The 1.0.0 source distribution on PyPI carries the sources before the ranges fix, so a build from it
+  fails with Apple clang 14 as the CRAN builders did, while the wheels, built with newer compilers,
+  are unaffected. The Python package follows into the patch release 1.0.1: pyproject.toml carries
+  the version, and the GitHub release v1.0.1 publishes the wheels and the fixed sdist through the
+  existing workflow.
+
 #### The C++ SDK is 1.0.1
 
 - The ranges fix changes the sources every package ships, so the C++ SDK follows the R package into
