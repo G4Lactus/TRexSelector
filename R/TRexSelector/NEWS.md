@@ -10,7 +10,9 @@ On Linux with R 4.6 or R-devel the package compiled without OpenMP, because `R C
 `SHLIB_OPENMP_CXXFLAGS` there. The configure script reads the flags from R's Makeconf instead, so those builds
 run their parallel regions again. The README is reorganised. It opens with a description of the method, gives
 an overview of the selectors, T-solvers, ML methods and utilities, and installs from CRAN first, as the
-getting-started vignette does. Nothing else changes.
+getting-started vignette does. The twelve vignettes share a stylesheet and a navigation header, with a
+table of contents on the left that follows the scroll, the list of pages under it, and previous/next links
+at the end of every page. Nothing else changes.
 
 # TRexSelector 2.0.0
 

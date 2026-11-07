@@ -4,6 +4,8 @@ output:
   rmarkdown::html_vignette:
     toc: true
     css: vignette_styles.css
+    includes:
+      before_body: vignette_nav.html
 bibliography: references.bib
 csl: ieee.csl
 link-citations: true

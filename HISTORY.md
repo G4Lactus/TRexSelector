@@ -10,6 +10,20 @@ changes. Versions: C++ SDK 1.0.1, R TRexSelector 2.0.1, Python trexselector 1.0.
 
 ### 2026-11-07
 
+#### The vignettes share a navigation header
+
+- The `css` option of `html_vignette` replaces rmarkdown's whole default stylesheet, and the package's
+  stylesheet held two heading colours, so code blocks, tables and the table of contents of the twelve
+  vignettes were unstyled. The stylesheet takes rmarkdown's default as its base and adds the package
+  colours, shaded and bordered code blocks as in rendered Markdown, a table of contents that stays on
+  the left on wide screens and follows the scroll, and the styles of a shared header. That header,
+  `vignette_nav.html`, is included before the body of every page and carries a dark top bar with the
+  page position, the list of the twelve pages under the table of contents with the current one marked,
+  and previous/next links at the end of the page, all from one page list, so a new vignette is one list
+  entry. The format stays `html_vignette`: the `html_document` format of the 1.x vignette embeds
+  Bootstrap and weighs 1.2 MB per page, while the twelve pages weigh 995 KB together, 108 KB more than
+  before, and build in 15 s.
+
 #### The R README describes the package
 
 - The README of the R package opened with the field labels of DESCRIPTION (`Title`, `Description`,

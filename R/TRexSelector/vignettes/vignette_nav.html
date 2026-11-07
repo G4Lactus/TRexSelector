@@ -1,0 +1,80 @@
+<!-- Shared header of the vignettes, included before the body of every page. The
+     page list below feeds the "Pages" block of the left table of contents, the
+     position in the top bar and the previous/next links at the end of the page.
+     A new vignette is one more list entry. -->
+<header class="trex-topbar">
+  <span class="brand">TRexSelector</span>
+  <span class="sub">R package vignettes</span>
+  <span class="where"></span>
+</header>
+<ol class="trex-pages-list" hidden>
+  <li><a href="v01-getting-started.html">Getting started</a></li>
+  <li><a href="v02-trex-selector.html">The T-Rex selector</a></li>
+  <li><a href="v03-trex-da.html">T-Rex+DA</a></li>
+  <li><a href="v04-trex-gvs.html">T-Rex GVS</a></li>
+  <li><a href="v05-screening.html">Screening</a></li>
+  <li><a href="v06-trex-spca.html">T-Rex SPCA</a></li>
+  <li><a href="v07-trex-tikhonov.html">T-Rex Tikhonov</a></li>
+  <li><a href="v08-tsolvers.html">The T-solvers</a></li>
+  <li><a href="v09-ml-methods.html">The ML methods</a></li>
+  <li><a href="v10-memory-mapping.html">Memory mapping</a></li>
+  <li><a href="v11-no-copies.html">Without data copies</a></li>
+  <li><a href="v12-parallelism.html">Parallelism</a></li>
+</ol>
+<nav class="trex-pane" aria-label="Vignettes"></nav>
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+  var here = location.pathname.split("/").pop();
+  var items = Array.prototype.slice.call(document.querySelectorAll(".trex-pages-list li"));
+  var pages = items.map(function (li, i) {
+    var a = li.querySelector("a");
+    return { n: i + 1, href: a.getAttribute("href"), title: a.textContent };
+  });
+  var cur = -1;
+  pages.forEach(function (p, i) { if (p.href === here) cur = i; });
+
+  /* the position in the top bar */
+  var where = document.querySelector(".trex-topbar .where");
+  if (where && cur >= 0) where.textContent = "Page " + (cur + 1) + " of " + pages.length;
+
+  /* the page list in the left table of contents */
+  var pane = document.querySelector(".trex-pane");
+  var toc = document.getElementById("TOC");
+  if (pane) {
+    var ol = document.createElement("ol");
+    pages.forEach(function (p, i) {
+      var li = document.createElement("li");
+      if (i === cur) li.className = "current";
+      li.innerHTML = '<a href="' + p.href + '"><span class="n">' + p.n + '</span>' + p.title + '</a>';
+      ol.appendChild(li);
+    });
+    pane.appendChild(ol);
+    if (toc) toc.appendChild(pane);
+  }
+
+  /* previous and next at the end of the page */
+  var pager = document.createElement("nav");
+  pager.className = "trex-pager";
+  if (cur > 0) {
+    var prev = pages[cur - 1];
+    pager.innerHTML += '<a class="prev" href="' + prev.href + '">&larr; ' + prev.n + '. ' + prev.title + '</a>';
+  }
+  if (cur >= 0) pager.innerHTML += '<span class="where">' + (cur + 1) + ' / ' + pages.length + '</span>';
+  if (cur >= 0 && cur < pages.length - 1) {
+    var next = pages[cur + 1];
+    pager.innerHTML += '<a class="next" href="' + next.href + '">' + next.n + '. ' + next.title + ' &rarr;</a>';
+  }
+  document.body.appendChild(pager);
+
+  /* the table of contents follows the scroll */
+  var links = Array.prototype.slice.call(document.querySelectorAll("#TOC a[href^='#']"));
+  var heads = links.map(function (a) { return document.getElementById(a.getAttribute("href").slice(1)); });
+  function follow() {
+    var active = -1;
+    heads.forEach(function (h, i) { if (h && h.getBoundingClientRect().top <= 90) active = i; });
+    links.forEach(function (a, i) { a.classList.toggle("active", i === active); });
+  }
+  window.addEventListener("scroll", follow);
+  follow();
+});
+</script>

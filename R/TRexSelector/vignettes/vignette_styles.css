@@ -1,2 +1,344 @@
-h1 { color: #336C68; }
-h2 { color: #6BB2AD; }
+/* Stylesheet of the TRexSelector vignettes.
+   Base: the html_vignette stylesheet of the rmarkdown package (GPL-3), extended by
+   the package colours, a code block style as in rendered Markdown and a table of
+   contents that stays on the left on wide screens. */
+
+body {
+  background-color: #fff;
+  margin: 1em auto;
+  max-width: 760px;
+  overflow: visible;
+  padding-left: 2em;
+  padding-right: 2em;
+  font-family: "Open Sans", "Helvetica Neue", Helvetica, Arial, sans-serif;
+  font-size: 15px;
+  line-height: 1.45;
+  color: #24292e;
+}
+
+/* Table of contents: a box at the top on narrow screens, a fixed column on the
+   left from 1100px on. */
+#TOC {
+  clear: both;
+  margin: 0 0 10px 10px;
+  padding: 6px 8px;
+  width: 400px;
+  border: 1px solid #d0d7de;
+  border-radius: 5px;
+  background-color: #f6f8fa;
+  font-size: 13px;
+  line-height: 1.3;
+}
+  #TOC .toctitle {
+    font-weight: bold;
+    font-size: 15px;
+    margin-left: 5px;
+    color: #336C68;
+  }
+  #TOC ul {
+    padding-left: 40px;
+    margin-left: -1.5em;
+    margin-top: 5px;
+    margin-bottom: 5px;
+  }
+  #TOC ul ul {
+    margin-left: -2em;
+  }
+  #TOC li {
+    line-height: 18px;
+    list-style: none;
+  }
+  #TOC a {
+    color: #336C68;
+    text-decoration: none;
+  }
+  #TOC a:hover {
+    color: #6BB2AD;
+    text-decoration: underline;
+  }
+
+@media (min-width: 1100px) {
+  body {
+    margin-left: 300px;
+    margin-right: auto;
+  }
+  #TOC {
+    position: fixed;
+    top: 0;
+    left: 0;
+    bottom: 0;
+    width: 240px;
+    margin: 0;
+    padding: 16px 12px;
+    overflow-y: auto;
+    border: none;
+    border-right: 1px solid #d0d7de;
+    border-radius: 0;
+  }
+}
+
+table {
+  margin: 1em auto;
+  border-width: 1px;
+  border-color: #DDDDDD;
+  border-style: outset;
+  border-collapse: collapse;
+}
+table th {
+  border-width: 2px;
+  padding: 5px;
+  border-style: inset;
+}
+table td {
+  border-width: 1px;
+  border-style: inset;
+  line-height: 18px;
+  padding: 5px 5px;
+}
+table, table th, table td {
+  border-left-style: none;
+  border-right-style: none;
+}
+table thead, table tr.even {
+  background-color: #f7f7f7;
+}
+
+p {
+  margin: 0.5em 0;
+}
+
+blockquote {
+  background-color: #f6f8fa;
+  border-left: 4px solid #d0d7de;
+  padding: 0.25em 0.75em;
+}
+
+hr {
+  border-style: solid;
+  border: none;
+  border-top: 1px solid #777;
+  margin: 28px 0;
+}
+
+dl {
+  margin-left: 0;
+}
+  dl dd {
+    margin-bottom: 13px;
+    margin-left: 13px;
+  }
+  dl dt {
+    font-weight: bold;
+  }
+
+ul {
+  margin-top: 0;
+}
+  ul li {
+    list-style: circle outside;
+  }
+  ul ul {
+    margin-bottom: 0;
+  }
+
+/* Code: a shaded, bordered block as in rendered Markdown, inline code shaded. */
+pre, code {
+  background-color: #f6f8fa;
+  border-radius: 4px;
+  color: #24292e;
+  white-space: pre-wrap;    /* Wrap long lines */
+}
+pre {
+  border: 1px solid #d0d7de;
+  margin: 8px 0px 14px 0px;
+  padding: 10px 12px;
+  font-size: 13px;
+  line-height: 1.4;
+}
+pre:not([class]) {
+  background-color: #f6f8fa;
+}
+
+code {
+  font-family: Consolas, Monaco, 'Courier New', monospace;
+  font-size: 87%;
+}
+p > code, li > code, td > code {
+  padding: 2px 4px;
+}
+
+div.figure {
+  text-align: center;
+}
+img {
+  background-color: #FFFFFF;
+  padding: 2px;
+  border: 1px solid #CCCCCC;
+  border-radius: 3px;
+  margin: 0 5px;
+}
+
+h1 {
+  margin-top: 0;
+  font-size: 35px;
+  line-height: 40px;
+  color: #336C68;
+}
+h1.title {
+  color: #336C68;
+}
+
+h2 {
+  border-bottom: 4px solid #f7f7f7;
+  padding-top: 10px;
+  padding-bottom: 2px;
+  font-size: 145%;
+  color: #6BB2AD;
+}
+
+h3 {
+  border-bottom: 2px solid #f7f7f7;
+  padding-top: 10px;
+  font-size: 120%;
+}
+
+h4 {
+  border-bottom: 1px solid #f7f7f7;
+  margin-left: 8px;
+  font-size: 105%;
+}
+
+h5, h6 {
+  border-bottom: 1px solid #ccc;
+  font-size: 105%;
+}
+
+a {
+  color: #0033dd;
+  text-decoration: none;
+}
+  a:hover {
+    color: #6666ff; }
+  a:visited {
+    color: #800080; }
+  a:visited:hover {
+    color: #BB00BB; }
+  a[href^="http:"] {
+    text-decoration: underline; }
+  a[href^="https:"] {
+    text-decoration: underline; }
+
+/* The shared header of vignette_nav.html: the top bar, the page list in the left
+   table of contents, the previous/next line and the section that follows the
+   scroll. */
+body {
+  padding-top: 48px;
+}
+.trex-topbar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  min-height: 40px;
+  padding: 0 16px;
+  background: #2C3E50;
+  color: #ecf0f1;
+  font-size: 13px;
+}
+  .trex-topbar .brand {
+    font-weight: bold;
+    font-size: 16px;
+    color: #fff;
+    margin-right: 12px;
+  }
+  .trex-topbar .sub {
+    color: #bdc3c7;
+  }
+  .trex-topbar .where {
+    margin-left: auto;
+    color: #18BC9C;
+    font-weight: bold;
+  }
+@media (min-width: 1100px) {
+  #TOC {
+    top: 40px;
+  }
+}
+
+.trex-pane {
+  margin-top: 14px;
+  padding-top: 10px;
+  border-top: 1px solid #d0d7de;
+  font-size: 13px;
+}
+  .trex-pane::before {
+    content: "Pages";
+    display: block;
+    font-weight: bold;
+    font-size: 15px;
+    margin: 0 0 4px 5px;
+    color: #336C68;
+  }
+  .trex-pane ol {
+    list-style: none;
+    margin: 0;
+    padding: 0 0 0 5px;
+  }
+  .trex-pane li a {
+    display: block;
+    padding: 2px 4px;
+    color: #336C68;
+    text-decoration: none;
+    line-height: 18px;
+  }
+  .trex-pane li a:hover {
+    text-decoration: underline;
+  }
+  .trex-pane li.current a {
+    font-weight: bold;
+    background: #e6f1f0;
+    border-radius: 3px;
+  }
+  .trex-pane .n::after {
+    content: ". ";
+  }
+
+.trex-pager {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 36px;
+  padding-top: 10px;
+  border-top: 1px solid #d0d7de;
+  font-size: 14px;
+}
+  .trex-pager a {
+    color: #336C68;
+  }
+  .trex-pager .where {
+    color: #6a737d;
+    font-size: 12px;
+  }
+
+#TOC a.active {
+  font-weight: bold;
+  color: #336C68;
+}
+
+/* Colours from https://gist.github.com/robsimmons/1172277 */
+
+code > span.kw { color: #555; font-weight: bold; } /* Keyword */
+code > span.dt { color: #902000; } /* DataType */
+code > span.dv { color: #40a070; } /* DecVal (decimal values) */
+code > span.bn { color: #d14; } /* BaseN */
+code > span.fl { color: #d14; } /* Float */
+code > span.ch { color: #d14; } /* Char */
+code > span.st { color: #d14; } /* String */
+code > span.co { color: #888888; font-style: italic; } /* Comment */
+code > span.ot { color: #007020; } /* OtherToken */
+code > span.al { color: #ff0000; font-weight: bold; } /* AlertToken */
+code > span.fu { color: #900; font-weight: bold; } /* Function calls */
+code > span.er { color: #a61717; background-color: #e3d2d2; } /* ErrorTok */
