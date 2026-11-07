@@ -10,6 +10,22 @@ changes. Versions: C++ SDK 1.0.1, R TRexSelector 2.0.1, Python trexselector 1.0.
 
 ### 2026-11-07
 
+#### The Python README describes the package
+
+- The README of the Python package, the long description on PyPI, opened with the field labels of
+  DESCRIPTION as body text, named the current version in prose, attached the OpenMP facts to the source
+  build although every wheel bundles the OpenMP runtime of its platform, copied the dummy strategy and
+  thread sections of the C++ README verbatim, pointed to "the R vignette page 2" for documentation and
+  had no overview of the package. It follows the R README now: the title "trexselector — Python
+  Package", the lead paragraph with the two main journal articles in a block quote, installation bullets
+  (wheels for three platforms and Python 3.10 to 3.15 with the bundled OpenMP runtime, the source build
+  with the toolchain's OpenMP and Homebrew's LLVM on macOS, `main` as the released branch, the
+  single-threaded and the development install), the quick start, an overview of the seven selectors
+  with their control classes and the dummy strategy, the twenty T-solvers in the four submodules of
+  `trexselector.tsolvers.ad`, the ML methods, the utilities and the thread options, a documentation
+  section (docstrings, stub files, the Examples repository, the R vignettes), the links (website,
+  repository, Examples, references, CITATION.cff, issues) and the GPL paragraph in a text fence.
+
 #### The vignettes share a navigation header
 
 - The `css` option of `html_vignette` replaces rmarkdown's whole default stylesheet, and the package's
