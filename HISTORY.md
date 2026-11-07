@@ -10,6 +10,13 @@ and the READMEs install from CRAN and PyPI first. No interface or result changes
 
 ### 2026-11-07
 
+#### The submission comments carry the win-builder results of 2.0.1
+
+- `cran-comments.md` lists win-builder on R-release 4.6.2 and on R-devel r90845 among the test
+  environments of 2.0.1, both with the incoming-feasibility NOTE alone, which names the one day since
+  the last update, and nothing else; the R-devel instance, which returned no result on 2.0.0, answered
+  this time.
+
 #### The Python package is 1.0.1
 
 - The 1.0.0 source distribution on PyPI carries the sources before the ranges fix, so a build from it

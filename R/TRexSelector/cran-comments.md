@@ -25,13 +25,16 @@ else changes in the package's code or interface. The package has no reverse depe
   builders: the compiled backend builds without a warning, while the 2.0.0 sources fail there on the
   same `std::ranges` call.
 * R-devel in a rocker/r-devel container (Debian, x86_64): `R CMD check --as-cran`.
+* win-builder, R-release (R 4.6.2) and R-devel (2026-11-06 r90845): `R CMD check --as-cran`.
 * The package's GitHub Actions jobs: install, the testthat suite and `R CMD check` without vignettes
   on Ubuntu, macOS and Windows (R release), the sequential build without OpenMP on Ubuntu, and
   Windows with the daily R-devel snapshot.
 
 ## R CMD check results
 
-0 errors | 0 warnings | 0 notes on macOS.
+0 errors | 0 warnings | 0 notes on macOS. win-builder (R-release and R-devel) reports the
+incoming-feasibility NOTE alone, "Days since last update: 1", which this patch release of the
+installation failure explains.
 
 Two NOTEs in the R-devel container, both from the container itself:
 
