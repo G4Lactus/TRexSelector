@@ -5,10 +5,31 @@
 Patch release of the three packages after the public release (CRAN 2026-11-06, GitHub and PyPI
 2026-11-07): the C++20 ranges calls that Apple clang 14 rejects are gone, the R package's configure
 finds R's OpenMP flags on R 4.6 and R-devel again, the sources compile without warnings of their own,
-and the READMEs install from CRAN and PyPI first. No interface or result changes. Versions: C++ SDK
-1.0.1, R TRexSelector 2.0.1, Python trexselector 1.0.1.
+and the READMEs describe the packages and install from CRAN and PyPI first. No interface or result
+changes. Versions: C++ SDK 1.0.1, R TRexSelector 2.0.1, Python trexselector 1.0.1.
 
 ### 2026-11-07
+
+#### The R README describes the package
+
+- The README of the R package opened with the field labels of DESCRIPTION (`Title`, `Description`,
+  `Papers`, `Note`) as body text, carried the quick start as a level-1 heading with the other sections
+  below it, and copied the dummy strategy and thread sections of the C++ README verbatim without any
+  overview of what the package contains. It is titled like the C++ README now ("TRexSelector — R
+  Package") and opens with a lead paragraph and the two main journal articles in a block quote, with
+  the repository's references section for the rest. The installation facts are bullets that say where
+  OpenMP is available (the Windows binary, the Linux build, a macOS build from source with Homebrew's
+  libomp, for which the commands follow, while CRAN's macOS binary runs on one thread), and the
+  GitHub passage states that `main` carries the released version and `dev_beyond` the development.
+  The quick start is a level-2 section, and a new section lists the seven selectors with their
+  control functions and the dummy strategy, the twenty T-solvers in their four families, the ML
+  methods, the utilities and the thread options, with pointers to vignettes 2 and 12. The vignette
+  list names all twelve, the links carry the project website, the repository, the Examples repository,
+  the references section and the issues, the vignette link is absolute (CRAN renders the README outside
+  the repository), and the GPL paragraph sits in a text fence. The getting-started vignette carries the
+  same branch and OpenMP statements, names the utilities as the fifth group of tools and ends with the
+  same links, and a table cell of the T-solvers vignette loses its semicolon. NEWS.md and
+  cran-comments.md describe the reorganised README.
 
 #### The submission comments carry the win-builder results of 2.0.1
 

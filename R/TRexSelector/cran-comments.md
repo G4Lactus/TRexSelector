@@ -14,8 +14,9 @@ it, and the configure script relied on that query. It reads Makeconf directly no
 `$(SHLIB_OPENMP_CXXFLAGS)` into Makevars, the form Writing R Extensions asks for, as Makevars.win
 already did. The compiler warnings in the package's own sources that the check logs showed (an unused
 variable in the sequential build, three signed-unsigned comparisons in the R bindings) are gone. The
-installation section of the README and of the getting-started vignette points to CRAN first. Nothing
-else changes in the package's code or interface. The package has no reverse dependencies on CRAN.
+README is reorganised, with an overview of the classes, and its installation section points to CRAN
+first, as the getting-started vignette does. Nothing else changes in the package's code or interface.
+The package has no reverse dependencies on CRAN.
 
 ## Test environments
 

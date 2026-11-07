@@ -26,29 +26,26 @@ knitr::opts_chunk$set(
 )
 ```
 
-# TRexSelector
+# TRexSelector — R Package
 
-**Title**: The T-Rex selector for fast high-dimensional variable selection with FDR control
+**Fast variable selection in high-dimensional settings with control of the false discovery rate (FDR).**
 
-**Description**: It performs fast variable selection in large-scale high-dimensional settings while controlling the
-false discovery rate (FDR) at a user-defined target level. Since version 2.0.0 the R package provides bindings to the
-TRexSelector C++ library, which replaces the pure-R implementation of the 1.x releases under the same package name.
+The T-Rex selector runs terminating random experiments with dummy variables and fuses their selected active sets into
+the final set of selected variables. It provably controls the false discovery rate (FDR), the expected fraction of
+false positives among the selected variables, at a user-defined target level while selecting as many variables as
+possible, and so reaches a high true positive rate (TPR). It is fast and memory-efficient enough for designs with
+millions of variables, as they arise in genomics or financial engineering. Since version 2.0.0 the R package provides
+bindings to the TRexSelector C++ library, which replaces the pure-R implementation of the 1.x releases under the same
+package name.
 
-**Papers**: The package is based on the papers
+The method family is published in a series of papers. The two main journal articles are
 
-J. Machkour, M. Muma, and D. P. Palomar, "The terminating-random experiments selector: Fast high-dimensional variable selection with false discovery rate control," *Signal Processing*, vol. 231, article 109894, 2025. (<https://doi.org/10.1016/j.sigpro.2025.109894>)
+> J. Machkour, M. Muma, and D. P. Palomar, "The terminating-random experiments selector: Fast high-dimensional variable selection with false discovery rate control," *Signal Processing*, vol. 231, article 109894, 2025. (<https://doi.org/10.1016/j.sigpro.2025.109894>)
+>
+> J. Machkour, M. Muma, and D. P. Palomar, "High-dimensional false discovery rate control for dependent variables," *Signal Processing*, vol. 234, article 109990, 2025. (<https://doi.org/10.1016/j.sigpro.2025.109990>)
 
-J. Machkour, M. Muma, and D. P. Palomar, "High-dimensional false discovery rate control for dependent variables," *Signal Processing*, vol. 234, article 109990, 2025. (<https://doi.org/10.1016/j.sigpro.2025.109990>)
-
-**Note**: The T-Rex selector performs terminated-random experiments (T-Rex) using the T-LARS algorithm and fuses the
-selected active sets of all random experiments to obtain a final set of selected variables. The T-Rex selector provably
-controls the false discovery rate (FDR), i.e., the expected fraction of selected false positives among all selected
-variables, at the user-defined target level while maximizing the number of selected variables and, thereby, achieving a
-high true positive rate (TPR) (i.e., power). The T-Rex selector can be applied in various fields, such as genomics,
-financial engineering, or any other field that requires a fast and FDR-controlling variable/feature selection method for
-large-scale high-dimensional settings.
-
-In the following sections, we show you how to install and use the package.
+The References section of the repository (see Links) lists the others, and the help page of every class names the
+papers it builds on.
 
 ## Installation
 
@@ -58,19 +55,32 @@ The released package is on the Comprehensive R Archive Network (CRAN). Install i
 install.packages("TRexSelector")
 ```
 
-CRAN provides binaries for Windows and macOS. On Linux, and for every install from source, the package compiles its
-C++ backend, so a C++20-capable compiler is required (GCC ≥ 10, Clang ≥ 12, Apple Clang ≥ 14, or Rtools on Windows),
-together with R ≥ 4.3.
+- CRAN provides binaries for Windows and macOS, so no compiler is needed there.
+- On Linux, and for every install from source, the package compiles its C++ backend. This needs R ≥ 4.3 and a
+  C++20 compiler (GCC ≥ 10, Clang ≥ 12, Apple Clang ≥ 14, or Rtools on Windows).
+- OpenMP is optional and enables the threads described below. Where it is missing, the package runs on one thread and
+  `trex_get_max_threads()` returns 1, which is also the check after an installation. The CRAN binary for Windows is
+  built with OpenMP. On Linux, `install.packages()` compiles from source with the OpenMP flags of R, so the build has
+  OpenMP. CRAN's R for macOS has no OpenMP, so the macOS binary runs on one thread, while a build from source has
+  OpenMP when Homebrew's libomp is installed (the next block), because `configure` compiles with its `omp.h` and
+  links the OpenMP runtime that R ships.
+- Setting `TREX_OPENMP=no` forces the single-threaded build on every platform, for example
+  `TREX_OPENMP=no R CMD INSTALL R/TRexSelector`.
 
-OpenMP is optional. Without it the package compiles single-threaded and `trex_get_max_threads()` returns 1. On Linux and
-Windows, R supplies the OpenMP flags. CRAN's R for macOS has none, so `configure` compiles with the `omp.h` of
-Homebrew's libomp (`brew install libomp`) and links R's own OpenMP runtime (`lib/libomp.dylib` of the R installation,
-the one other packages load), or Homebrew's runtime when R ships none. Setting `TREX_OPENMP=no` forces the
-single-threaded build, for example `TREX_OPENMP=no R CMD INSTALL R/TRexSelector`.
+For a threaded build on macOS, install libomp with Homebrew and then the package from source:
 
-The development version lives in the `R/TRexSelector/` subdirectory of the
-[GitHub repository](https://github.com/trexselector/TRexSelector). First install the R-side prerequisites (once, from
-an R session):
+```sh
+brew install libomp
+```
+
+```{r, eval=FALSE}
+install.packages("TRexSelector", type = "source")
+```
+
+The [GitHub repository](https://github.com/trexselector/TRexSelector) holds the package in its `R/TRexSelector/`
+subdirectory. The `main` branch carries the released sources, the version that is on CRAN, and the development
+happens on the `dev_beyond` branch. An install from the repository needs the R-side prerequisites (once, from an R
+session):
 
 ```{r, eval=FALSE}
 install.packages(c("Rcpp", "RcppEigen", "BH", "Rcereal", "R6"))
@@ -79,7 +89,7 @@ install.packages(c("Rcpp", "RcppEigen", "BH", "Rcereal", "R6"))
 Then install the package from GitHub or from a local clone:
 
 ```{r, eval=FALSE}
-# Option 1: Install directly from GitHub
+# Option 1: Install directly from GitHub (the main branch)
 install.packages("remotes")
 remotes::install_github("trexselector/TRexSelector", subdir = "R/TRexSelector")
 
@@ -88,7 +98,7 @@ remotes::install_github("trexselector/TRexSelector", subdir = "R/TRexSelector")
 # R CMD INSTALL R/TRexSelector
 ```
 
-You can open the help pages with:
+The help pages open with:
 ```{r, eval=FALSE}
 library(TRexSelector)
 help(package = "TRexSelector")
@@ -99,16 +109,16 @@ help(package = "TRexSelector")
 # etc.
 ```
 
-To cite the package 'TRexSelector' in publications use:
+To cite the package in publications use:
 ```{r, eval=FALSE}
 citation("TRexSelector")
 ```
 
-# Quick Start
-This section illustrates the basic usage of the 'TRexSelector' package to perform FDR-controlled variable selection
-in large-scale high-dimensional settings based on the T-Rex selector.
+## Quick Start
 
-1. **First**, we generate a high-dimensional Gaussian data set with sparse support:
+This section illustrates the basic usage of the package on a small high-dimensional example.
+
+First, generate a Gaussian data set with sparse support:
 
 ```{r}
 library(TRexSelector)
@@ -126,9 +136,8 @@ X <- matrix(stats::rnorm(n * p), nrow = n, ncol = p)
 y <- X %*% beta + stats::rnorm(n)
 ```
 
-2. **Second**, we perform FDR-controlled variable selection using the T-Rex selector for a target FDR of 5%. The
-   selectors are R6 classes: construct with `$new(...)`, run with `$select()`, and read the results from active fields
-   such as `$selected_indices` (1-based indices):
+Second, run the T-Rex selector for a target FDR of 5%. The selectors are R6 classes, so a selector is constructed with
+`$new(...)`, run with `$select()`, and read through active fields such as `$selected_indices` (1-based indices):
 
 ```{r}
 # Seed
@@ -142,77 +151,104 @@ paste0("True active variables: ", paste(as.character(true_actives), collapse = "
 paste0("Selected variables:    ", paste(as.character(sel$selected_indices), collapse = ", "))
 ```
 
-So, for a preset target FDR of 5%, the T-Rex selector has selected all true active variables and there are no false
-positives in this example.
+For the preset target FDR of 5%, the T-Rex selector has selected all true active variables and no false positive in
+this example. The target FDR has to be chosen according to the requirements of the application.
 
-Note that users have to choose the target FDR according to the requirements of their specific applications.
+Every selector of the next section follows the same pattern of construction, `$select()` and inspection.
 
-All selector variants (`TRexSelector`, `TRexDASelector`, `TRexGVSSelector`, `TRexScreeningSelector`,
-`TRexBiobankScreeningSelector`, `TRexSPCASelector`) follow the same construct → `$select()` → inspect pattern.
+## What the package provides
 
-## Dummy Strategies
-The T-Rex selector calibrates the number of dummies in its L-loop. `trex_control(lloop_strategy = )` says how the
-dummies of that loop are produced, in every selector that takes the control.
+### Selectors
 
-| Strategy | Dummies | Storage |
+Seven selectors cover the T-Rex method family. Each takes a control list, which carries the T-solver choice, the dummy
+settings and the thread budgets.
+
+| Selector | Task | Control |
 | --- | --- | --- |
-| `"STANDARD"` (default) | fresh matrices at every L step | K matrices |
-| `"HCONCAT"` | the same K matrices grow by p columns per L step | K matrices |
-| `"SEEDED"` | the draws of `"STANDARD"`, re-derived from the seed at every step | none |
-| `"PERMUTATION"` | permuted columns of the design | K matrices |
-| `"PERMUTATION_SEEDED"` | the permutation re-derived from the seed | none |
-| `"SKIPL"` | no L-loop, the cap `max_dummy_multiplier` is used directly | K matrices |
+| `TRexSelector` | FDR-controlled variable selection, the T-Rex selector | `trex_control()` |
+| `TRexDASelector` | dependency-aware (DA) dummies for correlated variables, T-Rex+DA | `trex_da_control()` |
+| `TRexGVSSelector` | group variable selection (GVS), T-Rex GVS | `trex_gvs_control()` |
+| `TRexScreeningSelector` | fast FDR-controlled screening of many variables, Screen-T-Rex | `trex_screen_control()` |
+| `TRexBiobankScreeningSelector` | phenotype screening of genomic biobank designs | `trex_biobank_control()` |
+| `TRexSPCASelector` | sparse principal component analysis (SPCA) under FDR control | `trex_spca_control()` |
+| `TRexTikhonovSelector` | selection with a general Tikhonov penalty matrix | `trex_tikhonov_control()` |
 
-`"STANDARD"` draws fresh dummies at every step, the law of the T-Rex paper and the default on every surface. The seeded
-strategies store nothing and suit designs where K times L times p columns do not fit in memory. `"SEEDED"` selects
-exactly as `"STANDARD"` for the same seed, and `"PERMUTATION_SEEDED"` exactly as `"PERMUTATION"`. `"HCONCAT"` keeps the
-grown law, which calibrates a larger L and gains 0.6 percentage points of true positive rate (TPR) on average in a
-paired study of 500 trials, at the same false discovery rate (FDR). `"SKIPL"` fixes L at the cap and skips the
-calibration, and under a large fixed L without the stagnation stop its FDP estimate is anti-conservative (the selector
-warns from `max_dummy_multiplier = 10` on), so the calibrated strategies are the safe choice. The dummies are standard
-Normal by default, and `trex_dummy_distribution()` offers the other laws. Vignette page 2,
-`vignette("v02-trex-selector")`, carries the study and the seeds section.
+The control list also sets the dummy strategy of the L-loop, `lloop_strategy`. Its default `"STANDARD"` draws fresh
+dummies at every step, as the T-Rex paper does, while the seeded strategies re-derive them from the seed and store
+nothing, for designs whose dummy matrices do not fit in memory. The dummies are standard Normal by default, and
+`trex_dummy_distribution()` offers the other laws. The vignette of the T-Rex selector,
+`vignette("v02-trex-selector")`, describes every strategy and the seeds.
 
-## Threads
-The package runs serially by default: `trex_control()` has `parallel_rnd_experiments = FALSE`, `max_outer_threads = 1`
-and `max_inner_threads = 1`, and `tsolver_options()` has `n_threads = 1`. The random experiments of a selector run one
-after the other, every T-solver on one thread. Parallel work is opt-in, and one layer owns the cores at a time.
+### T-solvers
 
-- `trex_control(parallel_rnd_experiments = TRUE, max_outer_threads = m)` runs the K random experiments on `m` threads,
-  at most K. Inside the parallel experiments every solver runs serially.
-- `trex_control(max_inner_threads = m)` gives the solvers inside the experiments a budget of `m` threads for their
-  passes over the design. The budget is live when the experiments run in sequence, which the lean L-loop strategies
-  (`"SEEDED"`, `"PERMUTATION"`, `"PERMUTATION_SEEDED"`) always do. A pass is split only when it touches at least a
-  million entries of the design, because the cost of forming a team of threads exceeds the gain below that. Two to four
-  threads carry the gain, since the passes are memory-bandwidth bound. The seeded generators (the dummies, the
-  synthetic designs) count their work in the same unit with the measured cost of a random draw (about 80 entries) and
-  of seeding an engine (up to 32,000), so they split from a few thousand entries.
-- `tsolver_options(n_threads = m)` is the same budget for a T-solver used on its own, and `$set_num_threads()` changes
-  it on a live solver.
-- Every other kernel (the scalers, the clustering, the ML regressions, `trex_normalize_design()`, the dummy and data
-  generators) runs on the library's default budget, which starts at 1, so the package is single-threaded by default
-  on every machine. `trex_set_num_threads(m)` sets that default for the session and returns the previous value,
-  `trex_get_num_threads()` reads it, and the `n_threads` argument of the scalers, the clustering and the ML classes
-  overrides it per object. Inside a selector these kernels take `max_inner_threads`. `trex_get_max_threads()` reports
-  the threads OpenMP can run on the machine, an upper bound for a budget.
+Each random experiment runs a terminating solver, a T-solver, which stops once a given number of dummies has entered
+its path. Twenty T-solvers are available as R6 classes in four families, `tsolver_options()` holds their options, and
+`trex_control(solver = )` picks the one a selector uses.
 
-Every thread option is a whole number of at least 1; other values are errors. A seeded run selects the same variables
-whatever the thread settings. Without OpenMP every setting is a no-op and `trex_get_max_threads()` returns 1 (see
-Installation). The parallelism vignette has the details.
+- Least angle regression (LARS) based: `TLARS_Solver`, `TLASSO_Solver`, `TSTEPWISE_Solver`, `TSTAGEWISE_Solver`,
+  `TENET_Solver`, `TENETAug_Solver`, `TIENET_Solver`, `TIENETAug_Solver` and `TIKNET_Solver`.
+- Matching pursuit based: `TOMP_Solver`, `TGP_Solver`, `TACGP_Solver`, `TMP_Solver`, `TOOLS_Solver` and
+  `TNCGMP_Solver`.
+- Adaptive forward stepwise: `TAFS_Solver`.
+- Coordinate descent (CD) based: `TCDLASSO_Solver`, `TCDENET_Solver`, `TCDIENET_Solver` and `TCDTIKNET_Solver`.
+
+### ML methods
+
+The machine learning (ML) building blocks the selectors share are available on their own: the scalers
+`MLZScoreScaler` and `MLLpNormScaler`, the decompositions `MLSVD` and `MLPCA`, the regressions `MLRidge` and
+`MLElasticNet` with their cross-validated variants `MLRidgeCV` and `MLElasticNetCV`, and agglomerative clustering
+through `ml_agglomerative_cluster()` and `ml_cut_tree()`.
+
+### Utilities
+
+- Memory-mapped designs: `mem_matrix_from()` writes a matrix to a memory-mapped file and `mem_matrix()` wraps such a
+  file, which the selectors and T-solvers read without a copy.
+- Metrics: `trex_fdp()`, `trex_tpp()`, `trex_precision()` and `trex_recall()` on index sets, `trex_fdp_dense()` and
+  `trex_tpp_dense()` on coefficient vectors.
+- Design helpers: `trex_normalize_design()`, `trex_dummy_distribution()`, `trex_gamma_to_k()` and
+  `trex_tikhonov_lambda2_power_rule()`.
+
+### Threads
+
+The package runs serially by default, and parallel work is opt-in. `trex_control(parallel_rnd_experiments = TRUE,
+max_outer_threads = m)` runs the random experiments of a selector on `m` threads, `trex_control(max_inner_threads = m)`
+and `tsolver_options(n_threads = m)` give the T-solvers a budget of `m` threads for their passes over the design, and
+`trex_set_num_threads(m)` sets the default budget of the scalers, the clustering and the ML methods for the session,
+which `trex_get_num_threads()` reads. `trex_get_max_threads()` reports the threads OpenMP can run on the machine and
+returns 1 without OpenMP (see Installation). A seeded run selects the same variables whatever the thread settings. The
+parallelism vignette, `vignette("v12-parallelism")`, explains which layer owns the cores.
 
 ## Documentation
-The package has twelve vignettes in [`vignettes/`](vignettes/) (built on installation with `build_vignettes = TRUE`,
-listed by `browseVignettes("TRexSelector")`): getting started, the T-Rex selector, T-Rex+DA, T-Rex GVS, screening,
-T-Rex SPCA, T-Rex Tikhonov, the T-solvers, the ML methods, memory mapping, working without data copies, and parallelism.
-The help page of every selector, T-solver and machine learning class ends with the papers it builds on, and
+
+The package has twelve vignettes, listed by `browseVignettes("TRexSelector")` and opened as
+`vignette("v02-trex-selector")`. An install from GitHub builds them with `build_vignettes = TRUE`, and their sources
+are in the
+[vignettes directory](https://github.com/trexselector/TRexSelector/tree/main/R/TRexSelector/vignettes) of the
+repository.
+
+1. Getting started with TRexSelector
+2. The T-Rex selector
+3. T-Rex+DA: dependency-aware dummies
+4. T-Rex GVS: grouped variable selection
+5. Screening: Screen-T-Rex and the biobank screening
+6. T-Rex SPCA: sparse principal components under FDR control
+7. T-Rex Tikhonov: a general penalty matrix
+8. The T-solvers
+9. The ML methods
+10. Memory mapping: disk-backed designs
+11. Working without data copies
+12. Parallelism: who owns the cores
+
+The help page of every selector, T-solver and ML class ends with the papers it builds on, and
 `citation("TRexSelector")` lists the package entry and the T-Rex method papers.
 
 ## Links
-T-Rex paper: <https://doi.org/10.48550/arXiv.2110.06048>
 
-TRexSelector repository (C++ core, Python, and R packages): [GitHub-TRexSelector](https://github.com/trexselector/TRexSelector)
-
-Bug reports: [GitHub Issues](https://github.com/trexselector/TRexSelector/issues)
+- Project website: <https://trexselector.com>
+- Repository of the C++ core and the R and Python packages: <https://github.com/trexselector/TRexSelector>
+- Examples in R, Python and C++: <https://github.com/trexselector/TRexSelector_Examples>
+- References of the method family: <https://github.com/trexselector/TRexSelector#references>
+- Bug reports: <https://github.com/trexselector/TRexSelector/issues>
 
 ```{r, include = FALSE}
 # Reset user's options()
@@ -228,10 +264,12 @@ where the toolchain provides it.
 
 ## License
 
-GPL ≥ 3 — see the [GNU General Public License v3](https://www.gnu.org/licenses/gpl-3.0.html).
+GPL ≥ 3, see the [GNU General Public License v3](https://www.gnu.org/licenses/gpl-3.0.html).
 
+```text
 This program is free software: you can redistribute it and/or modify it under the
 terms of the GNU General Public License as published by the Free Software
 Foundation, either version 3 of the License, or (at your option) any later
 version. It is distributed WITHOUT ANY WARRANTY; without even the implied
 warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+```

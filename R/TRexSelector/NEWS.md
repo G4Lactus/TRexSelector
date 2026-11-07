@@ -8,8 +8,9 @@ results.
 
 On Linux with R 4.6 or R-devel the package compiled without OpenMP, because `R CMD config` no longer serves
 `SHLIB_OPENMP_CXXFLAGS` there. The configure script reads the flags from R's Makeconf instead, so those builds
-run their parallel regions again. The installation section of the README and of the getting-started vignette
-points to CRAN first. Nothing else changes.
+run their parallel regions again. The README is reorganised. It opens with a description of the method, gives
+an overview of the selectors, T-solvers, ML methods and utilities, and installs from CRAN first, as the
+getting-started vignette does. Nothing else changes.
 
 # TRexSelector 2.0.0
 

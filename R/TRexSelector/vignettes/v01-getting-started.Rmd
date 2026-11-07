@@ -34,10 +34,10 @@ guarantees the FDR level.
 
 The R package is the R interface to the TRexSelector C++ library. The same library drives the Python
 package and the C++ software development kit, so the three surfaces select the same variables on the
-same data. Version 2.0.0 replaces the pure-R implementation of the 1.x releases under the same package
-name.
+same data. Since version 2.0.0 it replaces the pure-R implementation of the 1.x releases under the same
+package name.
 
-The package has four groups of tools.
+The package has five groups of tools.
 
 - **T-Rex selectors.** The core `TRexSelector` and its variants for dependent variables
   (`TRexDASelector`), grouped variables (`TRexGVSSelector`), fast screening (`TRexScreeningSelector`,
@@ -49,6 +49,8 @@ The package has four groups of tools.
   singular value decomposition (SVD), PCA and hierarchical clustering.
 - **Memory-mapped matrices.** Disk-backed designs accepted everywhere a matrix is, so a design larger than
   the memory of the machine can be processed.
+- **Utilities.** The metrics `trex_fdp()` and `trex_tpp()` with precision and recall, the design helpers
+  `trex_normalize_design()` and `trex_dummy_distribution()`, and the thread functions.
 
 # Installation
 
@@ -62,7 +64,8 @@ CRAN provides binaries for Windows and macOS. On Linux, and for every install fr
 compiles its C++ backend, so a C++20 compiler is required (GCC 10, Clang 12, Apple Clang 14, Rtools on
 Windows, or newer) together with R 4.3 or newer.
 
-The development version lives in the `R/TRexSelector/` subdirectory of the repository. Install the
+The `main` branch of the repository carries the released sources, the version that is on CRAN, in the
+`R/TRexSelector/` subdirectory, and the development happens on the `dev_beyond` branch. Install the
 R-side prerequisites once, then the package from GitHub.
 
 ```{r, eval = FALSE}
@@ -70,10 +73,12 @@ install.packages(c("Rcpp", "RcppEigen", "BH", "Rcereal", "R6", "remotes"))
 remotes::install_github("trexselector/TRexSelector", subdir = "R/TRexSelector")
 ```
 
-OpenMP is optional. On Linux and Windows R supplies the OpenMP flags. CRAN's R for macOS has none, so
-the configure script uses the `omp.h` header of Homebrew's libomp (`brew install libomp`) together with
-the OpenMP runtime that R itself ships. Without a header the package compiles single-threaded and
-`trex_get_max_threads()` returns 1. The parallelism page explains what the threads are used for.
+OpenMP is optional. The CRAN binary for Windows is built with it, and on Linux the package compiles with
+the OpenMP flags of R. CRAN's R for macOS has none, so the macOS binary runs on one thread, while a build
+from source (`install.packages("TRexSelector", type = "source")`) uses the `omp.h` header of Homebrew's
+libomp (`brew install libomp`) together with the OpenMP runtime that R itself ships. Without a header the
+package compiles single-threaded and `trex_get_max_threads()` returns 1. The parallelism page explains
+what the threads are used for.
 
 # A first run
 
@@ -171,6 +176,13 @@ sel2$selected_indices
 10. Memory mapping: disk-backed designs.
 11. Working without data copies: the in-place contract.
 12. Parallelism: who owns the cores.
+
+# Links
+
+- Project website: <https://trexselector.com>
+- Repository of the C++ core and the R and Python packages: <https://github.com/trexselector/TRexSelector>
+- Examples in R, Python and C++: <https://github.com/trexselector/TRexSelector_Examples>
+- Bug reports: <https://github.com/trexselector/TRexSelector/issues>
 
 # Citing the package
 
