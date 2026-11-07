@@ -129,6 +129,18 @@ that entry; TRexSelectorNeo before).
 
 ### 2026-11-07
 
+#### The configure script reads R's OpenMP flags from Makeconf
+
+- On R 4.6 and R-devel, `R CMD config SHLIB_OPENMP_CXXFLAGS` answers "no information for variable"
+  although Makeconf defines it, and the first step of the R package's configure relied on that query,
+  so every Linux build on those versions compiled sequentially: CRAN's Fedora builds of 2.0.0 and the
+  rocker R-devel container both report "checking for R's OpenMP flags... none", while R 4.3.3 still
+  served the value. The configure script reads SHLIB_OPENMP_CXXFLAGS from `${R_HOME}/etc${R_ARCH}/Makeconf`
+  and, when it is set, writes the make variable `$(SHLIB_OPENMP_CXXFLAGS)` itself into Makevars, the
+  form Writing R Extensions asks for, as Makevars.win already does. Where R has no OpenMP flags, CRAN's
+  R on macOS, the steps for Homebrew's omp.h with R's bundled libomp follow unchanged. The configure
+  script carries the package version 2.0.1.
+
 #### The R package is 2.0.1
 
 - The ranges fix reaches CRAN as a patch release, since CRAN takes no second upload of a version

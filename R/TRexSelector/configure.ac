@@ -1,4 +1,4 @@
-AC_INIT([TRexSelector], [2.0.0])
+AC_INIT([TRexSelector], [2.0.1])
 
 # Find the R compiler and flags
 : ${R_HOME=`R RHOME`}
@@ -29,17 +29,21 @@ if test "x${TREX_OPENMP}" = "xno"; then
   AC_MSG_NOTICE([TREX_OPENMP=no: OpenMP disabled])
   OPENMP_NOPRAGMA_FLAGS="-Wno-unknown-pragmas"
 else
-  # Step 1: R's native OpenMP flags
+  # Step 1: R's native OpenMP flags. Makeconf defines SHLIB_OPENMP_CXXFLAGS
+  # (empty where R has no OpenMP, as CRAN's R on macOS); R CMD config does not
+  # serve the variable on R 4.6 and R-devel, so the file is read directly. When
+  # the flags exist, Makevars carries the make variable itself, the form
+  # Writing R Extensions asks for, and make expands it at build time.
   AC_MSG_CHECKING([for R's OpenMP flags])
-  OPENMP_CXXFLAGS=`"${R_HOME}/bin/R" CMD config SHLIB_OPENMP_CXXFLAGS 2>/dev/null`
-  # R CMD config prints "ERROR: ..." when R has no OpenMP flags (CRAN's R on macOS)
-  if echo "${OPENMP_CXXFLAGS}" | grep -q "ERROR"; then
-    OPENMP_CXXFLAGS=""
-  fi
-  OPENMP_LIBS="${OPENMP_CXXFLAGS}"
-  if test -n "${OPENMP_CXXFLAGS}"; then
-    AC_MSG_RESULT([${OPENMP_CXXFLAGS}])
+  trex_makeconf="${R_HOME}/etc${R_ARCH}/Makeconf"
+  trex_r_openmp=`sed -n 's/^SHLIB_OPENMP_CXXFLAGS[[ ]]*=[[ ]]*//p' "${trex_makeconf}" 2>/dev/null`
+  if test -n "${trex_r_openmp}"; then
+    OPENMP_CXXFLAGS='$(SHLIB_OPENMP_CXXFLAGS)'
+    OPENMP_LIBS='$(SHLIB_OPENMP_CXXFLAGS)'
+    AC_MSG_RESULT([${trex_r_openmp}])
   else
+    OPENMP_CXXFLAGS=""
+    OPENMP_LIBS=""
     AC_MSG_RESULT([none])
   fi
 
