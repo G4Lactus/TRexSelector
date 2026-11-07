@@ -107,7 +107,8 @@ void preprocessMatStatistics(
 
                     // Only add to dropped if it isn't already there
                     // (useful if called multiple times or pre-populated)
-                    if (std::ranges::find(dropped_indices, j) == dropped_indices.end()) {
+                    if (std::find(dropped_indices.begin(), dropped_indices.end(), j) ==
+                        dropped_indices.end()) {
                         thread_dropped.push_back(static_cast<std::size_t>(j));
                     }
                 } else {
@@ -134,9 +135,9 @@ void preprocessMatStatistics(
         }
     } // End of #pragma omp parallel
 
-    // Ensure dropped indices are sorted for consistent downstream logic (C++20)
+    // Ensure dropped indices are sorted for consistent downstream logic
     if (normalize && !dropped_indices.empty()) {
-        std::ranges::sort(dropped_indices);
+        std::sort(dropped_indices.begin(), dropped_indices.end());
     }
 }
 

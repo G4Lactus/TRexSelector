@@ -306,7 +306,8 @@ void TSolver_Base::initializeInactives() {
 
     if (dropped_indices_.size() < HASH_THRESHOLD) {
         for (std::size_t j = 0; j < p_tot; ++j) {
-            if (std::ranges::find(dropped_indices_, j) == dropped_indices_.end())
+            if (std::find(dropped_indices_.begin(), dropped_indices_.end(), j) ==
+                dropped_indices_.end())
                 inactives_.push_back(j);
         }
     } else {

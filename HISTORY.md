@@ -129,6 +129,18 @@ that entry; TRexSelectorNeo before).
 
 ### 2026-11-07
 
+#### The solvers compile without the ranges library
+
+- CRAN's daily checks of TRexSelector 2.0.0 reported "Installation failed" on three macOS flavors
+  (r-release x86_64, r-oldrel arm64 and x86_64), whose builders run Apple clang 14.0.3 with the
+  macOS 11.3 SDK. That compiler accepts `-std=gnu++20` but its standard library has no ranges
+  algorithms, so `std::ranges::find` in the column preprocessing and in the inactive-set
+  initialization and `std::ranges::sort` of the dropped indices failed with "no member named
+  'ranges' in namespace 'std'". The arm64 release builder, on Apple clang 17, passed. The three
+  calls are `std::find` and `std::sort` over begin and end now, with identical results, and the
+  vendored copy of the R package follows. The tree uses no other C++20 library feature that
+  Apple clang 14 lacks.
+
 #### The getting-started vignette installs from CRAN first
 
 - The installation passage of the getting-started vignette still said that CRAN carried the pure-R
