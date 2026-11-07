@@ -1,9 +1,25 @@
 # TRexSelector — C++ Core Library
 
-The C++20 core of the [T-Rex Selector](../README.md): all selector variants, terminating
-solvers, and supporting machinery are implemented here once and exposed to R and Python
-through thin binding layers. This README covers building the library and its tests, and
-consuming it from your own C++ project.
+**Fast variable selection in high-dimensional settings with control of the false discovery rate (FDR).**
+
+The C++20 core of the T-Rex selector: every selector variant, terminating solver and supporting
+kernel is implemented here once and reaches R and Python through thin binding layers. The T-Rex
+selector runs terminating random experiments with dummy variables and fuses their selected active
+sets into the final set of selected variables. It provably controls the false discovery rate (FDR),
+the expected fraction of false positives among the selected variables, at a user-defined target level
+while selecting as many variables as possible, and so reaches a high true positive rate (TPR). This
+README covers the dependencies, building the library and its tests, installing and consuming it from
+a C++ project, and what the library provides. The [repository README](../README.md) tells the story
+of the method.
+
+The method family is published in a series of papers. The two main journal articles are
+
+> J. Machkour, M. Muma, and D. P. Palomar, "The terminating-random experiments selector: Fast high-dimensional variable selection with false discovery rate control," *Signal Processing*, vol. 231, article 109894, 2025. (<https://doi.org/10.1016/j.sigpro.2025.109894>)
+>
+> J. Machkour, M. Muma, and D. P. Palomar, "High-dimensional false discovery rate control for dependent variables," *Signal Processing*, vol. 234, article 109990, 2025. (<https://doi.org/10.1016/j.sigpro.2025.109990>)
+
+The [References section](../README.md#references) of the repository README lists the others, and the
+documentation comment of every class names the papers it builds on.
 
 ---
 
@@ -113,72 +129,7 @@ cmake --workflow --preset tidy        # clang-tidy over the codebase
 
 ---
 
-## Dummy Strategies
-
-The T-Rex selector calibrates the number of dummies in its L-loop. `lloop_strategy` of
-`TRexControlParameter` says how the dummies of that loop are produced, in every selector that
-carries the control.
-
-| Strategy | Dummies | Storage |
-| --- | --- | --- |
-| `STANDARD` (default) | fresh matrices at every L step | K matrices |
-| `HCONCAT` | the same K matrices grow by p columns per L step | K matrices |
-| `SEEDED` | the draws of `STANDARD`, re-derived from the seed at every step | none |
-| `PERMUTATION` | permuted columns of the design | K matrices |
-| `PERMUTATION_SEEDED` | the permutation re-derived from the seed | none |
-| `SKIPL` | no L-loop, the cap `max_dummy_multiplier` is used directly | K matrices |
-
-`STANDARD` draws fresh dummies at every step, the law of the T-Rex paper and the default on every
-surface. The seeded strategies store nothing and suit designs where K times L times p columns do
-not fit in memory. `SEEDED` selects exactly as `STANDARD` for the same seed, and
-`PERMUTATION_SEEDED` exactly as `PERMUTATION`. `HCONCAT` keeps the grown law, which calibrates a
-larger L and gains 0.6 percentage points of true positive rate (TPR) on average in a paired study
-of 500 trials, at the same false discovery rate (FDR). `SKIPL` fixes L at the cap and skips the
-calibration, and under a large fixed L without the stagnation stop its FDP estimate is
-anti-conservative (the selector warns from `max_dummy_multiplier = 10` on), so the calibrated
-strategies are the safe choice. The dummies are standard Normal by default, and
-`dummy_distribution` offers the other laws. The enum `LLoopStrategy` in trex.hpp documents the
-keys the seeded strategies derive their draws from.
-
----
-
-## Threads
-
-The library runs serially by default: `TRexControlParameter` has
-`parallel_rnd_experiments = false`, `max_outer_threads = 1` and `max_inner_threads = 1`, and
-`SolverOptions` has `n_threads = 1`. The random experiments of a selector run one after the
-other, every T-solver on one thread. Parallel work is opt-in, and one layer owns the cores at a
-time.
-
-* `parallel_rnd_experiments = true` with `max_outer_threads = m` runs the K random experiments
-  on `m` threads, at most K. Inside the parallel experiments every solver runs serially.
-* `max_inner_threads = m` gives the solvers inside the experiments a budget of `m` threads for
-  their passes over the design. The budget is live when the experiments run in sequence, which
-  the lean L-loop strategies (SEEDED, PERMUTATION, PERMUTATION_SEEDED) always do. A pass is
-  split only when it touches at least a million entries of the design
-  (`TSolver_Base::kParallelWorkThreshold`), because the cost of forming a team of threads
-  exceeds the gain below that. Two to four threads carry the gain, since the passes are
-  memory-bandwidth bound. The seeded generators (the dummies, the synthetic designs) count
-  their work in the same unit with the measured cost of a random draw (about 80 entries) and
-  of seeding an engine (up to 32,000), so they split from a few thousand entries.
-* `SolverOptions::n_threads = m` is the same budget for a T-solver used on its own, and
-  `TSolver_Base::setNumThreads()` changes it on a live solver.
-* Every other kernel (the scalers, the clustering, the ML regressions, the data normalizer, the
-  dummy and data generators) runs on the library's default budget, which starts at 1, so the
-  library is single-threaded by default on every machine. `trex::utils::openmp::set_num_threads(m)`
-  sets that default for the process and returns the previous value, `get_num_threads()` reads it,
-  and the `n_threads` option of the scalers, the clustering and the ML classes overrides it per
-  object. Inside a selector these kernels take `max_inner_threads`. `get_max_threads()` reports
-  the threads OpenMP can run on the machine, an upper bound for a budget. The OpenMP runtime's
-  own default team is never used.
-
-Every thread option is a whole number of at least 1; other values throw `std::invalid_argument`.
-A seeded run selects the same variables whatever the thread settings. Without OpenMP every
-setting is a no-op and `get_max_threads()` returns 1.
-
----
-
-## For C++ Developers: Installing and Consuming the Library
+## Installing and Consuming the Library
 
 The library installs CMake package config files and can be consumed by other C++ projects
 via `find_package(TRexSelector)`.
@@ -246,6 +197,137 @@ sets `TRexSelector_WITH_OPENMP` to tell which.
 
 ---
 
+## What the Library Provides
+
+The sources under `src/` follow the four exported targets. The R and Python packages bind the
+augmented-dummy family of selectors, the T-solvers, the ML methods and the utilities, with the same
+names where the language allows it.
+
+### Selectors (`src/trex_selector_methods/`)
+
+The augmented-dummy family, `ad/`, is the T-Rex method family of the papers. Each selector takes its
+control struct, which carries the T-solver choice, the dummy settings and the thread budgets.
+
+| Selector | Task | Control |
+| --- | --- | --- |
+| `TRexSelector` | FDR-controlled variable selection, the T-Rex selector | `TRexControlParameter` |
+| `TRexDASelector` | dependency-aware (DA) dummies for correlated variables, T-Rex+DA | `TRexDAControlParameter` |
+| `TRexGVSSelector` | group variable selection (GVS), T-Rex GVS | `TRexGVSControlParameter` |
+| `ScreenTRexSelector` | FDR-controlled screening of many variables, Screen-T-Rex | `ScreenTRexControlParameter` |
+| `BiobankScreenTRex` | phenotype screening of genomic biobank designs | `BiobankScreenTRexControl` |
+| `TRexSPCA` | sparse principal component analysis (SPCA) under FDR control | `TRexSPCAControlParameter` |
+| `TRexTikhonovSelector` | selection with a general Tikhonov penalty matrix | `TRexTikhonovControlParameter` |
+
+Two further families live next to it and are not bound in R or Python yet. The virtual-dummy family,
+`vd/`, holds `TRexVD` with its own solvers (`VD_LARS`, `VD_OMP`, `VD_AFS`, `VD_AFS_Logistic` under
+`src/tsolvers/vd/`), ported from the virtual-dummies project of T. Koka, J. Machkour, D. P. Palomar
+and M. Muma (arXiv:2604.07464, see the references). The sparse-dummy family, `sd/`, holds `TRexSD`
+with the solvers `SD_TLARS_Solver`, `SD_TOMP_Solver` and `SD_TAFS_Solver` under `src/tsolvers/sd/`,
+and is future work, as its notes in `trex_sd.md` say.
+
+### T-solvers (`src/tsolvers/ad/`)
+
+Each random experiment runs a terminating solver, a T-solver, which stops once a given number of
+dummies has entered its path. Twenty T-solvers derive from `TSolver_Base` in four families,
+`SolverOptions` holds their options, and `TRexControlParameter::solver_type` picks the one a selector
+uses.
+
+- Least angle regression (LARS) based: `TLARS_Solver`, `TLASSO_Solver`, `TSTEPWISE_Solver`,
+  `TSTAGEWISE_Solver`, `TENET_Solver`, `TENETAug_Solver`, `TIENET_Solver`, `TIENETAug_Solver` and
+  `TIKNET_Solver`.
+- Matching pursuit based: `TOMP_Solver`, `TGP_Solver`, `TACGP_Solver`, `TMP_Solver`, `TOOLS_Solver`
+  and `TNCGMP_Solver`.
+- Adaptive forward stepwise: `TAFS_Solver`.
+- Coordinate descent (CD) based: `TCDLASSO_Solver`, from which `TCDENET_Solver`, `TCDIENET_Solver`
+  and `TCDTIKNET_Solver` derive.
+
+### ML methods (`src/ml_methods/`)
+
+The machine learning (ML) building blocks the selectors share: the scalers `ZScoreScaler` and
+`LpNormScaler` (`scaler_methods/`), the decompositions `SVDSolver` (`svd/`) and `PCA` (`pca/`), the
+`RidgeSolver` (`ridge_regression/`), the cross-validated model selection of ridge, elastic-net,
+informed elastic-net and Tikhonov penalties (`model_selection/`), and `AgglomerativeClustering`
+(`clustering/`).
+
+### Utilities (`src/utils/`)
+
+- `memmap/`: `MemoryMappedMatrix`, the disk-backed design the selectors and T-solvers read without a
+  copy.
+- `eval_metrics/`: `compute_fdp()`, `compute_tpp()`, `compute_precision()` and `compute_recall()` on
+  index sets, their dense counterparts on coefficient vectors, and the true-positive, false-positive
+  and false-negative counts.
+- `openmp/`: `set_num_threads()`, `get_num_threads()`, `get_max_threads()` and `threads_for()`, the
+  thread budget of every kernel, with stubs for builds without OpenMP (see Threads).
+- `datageneration/`: the dummy, design and noise generators. `serialization/`: the cereal adapters for
+  Eigen types. `logging/` and `fp_classify/`: the logger and the floating-point classification.
+
+---
+
+## Dummy Strategies
+
+The T-Rex selector calibrates the number of dummies in its L-loop. `lloop_strategy` of
+`TRexControlParameter` says how the dummies of that loop are produced, in every selector that
+carries the control.
+
+| Strategy | Dummies | Storage |
+| --- | --- | --- |
+| `STANDARD` (default) | fresh matrices at every L step | K matrices |
+| `HCONCAT` | the same K matrices grow by p columns per L step | K matrices |
+| `SEEDED` | the draws of `STANDARD`, re-derived from the seed at every step | none |
+| `PERMUTATION` | permuted columns of the design | K matrices |
+| `PERMUTATION_SEEDED` | the permutation re-derived from the seed | none |
+| `SKIPL` | no L-loop, the cap `max_dummy_multiplier` is used directly | K matrices |
+
+`STANDARD` draws fresh dummies at every step, the law of the T-Rex paper and the default on every
+surface. The seeded strategies store nothing and suit designs where K times L times p columns do
+not fit in memory. `SEEDED` selects exactly as `STANDARD` for the same seed, and
+`PERMUTATION_SEEDED` exactly as `PERMUTATION`. `HCONCAT` keeps the grown law, which calibrates a
+larger L and gains 0.6 percentage points of true positive rate (TPR) on average in a paired study
+of 500 trials, at the same false discovery rate (FDR). `SKIPL` fixes L at the cap and skips the
+calibration, and under a large fixed L without the stagnation stop its FDP estimate is
+anti-conservative (the selector warns from `max_dummy_multiplier = 10` on), so the calibrated
+strategies are the safe choice. The dummies are standard Normal by default, and
+`dummy_distribution` offers the other laws. The enum `LLoopStrategy` in trex.hpp documents the
+keys the seeded strategies derive their draws from.
+
+---
+
+## Threads
+
+The library runs serially by default: `TRexControlParameter` has
+`parallel_rnd_experiments = false`, `max_outer_threads = 1` and `max_inner_threads = 1`, and
+`SolverOptions` has `n_threads = 1`. The random experiments of a selector run one after the
+other, every T-solver on one thread. Parallel work is opt-in, and one layer owns the cores at a
+time.
+
+* `parallel_rnd_experiments = true` with `max_outer_threads = m` runs the K random experiments
+  on `m` threads, at most K. Inside the parallel experiments every solver runs serially.
+* `max_inner_threads = m` gives the solvers inside the experiments a budget of `m` threads for
+  their passes over the design. The budget is live when the experiments run in sequence, which
+  the lean L-loop strategies (SEEDED, PERMUTATION, PERMUTATION_SEEDED) always do. A pass is
+  split only when it touches at least a million entries of the design
+  (`TSolver_Base::kParallelWorkThreshold`), because the cost of forming a team of threads
+  exceeds the gain below that. Two to four threads carry the gain, since the passes are
+  memory-bandwidth bound. The seeded generators (the dummies, the synthetic designs) count
+  their work in the same unit with the measured cost of a random draw (about 80 entries) and
+  of seeding an engine (up to 32,000), so they split from a few thousand entries.
+* `SolverOptions::n_threads = m` is the same budget for a T-solver used on its own, and
+  `TSolver_Base::setNumThreads()` changes it on a live solver.
+* Every other kernel (the scalers, the clustering, the ML regressions, the data normalizer, the
+  dummy and data generators) runs on the library's default budget, which starts at 1, so the
+  library is single-threaded by default on every machine. `trex::utils::openmp::set_num_threads(m)`
+  sets that default for the process and returns the previous value, `get_num_threads()` reads it,
+  and the `n_threads` option of the scalers, the clustering and the ML classes overrides it per
+  object. Inside a selector these kernels take `max_inner_threads`. `get_max_threads()` reports
+  the threads OpenMP can run on the machine, an upper bound for a budget. The OpenMP runtime's
+  own default team is never used.
+
+Every thread option is a whole number of at least 1, and other values throw `std::invalid_argument`.
+A seeded run selects the same variables whatever the thread settings. Without OpenMP every
+setting is a no-op and `get_max_threads()` returns 1.
+
+---
+
 ## Relation to the Language Packages
 
 * The Python package ([Python/trexselector](../Python/trexselector/)) compiles this
@@ -257,8 +339,10 @@ sets `TRexSelector_WITH_OPENMP` to tell which.
 
 GPL ≥ 3 — see [LICENSE](LICENSE) or the [GNU General Public License v3](https://www.gnu.org/licenses/gpl-3.0.html).
 
+```text
 This program is free software: you can redistribute it and/or modify it under the
 terms of the GNU General Public License as published by the Free Software
 Foundation, either version 3 of the License, or (at your option) any later
 version. It is distributed WITHOUT ANY WARRANTY; without even the implied
 warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+```

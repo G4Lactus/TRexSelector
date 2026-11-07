@@ -10,6 +10,18 @@ changes. Versions: C++ SDK 1.0.1, R TRexSelector 2.0.1, Python trexselector 1.0.
 
 ### 2026-11-07
 
+#### The C++ README describes the library
+
+- The C++ README kept its developer sections (dependencies, building, installing and consuming) and
+  gains the opening of the other READMEs, the one-line summary, a lead paragraph and the two main
+  journal articles in a block quote, with the repository's references section for the rest. The
+  install-and-consume section follows the build section now, so the build flow is contiguous, and a
+  new section "What the Library Provides" lists the augmented-dummy selectors with their control
+  structs, names the virtual-dummy family with its paper and the sparse-dummy family as future work,
+  the twenty T-solvers in four families, the ML methods and the utilities by source directory. The
+  dummy strategy and thread sections stay in full, as the reference the bindings rely on, a semicolon
+  leaves the thread section, and the GPL paragraph sits in a text fence.
+
 #### The Python README describes the package
 
 - The README of the Python package, the long description on PyPI, opened with the field labels of
