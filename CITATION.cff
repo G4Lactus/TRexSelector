@@ -11,7 +11,7 @@ abstract: >-
   random experiments (the T-Rex selector) in C++, R and Python.
 authors:
   - name: "TRexSelector Team"
-version: 1.0.0
+version: 1.0.1
 repository-code: "https://github.com/trexselector/TRexSelector"
 license: GPL-3.0-or-later
 keywords:

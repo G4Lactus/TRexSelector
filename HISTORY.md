@@ -1,12 +1,104 @@
 # TRexSelector changelog
 
+## TRexSelector C++ 1.0.1 / R 2.0.1 / Python 1.0.1
+
+Patch release of the three packages after the public release (CRAN 2026-11-06, GitHub and PyPI
+2026-11-07): the C++20 ranges calls that Apple clang 14 rejects are gone, the R package's configure
+finds R's OpenMP flags on R 4.6 and R-devel again, the sources compile without warnings of their own,
+and the READMEs install from CRAN and PyPI first. No interface or result changes. Versions: C++ SDK
+1.0.1, R TRexSelector 2.0.1, Python trexselector 1.0.1.
+
+### 2026-11-07
+
+#### The C++ SDK is 1.0.1
+
+- The ranges fix changes the sources every package ships, so the C++ SDK follows the R package into
+  a patch release: the CMake project version is 1.0.1, which `find_package(TRexSelector 1.0)` still
+  accepts under the SameMajorVersion rule, and CITATION.cff names 1.0.1 as the version of the
+  library and the Python package. HISTORY opens the release block above these entries, and the
+  1.0.0 block records its release dates.
+
+#### The sources compile without warnings of their own
+
+- CRAN's install logs of 2.0.0 and a local build without OpenMP under `-Wall -Wextra` listed the
+  warnings the project's own sources produce: the flag `do_parallel` of the three experiment loops
+  is unused when the OpenMP pragma that reads it is compiled out; the Tikhonov selector built its
+  group-centering triplets from `Eigen::Index` values, which MSVC narrows to the `int` StorageIndex
+  with C4244; three loops of the R bindings compared signed and unsigned sizes; the VD and SD
+  selectors take a thread count their sequential build does not use; and VD_Base listed its
+  generator before the data views it is declared after. Each site carries the attribute, the cast
+  or the order the compiler asked for, with no change in behavior, and the vendored copy of the R
+  package follows. The remaining warnings in those logs come from RcppEigen's headers.
+
+#### The configure script reads R's OpenMP flags from Makeconf
+
+- On R 4.6 and R-devel, `R CMD config SHLIB_OPENMP_CXXFLAGS` answers "no information for variable"
+  although Makeconf defines it, and the first step of the R package's configure relied on that query,
+  so every Linux build on those versions compiled sequentially: CRAN's Fedora builds of 2.0.0 and the
+  rocker R-devel container both report "checking for R's OpenMP flags... none", while R 4.3.3 still
+  served the value. The configure script reads SHLIB_OPENMP_CXXFLAGS from `${R_HOME}/etc${R_ARCH}/Makeconf`
+  and, when it is set, writes the make variable `$(SHLIB_OPENMP_CXXFLAGS)` itself into Makevars, the
+  form Writing R Extensions asks for, as Makevars.win already does. Where R has no OpenMP flags, CRAN's
+  R on macOS, the steps for Homebrew's omp.h with R's bundled libomp follow unchanged. The configure
+  script carries the package version 2.0.1.
+
+#### The R package is 2.0.1
+
+- The ranges fix reaches CRAN as a patch release, since CRAN takes no second upload of a version
+  it holds. DESCRIPTION carries 2.0.1, NEWS.md describes the release, inst/CITATION names the
+  version, and cran-comments.md states the reason for the update, the test environments, with the
+  clang 14 and libc++ 14 container as the closest match to the failing builders, and the check
+  results.
+
+#### The solvers compile without the ranges library
+
+- CRAN's daily checks of TRexSelector 2.0.0 reported "Installation failed" on three macOS flavors
+  (r-release x86_64, r-oldrel arm64 and x86_64), whose builders run Apple clang 14.0.3 with the
+  macOS 11.3 SDK. That compiler accepts `-std=gnu++20` but its standard library has no ranges
+  algorithms, so `std::ranges::find` in the column preprocessing and in the inactive-set
+  initialization and `std::ranges::sort` of the dropped indices failed with "no member named
+  'ranges' in namespace 'std'". The arm64 release builder, on Apple clang 17, passed. The three
+  calls are `std::find` and `std::sort` over begin and end now, with identical results, and the
+  vendored copy of the R package follows. The tree uses no other C++20 library feature that
+  Apple clang 14 lacks.
+
+#### The getting-started vignette installs from CRAN first
+
+- The installation passage of the getting-started vignette still said that CRAN carried the pure-R
+  1.x release and sent the reader to GitHub until 2.0.0 was accepted. Like the README since the
+  previous commit, it opens with `install.packages("TRexSelector")`, states that CRAN provides the
+  Windows and macOS binaries while Linux and every source install compile the C++ backend, and
+  presents the GitHub route as the development version, without a current version number.
+
+#### The development versions follow the release
+
+- With TRexSelector 2.0.0 on CRAN and trexselector 1.0.0 on PyPI, the sources carried the released
+  version numbers, so an install from the repository called itself the released package. The R
+  package is 2.0.0.9000 in DESCRIPTION with a "development version" heading at the top of
+  NEWS.md, the R convention after a CRAN release, and the Python package is 1.0.1.dev0 in
+  pyproject.toml. Both sort after the released versions and before the next release, whose
+  commit sets the final numbers. The C++ SDK version, inst/CITATION and CITATION.cff keep the
+  released numbers, since they name what is published.
+
+#### The R README installs from CRAN first
+
+- The installation section of the R package's README opened with the compiler requirement and
+  the GitHub route, and closed with a note that CRAN still carried the pure-R 1.x release while
+  the 2.0.0 submission was in progress. With 2.0.0 on CRAN the section opens with
+  `install.packages("TRexSelector")`, states that CRAN provides the Windows and macOS binaries
+  while Linux and every source install compile the C++ backend, and presents the GitHub route as
+  the development version. The current version number stays out of the text, so the section
+  needs no edit per release. README.md is knit from README.Rmd again, and the root README notes
+  that the R package is distributed on CRAN.
+
 ## TRexSelector C++ 1.0.0 / R 2.0.0 / Python 1.0.0
 
 Release candidate on `dev_beyond` (2026-09-24); the three packages carry
 their own version numbers from here on: the C++ SDK 1.0.0 (CMake project
 version, `find_package(TRexSelector 1.0)`), the R package TRexSelector
 2.0.0, the Python package trexselector 1.0.0 (the names since 2026-11-04, see
-that entry; TRexSelectorNeo before).
+that entry; TRexSelectorNeo before). Released: TRexSelector 2.0.0 on CRAN on 2026-11-06, the GitHub
+release v1.0.0 and trexselector 1.0.0 on PyPI on 2026-11-07.
 
 ### Breaking changes since 2.0.0 (June 2026)
 
@@ -126,81 +218,6 @@ that entry; TRexSelectorNeo before).
   `TikLambda2Method`), and the power rule's `Lambda2PowerRule` enum with
   `MAX_SELECTION` is gone; the knee with tolerance 0 is the largest
   selection. See the 2026-10-28 entry.
-
-### 2026-11-07
-
-#### The sources compile without warnings of their own
-
-- CRAN's install logs of 2.0.0 and a local build without OpenMP under `-Wall -Wextra` listed the
-  warnings the project's own sources produce: the flag `do_parallel` of the three experiment loops
-  is unused when the OpenMP pragma that reads it is compiled out; the Tikhonov selector built its
-  group-centering triplets from `Eigen::Index` values, which MSVC narrows to the `int` StorageIndex
-  with C4244; three loops of the R bindings compared signed and unsigned sizes; the VD and SD
-  selectors take a thread count their sequential build does not use; and VD_Base listed its
-  generator before the data views it is declared after. Each site carries the attribute, the cast
-  or the order the compiler asked for, with no change in behavior, and the vendored copy of the R
-  package follows. The remaining warnings in those logs come from RcppEigen's headers.
-
-#### The configure script reads R's OpenMP flags from Makeconf
-
-- On R 4.6 and R-devel, `R CMD config SHLIB_OPENMP_CXXFLAGS` answers "no information for variable"
-  although Makeconf defines it, and the first step of the R package's configure relied on that query,
-  so every Linux build on those versions compiled sequentially: CRAN's Fedora builds of 2.0.0 and the
-  rocker R-devel container both report "checking for R's OpenMP flags... none", while R 4.3.3 still
-  served the value. The configure script reads SHLIB_OPENMP_CXXFLAGS from `${R_HOME}/etc${R_ARCH}/Makeconf`
-  and, when it is set, writes the make variable `$(SHLIB_OPENMP_CXXFLAGS)` itself into Makevars, the
-  form Writing R Extensions asks for, as Makevars.win already does. Where R has no OpenMP flags, CRAN's
-  R on macOS, the steps for Homebrew's omp.h with R's bundled libomp follow unchanged. The configure
-  script carries the package version 2.0.1.
-
-#### The R package is 2.0.1
-
-- The ranges fix reaches CRAN as a patch release, since CRAN takes no second upload of a version
-  it holds. DESCRIPTION carries 2.0.1, NEWS.md describes the release, inst/CITATION names the
-  version, and cran-comments.md states the reason for the update, the test environments, with the
-  clang 14 and libc++ 14 container as the closest match to the failing builders, and the check
-  results.
-
-#### The solvers compile without the ranges library
-
-- CRAN's daily checks of TRexSelector 2.0.0 reported "Installation failed" on three macOS flavors
-  (r-release x86_64, r-oldrel arm64 and x86_64), whose builders run Apple clang 14.0.3 with the
-  macOS 11.3 SDK. That compiler accepts `-std=gnu++20` but its standard library has no ranges
-  algorithms, so `std::ranges::find` in the column preprocessing and in the inactive-set
-  initialization and `std::ranges::sort` of the dropped indices failed with "no member named
-  'ranges' in namespace 'std'". The arm64 release builder, on Apple clang 17, passed. The three
-  calls are `std::find` and `std::sort` over begin and end now, with identical results, and the
-  vendored copy of the R package follows. The tree uses no other C++20 library feature that
-  Apple clang 14 lacks.
-
-#### The getting-started vignette installs from CRAN first
-
-- The installation passage of the getting-started vignette still said that CRAN carried the pure-R
-  1.x release and sent the reader to GitHub until 2.0.0 was accepted. Like the README since the
-  previous commit, it opens with `install.packages("TRexSelector")`, states that CRAN provides the
-  Windows and macOS binaries while Linux and every source install compile the C++ backend, and
-  presents the GitHub route as the development version, without a current version number.
-
-#### The development versions follow the release
-
-- With TRexSelector 2.0.0 on CRAN and trexselector 1.0.0 on PyPI, the sources carried the released
-  version numbers, so an install from the repository called itself the released package. The R
-  package is 2.0.0.9000 in DESCRIPTION with a "development version" heading at the top of
-  NEWS.md, the R convention after a CRAN release, and the Python package is 1.0.1.dev0 in
-  pyproject.toml. Both sort after the released versions and before the next release, whose
-  commit sets the final numbers. The C++ SDK version, inst/CITATION and CITATION.cff keep the
-  released numbers, since they name what is published.
-
-#### The R README installs from CRAN first
-
-- The installation section of the R package's README opened with the compiler requirement and
-  the GitHub route, and closed with a note that CRAN still carried the pure-R 1.x release while
-  the 2.0.0 submission was in progress. With 2.0.0 on CRAN the section opens with
-  `install.packages("TRexSelector")`, states that CRAN provides the Windows and macOS binaries
-  while Linux and every source install compile the C++ backend, and presents the GitHub route as
-  the development version. The current version number stays out of the text, so the section
-  needs no edit per release. README.md is knit from README.Rmd again, and the root README notes
-  that the R package is distributed on CRAN.
 
 ### 2026-11-06
 
