@@ -15,9 +15,10 @@ VD_Base::VD_Base(const double* Xptr, int n, int p,
                  const double* yptr, int ny,
                  int num_dummies, const VDOptions& o)
   : n_(n), p_(p), L_(num_dummies),
-    opt_(o), rng_(opt_.seed),
+    opt_(o),
     X_(Xptr, n, p),
-    y_(yptr, ny)
+    y_(yptr, ny),
+    rng_(opt_.seed)
 {
     init_common_state_();
 }

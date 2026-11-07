@@ -398,8 +398,8 @@ LogicalVector trex_selector_get_selected_var(
 ) {
     auto var = r_ptr->getSelectedVar();
     LogicalVector res(static_cast<int>(var.size()));
-    for (size_t i = 0; i < var.size(); ++i) {
-        res[static_cast<int>(i)] = static_cast<bool>(var[static_cast<int>(i)]);
+    for (Eigen::Index i = 0; i < var.size(); ++i) {
+        res[static_cast<int>(i)] = static_cast<bool>(var[i]);
     }
     return res;
 }

@@ -222,7 +222,7 @@ inline void fill_mask_(const tsolvers::sd::SDTSolver_Base& solver, int p,
 // ========================================================================
 TRexSDResult TRexSD::run_fixed_T_(
     Eigen::Map<Eigen::MatrixXd>& Xm, Eigen::Map<Eigen::VectorXd>& ym,
-    int T_fixed, int num_dummies, int n_threads, const Eigen::VectorXd& V)
+    int T_fixed, int num_dummies, [[maybe_unused]] int n_threads, const Eigen::VectorXd& V)
 {
     const int p = (int)Xm.cols();
     const int n_v = (int)V.size();
@@ -298,7 +298,7 @@ TRexSDResult TRexSD::run_fixed_T_(
 // ========================================================================
 TRexSDResult TRexSD::run_posthoc_(
     Eigen::Map<Eigen::MatrixXd>& Xm, Eigen::Map<Eigen::VectorXd>& ym,
-    int Tstop, int num_dummies, int n_threads, const Eigen::VectorXd& V)
+    int Tstop, int num_dummies, [[maybe_unused]] int n_threads, const Eigen::VectorXd& V)
 {
     const int p = (int)Xm.cols();
     const int n_v = (int)V.size();
@@ -366,7 +366,7 @@ TRexSDResult TRexSD::run_posthoc_(
 // ========================================================================
 TRexSDResult TRexSD::run_early_stop_(
     Eigen::Map<Eigen::MatrixXd>& Xm, Eigen::Map<Eigen::VectorXd>& ym,
-    int Tstop, int num_dummies, int n_threads, const Eigen::VectorXd& V)
+    int Tstop, int num_dummies, [[maybe_unused]] int n_threads, const Eigen::VectorXd& V)
 {
     const int p = (int)Xm.cols();
     const int n_v = (int)V.size();
@@ -492,7 +492,7 @@ TRexSDResult TRexSD::run_early_stop_(
 // ========================================================================
 int TRexSD::calibrate_L_(
     Eigen::Map<Eigen::MatrixXd>& Xm, Eigen::Map<Eigen::VectorXd>& ym,
-    int p, int n_threads)
+    int p, [[maybe_unused]] int n_threads)
 {
     const double v_calib = 0.75;
 

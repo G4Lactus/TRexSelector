@@ -197,7 +197,7 @@ TRexVD::SelectResult TRexVD::select_var_(
 // ========================================================================
 TRexVDResult TRexVD::run_fixed_T_(
     const Eigen::Ref<const MatC>& X, const Eigen::Ref<const Vec>& y,
-    int T_fixed, int num_dummies, int n_threads, const Vec& V)
+    int T_fixed, int num_dummies, [[maybe_unused]] int n_threads, const Vec& V)
 {
     const int p = (int)X.cols();
     const int n_v = (int)V.size();
@@ -284,7 +284,7 @@ TRexVDResult TRexVD::run_fixed_T_(
 // ========================================================================
 TRexVDResult TRexVD::run_posthoc_(
     const Eigen::Ref<const MatC>& X, const Eigen::Ref<const Vec>& y,
-    int Tstop, int num_dummies, int n_threads, const Vec& V)
+    int Tstop, int num_dummies, [[maybe_unused]] int n_threads, const Vec& V)
 {
     const int p = (int)X.cols();
     const int n_v = (int)V.size();
@@ -356,7 +356,7 @@ TRexVDResult TRexVD::run_posthoc_(
 // ========================================================================
 TRexVDResult TRexVD::run_early_stop_(
     const Eigen::Ref<const MatC>& X, const Eigen::Ref<const Vec>& y,
-    int Tstop, int num_dummies, int n_threads, const Vec& V)
+    int Tstop, int num_dummies, [[maybe_unused]] int n_threads, const Vec& V)
 {
     const int p = (int)X.cols();
     const int n_v = (int)V.size();
@@ -479,7 +479,7 @@ TRexVDResult TRexVD::run_early_stop_(
 // ========================================================================
 int TRexVD::calibrate_L_(
     const Eigen::Ref<const MatC>& X, const Eigen::Ref<const Vec>& y,
-    int p, int n_threads)
+    int p, [[maybe_unused]] int n_threads)
 {
     const double v_calib = 0.75;
 

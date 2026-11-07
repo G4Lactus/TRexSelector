@@ -369,7 +369,7 @@ private:
         const int outer_threads = static_cast<int>(
             std::min<std::size_t>(static_cast<std::size_t>(std::max(1, cfg.max_outer_threads)),
                                   cfg.K));
-        const bool do_parallel = (outer_threads > 1);
+        [[maybe_unused]] const bool do_parallel = (outer_threads > 1);
 
         // An exception may not leave an OpenMP structured block — even an
         // INACTIVE region (if(false), single thread): the runtime calls
@@ -572,7 +572,7 @@ private:
         const int outer_threads = static_cast<int>(
             std::min<std::size_t>(static_cast<std::size_t>(std::max(1, cfg.max_outer_threads)),
                                   cfg.K));
-        const bool do_parallel = !shared && (outer_threads > 1);
+        [[maybe_unused]] const bool do_parallel = !shared && (outer_threads > 1);
 
         // Same OpenMP exception discipline as runStandard: capture, drain,
         // rethrow after the region (an escaping exception terminates).

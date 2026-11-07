@@ -256,14 +256,18 @@ Eigen::SparseMatrix<double> TRexTikhonovSelector::buildGroupCenteringK(
             .push_back(static_cast<Eigen::Index>(j));
     }
 
-    std::vector<Eigen::Triplet<double>> trip;
+    // Triplets carry the matrix's StorageIndex (int), so the Eigen::Index
+    // group members are converted explicitly.
+    using StorageIndex = Eigen::SparseMatrix<double>::StorageIndex;
+    std::vector<Eigen::Triplet<double, StorageIndex>> trip;
     for (const auto& members : cols) {
         if (members.size() < 2) { continue; }   // singleton: no penalty
         const double w = 1.0 / static_cast<double>(members.size());
         for (const Eigen::Index a : members) {
             for (const Eigen::Index b : members) {
                 const double delta = (a == b) ? 1.0 : 0.0;
-                trip.emplace_back(a, b, delta - w);
+                trip.emplace_back(static_cast<StorageIndex>(a), static_cast<StorageIndex>(b),
+                                  delta - w);
             }
         }
     }

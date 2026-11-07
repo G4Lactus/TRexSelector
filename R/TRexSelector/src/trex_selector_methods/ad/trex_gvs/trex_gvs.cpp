@@ -880,7 +880,7 @@ TRexGVSSelector::ExpAgg TRexGVSSelector::runKExperiments(
     // team every solver stays serial, so no nested team forms.
     const int outer_threads = static_cast<int>(std::min<std::size_t>(
         static_cast<std::size_t>(std::max(1, trex_ctrl_.max_outer_threads)), K));
-    const bool do_parallel =
+    [[maybe_unused]] const bool do_parallel =
         trex_ctrl_.parallel_rnd_experiments && (outer_threads > 1);
 
     // An exception may not leave an OpenMP structured block — even an

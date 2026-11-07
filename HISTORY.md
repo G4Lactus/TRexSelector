@@ -129,6 +129,18 @@ that entry; TRexSelectorNeo before).
 
 ### 2026-11-07
 
+#### The sources compile without warnings of their own
+
+- CRAN's install logs of 2.0.0 and a local build without OpenMP under `-Wall -Wextra` listed the
+  warnings the project's own sources produce: the flag `do_parallel` of the three experiment loops
+  is unused when the OpenMP pragma that reads it is compiled out; the Tikhonov selector built its
+  group-centering triplets from `Eigen::Index` values, which MSVC narrows to the `int` StorageIndex
+  with C4244; three loops of the R bindings compared signed and unsigned sizes; the VD and SD
+  selectors take a thread count their sequential build does not use; and VD_Base listed its
+  generator before the data views it is declared after. Each site carries the attribute, the cast
+  or the order the compiler asked for, with no change in behavior, and the vendored copy of the R
+  package follows. The remaining warnings in those logs come from RcppEigen's headers.
+
 #### The configure script reads R's OpenMP flags from Makeconf
 
 - On R 4.6 and R-devel, `R CMD config SHLIB_OPENMP_CXXFLAGS` answers "no information for variable"

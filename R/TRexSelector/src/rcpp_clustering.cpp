@@ -45,7 +45,7 @@ Eigen::MatrixXd rcpp_merge_steps_to_linkage(const std::vector<MergeStep>& merges
         return Eigen::MatrixXd(0, 4);
     }
     Eigen::MatrixXd out(merges.size(), 4);
-    for (Eigen::Index i = 0; i < merges.size(); ++i) {
+    for (Eigen::Index i = 0; i < static_cast<Eigen::Index>(merges.size()); ++i) {
         out(i, 0) = static_cast<double>(merges[i].cluster1);
         out(i, 1) = static_cast<double>(merges[i].cluster2);
         out(i, 2) = merges[i].distance;
@@ -336,7 +336,7 @@ IntegerVector rcpp_cut_tree(
                                                     num_orig_objs, num_clusters);
 
     IntegerVector out(clusters.size());
-    for (int i = 0; i < clusters.size(); ++i) {
+    for (int i = 0; i < static_cast<int>(clusters.size()); ++i) {
         out[i] = static_cast<int>(clusters[i]);
     }
 
